@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ════════════════════════════════════════════════════════
+  AndroidManifest.xml
+  المسار: android/app/src/main/AndroidManifest.xml
+  
+  أضف الأسطر دي داخل <manifest> وقبل <application>
+  ════════════════════════════════════════════════════════
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ✅ إذن الإنترنت للاتصال بـ Firebase -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- ✅ إذن الموقع الدقيق -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
+    <!-- ✅ إذن الموقع التقريبي (احتياطي) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- ✅ إشعارات الستارة — مطلوب Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- ✅ اهتزاز مع الإشعار -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- ✅ ضروري عشان شاشة "المكالمة الواردة" (CallKit) تفتح فوق شاشة القفل
+         بشكل صحيح بدل ما تتحول لإشعار عادي بس — من غيره سلوك القبول
+         بيبقى غير مستقر على بعض الأجهزة/إصدارات أندرويد -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+
+    <!-- ✅ Foreground Service — الخدمة المستمرة في الخلفية -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
+    <!-- ✅ إعادة التشغيل بعد بوت الهاتف -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!--
+      ⚠️  لو عايز GPS يفضل شغال لما الأب في الخلفية:
+      1. أضف السطر ده
+      2. لازم تضيف foreground service في الكود (خطوة تانية)
+
+      <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    -->
+
+    <!-- ✅ مطلوب لـ url_launcher على Android 11+ -->
+    <!-- بدونه لن يعمل الاتصال أو واتساب -->
+    <queries>
+        <!-- فتح تطبيق الهاتف للاتصال -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <!-- فتح واتساب مباشرة عبر deep-link -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
+        <!-- فتح روابط https (واتساب web fallback) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <!-- فتح تطبيق الخرائط عبر geo: scheme -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+        <!-- فتح Google Maps عبر رابط الويب -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" android:host="maps.google.com" />
+        </intent>
+    </queries>
+
+    <application
+        android:label="طيّار"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:windowSoftInputMode="adjustResize">
+
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"/>
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2"/>
+
+        <!-- ✅ flutter_foreground_task — الخدمة المستمرة في الخلفية -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"/>
+
+        <!-- ✅ إعادة تشغيل الخدمة بعد بوت الهاتف -->
+        <receiver
+            android:name="com.pravera.flutter_foreground_task.receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- ✅ flutter_local_notifications — قناة الإشعارات -->
+        <meta-data
+            android:name="com.dexterous.flutterlocalnotifications.default_notification_channel_id"
+            android:value="tiar_orders"/>
+        <meta-data
+            android:name="com.dexterous.flutterlocalnotifications.default_notification_channel_name"
+            android:value="طلبات التوصيل"/>
+        <meta-data
+            android:name="com.dexterous.flutterlocalnotifications.default_notification_channel_importance"
+            android:value="4"/>
+
+    </application>
+
+</manifest>
