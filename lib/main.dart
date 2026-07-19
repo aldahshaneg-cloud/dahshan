@@ -159,6 +159,113 @@ class LocalNotif {
   }
 
   static Future<void> clearAll() async => _plugin.cancelAll();
+
+  // ────────────────────────────────────────────────────────────────
+  //  إشعار الرنين الثابت (Ongoing) — إشعار واحد للأوردر الجديد
+  // ────────────────────────────────────────────────────────────────
+  // إشعار واحد بس (مش بيتكرر ولا بيتمسح بالسحب)، بترافقه نغمة loop مستمرة
+  // بتتشغّل بشكل منفصل من OrderRinger — عشان كده الإشعار نفسه من غير صوت
+  // ولا اهتزاز (onlyAlertOnce) حتى لو اتحدّث، فيفضل إشعار واحد ثابت بس
+
+  static const _ringNotifId   = 2001;
+  static const _ringChannelId = 'tiar_ring';
+
+  /// يعرض/يحدّث إشعار الرنين الثابت (نفس الـ id دايمًا = إشعار واحد فقط)
+  static Future<void> showRingingNotification({required int count}) async {
+    final title = count <= 1 ? 'طلب توصيل جديد 🚀' : '$count طلبات توصيل جديدة 🚀';
+    const body  = 'اضغط لفتح التطبيق وإيقاف التنبيه';
+
+    final androidDetails = AndroidNotificationDetails(
+      _ringChannelId, 'تنبيه الطلبات',
+      channelDescription: 'رنين مستمر عند وصول طلب توصيل جديد',
+      importance:      Importance.max,
+      priority:        Priority.high,
+      playSound:       false, // الصوت loop بيتشغّل بشكل منفصل من OrderRinger
+      enableVibration: false, // الاهتزاز loop بيتشغّل بشكل منفصل من OrderRinger
+      onlyAlertOnce:   true,  // ميعملش heads-up تاني لو اتحدّث → إشعار واحد ثابت
+      ongoing:         true,  // ثابت — ميتمسحش بالسحب، يجبر الطيار يفتح التطبيق
+      autoCancel:      false,
+      // category=alarm عشان الرنين يخترق وضع "عدم الإزعاج" زي المنبّه.
+      // ملحوظة: مش بنستخدم fullScreenIntent عن قصد — عايزين الإشعار يفضل
+      // في الستارة ويرن، مش يفتح التطبيق تلقائيًا؛ الطيار هو اللي بينزل
+      // الستارة ويفتح التطبيق بنفسه فيقف الرنين (ده اللي بيوقف النغمة)
+      category:        AndroidNotificationCategory.alarm,
+      icon:            '@mipmap/ic_launcher',
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true, presentBadge: true, presentSound: false,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+    await _plugin.show(
+      _ringNotifId, title, body,
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
+    );
+  }
+
+  /// يشيل إشعار الرنين الثابت (يشتغل من أي isolate — الإلغاء بالـ id على مستوى النظام)
+  static Future<void> cancelRingingNotification() async =>
+      _plugin.cancel(_ringNotifId);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ORDER RINGER — تنبيه الأوردر: إشعار ثابت + رنين نغمة loop مستمر
+// ════════════════════════════════════════════════════════════════
+//
+// بديل شاشة "المكالمة الواردة" الفل-سكرين: بيعرض إشعار ستارة واحد ثابت،
+// وبيشغّل نفس نغمة الطيار المختارة بشكل loop مستمر (+ اهتزاز متكرر) لحد
+// ما الطيار يفتح التطبيق فيقف الرنين. بيشتغل من الـ isolate الخلفي حتى
+// والتطبيق مقفول تمامًا، وبيستخدم usage=alarm عشان يرن حتى لو الموبايل
+// صامت/على اهتزاز — بالظبط زي نغمة المنبّه.
+class OrderRinger {
+  static final AudioPlayer _player = AudioPlayer();
+  static bool _ringing        = false; // نغمة/اهتزاز شغّالين حاليًا؟
+  static bool _audioConfigured = false;
+
+  /// تهيئة سياق الصوت مرة واحدة: loop + usage=alarm (يرن فوق الصامت)
+  static Future<void> _ensureAudioConfig() async {
+    if (_audioConfigured) return;
+    _audioConfigured = true;
+    await _player.setReleaseMode(ReleaseMode.loop);
+    await _player.setAudioContext(AudioContext(
+      android: const AudioContextAndroid(
+        isSpeakerphoneOn: false,
+        stayAwake:        true,
+        contentType:      AndroidContentType.sonification,
+        usageType:        AndroidUsageType.alarm,
+        audioFocus:       AndroidAudioFocus.gain,
+      ),
+    ));
+  }
+
+  /// يبدأ الرنين المستمر — idempotent: لو شغّال بالفعل بيحدّث الإشعار بس
+  /// (عدد الطلبات) من غير ما يقطع النغمة ويشغّلها من الأول
+  static Future<void> startRinging({required int count}) async {
+    await LocalNotif.showRingingNotification(count: count);
+    if (_ringing) return; // شغّال بالفعل — بلاش نعيد تشغيل النغمة/الاهتزاز
+    _ringing = true;
+
+    try {
+      await _ensureAudioConfig();
+      final soundId = await NotificationService.getSelectedSound();
+      await _player.stop();
+      await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
+    } catch (_) {}
+
+    try {
+      if (await Vibration.hasVibrator() ?? false) {
+        // repeat: 0 → يكرّر النمط من أوله باستمرار لحد ما نستدعي cancel()
+        Vibration.vibrate(pattern: [0, 600, 400, 600, 400, 800], repeat: 0);
+      }
+    } catch (_) {}
+  }
+
+  /// يوقف الرنين بالكامل ويشيل الإشعار الثابت
+  static Future<void> stopRinging() async {
+    _ringing = false;
+    try { await _player.stop(); } catch (_) {}
+    try { await Vibration.cancel(); } catch (_) {}
+    await LocalNotif.cancelRingingNotification();
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -190,7 +297,12 @@ class _OrderTaskHandler extends TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    final prefs   = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
+    // مهم: نعيد قراءة القيم من القرص عشان نشوف اللي كتبه الـ isolate الرئيسي
+    // (فلاج فتح التطبيق / مسح قائمة الرنين) — SharedPreferences بتكاش نسخة
+    // منفصلة لكل isolate، فمن غير reload مش هنحس بتغييرات التطبيق الرئيسي
+    try { await prefs.reload(); } catch (_) {}
+
     final pilotId = prefs.getString('pilotId') ?? '';
     if (pilotId.isEmpty) return;
 
@@ -212,9 +324,22 @@ class _OrderTaskHandler extends TaskHandler {
           .map((e) => e.key)
           .toSet();
 
+      // ── التطبيق مفتوح قدام الطيار؟ ──
+      // لو الطيار فاتح التطبيق، مفيش داعي لأي رنين خلفي إطلاقًا — بنوقف
+      // الرنين، وبنعتبر كل الطلبات الحالية "اتشافت" (نحدّث known ونمسح
+      // قائمة الرنين) عشان ما نرنّش عليها لو التطبيق اترجع للخلفية بعدين
+      final appOpen = prefs.getBool('app_in_foreground') ?? false;
+      if (appOpen) {
+        await OrderRinger.stopRinging();
+        await prefs.setStringList('known_order_ids', currentIds.toList());
+        await prefs.setStringList('pending_ring_ids', <String>[]);
+        _knownIds = currentIds;
+        _firstRun = false;
+        return;
+      }
+
       // ── قائمة الطلبات التي لسه الطيار ما فتحش التطبيق يشوفها ──
-      // نفضل نرن عليها من جديد كل دورة (كل 15 ثانية) لحد ما يفتح
-      // التطبيق فعلياً (HomeScreen بيمسح القائمة دي أول ما يفتح)
+      // نفضل نرن عليها لحد ما يفتح التطبيق فعليًا (اللي بيمسح القائمة دي)
       final pendingSaved = prefs.getStringList('pending_ring_ids') ?? [];
       var pending = pendingSaved.toSet();
 
@@ -225,25 +350,15 @@ class _OrderTaskHandler extends TaskHandler {
 
       // نشيل من قائمة الرنين أي طلب مبقاش مُسند لهذا الطيار بنفس الحالة
       // (اتسلّم / اترجع / اتحول لطيار تاني) عشان الرنين يوقف تلقائياً
-      final stillPending = pending.intersection(currentIds);
-      final droppedOut = pending.difference(stillPending);
-      pending = stillPending;
-
-      // لو أي طلب كان بيرن وطلع بره القائمة (اتحول لطيار تاني مثلاً)،
-      // نقفل شاشة المكالمة الواردة الخاصة بيه فورًا
-      for (final id in droppedOut) {
-        await IncomingCallService.endCall(id);
-      }
+      pending = pending.intersection(currentIds);
 
       if (pending.isNotEmpty) {
-        // نستخدم أول طلب معلّق كمعرّف للمكالمة، والعدد الكلي في العنوان
-        // — شاشة "مكالمة واردة" حقيقية ترن باستمرار (loop) لحد ما الطيار
-        // يقبل أو يرفض، حتى لو التطبيق مقفول تمامًا، بدل الإشعار العادي
-        // اللي كان بيرن مرتين بس ويسكت
-        await IncomingCallService.showIncomingOrder(
-          orderId: pending.first,
-          count: pending.length,
-        );
+        // إشعار ستارة واحد ثابت + نغمة loop مستمرة لحد ما الطيار يفتح
+        // التطبيق — يشتغل حتى لو التطبيق مقفول تمامًا (بديل شاشة المكالمة)
+        await OrderRinger.startRinging(count: pending.length);
+      } else {
+        // مفيش طلب معلّق — نوقف أي رنين شغّال ونشيل الإشعار
+        await OrderRinger.stopRinging();
       }
 
       await prefs.setStringList('known_order_ids', currentIds.toList());
@@ -254,8 +369,19 @@ class _OrderTaskHandler extends TaskHandler {
     } catch (_) {}
   }
 
+  /// استقبال إشارة فورية من التطبيق الرئيسي (مثلاً "الطيار فتح التطبيق")
+  /// عشان نوقف الرنين في نفس اللحظة من غير ما نستنى دورة الـ 15 ثانية الجاية
   @override
-  Future<void> onDestroy(DateTime timestamp) async {}
+  void onReceiveData(Object data) {
+    if (data == 'stop_ring') {
+      OrderRinger.stopRinging();
+    }
+  }
+
+  @override
+  Future<void> onDestroy(DateTime timestamp) async {
+    await OrderRinger.stopRinging();
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2017,7 +2143,7 @@ class HomeScreen extends StatefulWidget {
   @override State<HomeScreen> createState() => _HomeState();
 }
 
-class _HomeState extends State<HomeScreen> {
+class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   int _tab = 0;
   Timer? _refreshTimer;
   StreamSubscription<Position>? _gpsStream;   // stream مستمر من GPS
@@ -2039,6 +2165,7 @@ class _HomeState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startGpsStream();
     _loadKnownIdsFromPrefs();
     _loadOrders();
@@ -2047,18 +2174,42 @@ class _HomeState extends State<HomeScreen> {
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) { _loadOrders(); _syncPilotStatus(); _ensureFgServiceAlive(); }
     });
-    LocalNotif.clearAll();
-    // الطيار فتح التطبيق فعلياً — نوقف رنين أي طلب كان مستني
-    _clearPendingRing();
+    // الطيار فتح التطبيق فعلياً — نوقف رنين أي طلب كان مستني فورًا
+    _onAppForeground();
     // تشغيل Foreground Service للخلفية
     _initFgService();
   }
 
-  /// يمسح قائمة الطلبات "المعلقة" اللي كان بيرن عليها التطبيق في الخلفية،
-  /// عشان الرنين يوقف بمجرد ما الطيار يفتح التطبيق فعلياً
-  Future<void> _clearPendingRing() async {
+  /// مراقبة دورة حياة التطبيق — أي رجوع للواجهة يوقف الرنين الخلفي فورًا،
+  /// وأي خروج للخلفية يسمح للخدمة الخلفية ترن من جديد على أي طلب جديد
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _onAppForeground();
+    } else if (state == AppLifecycleState.paused ||
+               state == AppLifecycleState.detached) {
+      _markAppBackground();
+    }
+  }
+
+  /// التطبيق بقى قدام الطيار: نرفع فلاج "مفتوح"، نمسح قائمة الرنين، نلغي
+  /// إشعار الرنين الثابت، ونبعت إشارة فورية للخدمة الخلفية توقف النغمة
+  /// في نفس اللحظة (من غير ما نستنى دورتها الجاية)
+  Future<void> _onAppForeground() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('app_in_foreground', true);
     await prefs.remove('pending_ring_ids');
+    await LocalNotif.cancelRingingNotification();
+    LocalNotif.clearAll();
+    try { FlutterForegroundTask.sendDataToTask('stop_ring'); } catch (_) {}
+  }
+
+  /// التطبيق راح للخلفية: نخفض الفلاج عشان الخدمة الخلفية ترجع ترن على أي
+  /// طلب جديد يوصل والطيار مش شايف
+  Future<void> _markAppBackground() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('app_in_foreground', false);
   }
 
   /// مزامنة حالة الطيار مع Firebase — لاكتشاف: (1) موافقة/رفض/إنهاء
@@ -2249,12 +2400,11 @@ class _HomeState extends State<HomeScreen> {
           for (final id in added) {
             await ShiftService.addOrder(id);
           }
-          // نفس شاشة "المكالمة الواردة" بترن باستمرار حتى لو التطبيق فاتح
-          // فعليًا قدام الطيار — سلوك موحّد في كل الحالات (فاتح/خلفية/مقفول)
-          await IncomingCallService.showIncomingOrder(
-            orderId: added.first,
-            count: added.length,
-          );
+          // التطبيق مفتوح قدام الطيار فعلاً — مفيش داعي لرنين مستمر (ده
+          // بيحصل بس والتطبيق مقفول). هنا يكفي تنبيه صوتي لمرة واحدة + بانر،
+          // والطيار شايف الطلب على طول. الرنين الخلفي المستمر بيتولّاه
+          // OrderRinger من الخدمة الخلفية لما التطبيق يكون مقفول/في الخلفية
+          NotificationService.playNewOrder();
           _showNewOrderBanner(added.length);
         }
       } else {
@@ -2302,6 +2452,9 @@ class _HomeState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // التطبيق بيتقفل — نخفض الفلاج عشان الخدمة الخلفية ترجع ترن على الطلبات
+    _markAppBackground();
     _gpsStream?.cancel();
     _refreshTimer?.cancel();
     NotificationService.dispose();
