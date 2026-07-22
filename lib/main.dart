@@ -629,6 +629,8 @@ class DeliveryItem {
   final String zoneName;
   final double zonePrice;
   final String note;
+  /// صور الإيصال/العنوان اللي المحل رفعها مع الطلب (روابط Cloudinary)
+  final List<String> images;
 
   DeliveryItem({
     required this.receiverName,
@@ -638,6 +640,7 @@ class DeliveryItem {
     required this.zoneName,
     required this.zonePrice,
     required this.note,
+    this.images = const [],
   });
 
   factory DeliveryItem.fromMap(Map m) {
@@ -649,6 +652,9 @@ class DeliveryItem {
         zoneName:       m['zoneName']       ?? '',
         zonePrice:      (m['zonePrice'] as num?)?.toDouble() ?? 0,
         note:           m['note']           ?? '',
+        images:         (m['images'] is List)
+            ? List<String>.from((m['images'] as List).whereType<String>())
+            : const [],
       );
   }
 }
@@ -4259,6 +4265,9 @@ class _OrderDetailState extends State<OrderDetailScreen> {
                       valueColor: K.green),
                 if (o.deliveries[i].note.isNotEmpty)
                   _DRow(Icons.note_outlined, o.deliveries[i].note, valueColor: K.orange),
+                // صور الإيصال/العنوان اللي المحل رفعها — اضغط للتكبير
+                if (o.deliveries[i].images.isNotEmpty)
+                  _ReceiptImages(urls: o.deliveries[i].images),
               ],
             ),
             const SizedBox(height: 12),
@@ -4656,6 +4665,121 @@ class VSep extends StatelessWidget {
 }
 
 // ─── Badge ───────────────────────────────────────────────────────
+/// شريط صور الإيصال/العنوان اللي المحل بيرفعها مع الطلب.
+/// الطيار يقدر يضغط على أي صورة يشوفها بالحجم الكامل ويكبّرها بأصابعه.
+class _ReceiptImages extends StatelessWidget {
+  final List<String> urls;
+  const _ReceiptImages({required this.urls});
+
+  void _openViewer(BuildContext context, int startIndex) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => _ImageViewer(urls: urls, initialIndex: startIndex),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.photo_camera_outlined, color: K.blue, size: 16),
+          const SizedBox(width: 6),
+          Text('صور الإيصال / العنوان (${urls.length})',
+              style: const TextStyle(color: K.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 88,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: urls.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => GestureDetector(
+              onTap: () => _openViewer(context, i),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  urls[i],
+                  width: 88, height: 88, fit: BoxFit.cover,
+                  loadingBuilder: (c, child, p) => p == null ? child : Container(
+                    width: 88, height: 88, color: K.card2,
+                    child: const Center(child: SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: K.grey))),
+                  ),
+                  errorBuilder: (c, e, st) => Container(
+                    width: 88, height: 88, color: K.card2,
+                    child: const Icon(Icons.broken_image_outlined, color: K.grey, size: 22),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// عارض الصور بالحجم الكامل مع إمكانية التكبير والتنقل بين الصور
+class _ImageViewer extends StatefulWidget {
+  final List<String> urls;
+  final int initialIndex;
+  const _ImageViewer({required this.urls, required this.initialIndex});
+  @override State<_ImageViewer> createState() => _ImageViewerState();
+}
+
+class _ImageViewerState extends State<_ImageViewer> {
+  late final PageController _ctrl = PageController(initialPage: widget.initialIndex);
+  late int _current = widget.initialIndex;
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded, color: K.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
+        title: Text('${_current + 1} / ${widget.urls.length}',
+            style: const TextStyle(color: K.white, fontSize: 15, fontWeight: FontWeight.w700)),
+      ),
+      body: PageView.builder(
+        controller: _ctrl,
+        itemCount: widget.urls.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (_, i) => InteractiveViewer(
+          minScale: 1, maxScale: 5,
+          child: Center(
+            child: Image.network(
+              widget.urls[i],
+              fit: BoxFit.contain,
+              loadingBuilder: (c, child, p) => p == null ? child
+                  : const Center(child: CircularProgressIndicator(color: K.red)),
+              errorBuilder: (c, e, st) => const Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.broken_image_outlined, color: K.grey, size: 46),
+                  SizedBox(height: 10),
+                  Text('تعذّر تحميل الصورة — تحقق من الإنترنت',
+                      style: TextStyle(color: K.grey, fontSize: 13)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Badge extends StatelessWidget {
   final String label;
   final Color color;

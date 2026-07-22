@@ -26,6 +26,35 @@
       measurementId: "G-F9R1E5P5GS"
     };
 
+    /* ══════════════════════════════════════════════════════════════
+       CLOUDINARY — رفع صور الإيصالات
+       الرفع بيتم من المتصفح مباشرة (unsigned preset) من غير سيرفر.
+       لازم يكون الـ preset معمول Unsigned من:
+       Settings ← Upload ← Upload presets
+    ══════════════════════════════════════════════════════════════ */
+    window.CLOUDINARY = {
+      cloudName   : "___CLOUD_NAME___",
+      uploadPreset: "___UPLOAD_PRESET___",
+    };
+
+    window.uploadReceiptImage = async function(file) {
+      const cfg = window.CLOUDINARY;
+      if (!cfg.cloudName || cfg.cloudName.startsWith("___"))
+        throw new Error("إعدادات Cloudinary مش مضبوطة");
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("upload_preset", cfg.uploadPreset);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cfg.cloudName}/image/upload`,
+                              { method: "POST", body: fd });
+      if (!res.ok) {
+        let msg = "فشل رفع الصورة";
+        try { const e = await res.json(); msg = e?.error?.message || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      const d = await res.json();
+      return d.secure_url;
+    };
+
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
     const auth = getAuth(app);
@@ -389,6 +418,7 @@
       $("orderNotes").value         = "";
       $("orderPrepaid").value       = "";
       $("delivContainer").innerHTML = "";
+      window._rowImages = {};
       window._delivCount = 0;
       const btn = $("saveBtn");
       if (btn) { btn.disabled = false; btn.textContent = "📤 إرسال الطلب"; }
@@ -941,6 +971,15 @@
         <div class="fg">
           <label>ملاحظات الطرد</label>
           <input type="text" id="rNote-${n}" placeholder="هش — لا تكسر / إلخ…" />
+        </div>
+        <div class="fg">
+          <label>📷 صور الإيصال / العنوان (اختياري)</label>
+          <input type="file" id="rImgInput-${n}" accept="image/*" multiple
+                 style="display:none" onchange="handleReceiptImages(${n}, this)" />
+          <button type="button" class="img-add-btn" onclick="document.getElementById('rImgInput-${n}').click()">
+            📷 إضافة صور
+          </button>
+          <div class="img-strip" id="rImgs-${n}"></div>
         </div>`;
       $("delivContainer").appendChild(div);
       window.renderAddressWidget(`rAddrWidget-${n}`, { required: false });
@@ -977,8 +1016,57 @@
       toast("تم ملء بيانات المحل كمستلِم ✓", "ok");
     };
 
+    /* صور كل طرد: { رقم الطرد: [روابط] } */
+    window._rowImages = {};
+
+    window.handleReceiptImages = async function(n, input) {
+      const files = [...(input.files || [])];
+      input.value = "";                       // نسمح باختيار نفس الملف تاني
+      if (!files.length) return;
+      window._rowImages[n] = window._rowImages[n] || [];
+
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) { toast("الملف ده مش صورة", "err"); continue; }
+        if (f.size > 10 * 1024 * 1024)    { toast(`${f.name}: أكبر من 10 ميجا`, "err"); continue; }
+        const ph = { uploading: true, name: f.name };
+        window._rowImages[n].push(ph);
+        renderRowImages(n);
+        try {
+          const url = await window.uploadReceiptImage(f);
+          const i = window._rowImages[n].indexOf(ph);
+          if (i > -1) window._rowImages[n][i] = url;   // نستبدل المؤقّت بالرابط
+        } catch (e) {
+          const i = window._rowImages[n].indexOf(ph);
+          if (i > -1) window._rowImages[n].splice(i, 1);
+          toast("تعذّر رفع الصورة: " + e.message, "err");
+        }
+        renderRowImages(n);
+      }
+    };
+
+    window.removeRowImage = function(n, idx) {
+      if (!window._rowImages[n]) return;
+      window._rowImages[n].splice(idx, 1);
+      renderRowImages(n);
+    };
+
+    function renderRowImages(n) {
+      const box = document.getElementById(`rImgs-${n}`);
+      if (!box) return;
+      const list = window._rowImages[n] || [];
+      box.innerHTML = list.map((it, i) => {
+        if (typeof it === "object" && it.uploading)
+          return `<div class="img-thumb img-loading" title="جاري الرفع…">⏳</div>`;
+        return `<div class="img-thumb">
+                  <img src="${it}" alt="إيصال" onclick="window.open('${it}','_blank')" />
+                  <button type="button" class="img-del" onclick="removeRowImage(${n},${i})" title="حذف">✕</button>
+                </div>`;
+      }).join("");
+    }
+
     window.rmRow = function (n) {
       document.getElementById(`row-${n}`)?.remove();
+      delete window._rowImages[n];
       recalc();
     };
 
@@ -1057,7 +1145,9 @@
           receiverId: null, receiverName: name,
           receiverPhone: phone, receiverPhone2: phone2,
           zoneId, zoneName, zonePrice: price,
-          orderPrice, address: addr, note, status: "قيد التنفيذ"
+          orderPrice, address: addr, note, status: "قيد التنفيذ",
+          // الروابط بس — أي صورة لسه بترفع بتتستبعد
+          images: (window._rowImages[n] || []).filter(x => typeof x === "string")
         });
       }
 
@@ -1397,6 +1487,22 @@
     /* ─── Form ─── */
     .fg { margin-bottom: 11px; }
     /* ── Address Widget ── */
+    /* صور الإيصالات */
+    .img-add-btn { background: var(--card); border: 1px dashed var(--sky); color: var(--sky);
+      border-radius: 9px; padding: 9px 14px; font-size: .84rem; font-weight: 700;
+      cursor: pointer; font-family: inherit; width: 100%; }
+    .img-add-btn:hover { background: rgba(232,25,44,.08); }
+    .img-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .img-thumb { position: relative; width: 74px; height: 74px; border-radius: 9px;
+      overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+    .img-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; display: block; }
+    .img-loading { display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; color: var(--muted); }
+    .img-del { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+      border-radius: 50%; border: none; background: rgba(0,0,0,.65); color: #fff;
+      font-size: .7rem; cursor: pointer; line-height: 1; padding: 0; }
+    .img-del:hover { background: var(--red); }
+
     .addr-widget { width: 100%; }
     .addr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .addr-field { display: flex; flex-direction: column; gap: 4px; }

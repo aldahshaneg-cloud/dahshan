@@ -3542,6 +3542,15 @@
             <span class="od-info-label">العنوان</span>
             <span class="od-info-val">📍 ${d.address || "—"}</span>
           </div>
+          ${(d.images && d.images.length) ? `
+          <div class="od-info-block" style="margin-top:8px;display:block">
+            <span class="od-info-label" style="display:block;margin-bottom:6px">📷 صور الإيصال / العنوان</span>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              ${d.images.map(u => `<a href="${u}" target="_blank" rel="noopener" title="اضغط للتكبير">
+                <img src="${u}" style="width:84px;height:84px;object-fit:cover;border-radius:9px;border:1px solid var(--border);display:block" />
+              </a>`).join("")}
+            </div>
+          </div>` : ""}
           <div class="od-price-row">
             <span>سعر التوصيل</span>
             <span class="od-price-val">${d.zonePrice || 0} ج.م</span>
