@@ -944,6 +944,15 @@
         </div>`;
       $("delivContainer").appendChild(div);
       window.renderAddressWidget(`rAddrWidget-${n}`, { required: false });
+      // نبدأ من محافظة/مدينة المحل — أغلب التوصيلات في نفس المنطقة، فالمحل
+      // ما يضطرش يختارهم مع كل طرد. التفاصيل تفضل فاضية عشان عنوان العميل.
+      const _u = window._currentUser || {};
+      if (_u.shopAddress) {
+        window.setAddressValue(`rAddrWidget-${n}`, _u.shopAddress);
+        const _d = document.getElementById(`rAddrWidget-${n}-detail`);
+        if (_d) _d.value = "";
+        window._updateAddrPreview(`rAddrWidget-${n}`);
+      }
       fillZones(n);
     };
 
