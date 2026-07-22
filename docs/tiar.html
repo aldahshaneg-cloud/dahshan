@@ -910,7 +910,7 @@
       const phone1 = document.getElementById("phone1").value.trim();
       const phone2 = document.getElementById("phone2").value.trim();
       const cardNum = document.getElementById("cardNum").value.trim();
-      const address = document.getElementById("address").value.trim();
+      const address = window.getAddressValue("pilotAddrWidget").trim();
       const vehicleNo = document.getElementById("vehicleNo").value.trim();
       const commissionType  = document.getElementById("commissionType").value || "percent";
       const commissionValue = Number(document.getElementById("commissionValue").value) || 0;
@@ -960,6 +960,7 @@
           showToast("تمّ إضافة الطيار بنجاح ✓ — اسم المستخدم: " + pilotUsername, "success");
         }
         document.getElementById("addForm").reset();
+        window.renderAddressWidget("pilotAddrWidget", { required: true, value: "" });
         resetEditState();
         closeModal('pilot');
       } catch (e) { showToast("خطأ أثناء الحفظ: " + e.message, "error"); }
@@ -983,7 +984,7 @@
       document.getElementById("phone1").value       = p.phone1;
       document.getElementById("phone2").value       = p.phone2 || "";
       document.getElementById("cardNum").value      = p.cardNum;
-      document.getElementById("address").value      = p.address;
+      window.renderAddressWidget("pilotAddrWidget", { required: true, value: p.address || "" });
       document.getElementById("vehicleNo").value    = p.vehicleNo;
       document.getElementById("commissionType").value  = p.commissionType || "percent";
       document.getElementById("commissionValue").value = p.commissionValue || "";
@@ -2321,7 +2322,7 @@
       const areas   = window.getAreasFromForm();
       const phone   = document.getElementById("branchPhone").value.trim();
       const manager = document.getElementById("branchManager").value.trim();
-      const address = document.getElementById("branchAddress").value.trim();
+      const address = window.getAddressValue("branchAddrWidget").trim();
       if (!name || !code || !areas.length || !phone) { showToast("يرجى تعبئة الحقول الإلزامية (الاسم والكود والمناطق والهاتف)", "error"); return; }
       if (!/^[A-Z0-9]{2,6}$/.test(code)) { showToast("كود الفرع يجب أن يكون 2-6 أحرف إنجليزية أو أرقام", "error"); return; }
       if (!window._editState.active) {
@@ -2339,6 +2340,7 @@
           showToast("تمّ إضافة الفرع بنجاح ✓", "success");
         }
         document.getElementById("addBranchForm").reset();
+        window.renderAddressWidget("branchAddrWidget", { required: false, value: "" });
         window.loadAreasIntoForm([]);
         resetEditState();
         closeModal("branch");
@@ -2357,7 +2359,7 @@
       document.getElementById("branchCode").value    = b.code;
       document.getElementById("branchPhone").value   = b.phone;
       document.getElementById("branchManager").value = b.manager || "";
-      document.getElementById("branchAddress").value = b.address || "";
+      window.renderAddressWidget("branchAddrWidget", { value: b.address || "" });
       /* توافق مع البيانات القديمة: إذا كان الفرع يحتوي على area قديمة فقط */
       const areasToLoad = b.areas && b.areas.length ? b.areas : (b.area ? [b.area] : [""]);
       window.loadAreasIntoForm(areasToLoad);
@@ -4289,7 +4291,7 @@
         shopName   = document.getElementById("newShopName").value.trim();
         shopPhone  = document.getElementById("newShopPhone").value.trim();
         shopPhone2 = document.getElementById("newShopPhone2").value.trim();
-        shopAddress= document.getElementById("newShopAddress").value.trim();
+        shopAddress= window.getAddressValue("shopAddrWidget").trim();
         if (!branchId)  { showToast("يرجى اختيار الفرع المخدوم", "error"); return; }
         if (!shopName)  { showToast("يرجى إدخال اسم المحل", "error"); return; }
         if (!shopPhone) { showToast("يرجى إدخال هاتف المحل", "error"); return; }
@@ -4333,6 +4335,7 @@
         // مسح اختيار العميل بعد الحفظ
         window._selectedSenderForStore = null;
         document.getElementById("addUserForm").reset();
+        window.renderAddressWidget("shopAddrWidget", { required: false, value: "" });
         resetEditState();
         closeModal('user');
       } catch (e) { showToast("خطأ: " + e.message, "error"); }
@@ -4376,7 +4379,7 @@
           if (u.shopName)    document.getElementById("newShopName").value    = u.shopName;
           if (u.shopPhone)   document.getElementById("newShopPhone").value   = u.shopPhone;
           if (u.shopPhone2)  document.getElementById("newShopPhone2").value  = u.shopPhone2;
-          if (u.shopAddress) document.getElementById("newShopAddress").value = u.shopAddress;
+          if (u.shopAddress) window.renderAddressWidget("shopAddrWidget", { value: u.shopAddress });
           // استعادة ربط عميل الاستلام
           if (u.senderId) {
             window._selectedSenderForStore = u.senderId;
@@ -8566,7 +8569,7 @@
       <div class="form-group"><label>رقم البطاقة <span class="req">*</span></label><input id="cardNum" type="text" required /></div>
       <div class="form-group"><label>رقم المركبة <span class="req">*</span></label><input id="vehicleNo" type="text" required /></div>
       <div class="form-group"><label>الفرع المعيّن</label><select id="pilotBranch"><option value="">— بلا فرع —</option></select></div>
-      <div class="form-group full"><label>العنوان <span class="req">*</span></label><textarea id="address" required></textarea></div>
+      <div class="form-group full"><label>العنوان <span class="req">*</span></label><div id="pilotAddrWidget"></div></div>
       <div class="form-group"><label>نوع العمولة</label><select id="commissionType"><option value="percent">نسبة % من سعر التوصيل</option><option value="fixed">عمولة ثابتة لكل طلب</option></select></div>
       <div class="form-group"><label>قيمة العمولة</label><input id="commissionValue" type="number" step="0.01" min="0" placeholder="مثال: 20 (للنسبة) أو 15 (ج.م ثابت)" /></div>
       <div class="form-group full"><label>ملاحظات</label><textarea id="pilotNotes"></textarea></div>
@@ -8698,7 +8701,7 @@
           </button>
         </div>
         <div class="form-group full"><label>اسم المدير</label><input id="branchManager" type="text" /></div>
-        <div class="form-group full"><label>العنوان</label><textarea id="branchAddress"></textarea></div>
+        <div class="form-group full"><label>العنوان</label><div id="branchAddrWidget"></div></div>
       </div>
       <div class="form-actions"><button type="submit" id="submitBranchBtn" class="submit-btn">حفظ الفرع</button><button type="button" class="cancel-btn" onclick="closeModal('branch')">إلغاء</button></div>
     </form>
@@ -8892,7 +8895,7 @@
               <div class="form-group full"><label>اسم المحل <span class="req">*</span></label><input id="newShopName" type="text" placeholder="مثال: محلات النور" /></div>
               <div class="form-group"><label>هاتف المحل <span class="req">*</span></label><input id="newShopPhone" type="tel" dir="ltr" placeholder="01xxxxxxxxx" /></div>
               <div class="form-group"><label>هاتف 2 (اختياري)</label><input id="newShopPhone2" type="tel" dir="ltr" placeholder="—" /></div>
-              <div class="form-group full"><label>عنوان المحل</label><input id="newShopAddress" type="text" placeholder="الشارع / الحي / المدينة" /></div>
+              <div class="form-group full"><label>عنوان المحل</label><div id="shopAddrWidget"></div></div>
             </div>
           </div>
         </div>
@@ -9033,6 +9036,7 @@
   /* ── Reset modal functions (clear edit mode) ── */
   function resetPilotModal() {
     document.getElementById("addForm").reset();
+        window.renderAddressWidget("pilotAddrWidget", { required: true, value: "" });
     document.querySelector("#modal-pilot .modal-title").textContent = "✈ إضافة طيار جديد";
     document.getElementById("submitBtn").textContent = "حفظ الطيار";
     if (window.fillPilotBranchSelect) window.fillPilotBranchSelect("");
@@ -9054,6 +9058,7 @@
   }
   function resetBranchModal() {
     document.getElementById("addBranchForm").reset();
+        window.renderAddressWidget("branchAddrWidget", { required: false, value: "" });
     document.querySelector("#modal-branch .modal-title").textContent = "🏢 إضافة فرع جديد";
     document.getElementById("submitBranchBtn").textContent = "حفظ الفرع";
     if (window.loadAreasIntoForm) window.loadAreasIntoForm([""]);
@@ -9080,6 +9085,7 @@
   }
   function resetUserModal() {
     document.getElementById("addUserForm").reset();
+        window.renderAddressWidget("shopAddrWidget", { required: false, value: "" });
     document.getElementById("newUsername").disabled = false;
     document.querySelector("#modal-user .modal-title").textContent = "👤 إضافة مستخدم جديد";
     document.getElementById("addUserBtn").textContent = "حفظ المستخدم";
@@ -9158,7 +9164,7 @@
     document.getElementById("newShopName").value    = s.name    || "";
     document.getElementById("newShopPhone").value   = s.phone1  || "";
     document.getElementById("newShopPhone2").value  = s.phone2  || "";
-    document.getElementById("newShopAddress").value = s.address || "";
+    window.renderAddressWidget("shopAddrWidget", { value: s.address || "" });
     // إغلاق الـ dropdown وإظهار الـ selected bar
     document.getElementById("senderSearchForStore").value = s.name;
     document.getElementById("senderDropForStore").style.display  = "none";
@@ -9176,7 +9182,7 @@
     document.getElementById("newShopName").value    = "";
     document.getElementById("newShopPhone").value   = "";
     document.getElementById("newShopPhone2").value  = "";
-    document.getElementById("newShopAddress").value = "";
+    window.renderAddressWidget("shopAddrWidget", { value: "" });
   };
 
   // إغلاق الـ dropdown عند الضغط خارجه
@@ -10340,6 +10346,18 @@
       icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
     }
   }
+
+    /* رسم ودجتات العنوان مرة عند التحميل — النماذج الجديدة محتاجة الودجت
+       جاهز حتى لو المستخدم ما فتحش شاشة تعديل قبلها. */
+    function _initAddrWidgets() {
+      if (document.getElementById("pilotAddrWidget")) window.renderAddressWidget("pilotAddrWidget", { required: true });
+      if (document.getElementById("branchAddrWidget")) window.renderAddressWidget("branchAddrWidget", { required: false });
+      if (document.getElementById("shopAddrWidget")) window.renderAddressWidget("shopAddrWidget", { required: false });
+    }
+    if (document.readyState === "loading")
+      document.addEventListener("DOMContentLoaded", _initAddrWidgets);
+    else _initAddrWidgets();
+
 </script>
 </body>
 </html>

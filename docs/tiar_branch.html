@@ -3213,7 +3213,7 @@
     // فتح موودال طلب انضمام طيار جديد
     window.openAddPilotModal = function() {
       // مسح الحقول
-      ["jPilotName","jPilotPhone1","jPilotPhone2","jPilotCard","jPilotVehicle","jPilotAddress"]
+      ["jPilotName","jPilotPhone1","jPilotPhone2","jPilotCard","jPilotVehicle"]
         .forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
       document.getElementById("modal-addpilot").classList.add("open");
     };
@@ -3224,7 +3224,7 @@
       const phone2  = document.getElementById("jPilotPhone2").value.trim();
       const card    = document.getElementById("jPilotCard").value.trim();
       const vehicle = document.getElementById("jPilotVehicle").value.trim();
-      const address = document.getElementById("jPilotAddress").value.trim();
+      const address = window.getAddressValue("jPilotAddrWidget").trim();
 
       if (!name)    { showToast("يرجى إدخال اسم الطيار", "error"); return; }
       if (!phone1)  { showToast("يرجى إدخال رقم الهاتف", "error"); return; }
@@ -7186,7 +7186,7 @@
       </div>
       <div class="form-group full">
         <label>العنوان <span style="color:var(--red)">*</span></label>
-        <textarea id="jPilotAddress" placeholder="عنوان الطيار التفصيلي" style="min-height:60px"></textarea>
+        <div id="jPilotAddrWidget"></div>
       </div>
     </div>
     <div class="form-actions">
@@ -8449,6 +8449,16 @@ window.clearBrDeliveredFilters = function() {
       icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
     }
   }
+
+    /* رسم ودجتات العنوان مرة عند التحميل — النماذج الجديدة محتاجة الودجت
+       جاهز حتى لو المستخدم ما فتحش شاشة تعديل قبلها. */
+    function _initAddrWidgets() {
+      if (document.getElementById("jPilotAddrWidget")) window.renderAddressWidget("jPilotAddrWidget", { required: true });
+    }
+    if (document.readyState === "loading")
+      document.addEventListener("DOMContentLoaded", _initAddrWidgets);
+    else _initAddrWidgets();
+
 </script>
 </body>
 </html>
