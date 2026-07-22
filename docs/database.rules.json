@@ -1,0 +1,67 @@
+{
+  "_ملاحظة": [
+    "قواعد أمان Realtime Database — انسخ محتوى هذا الملف في:",
+    "Firebase Console → Realtime Database → Rules → Publish",
+    "",
+    "المبدأ: مقفول بالكامل افتراضيًا، ولا يُسمح بأي قراءة أو كتابة إلا لجلسة",
+    "مُصادَق عليها (auth != null). كل التطبيقات بتسجّل دخول تلقائيًا:",
+    "  • البوابة ولوحة الإدارة → دخول جوجل (حساب حقيقي)",
+    "  • تطبيقات الفروع/المحلات/HR → دخول مجهول تلقائي عند فتح الصفحة",
+    "  • تطبيق الطيار (Flutter) → دخول مجهول عبر REST مع ?auth=<idToken>",
+    "",
+    "أهم مكسب: منع سحب قاعدة البيانات كاملة بـ curl/المتصفح من غير مصادقة",
+    "(دلوقتي أي حد يقدر يعمل كده). راجع التحذير في آخر الملف."
+  ],
+
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "adminEmails": {
+      ".read": "auth != null",
+      ".write": "auth != null && (!data.exists() || auth.token.email_verified == true)",
+      "$entry": {
+        ".validate": "newData.isString() && newData.val().length > 3"
+      }
+    },
+
+    "users":                  { ".read": "auth != null", ".write": "auth != null" },
+    "pilots":                 { ".read": "auth != null", ".write": "auth != null" },
+    "orders":                 { ".read": "auth != null", ".write": "auth != null" },
+    "branches":               { ".read": "auth != null", ".write": "auth != null" },
+    "shifts":                 { ".read": "auth != null", ".write": "auth != null" },
+    "zones":                  { ".read": "auth != null", ".write": "auth != null" },
+    "senders":                { ".read": "auth != null", ".write": "auth != null" },
+    "receivers":              { ".read": "auth != null", ".write": "auth != null" },
+    "settings":               { ".read": "auth != null", ".write": "auth != null" },
+    "attendance":             { ".read": "auth != null", ".write": "auth != null" },
+    "payroll":                { ".read": "auth != null", ".write": "auth != null" },
+    "expenses":               { ".read": "auth != null", ".write": "auth != null" },
+    "manualEmployees":        { ".read": "auth != null", ".write": "auth != null" },
+    "storeContacts":          { ".read": "auth != null", ".write": "auth != null" },
+    "cashStores":             { ".read": "auth != null", ".write": "auth != null" },
+    "cashTransactions":       { ".read": "auth != null", ".write": "auth != null" },
+    "custodyTransactions":    { ".read": "auth != null", ".write": "auth != null" },
+    "closingBranches":        { ".read": "auth != null", ".write": "auth != null" },
+    "pilotJoinRequests":      { ".read": "auth != null", ".write": "auth != null" },
+    "pilotLeaveRequests":     { ".read": "auth != null", ".write": "auth != null" },
+    "pilotShiftRequests":     { ".read": "auth != null", ".write": "auth != null" },
+    "pilotReturnRequests":    { ".read": "auth != null", ".write": "auth != null" },
+    "pilotMonthlyCloseouts":  { ".read": "auth != null", ".write": "auth != null" },
+    "pilotSupportRequests":   { ".read": "auth != null", ".write": "auth != null" },
+    "pilotTransfers":         { ".read": "auth != null", ".write": "auth != null" }
+  },
+
+  "_تحذير_مهم": [
+    "دي مرحلة أولى (تصليب) مش تأمين كامل:",
+    "  ✔ بتمنع السحب المباشر بـ curl / فتح رابط .json في المتصفح (أخطر وأسهل هجوم).",
+    "  ✖ الدخول المجهول متاح لأي حد معاه إعدادات Firebase (وهي علنية بطبيعتها)،",
+    "     فالمهاجم المصمّم لسه يقدر يوصل. وكمان الباسوردات في users لسه نص صريح.",
+    "",
+    "التأمين الكامل يحتاج: حساب Firebase Auth حقيقي لكل مستخدم (طيار/فرع/محل/HR)،",
+    "وقواعد حسب الدور (roles/$uid)، وإلغاء الدخول المجهول، وتشفير/إزالة الباسوردات.",
+    "",
+    "للتراجع السريع لو حصلت مشكلة، استخدم القواعد المفتوحة القديمة:",
+    "{ \"rules\": { \".read\": true, \".write\": true } }"
+  ]
+}

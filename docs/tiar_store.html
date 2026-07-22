@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>طيّار | بوابة المحلات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getDatabase, ref, push, set, onValue, get, update, runTransaction
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signOut, signInAnonymously }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+      authDomain: "aldahshaneg-92f66.firebaseapp.com",
+      databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+      projectId: "aldahshaneg-92f66",
+      storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+      messagingSenderId: "164254513529",
+      appId: "1:164254513529:web:8ec9bf526f2b2669d397a8",
+      measurementId: "G-F9R1E5P5GS"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+    const auth = getAuth(app);
+
+    /* ══════════════════════════════════════════════════════════════════
+       دخول الإدارة بحساب جوجل — بوابة المحلات شغّالة على محل محدد،
+       فبنعرض للأدمن قائمة المحلات ويختار منها. صاحب المحل العادي
+       يفضل يدخل باسم مستخدم/كلمة مرور زي ما هو.
+    ══════════════════════════════════════════════════════════════════ */
+    async function _isAdminEmail(email) {
+      if (!email) return false;
+      const snap = await get(ref(db, "adminEmails"));
+      if (!snap.exists()) return false;
+      const val = snap.val();
+      const list = Array.isArray(val) ? val : Object.values(val);
+      return list.filter(Boolean).map(e => String(e).trim().toLowerCase())
+                 .includes(String(email).trim().toLowerCase());
+    }
+
+    async function _showStorePickerForAdmin(adminName) {
+      const snap = await get(ref(db, "users"));
+      const shops = snap.exists()
+        ? Object.entries(snap.val())
+            .filter(([, u]) => u && u.role === "صاحب محل")
+            .map(([username, u]) => ({ username, ...u }))
+        : [];
+      const box = document.createElement("div");
+      box.id = "_adminStorePicker";
+      box.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:20px";
+      box.innerHTML = `
+        <div style="background:var(--panel,#15161c);border:1px solid var(--border,#2a2b33);border-radius:14px;padding:22px;max-width:420px;width:100%;font-family:inherit">
+          <div style="font-size:1.05rem;font-weight:800;color:var(--text,#e8e8ef);margin-bottom:6px">👑 دخول الإدارة</div>
+          <div style="font-size:.82rem;color:var(--muted,#8b93a7);margin-bottom:16px">
+            أهلاً ${adminName} — اختر المحل اللي عايز تشتغل عليه:
+          </div>
+          <div id="_spShops" style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto">
+            ${shops.length ? shops.map(s => `
+              <button data-u="${String(s.username).replace(/"/g,'&quot;')}"
+                style="text-align:right;background:var(--card,#1c1d24);border:1px solid var(--border,#2a2b33);color:var(--text,#e8e8ef);padding:11px 14px;border-radius:9px;cursor:pointer;font-size:.9rem;font-weight:600">
+                🏪 ${s.shopName || s.username}
+                <span style="display:block;font-size:.72rem;color:var(--muted,#8b93a7);font-weight:400;margin-top:2px">${s.branchName || "—"}</span>
+              </button>`).join("")
+              : `<div style="color:var(--muted,#8b93a7);text-align:center;padding:18px">لا توجد محلات مسجّلة</div>`}
+          </div>
+          <button id="_spCancel" style="margin-top:14px;width:100%;background:transparent;border:1px solid var(--border,#2a2b33);color:var(--muted,#8b93a7);padding:9px;border-radius:9px;cursor:pointer">إلغاء وتسجيل الخروج</button>
+        </div>`;
+      document.body.appendChild(box);
+
+      box.querySelectorAll("#_spShops button[data-u]").forEach(btn => {
+        btn.onclick = () => {
+          const u = shops.find(s => s.username === btn.dataset.u);
+          if (!u) return;
+          const data = {
+            username   : u.username,
+            role       : u.role,
+            branchId   : u.branchId    || "",
+            branchName : u.branchName  || "",
+            shopName   : u.shopName    || u.username,
+            shopPhone  : u.shopPhone   || "",
+            shopPhone2 : u.shopPhone2  || "",
+            shopAddress: u.shopAddress || "",
+            viaGoogleAdmin: true
+          };
+          box.remove();
+          saveSession(data);
+          applySession(data);
+        };
+      });
+      box.querySelector("#_spCancel").onclick = async () => {
+        box.remove();
+        try { await signOut(auth); } catch(e) {}
+      };
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      try {
+        if (!user) {
+          // مفيش جلسة: ندخل مجهول عشان القواعد (auth != null) تسمح بالقراءة/الكتابة
+          signInAnonymously(auth).catch(e => console.warn("anonymous auth:", e?.code || e));
+          return;
+        }
+        if (window._currentUser) return;
+        if (document.getElementById("_adminStorePicker")) return;
+        const email = (user.email || "").toLowerCase();
+        if (!await _isAdminEmail(email)) return;
+        await _showStorePickerForAdmin(user.displayName || email);
+      } catch(e) { console.error("google admin auto-login:", e); }
+    });
+
+    /* ══════════════════════════════════════════════════════
+       SESSION
+    ══════════════════════════════════════════════════════ */
+    const SESSION_KEY = "tiar-store-session";
+
+    function saveSession(data) { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); }
+    function clearSession()    { localStorage.removeItem(SESSION_KEY); }
+
+    function applySession(data) {
+      window._currentUser = data;
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("app").style.display          = "flex";
+      // Profile info
+      $("prof-shop").textContent     = data.shopName   || data.username;
+      $("prof-branch").textContent   = data.branchName || "—";
+      $("prof-branch-2").textContent = data.branchName || "—";
+      $("prof-user").textContent     = data.username;
+      $("prof-phone").textContent    = data.shopPhone  || "—";
+      $("prof-addr").textContent     = data.shopAddress || "—";
+      // Sender bar in new-order page
+      $("sender-name").textContent  = data.shopName  || data.username;
+      $("sender-phone").textContent = data.shopPhone  || "—";
+      startListeners(data);
+      navigateTo("new-order");
+    }
+
+    // Restore session on load
+    try {
+      const saved = localStorage.getItem(SESSION_KEY);
+      if (saved) { const d = JSON.parse(saved); if (d?.branchId) applySession(d); else clearSession(); }
+    } catch { clearSession(); }
+
+    /* ══════════════════════════════════════════════════════
+       LOGIN
+       ملاحظة: لا يوجد تسجيل حضور وانصراف في تطبيق المحلات
+       لأن أصحاب المحلات لا يعملون في الشركة — حضورهم منفصل
+    ══════════════════════════════════════════════════════ */
+
+    /* ── Passthrough من الواجهة الرئيسية ───────────────── */
+    async function checkStorePassthrough() {
+      const key = "tiar-passthrough-store";
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      localStorage.removeItem(key);
+      try {
+        const pt = JSON.parse(raw);
+        if (!pt?.username || !pt?.password) return false;
+        const snap = await get(ref(db, "users/" + pt.username));
+        if (!snap.exists()) return false;
+        const u = snap.val();
+        if (u.password !== pt.password) return false;
+        if (!u.branchId) return false;
+        const data = {
+          username:   pt.username,
+          role:       u.role,
+          branchId:   u.branchId,
+          branchName: u.branchName  || "",
+          shopName:   u.shopName    || pt.username,
+          shopPhone:  u.shopPhone   || "",
+          shopPhone2: u.shopPhone2  || "",
+          shopAddress:u.shopAddress || ""
+        };
+        saveSession(data);
+        applySession(data);
+        return true;
+      } catch(e) { console.error("store passthrough error", e); return false; }
+    }
+
+    window.doLogin = async function () {
+      const username = $("loginUser").value.trim();
+      const password = $("loginPass").value;
+      const errEl    = $("loginError");
+      const btn      = $("loginBtn");
+      errEl.textContent = "";
+      if (!username || !password) { errEl.textContent = "يرجى إدخال بيانات الدخول"; return; }
+      btn.disabled = true; btn.textContent = "جاري التحقق…";
+      try {
+        const snap = await get(ref(db, "users/" + username));
+        if (!snap.exists()) { errEl.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+        const u = snap.val();
+        if (u.password !== password) {
+          errEl.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة";
+          $("loginPass").value = ""; return;
+        }
+        if (u.role !== "صاحب محل") {
+          errEl.textContent = "هذا التطبيق خاص بأصحاب المحلات فقط"; return;
+        }
+        if (!u.branchId) {
+          errEl.textContent = "لم يتم ربط حسابك بفرع — تواصل مع الإدارة"; return;
+        }
+        const data = {
+          username,
+          role       : u.role,
+          branchId   : u.branchId,
+          branchName : u.branchName  || "",
+          shopName   : u.shopName    || username,
+          shopPhone  : u.shopPhone   || "",
+          shopPhone2 : u.shopPhone2  || "",
+          shopAddress: u.shopAddress || ""
+        };
+        saveSession(data);
+        applySession(data);
+      } catch (e) { errEl.textContent = "خطأ في الاتصال: " + e.message; }
+      finally { btn.disabled = false; btn.textContent = "دخول"; }
+    };
+
+    window.doLogout = function () {
+      if (window._zonesUnsub)  window._zonesUnsub();
+      if (window._ordersUnsub) window._ordersUnsub();
+      window._currentUser  = null;
+      window._zonesList    = [];
+      window._ordersData   = [];
+      window._delivCount   = 0;
+      clearSession();
+      // خروج من جلسة جوجل كمان وإلا منتقي المحلات هيظهر تاني فورًا للإدارة
+      signOut(auth).catch(() => {});
+      document.getElementById("app").style.display           = "none";
+      document.getElementById("login-screen").style.display  = "flex";
+      $("loginUser").value = ""; $("loginPass").value = ""; $("loginError").textContent = "";
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+      $("loginBtn")?.addEventListener("click", window.doLogin);
+      $("loginPass")?.addEventListener("keydown", e => { if (e.key === "Enter") window.doLogin(); });
+      // تحقق من passthrough الواجهة الرئيسية
+      if (!window._currentUser) { checkStorePassthrough(); }
+    });
+
+    /* ══════════════════════════════════════════════════════
+       NAVIGATION
+    ══════════════════════════════════════════════════════ */
+    const PAGES = ["new-order", "my-orders", "profile"];
+    const PAGE_TITLES = { "new-order": "طلب جديد", "my-orders": "طلباتي", "profile": "حسابي" };
+
+    window.navigateTo = function (page) {
+      PAGES.forEach(p => {
+        document.getElementById("page-" + p)?.classList.remove("active");
+        document.querySelector(`[data-page="${p}"]`)?.classList.remove("active");
+      });
+      document.getElementById("page-" + page)?.classList.add("active");
+      document.querySelector(`[data-page="${page}"]`)?.classList.add("active");
+      $("top-title").textContent = PAGE_TITLES[page] || "";
+      window._currentPage = page;
+      if (page === "new-order")  resetForm();
+      if (page === "my-orders")  renderOrders();
+    };
+
+    /* ══════════════════════════════════════════════════════
+       FIREBASE LISTENERS
+    ══════════════════════════════════════════════════════ */
+    window._zonesList    = [];
+    window._ordersData   = [];
+    window._storeContacts = [];   // جهات اتصال هذا المحل فقط
+
+    /* ══════════════════════════════════════════════════════
+       STORE CONTACTS  (storeContacts/{username}/...)
+    ══════════════════════════════════════════════════════ */
+    function loadStoreContacts(username) {
+      onValue(ref(db, "storeContacts/" + username), snap => {
+        const d = snap.val() || {};
+        window._storeContacts = Object.entries(d).map(([id, v]) => ({ id, ...v }));
+      });
+    }
+
+    // حفظ أو تحديث جهة اتصال للمحل بناءً على رقم الهاتف
+    // يحفظ في مكانين:
+    //   1) storeContacts/{username}/  -- خاص بالمحل فقط (autocomplete)
+    //   2) receivers/                 -- نسخة للإدارة والفروع، مخفية عن المحل
+    async function saveStoreContact(username, { name, phone, phone2, address }) {
+      if (!name || !phone) return;
+      const now = new Date().toISOString();
+
+      // 1) storeContacts: خاص بالمحل
+      const existing = window._storeContacts.find(c => c.phone === phone);
+      if (existing) {
+        await update(ref(db, "storeContacts/" + username + "/" + existing.id), {
+          name, phone, phone2: phone2 || "", address: address || "", updatedAt: now
+        });
+      } else {
+        await push(ref(db, "storeContacts/" + username), {
+          name, phone, phone2: phone2 || "", address: address || "", createdAt: now
+        });
+      }
+
+      // 2) receivers: نسخة للإدارة والفروع (لا يراها المحل)
+      // ابحث إذا كان الرقم مسجل مسبقاً في receivers لتجنب التكرار
+      try {
+        const receiversSnap = await get(ref(db, "receivers"));
+        const receiversData = receiversSnap.val() || {};
+        const entries = Object.entries(receiversData);
+        const existingReceiver = entries.find(([, v]) => v.phone1 === phone);
+        if (existingReceiver) {
+          const [rid, rv] = existingReceiver;
+          if (rv.name !== name || rv.address !== (address || "")) {
+            await update(ref(db, "receivers/" + rid), {
+              name, phone2: phone2 || "", address: address || "",
+              addedBy: username, updatedAt: now
+            });
+          }
+        } else {
+          await push(ref(db, "receivers"), {
+            name,
+            phone1   : phone,
+            phone2   : phone2 || "",
+            address  : address || "",
+            addedBy  : username,
+            createdAt: now
+          });
+        }
+      } catch (e) {
+        console.warn("receivers sync error:", e);
+      }
+    }
+
+    function startListeners(u) {
+      loadStoreContacts(u.username);
+      // Zones for this branch
+      window._zonesUnsub = onValue(ref(db, "zones"), snap => {
+        const d = snap.val() || {};
+        window._zonesList = Object.entries(d)
+          .map(([id, v]) => ({ id, ...v }))
+          .filter(z => (z.deliveryBranchId || z.branchId) === u.branchId);
+        // Refill any existing zone dropdowns on the form
+        document.querySelectorAll("[id^='rZone-']").forEach(sel => {
+          const n = sel.id.replace("rZone-", "");
+          const prevVal = sel.value;
+          fillZones(n);
+          if (prevVal) sel.value = prevVal; // restore selection if possible
+        });
+      });
+
+      // Orders for this merchant (real-time)
+      window._ordersUnsub = onValue(ref(db, "orders"), snap => {
+        const d = snap.val() || {};
+        window._ordersData = Object.entries(d)
+          .map(([id, v]) => ({ id, ...v }))
+          .filter(o => o.addedBy === u.username)
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        refreshBadge();
+        if (window._currentPage === "my-orders") renderOrders();
+      });
+    }
+
+    function refreshBadge() {
+      const n = window._ordersData.filter(
+        o => o.status === "قيد التنفيذ" || o.status === "جاري التوصيل"
+      ).length;
+      const el = $("orders-badge");
+      if (!el) return;
+      el.textContent     = n || "";
+      el.style.display   = n ? "flex" : "none";
+    }
+
+    /* ══════════════════════════════════════════════════════
+       NEW ORDER
+    ══════════════════════════════════════════════════════ */
+    window._delivCount = 0;
+
+    function resetForm() {
+      $("orderNotes").value         = "";
+      $("orderPrepaid").value       = "";
+      $("delivContainer").innerHTML = "";
+      window._delivCount = 0;
+      const btn = $("saveBtn");
+      if (btn) { btn.disabled = false; btn.textContent = "📤 إرسال الطلب"; }
+      const tot = $("orderTotal");
+      if (tot) tot.textContent = "0 ج.م";
+      // عنوان الاستلام: يتجدّد مع كل طلب، ومعبّى تلقائياً من بيانات المحل المحفوظة
+      const u = window._currentUser || {};
+      window.renderAddressWidget("pickupAddrWidget", { required: true, value: u.shopAddress || "" });
+      addRow();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       ADDRESS WIDGET — مكوّن العنوان المقسّم
+    ══════════════════════════════════════════════════════════════════ */
+    window.EG_GOVERNORATES = [
+      "القاهرة","الجيزة","الإسكندرية","الدقهلية","البحيرة","الفيوم",
+      "الغربية","الإسماعيلية","المنوفية","المنيا","القليوبية","الوادي الجديد",
+      "السويس","أسوان","أسيوط","بني سويف","بورسعيد","دمياط","الشرقية",
+      "جنوب سيناء","شمال سيناء","الأقصر","قنا","كفر الشيخ","مطروح",
+      "سوهاج","البحر الأحمر","السادات"
+    ];
+
+    window.renderAddressWidget = function(containerId, opts = {}) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const req = opts.required ? '<span style="color:#f87171">*</span>' : '';
+      el.innerHTML = `
+        <div class="addr-widget">
+          <div class="addr-row">
+            <div class="addr-field">
+              <label class="addr-label">المحافظة ${req}</label>
+              <select class="addr-input" id="${containerId}-gov">
+                <option value="">— اختر —</option>
+                ${window.EG_GOVERNORATES.map(g=>`<option value="${g}">${g}</option>`).join('')}
+              </select>
+            </div>
+            <div class="addr-field">
+              <label class="addr-label">المنطقة / الحي ${req}</label>
+              <input class="addr-input" id="${containerId}-area"
+                placeholder="المعادي، مدينة نصر…" type="text" />
+            </div>
+          </div>
+          <div class="addr-field" style="margin-top:7px">
+            <label class="addr-label">العنوان بالتفصيل ${req}</label>
+            <input class="addr-input" id="${containerId}-detail"
+              placeholder="الشارع، رقم العمارة، الدور، الشقة…" type="text" />
+          </div>
+          <div class="addr-preview" id="${containerId}-preview" style="display:none"></div>
+        </div>`;
+      ['gov','area','detail'].forEach(k => {
+        const el2 = document.getElementById(`${containerId}-${k}`);
+        if (el2) {
+          el2.addEventListener('input',  () => _updateAddrPreview(containerId));
+          el2.addEventListener('change', () => _updateAddrPreview(containerId));
+        }
+      });
+      if (opts.value) window.setAddressValue(containerId, opts.value);
+    };
+
+    window._updateAddrPreview = function(containerId) {
+      const full = window.getAddressValue(containerId);
+      const el   = document.getElementById(`${containerId}-preview`);
+      if (!el) return;
+      if (full.trim()) { el.style.display = 'block'; el.textContent = '📍 ' + full; }
+      else              { el.style.display = 'none'; }
+    };
+
+    window.getAddressValue = function(containerId) {
+      const gov    = (document.getElementById(`${containerId}-gov`)?.value    || '').trim();
+      const area   = (document.getElementById(`${containerId}-area`)?.value   || '').trim();
+      const detail = (document.getElementById(`${containerId}-detail`)?.value || '').trim();
+      return [detail, area, gov].filter(Boolean).join('، ');
+    };
+
+    window.setAddressValue = function(containerId, text) {
+      if (!text) return;
+      const govSel    = document.getElementById(`${containerId}-gov`);
+      const areaSel   = document.getElementById(`${containerId}-area`);
+      const detailSel = document.getElementById(`${containerId}-detail`);
+      if (!govSel) return;
+      let remaining = text, foundGov = '';
+      for (const g of window.EG_GOVERNORATES) {
+        if (text.includes(g)) {
+          foundGov = g;
+          remaining = text.replace(g,'').replace(/،\s*$/,'').replace(/^،\s*/,'').trim();
+          break;
+        }
+      }
+      govSel.value = foundGov;
+      const parts = remaining.split('،').map(p => p.trim()).filter(Boolean);
+      if (parts.length >= 2) { detailSel.value = parts[0]; areaSel.value = parts.slice(1).join('، '); }
+      else if (parts.length === 1) { detailSel.value = parts[0]; areaSel.value = ''; }
+      else { detailSel.value = ''; areaSel.value = ''; }
+      window._updateAddrPreview(containerId);
+    };
+
+    window.addRow = function () {
+      window._delivCount++;
+      const n   = window._delivCount;
+      const div = document.createElement("div");
+      div.className = "parcel-card";
+      div.id = `row-${n}`;
+      div.innerHTML = `
+        <div class="parcel-head">
+          <span class="parcel-label">📦 الطرد #${n}</span>
+          ${n > 1 ? `<button class="rm-btn" onclick="rmRow(${n})">✕ إزالة</button>` : ""}
+        </div>
+        <div class="fg" style="position:relative">
+          <label>اسم المستلِم <span class="req">*</span></label>
+          <input type="text" id="rName-${n}" placeholder="اكتب اسم المستلِم" autocomplete="off"
+            oninput="filterContacts(${n},'name')" onfocus="filterContacts(${n},'name')" onblur="hideDropdown(${n},200)" />
+          <div class="ac-drop" id="acDrop-${n}"></div>
+        </div>
+        <div class="grid2">
+          <div class="fg" style="position:relative">
+            <label>هاتف المستلِم <span class="req">*</span></label>
+            <input type="tel" id="rPhone-${n}" dir="ltr" placeholder="01xxxxxxxxx"
+              oninput="filterContacts(${n},'phone')" onfocus="filterContacts(${n},'phone')" onblur="hideDropdown(${n},200)" />
+          </div>
+          <div class="fg">
+            <label>هاتف 2</label>
+            <input type="tel" id="rPhone2-${n}" dir="ltr" placeholder="—" />
+          </div>
+        </div>
+        <div class="fg">
+          <label>المنطقة <span class="req">*</span></label>
+          <select id="rZone-${n}" onchange="onZone(${n})">
+            <option value="">— اختر المنطقة —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>عنوان التوصيل</label>
+          <div id="rAddrWidget-${n}"></div>
+        </div>
+        <div class="fg">
+          <label>سعر التوصيل</label>
+          <input id="rPrice-${n}" type="text" readonly class="price-ro" value="—" />
+        </div>
+        <div class="fg">
+          <label>سعر الطلب <span class="req">*</span></label>
+          <input type="number" id="rOrderPrice-${n}" placeholder="0" min="0" oninput="recalcTotal()" />
+        </div>
+        <div class="fg">
+          <label>ملاحظات الطرد</label>
+          <input type="text" id="rNote-${n}" placeholder="هش — لا تكسر / إلخ…" />
+        </div>`;
+      $("delivContainer").appendChild(div);
+      window.renderAddressWidget(`rAddrWidget-${n}`, { required: false });
+      fillZones(n);
+    };
+
+    window.rmRow = function (n) {
+      document.getElementById(`row-${n}`)?.remove();
+      recalc();
+    };
+
+    function fillZones(n) {
+      const sel = document.getElementById(`rZone-${n}`);
+      if (!sel) return;
+      sel.innerHTML = `<option value="">— اختر المنطقة —</option>`;
+      window._zonesList.forEach(z => {
+        const o = document.createElement("option");
+        o.value = z.id; o.dataset.price = z.price || 0;
+        o.textContent = `${z.areaName || z.name} — ${z.price || 0} ج.م`;
+        sel.appendChild(o);
+      });
+    }
+
+    window.onZone = function (n) {
+      const sel   = document.getElementById(`rZone-${n}`);
+      const price = parseFloat(sel.options[sel.selectedIndex]?.dataset.price) || 0;
+      const el    = document.getElementById(`rPrice-${n}`);
+      if (el) el.value = price + " ج.م";
+      recalc();
+    };
+
+    function recalc() {
+      let total = 0;
+      for (let i = 1; i <= window._delivCount; i++) {
+        const el = document.getElementById(`rPrice-${i}`);
+        if (!el) continue;
+        total += parseFloat(el.value.replace(/[^0-9.]/g, "")) || 0;
+      }
+      $("orderTotal").textContent = total + " ج.م";
+    }
+
+    window.recalcTotal = function () {
+      let total = 0;
+      for (let i = 1; i <= window._delivCount; i++) {
+        const el = document.getElementById(`rOrderPrice-${i}`);
+        if (!el) continue;
+        total += parseFloat(el.value) || 0;
+      }
+      const prepaidEl = $("orderPrepaid");
+      if (prepaidEl) { prepaidEl.value = total > 0 ? total : ""; }
+    };
+
+    window.saveOrder = async function () {
+      const u = window._currentUser;
+      if (!u) return;
+
+      const notes    = $("orderNotes").value.trim();
+      const rows     = document.querySelectorAll(".parcel-card");
+      if (!rows.length) { toast("أضف وجهة توصيل واحدة على الأقل", "err"); return; }
+
+      const pickupAddress = window.getAddressValue("pickupAddrWidget");
+      if (!pickupAddress) { toast("يرجى إدخال عنوان استلام الطلب", "err"); return; }
+
+      const deliveries = [];
+      for (const row of rows) {
+        const n       = row.id.replace("row-", "");
+        const name    = document.getElementById(`rName-${n}`)?.value.trim();
+        const phone   = document.getElementById(`rPhone-${n}`)?.value.trim();
+        const phone2  = document.getElementById(`rPhone2-${n}`)?.value.trim() || "";
+        const zoneSel = document.getElementById(`rZone-${n}`);
+        const zoneId  = zoneSel?.value;
+        const zoneTxt = zoneSel?.options[zoneSel.selectedIndex]?.text || "";
+        const zoneName= zoneTxt.split(" — ")[0] || "";
+        const price   = parseFloat(document.getElementById(`rPrice-${n}`)?.value.replace(/[^0-9.]/g, "")) || 0;
+        const addr       = window.getAddressValue(`rAddrWidget-${n}`);
+        const note       = document.getElementById(`rNote-${n}`)?.value.trim() || "";
+        const orderPrice = parseFloat(document.getElementById(`rOrderPrice-${n}`)?.value) || 0;
+
+        if (!name)   { toast(`يرجى إدخال اسم المستلِم — طرد #${n}`, "err"); return; }
+        if (!phone)  { toast(`يرجى إدخال هاتف المستلِم — طرد #${n}`, "err"); return; }
+        if (!zoneId) { toast(`يرجى اختيار المنطقة — طرد #${n}`, "err"); return; }
+
+        deliveries.push({
+          receiverId: null, receiverName: name,
+          receiverPhone: phone, receiverPhone2: phone2,
+          zoneId, zoneName, zonePrice: price,
+          orderPrice, address: addr, note, status: "قيد التنفيذ"
+        });
+      }
+
+      const btn = $("saveBtn");
+      btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
+      try {
+        const bSnap     = await get(ref(db, "branches/" + u.branchId));
+        const branchCode= bSnap.exists() ? (bSnap.val().code || "STR") : "STR";
+        const today     = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        const cRef      = ref(db, `counters/${u.branchId}/${today}`);
+        let   count     = 1;
+        await runTransaction(cRef, cur => { count = (cur || 0) + 1; return count; });
+        const orderNum  = `${branchCode}-${String(count).padStart(3, "0")}`;
+        const total          = deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0);
+        const totalOrderPrice = deliveries.reduce((s, d) => s + (d.orderPrice || 0), 0);
+
+        await push(ref(db, "orders"), {
+          orderNum,
+          senderId    : null,
+          senderName  : u.shopName,
+          senderPhone : u.shopPhone,
+          senderPhone2: u.shopPhone2 || "",
+          senderAddress: pickupAddress || u.shopAddress || "",
+          branchId    : u.branchId,
+          branchName  : u.branchName,
+          notes, deliveries,
+          totalDeliveryPrice: total,
+          storePrepaid: totalOrderPrice,
+          storePrepaidNote: "",
+          status     : "قيد التنفيذ",
+          statusSince: new Date().toISOString(),
+          createdAt  : new Date().toISOString(),
+          addedBy    : u.username,
+          addedByRole: "صاحب محل",
+          source     : "store"
+        });
+
+        // حفظ بيانات المستلمين في جهات اتصال المحل
+        for (const d of deliveries) {
+          saveStoreContact(u.username, {
+            name: d.receiverName, phone: d.receiverPhone,
+            phone2: d.receiverPhone2, address: d.address
+          }).catch(() => {});
+        }
+
+        toast(`✅ تمّ إرسال الطلب ${orderNum}`, "ok");
+        setTimeout(() => navigateTo("my-orders"), 900);
+      } catch (e) {
+        toast("خطأ: " + e.message, "err");
+        btn.disabled = false; btn.textContent = "📤 إرسال الطلب";
+      }
+    };
+
+    /* ══════════════════════════════════════════════════════
+       MY ORDERS
+    ══════════════════════════════════════════════════════ */
+    window._filterStatus = "all";
+
+    window.setFilter = function (chip, val) {
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      window._filterStatus = val;
+      renderOrders();
+    };
+
+    function renderOrders() {
+      const el  = $("ordersList");
+      let list  = window._ordersData || [];
+      if (window._filterStatus !== "all")
+        list = list.filter(o => o.status === window._filterStatus);
+
+      if (!list.length) {
+        el.innerHTML = `<div class="empty">📭<br>لا توجد طلبات هنا</div>`;
+        return;
+      }
+
+      el.innerHTML = list.map(o => {
+        const cls = statusCls(o.status);
+        const lbl = o.status || "—";
+        const parts = o.deliveries || [];
+        const d = new Date(o.createdAt);
+        const dt = d.toLocaleDateString("ar-EG", { day: "2-digit", month: "short" })
+                 + " " + d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+
+        return `
+        <div class="order-card">
+          <div class="oc-top" onclick="toggleDet('${o.id}')">
+            <div class="oc-left">
+              <span class="onum">${o.orderNum || "—"}</span>
+              <span class="badge ${cls}">${lbl}</span>
+            </div>
+            <div class="oc-right">${dt}</div>
+          </div>
+          <div class="oc-mid" onclick="toggleDet('${o.id}')">
+            <span>📦 ${parts.length} ${parts.length === 1 ? "طرد" : "طرود"}</span>
+          </div>
+          ${o.pilotName ? `<div class="pilot-row">🛵 الطيار: <b>${o.pilotName}</b></div>` : ""}
+          <div class="order-det" id="det-${o.id}">
+            ${parts.map((d, i) => `
+              <div class="det-parcel">
+                <div class="dp-head">طرد #${i+1} — <b>${d.receiverName || "—"}</b></div>
+                <div class="dp-row">📍 ${d.zoneName || "—"}${d.address ? " · " + d.address : ""}</div>
+                <div class="dp-row" dir="ltr">📞 ${d.receiverPhone || "—"}${d.receiverPhone2 ? " / " + d.receiverPhone2 : ""}</div>
+
+                ${d.note ? `<div class="dp-row">📝 ${d.note}</div>` : ""}
+                <span class="badge ${statusCls(d.status || o.status)} dp-st">${d.status || o.status}</span>
+              </div>`).join("")}
+            ${o.notes ? `<div class="det-note">📝 ملاحظة: ${o.notes}</div>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    window.toggleDet = function (id) {
+      document.getElementById("det-" + id)?.classList.toggle("open");
+    };
+
+    /* ══════════════════════════════════════════════════════
+       CONTACTS AUTOCOMPLETE
+    ══════════════════════════════════════════════════════ */
+    window.filterContacts = function (n, field) {
+      const nameEl  = document.getElementById(`rName-${n}`);
+      const phoneEl = document.getElementById(`rPhone-${n}`);
+      const drop    = document.getElementById(`acDrop-${n}`);
+      if (!drop) return;
+      const q = (field === "name" ? nameEl?.value : phoneEl?.value || "").trim().toLowerCase();
+      const all = window._storeContacts || [];
+      const hits = q.length >= 1
+        ? all.filter(c =>
+            (field === "name"  && c.name?.toLowerCase().includes(q)) ||
+            (field === "phone" && c.phone?.includes(q))
+          ).slice(0, 6)
+        : all.slice(0, 6);
+      if (!hits.length) { drop.innerHTML = ""; drop.style.display = "none"; return; }
+      drop.innerHTML = hits.map(c => `
+        <div class="ac-item" onmousedown="pickContact(${n},'${c.id}')">
+          <span class="ac-name">${c.name}</span>
+          <span class="ac-phone" dir="ltr">${c.phone}</span>
+        </div>`).join("");
+      drop.style.display = "block";
+    };
+
+    window.hideDropdown = function (n, delay) {
+      setTimeout(() => {
+        const drop = document.getElementById(`acDrop-${n}`);
+        if (drop) { drop.innerHTML = ""; drop.style.display = "none"; }
+      }, delay || 0);
+    };
+
+    window.pickContact = function (n, contactId) {
+      const c = (window._storeContacts || []).find(x => x.id === contactId);
+      if (!c) return;
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
+      set(`rName-${n}`,  c.name);
+      set(`rPhone-${n}`, c.phone);
+      set(`rPhone2-${n}`, c.phone2 || "");
+      if (window.setAddressValue) window.setAddressValue(`rAddrWidget-${n}`, c.address || "");
+      hideDropdown(n, 0);
+    };
+
+    /* ══════════════════════════════════════════════════════
+       HELPERS
+    ══════════════════════════════════════════════════════ */
+    function $ (id) { return document.getElementById(id); }
+
+    function statusCls (s) {
+      switch (s) {
+        case "قيد التنفيذ"   : return "st-pend";
+        case "جاري التوصيل"  : return "st-deliv";
+        case "تم التسليم"    : return "st-done";
+        case "لم يتم التوصيل": return "st-fail";
+        case "ملغي"          : return "st-cancel";
+        default              : return "st-pend";
+      }
+    }
+
+    let _tTimer;
+    window.toast = function (msg, type) {
+      const t = $("toast");
+      t.textContent = msg; t.className = "show " + (type || "");
+      clearTimeout(_tTimer);
+      _tTimer = setTimeout(() => t.className = "", 3500);
+    };
+    // alias for external calls
+    window.showToast = window.toast;
+  </script>
+
+  <style>
+    /* ─── Base ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sky : #0ea5e9; --sky-d: #0284c7;
+      --night: #0c1624; --panel: #111e2e;
+      --card : #162130; --border: #1e3248;
+      --text : #e2eaf4; --muted: #6e90ae;
+      --green: #22c55e; --red  : #ef4444;
+      --orng : #f97316; --yell : #eab308;
+      --purp : #a855f7;
+      --R : 14px; --Rs: 9px;
+      --nav: 62px;
+    }
+
+    html, body {
+      height: 100%; background: var(--night); color: var(--text);
+      font-family: "Tajawal", sans-serif; font-size: 15px; direction: rtl;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ─── Login ─── */
+    #login-screen {
+      min-height: 100dvh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 24px;
+      background: radial-gradient(ellipse at top, #0d1e31 0%, var(--night) 70%);
+    }
+
+    .lg-icon  { font-size: 3.5rem; margin-bottom: 6px; filter: drop-shadow(0 0 18px rgba(14,165,233,.5)); }
+    .lg-title { font-size: 1.7rem; font-weight: 900; color: var(--sky); margin-bottom: 2px; }
+    .lg-sub   { font-size: .82rem; color: var(--muted); margin-bottom: 32px; }
+
+    .lg-card {
+      width: 100%; max-width: 360px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--R); padding: 26px 22px;
+    }
+
+    .lg-card input {
+      width: 100%; padding: 13px 16px; margin-bottom: 12px;
+      background: rgba(255,255,255,.04); border: 1px solid var(--border);
+      border-radius: var(--Rs); color: var(--text);
+      font-size: .95rem; font-family: inherit; direction: rtl;
+      transition: border-color .2s;
+    }
+    .lg-card input:focus { outline: none; border-color: var(--sky); }
+    .lg-card input::placeholder { color: var(--muted); }
+
+    .lg-btn {
+      width: 100%; padding: 14px; background: var(--sky); color: #fff;
+      border: none; border-radius: var(--Rs);
+      font-size: 1rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: background .2s;
+    }
+    .lg-btn:hover   { background: var(--sky-d); }
+    .lg-btn:disabled{ opacity: .6; cursor: not-allowed; }
+
+    .lg-err {
+      color: var(--red); font-size: .82rem; text-align: center;
+      margin-top: 10px; min-height: 20px;
+    }
+
+    /* ─── App Shell ─── */
+    #app {
+      display: none; flex-direction: column;
+      height: 100dvh; max-width: 480px; margin: 0 auto;
+      position: relative; overflow: hidden;
+    }
+
+    /* ─── Top Bar ─── */
+    .topbar {
+      flex-shrink: 0; background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 13px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .tb-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .tb-logo  { font-size: 1.1rem; font-weight: 900; color: var(--sky); letter-spacing: -.02em; }
+
+    /* ─── Pages ─── */
+    .page {
+      display: none; flex: 1; overflow-y: auto;
+      padding: 14px 13px calc(var(--nav) + 14px);
+    }
+    .page.active { display: block; }
+
+    /* ─── Bottom Nav ─── */
+    .bottom-nav {
+      position: fixed; bottom: 0;
+      left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 480px;
+      height: var(--nav); background: var(--panel);
+      border-top: 1px solid var(--border);
+      display: flex; z-index: 200;
+    }
+
+    .nav-btn {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 3px;
+      border: none; background: none; cursor: pointer;
+      color: var(--muted); font-size: .7rem; font-family: inherit;
+      position: relative; transition: color .2s;
+    }
+    .nav-btn .ni { font-size: 1.3rem; line-height: 1; }
+    .nav-btn.active { color: var(--sky); }
+    .nav-btn.active::after {
+      content: ""; position: absolute; top: 0;
+      left: 22%; right: 22%; height: 2.5px;
+      background: var(--sky); border-radius: 0 0 4px 4px;
+    }
+
+    .nav-badge {
+      position: absolute; top: 7px; left: calc(50% + 4px);
+      background: var(--red); color: #fff;
+      font-size: .6rem; font-weight: 800;
+      min-width: 17px; height: 17px;
+      border-radius: 9px; padding: 0 4px;
+      display: none; align-items: center; justify-content: center;
+    }
+
+    /* ─── Section Title ─── */
+    .sec { font-size: .73rem; font-weight: 700; color: var(--muted);
+           text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
+
+    /* ─── Sender Bar ─── */
+    .sender-bar {
+      background: linear-gradient(135deg, rgba(14,165,233,.1) 0%, rgba(14,165,233,.05) 100%);
+      border: 1px solid rgba(14,165,233,.25);
+      border-radius: var(--R); padding: 12px 14px; margin-bottom: 16px;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .sender-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
+    .sender-label{ font-size: .7rem; color: var(--sky); margin-bottom: 2px; }
+    .sender-name { font-weight: 700; font-size: .95rem; }
+    .sender-meta { font-size: .77rem; color: var(--muted); margin-top: 2px; }
+
+    /* ─── Form ─── */
+    .fg { margin-bottom: 11px; }
+    /* ── Address Widget ── */
+    .addr-widget { width: 100%; }
+    .addr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .addr-field { display: flex; flex-direction: column; gap: 4px; }
+    .addr-label { font-size: .78rem; color: var(--muted); font-weight: 600; }
+    .addr-input { width: 100%; padding: 8px 11px; background: var(--card);
+      border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+      font-family: "Tajawal", sans-serif; font-size: .88rem; box-sizing: border-box;
+      transition: border-color .2s; }
+    .addr-input:focus { outline: none; border-color: var(--sky); }
+    select.addr-input { cursor: pointer; }
+    .addr-preview { margin-top: 6px; padding: 6px 11px; background: rgba(14,165,233,.08);
+      border: 1px solid rgba(14,165,233,.25); border-radius: 7px;
+      font-size: .8rem; color: var(--sky); line-height: 1.5; }
+    @media(max-width:480px) { .addr-row { grid-template-columns: 1fr; } }
+    .fg label { display: block; font-size: .77rem; color: var(--muted); margin-bottom: 5px; }
+    .req { color: var(--red); }
+
+    .fg input, .fg select {
+      width: 100%; padding: 11px 13px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--Rs); color: var(--text);
+      font-size: .88rem; font-family: inherit; direction: rtl;
+      transition: border-color .2s;
+    }
+    .fg input:focus, .fg select:focus { outline: none; border-color: var(--sky); }
+    .fg select { cursor: pointer; }
+    .fg input::placeholder { color: rgba(110,144,174,.6); }
+
+    .price-ro { color: var(--green) !important; font-weight: 700; text-align: center; }
+
+    /* ─── Autocomplete Dropdown ─── */
+    .ac-drop {
+      display: none; position: absolute; top: 100%; right: 0; left: 0; z-index: 300;
+      background: var(--panel); border: 1px solid var(--sky);
+      border-radius: var(--Rs); overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      max-height: 220px; overflow-y: auto;
+    }
+    .ac-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 13px; cursor: pointer; transition: background .15s;
+      border-bottom: 1px solid var(--border);
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item:active { background: rgba(14,165,233,.12); }
+    .ac-name  { font-size: .88rem; font-weight: 700; color: var(--text); }
+    .ac-phone { font-size: .78rem; color: var(--sky); direction: ltr; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+    /* ─── Parcel Card ─── */
+    .parcel-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--R); padding: 14px; margin-bottom: 11px;
+    }
+    .parcel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .parcel-label { font-weight: 700; font-size: .85rem; color: var(--sky); }
+    .rm-btn {
+      background: rgba(239,68,68,.1); color: var(--red);
+      border: 1px solid rgba(239,68,68,.25); border-radius: 7px;
+      padding: 4px 10px; font-size: .72rem; cursor: pointer; font-family: inherit;
+    }
+
+    /* ─── Add parcel / Total / Submit ─── */
+    .add-btn {
+      width: 100%; padding: 12px;
+      background: rgba(14,165,233,.07);
+      color: var(--sky);
+      border: 1.5px dashed rgba(14,165,233,.35);
+      border-radius: var(--R);
+      font-size: .88rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; margin-bottom: 14px; transition: background .2s;
+    }
+    .add-btn:active { background: rgba(14,165,233,.14); }
+
+    .total-bar {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--R); padding: 13px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .tot-lbl { font-size: .82rem; color: var(--muted); }
+    .tot-val { font-size: 1.1rem; font-weight: 800; color: var(--green); }
+
+    .submit-btn {
+      width: 100%; padding: 15px;
+      background: var(--sky); color: #fff;
+      border: none; border-radius: var(--R);
+      font-size: 1rem; font-weight: 800; font-family: inherit;
+      cursor: pointer; transition: background .2s; letter-spacing: .02em;
+    }
+    .submit-btn:active  { background: var(--sky-d); }
+    .submit-btn:disabled{ opacity: .55; cursor: not-allowed; }
+
+    /* ─── Orders Page ─── */
+    .chips {
+      display: flex; gap: 7px; overflow-x: auto;
+      padding-bottom: 3px; margin-bottom: 12px;
+      scrollbar-width: none;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+
+    .chip {
+      flex-shrink: 0; padding: 6px 13px; border-radius: 20px;
+      font-size: .75rem; font-weight: 600; cursor: pointer;
+      background: var(--card); color: var(--muted);
+      border: 1px solid var(--border); font-family: inherit;
+      transition: all .18s;
+    }
+    .chip.active { background: var(--sky); color: #fff; border-color: var(--sky); }
+
+    /* ─── Order Card ─── */
+    .order-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--R); overflow: hidden; margin-bottom: 10px;
+    }
+
+    .oc-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px 6px; cursor: pointer;
+    }
+    .oc-left  { display: flex; align-items: center; gap: 8px; }
+    .oc-right { font-size: .7rem; color: var(--muted); }
+
+    .onum { font-size: .9rem; font-weight: 800; color: var(--sky); }
+
+    .oc-mid {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 14px 12px; cursor: pointer;
+      font-size: .8rem; color: var(--muted);
+    }
+    .o-total { font-weight: 700; color: var(--green); }
+
+    .pilot-row {
+      padding: 5px 14px 8px;
+      font-size: .78rem; color: var(--orng);
+    }
+
+    .order-det {
+      display: none; border-top: 1px solid var(--border);
+      padding: 12px 14px; background: rgba(0,0,0,.15);
+    }
+    .order-det.open { display: block; }
+
+    .det-parcel {
+      background: rgba(255,255,255,.03);
+      border-radius: var(--Rs); padding: 10px 12px; margin-bottom: 8px;
+    }
+    .dp-head { font-weight: 700; font-size: .85rem; margin-bottom: 5px; }
+    .dp-row  { font-size: .76rem; color: var(--muted); margin-bottom: 2px; }
+    .dp-st   { margin-top: 6px; }
+
+    .det-note {
+      font-size: .78rem; color: var(--muted); margin-top: 6px;
+      padding: 8px 10px; background: rgba(255,255,255,.03); border-radius: 7px;
+    }
+
+    /* ─── Status Badges ─── */
+    .badge {
+      display: inline-block; padding: 2px 10px;
+      border-radius: 20px; font-size: .7rem; font-weight: 700;
+    }
+    .st-pend   { background: rgba(234,179,8,.15);  color: var(--yell); }
+    .st-deliv  { background: rgba(14,165,233,.15); color: var(--sky);  }
+    .st-done   { background: rgba(34,197,94,.15);  color: var(--green);}
+    .st-fail   { background: rgba(249,115,22,.15); color: var(--orng); }
+    .st-cancel { background: rgba(239,68,68,.15);  color: var(--red);  }
+
+    /* ─── Empty State ─── */
+    .empty {
+      text-align: center; color: var(--muted);
+      padding: 60px 20px; font-size: .9rem; line-height: 2.2;
+    }
+
+    /* ─── Profile ─── */
+    .prof-hero {
+      background: linear-gradient(135deg, var(--panel) 0%, rgba(14,165,233,.08) 100%);
+      border: 1px solid var(--border); border-radius: var(--R);
+      padding: 24px 16px; text-align: center; margin-bottom: 14px;
+    }
+    .ph-avatar { font-size: 2.8rem; margin-bottom: 6px; }
+    .ph-name   { font-size: 1.1rem; font-weight: 800; }
+    .ph-branch { font-size: .8rem; color: var(--sky); margin-top: 4px; }
+
+    .info-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--R); overflow: hidden; margin-bottom: 12px;
+    }
+    .irow {
+      display: flex; align-items: center; gap: 13px;
+      padding: 13px 16px; border-bottom: 1px solid var(--border);
+    }
+    .irow:last-child { border-bottom: none; }
+    .ii { font-size: 1.1rem; flex-shrink: 0; }
+    .ik { font-size: .7rem; color: var(--muted); margin-bottom: 2px; }
+    .iv { font-size: .88rem; font-weight: 600; }
+
+    .logout-btn {
+      width: 100%; padding: 14px;
+      background: rgba(239,68,68,.08); color: var(--red);
+      border: 1px solid rgba(239,68,68,.3); border-radius: var(--R);
+      font-size: .95rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; margin-top: 4px; transition: background .2s;
+    }
+    .logout-btn:active { background: rgba(239,68,68,.16); }
+
+    /* ─── Toast ─── */
+    #toast {
+      position: fixed; bottom: calc(var(--nav) + 14px);
+      left: 50%; transform: translateX(-50%);
+      background: #1d3045; color: var(--text);
+      padding: 11px 20px; border-radius: 12px;
+      font-size: .85rem; font-weight: 600;
+      box-shadow: 0 6px 24px rgba(0,0,0,.5);
+      opacity: 0; pointer-events: none; transition: opacity .28s;
+      z-index: 999; max-width: calc(100vw - 28px);
+      text-align: center; white-space: pre-wrap;
+    }
+    #toast.show   { opacity: 1; }
+    #toast.ok     { background: rgba(34,197,94,.18);  color: var(--green); }
+    #toast.err    { background: rgba(239,68,68,.18);  color: var(--red);   }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="lg-icon">🛵</div>
+  <div class="lg-title">طيّار</div>
+  <div class="lg-sub">بوابة المحلات</div>
+  <div class="lg-card">
+    <input type="text"     id="loginUser" placeholder="اسم المستخدم"   autocomplete="username" />
+    <input type="password" id="loginPass" placeholder="كلمة المرور"    autocomplete="current-password" />
+    <button class="lg-btn" id="loginBtn">دخول</button>
+    <div class="lg-err" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     APP
+══════════════════════════════════════ -->
+<div id="app">
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <span class="tb-title" id="top-title">طلب جديد</span>
+    <span class="tb-logo">طيّار ✈</span>
+  </div>
+
+  <!-- ── PAGE: New Order ── -->
+  <div class="page active" id="page-new-order">
+
+    <!-- Sender (shop) info bar -->
+    <div class="sender-bar">
+      <span class="sender-icon">🏪</span>
+      <div style="flex:1; min-width:0">
+        <div class="sender-label">المُرسِل — محلك</div>
+        <div class="sender-name"  id="sender-name">—</div>
+        <div class="sender-meta">
+          <span dir="ltr" id="sender-phone">—</span>
+        </div>
+        <div class="fg" style="margin:10px 0 0">
+          <label>📍 عنوان الاستلام</label>
+          <div id="pickupAddrWidget"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parcels container -->
+    <div class="sec">📦 الطرود</div>
+    <div id="delivContainer"></div>
+
+    <button class="add-btn" onclick="addRow()">➕ إضافة طرد آخر</button>
+
+    <!-- Total bar -->
+    <div class="total-bar">
+      <span class="tot-lbl">إجمالي أسعار التوصيل</span>
+      <span class="tot-val" id="orderTotal">0 ج.م</span>
+    </div>
+
+    <!-- Optional fields -->
+    <div class="sec">تفاصيل إضافية (اختياري)</div>
+    <div class="fg">
+      <label>إجمالي أسعار الطلبات (العهدة)</label>
+      <input type="number" id="orderPrepaid" placeholder="0" min="0" readonly class="price-ro" />
+    </div>
+    <div class="fg">
+      <label>ملاحظات عامة للفرع</label>
+      <input type="text" id="orderNotes" placeholder="مثال: استلم قبل الساعة 2" />
+    </div>
+
+    <button class="submit-btn" id="saveBtn" onclick="saveOrder()">📤 إرسال الطلب</button>
+  </div>
+
+  <!-- ── PAGE: My Orders ── -->
+  <div class="page" id="page-my-orders">
+    <!-- Filter chips -->
+    <div class="chips">
+      <button class="chip active" onclick="setFilter(this,'all')">الكل</button>
+      <button class="chip" onclick="setFilter(this,'قيد التنفيذ')">قيد التنفيذ</button>
+      <button class="chip" onclick="setFilter(this,'جاري التوصيل')">جاري التوصيل</button>
+      <button class="chip" onclick="setFilter(this,'تم التسليم')">تم التسليم</button>
+      <button class="chip" onclick="setFilter(this,'لم يتم التوصيل')">لم يتم</button>
+      <button class="chip" onclick="setFilter(this,'ملغي')">ملغي</button>
+    </div>
+    <div id="ordersList">
+      <div class="empty">📭<br>لا توجد طلبات بعد</div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: Profile ── -->
+  <div class="page" id="page-profile">
+    <div class="prof-hero">
+      <div class="ph-avatar">🏪</div>
+      <div class="ph-name"   id="prof-shop">—</div>
+      <div class="ph-branch">🏢 <span id="prof-branch">—</span></div>
+    </div>
+
+    <div class="info-card">
+      <div class="irow">
+        <span class="ii">👤</span>
+        <div><div class="ik">اسم المستخدم</div><div class="iv" id="prof-user">—</div></div>
+      </div>
+      <div class="irow">
+        <span class="ii">📞</span>
+        <div><div class="ik">هاتف المحل</div><div class="iv" dir="ltr" id="prof-phone">—</div></div>
+      </div>
+      <div class="irow">
+        <span class="ii">📍</span>
+        <div><div class="ik">عنوان المحل</div><div class="iv" id="prof-addr">—</div></div>
+      </div>
+      <div class="irow">
+        <span class="ii">🏢</span>
+        <div><div class="ik">الفرع المسؤول</div><div class="iv" id="prof-branch-2">—</div></div>
+      </div>
+    </div>
+
+    <button class="logout-btn" onclick="doLogout()">🚪 تسجيل الخروج</button>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-page="new-order" onclick="navigateTo('new-order')">
+      <span class="ni">➕</span>
+      <span>طلب جديد</span>
+    </button>
+    <button class="nav-btn" data-page="my-orders" onclick="navigateTo('my-orders')">
+      <span class="ni">📋</span>
+      <span>طلباتي</span>
+      <span class="nav-badge" id="orders-badge"></span>
+    </button>
+    <button class="nav-btn" data-page="profile" onclick="navigateTo('profile')">
+      <span class="ni">👤</span>
+      <span>حسابي</span>
+    </button>
+  </div>
+</div><!-- /#app -->
+
+<div id="toast"></div>
+
+
+
+</body>
+</html>

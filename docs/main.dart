@@ -159,113 +159,6 @@ class LocalNotif {
   }
 
   static Future<void> clearAll() async => _plugin.cancelAll();
-
-  // ────────────────────────────────────────────────────────────────
-  //  إشعار الرنين الثابت (Ongoing) — إشعار واحد للأوردر الجديد
-  // ────────────────────────────────────────────────────────────────
-  // إشعار واحد بس (مش بيتكرر ولا بيتمسح بالسحب)، بترافقه نغمة loop مستمرة
-  // بتتشغّل بشكل منفصل من OrderRinger — عشان كده الإشعار نفسه من غير صوت
-  // ولا اهتزاز (onlyAlertOnce) حتى لو اتحدّث، فيفضل إشعار واحد ثابت بس
-
-  static const _ringNotifId   = 2001;
-  static const _ringChannelId = 'tiar_ring';
-
-  /// يعرض/يحدّث إشعار الرنين الثابت (نفس الـ id دايمًا = إشعار واحد فقط)
-  static Future<void> showRingingNotification({required int count}) async {
-    final title = count <= 1 ? 'طلب توصيل جديد 🚀' : '$count طلبات توصيل جديدة 🚀';
-    const body  = 'اضغط لفتح التطبيق وإيقاف التنبيه';
-
-    final androidDetails = AndroidNotificationDetails(
-      _ringChannelId, 'تنبيه الطلبات',
-      channelDescription: 'رنين مستمر عند وصول طلب توصيل جديد',
-      importance:      Importance.max,
-      priority:        Priority.high,
-      playSound:       false, // الصوت loop بيتشغّل بشكل منفصل من OrderRinger
-      enableVibration: false, // الاهتزاز loop بيتشغّل بشكل منفصل من OrderRinger
-      onlyAlertOnce:   true,  // ميعملش heads-up تاني لو اتحدّث → إشعار واحد ثابت
-      ongoing:         true,  // ثابت — ميتمسحش بالسحب، يجبر الطيار يفتح التطبيق
-      autoCancel:      false,
-      // category=alarm عشان الرنين يخترق وضع "عدم الإزعاج" زي المنبّه.
-      // ملحوظة: مش بنستخدم fullScreenIntent عن قصد — عايزين الإشعار يفضل
-      // في الستارة ويرن، مش يفتح التطبيق تلقائيًا؛ الطيار هو اللي بينزل
-      // الستارة ويفتح التطبيق بنفسه فيقف الرنين (ده اللي بيوقف النغمة)
-      category:        AndroidNotificationCategory.alarm,
-      icon:            '@mipmap/ic_launcher',
-    );
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true, presentBadge: true, presentSound: false,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-    await _plugin.show(
-      _ringNotifId, title, body,
-      NotificationDetails(android: androidDetails, iOS: iosDetails),
-    );
-  }
-
-  /// يشيل إشعار الرنين الثابت (يشتغل من أي isolate — الإلغاء بالـ id على مستوى النظام)
-  static Future<void> cancelRingingNotification() async =>
-      _plugin.cancel(_ringNotifId);
-}
-
-// ════════════════════════════════════════════════════════════════
-//  ORDER RINGER — تنبيه الأوردر: إشعار ثابت + رنين نغمة loop مستمر
-// ════════════════════════════════════════════════════════════════
-//
-// بديل شاشة "المكالمة الواردة" الفل-سكرين: بيعرض إشعار ستارة واحد ثابت،
-// وبيشغّل نفس نغمة الطيار المختارة بشكل loop مستمر (+ اهتزاز متكرر) لحد
-// ما الطيار يفتح التطبيق فيقف الرنين. بيشتغل من الـ isolate الخلفي حتى
-// والتطبيق مقفول تمامًا، وبيستخدم usage=alarm عشان يرن حتى لو الموبايل
-// صامت/على اهتزاز — بالظبط زي نغمة المنبّه.
-class OrderRinger {
-  static final AudioPlayer _player = AudioPlayer();
-  static bool _ringing        = false; // نغمة/اهتزاز شغّالين حاليًا؟
-  static bool _audioConfigured = false;
-
-  /// تهيئة سياق الصوت مرة واحدة: loop + usage=alarm (يرن فوق الصامت)
-  static Future<void> _ensureAudioConfig() async {
-    if (_audioConfigured) return;
-    _audioConfigured = true;
-    await _player.setReleaseMode(ReleaseMode.loop);
-    await _player.setAudioContext(AudioContext(
-      android: const AudioContextAndroid(
-        isSpeakerphoneOn: false,
-        stayAwake:        true,
-        contentType:      AndroidContentType.sonification,
-        usageType:        AndroidUsageType.alarm,
-        audioFocus:       AndroidAudioFocus.gain,
-      ),
-    ));
-  }
-
-  /// يبدأ الرنين المستمر — idempotent: لو شغّال بالفعل بيحدّث الإشعار بس
-  /// (عدد الطلبات) من غير ما يقطع النغمة ويشغّلها من الأول
-  static Future<void> startRinging({required int count}) async {
-    await LocalNotif.showRingingNotification(count: count);
-    if (_ringing) return; // شغّال بالفعل — بلاش نعيد تشغيل النغمة/الاهتزاز
-    _ringing = true;
-
-    try {
-      await _ensureAudioConfig();
-      final soundId = await NotificationService.getSelectedSound();
-      await _player.stop();
-      await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
-    } catch (_) {}
-
-    try {
-      if (await Vibration.hasVibrator() ?? false) {
-        // repeat: 0 → يكرّر النمط من أوله باستمرار لحد ما نستدعي cancel()
-        Vibration.vibrate(pattern: [0, 600, 400, 600, 400, 800], repeat: 0);
-      }
-    } catch (_) {}
-  }
-
-  /// يوقف الرنين بالكامل ويشيل الإشعار الثابت
-  static Future<void> stopRinging() async {
-    _ringing = false;
-    try { await _player.stop(); } catch (_) {}
-    try { await Vibration.cancel(); } catch (_) {}
-    await LocalNotif.cancelRingingNotification();
-  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -297,38 +190,13 @@ class _OrderTaskHandler extends TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    final prefs = await SharedPreferences.getInstance();
-    // مهم: نعيد قراءة القيم من القرص عشان نشوف اللي كتبه الـ isolate الرئيسي
-    // (فلاج فتح التطبيق / مسح قائمة الرنين) — SharedPreferences بتكاش نسخة
-    // منفصلة لكل isolate، فمن غير reload مش هنحس بتغييرات التطبيق الرئيسي
-    try { await prefs.reload(); } catch (_) {}
-
+    final prefs   = await SharedPreferences.getInstance();
     final pilotId = prefs.getString('pilotId') ?? '';
     if (pilotId.isEmpty) return;
 
-    final appOpen = prefs.getBool('app_in_foreground') ?? false;
-
-    // ── إرسال الموقع في الخلفية (كل 60ث كحد أقصى، ولو الطيار اتحرّك فعلاً) ──
-    // لما التطبيق مفتوح، HomeScreen هو اللي بيبعت الموقع من stream الـ GPS،
-    // فمبنبعتش من هنا عشان ما نكرّرش الشغل ونستنزف البطارية
-    if (!appOpen) {
-      await LocationSender.maybeSend(pilotId, background: true);
-    }
-
-    // ── التطبيق مفتوح قدام الطيار؟ ──
-    // لو الطيار فاتح التطبيق، مفيش داعي لأي رنين خلفي، ولا حتى جلب شجرة
-    // الأوردرات كاملة من هنا (توفير بيانات) — HomeScreen بيتولّى ده بنفسه
-    // ويحدّث known_order_ids باستمرار. بس نعيد ضبط الـ baseline المحلي منها
-    if (appOpen) {
-      await OrderRinger.stopRinging();
-      _knownIds = (prefs.getStringList('known_order_ids') ?? []).toSet();
-      _firstRun = false;
-      return;
-    }
-
     try {
       final res = await http
-          .get(Uri.parse('$_fbUrl/orders.json${await FbAuth.queryParam()}'))
+          .get(Uri.parse('$_fbUrl/orders.json'))
           .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return;
 
@@ -345,7 +213,8 @@ class _OrderTaskHandler extends TaskHandler {
           .toSet();
 
       // ── قائمة الطلبات التي لسه الطيار ما فتحش التطبيق يشوفها ──
-      // نفضل نرن عليها لحد ما يفتح التطبيق فعليًا (اللي بيمسح القائمة دي)
+      // نفضل نرن عليها من جديد كل دورة (كل 15 ثانية) لحد ما يفتح
+      // التطبيق فعلياً (HomeScreen بيمسح القائمة دي أول ما يفتح)
       final pendingSaved = prefs.getStringList('pending_ring_ids') ?? [];
       var pending = pendingSaved.toSet();
 
@@ -356,15 +225,25 @@ class _OrderTaskHandler extends TaskHandler {
 
       // نشيل من قائمة الرنين أي طلب مبقاش مُسند لهذا الطيار بنفس الحالة
       // (اتسلّم / اترجع / اتحول لطيار تاني) عشان الرنين يوقف تلقائياً
-      pending = pending.intersection(currentIds);
+      final stillPending = pending.intersection(currentIds);
+      final droppedOut = pending.difference(stillPending);
+      pending = stillPending;
+
+      // لو أي طلب كان بيرن وطلع بره القائمة (اتحول لطيار تاني مثلاً)،
+      // نقفل شاشة المكالمة الواردة الخاصة بيه فورًا
+      for (final id in droppedOut) {
+        await IncomingCallService.endCall(id);
+      }
 
       if (pending.isNotEmpty) {
-        // إشعار ستارة واحد ثابت + نغمة loop مستمرة لحد ما الطيار يفتح
-        // التطبيق — يشتغل حتى لو التطبيق مقفول تمامًا (بديل شاشة المكالمة)
-        await OrderRinger.startRinging(count: pending.length);
-      } else {
-        // مفيش طلب معلّق — نوقف أي رنين شغّال ونشيل الإشعار
-        await OrderRinger.stopRinging();
+        // نستخدم أول طلب معلّق كمعرّف للمكالمة، والعدد الكلي في العنوان
+        // — شاشة "مكالمة واردة" حقيقية ترن باستمرار (loop) لحد ما الطيار
+        // يقبل أو يرفض، حتى لو التطبيق مقفول تمامًا، بدل الإشعار العادي
+        // اللي كان بيرن مرتين بس ويسكت
+        await IncomingCallService.showIncomingOrder(
+          orderId: pending.first,
+          count: pending.length,
+        );
       }
 
       await prefs.setStringList('known_order_ids', currentIds.toList());
@@ -375,19 +254,8 @@ class _OrderTaskHandler extends TaskHandler {
     } catch (_) {}
   }
 
-  /// استقبال إشارة فورية من التطبيق الرئيسي (مثلاً "الطيار فتح التطبيق")
-  /// عشان نوقف الرنين في نفس اللحظة من غير ما نستنى دورة الـ 15 ثانية الجاية
   @override
-  void onReceiveData(Object data) {
-    if (data == 'stop_ring') {
-      OrderRinger.stopRinging();
-    }
-  }
-
-  @override
-  Future<void> onDestroy(DateTime timestamp) async {
-    await OrderRinger.stopRinging();
-  }
+  Future<void> onDestroy(DateTime timestamp) async {}
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -573,15 +441,7 @@ class IncomingCallService {
         case CallEventActionCallAccept():
           final orderId =
               event.callKitParams.extra?['orderId']?.toString() ?? '';
-          if (orderId.isNotEmpty) {
-            // مهم جداً: لازم نبلّغ النظام إن المكالمة "اتوصلت" فور القبول،
-            // وإلا أندرويد أحيانًا بيقفل نشاط المكالمة الواردة بطريقة بتسحب
-            // معاها نشاط التطبيق الرئيسي كمان (يبان كإنه "قفل التطبيق")
-            try {
-              await FlutterCallkitIncoming.setCallConnected(orderId);
-            } catch (_) {}
-            onAccept(orderId);
-          }
+          if (orderId.isNotEmpty) onAccept(orderId);
           break;
         case CallEventActionCallDecline():
         case CallEventActionCallTimeout():
@@ -592,29 +452,6 @@ class IncomingCallService {
           break;
       }
     });
-  }
-
-  /// يتحقق —عند بدء التطبيق فقط— من وجود مكالمة "متصلة بالفعل" لسه معلّقة.
-  /// ده بيغطي حالة إن التطبيق كان مقفول تمامًا (Terminated) وابتدأ من
-  /// جديد بسبب ضغط "قبول" على شاشة المكالمة، لأن مستمع الأحداث العادي
-  /// (listenToEvents) بيتسجل بعد ما الـ isolate يبدأ، فممكن يفوّت
-  /// اللحظة اللي اتطلق فيها حدث القبول الأصلي قبل ما التطبيق يخلص تحميله
-  static Future<String?> getAlreadyAcceptedOrderId() async {
-    try {
-      final calls = await FlutterCallkitIncoming.activeCalls();
-      if (calls is List<CallKitParams> && calls.isNotEmpty) {
-        final first = calls.first;
-        final extra = first.extra;
-        final orderId = extra?['orderId']?.toString() ?? first.id;
-        if (orderId != null && orderId.isNotEmpty) {
-          try {
-            await FlutterCallkitIncoming.setCallConnected(orderId);
-          } catch (_) {}
-          return orderId;
-        }
-      }
-    } catch (_) {}
-    return null;
   }
 }
 
@@ -673,11 +510,6 @@ class OrderModel {
   final String tripStartedAt;   // الطيار بدأ رحلة توصيل هذا الطلب بعينه
   final String deliveredAt;
   final String createdAt;
-  // حالة طلب إرجاع الطلب بإذن: '' (لا يوجد) | 'pending' (بانتظار موافقة
-  // الفرع/الإدارة) | 'rejected' (اترفض) — عند الموافقة يتحوّل الأوردر نفسه
-  // لحالة "لم يتم التوصيل" فمش محتاجين قيمة 'approved' هنا
-  final String returnStatus;
-  final String returnReason;
 
   OrderModel({
     required this.id,
@@ -699,8 +531,6 @@ class OrderModel {
     required this.tripStartedAt,
     required this.deliveredAt,
     required this.createdAt,
-    this.returnStatus = '',
-    this.returnReason = '',
   });
 
   factory OrderModel.fromMap(String id, Map m) {
@@ -728,8 +558,6 @@ class OrderModel {
       tripStartedAt:      m['tripStartedAt']      ?? '',
       deliveredAt:        m['deliveredAt']        ?? '',
       createdAt:          m['createdAt']          ?? '',
-      returnStatus:       m['returnStatus']       ?? '',
-      returnReason:       m['returnReason']       ?? '',
     );
   }
 
@@ -738,10 +566,6 @@ class OrderModel {
   /// الطيار بدأ رحلة توصيل هذا الطلب بعينه (بعد استلامه فعلياً)
   bool   get hasStarted  => tripStartedAt.isNotEmpty;
   int    get parcelCount => deliveries.isEmpty ? 1 : deliveries.length;
-  /// طلب إرجاع بانتظار موافقة الفرع/الإدارة
-  bool   get returnPending  => returnStatus == 'pending';
-  /// طلب إرجاع اترفض من الفرع/الإدارة
-  bool   get returnRejected => returnStatus == 'rejected';
 
   DeliveryItem? get firstDelivery => deliveries.isNotEmpty ? deliveries.first : null;
 
@@ -1001,86 +825,9 @@ class ShiftService {
 // ════════════════════════════════════════════════════════════════
 //  FIREBASE SERVICE — استدعاءات Firebase
 // ════════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════
-//  FIREBASE AUTH (Anonymous) — توكن للوصول لقاعدة البيانات
-// ════════════════════════════════════════════════════════════════
-//
-// قواعد قاعدة البيانات بتتطلب auth != null، فالتطبيق بيسجّل دخول مجهول
-// (Anonymous) مرة واحدة وبيحفظ refreshToken، وبيضيف ?auth=<idToken> على
-// كل نداء REST. لو فشل التوكن لأي سبب بنرجّع null والنداءات تشتغل من غير
-// توكن (متوافق مع القواعد المفتوحة) — عشان التحديث يبقى آمن ومتدرّج.
-class FbAuth {
-  static const _apiKey = 'AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws';
-  static String? _idToken;
-  static DateTime? _expiresAt;
-  static bool _busy = false;
-
-  /// يرجّع idToken صالح (أو null لو تعذّر) — بيتعامل مع التجديد تلقائيًا
-  static Future<String?> token() async {
-    if (_idToken != null && _expiresAt != null &&
-        DateTime.now().isBefore(_expiresAt!.subtract(const Duration(minutes: 5)))) {
-      return _idToken;
-    }
-    if (_busy) return _idToken; // منع التزاحم بين نداءات متوازية
-    _busy = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      try { await prefs.reload(); } catch (_) {}
-      final refresh = prefs.getString('fb_refresh_token');
-
-      if (refresh != null && refresh.isNotEmpty) {
-        final ok = await _refresh(refresh);
-        if (ok) return _idToken;
-      }
-      await _signInAnonymously(prefs);
-      return _idToken;
-    } catch (_) {
-      return null;
-    } finally {
-      _busy = false;
-    }
-  }
-
-  static Future<bool> _refresh(String refreshToken) async {
-    try {
-      final res = await http.post(
-        Uri.parse('https://securetoken.googleapis.com/v1/token?key=$_apiKey'),
-        body: {'grant_type': 'refresh_token', 'refresh_token': refreshToken},
-      ).timeout(const Duration(seconds: 12));
-      if (res.statusCode != 200) return false;
-      final d = json.decode(res.body);
-      _idToken   = d['id_token'];
-      _expiresAt = DateTime.now().add(Duration(seconds: int.tryParse('${d['expires_in']}') ?? 3600));
-      return _idToken != null;
-    } catch (_) { return false; }
-  }
-
-  static Future<void> _signInAnonymously(SharedPreferences prefs) async {
-    final res = await http.post(
-      Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_apiKey'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'returnSecureToken': true}),
-    ).timeout(const Duration(seconds: 12));
-    if (res.statusCode != 200) return;
-    final d = json.decode(res.body);
-    _idToken   = d['idToken'];
-    _expiresAt = DateTime.now().add(Duration(seconds: int.tryParse('${d['expiresIn']}') ?? 3600));
-    // نحفظ refreshToken عشان ما ننشئش حساب مجهول جديد كل مرة
-    if (d['refreshToken'] != null) {
-      await prefs.setString('fb_refresh_token', d['refreshToken']);
-    }
-  }
-
-  /// لاحقة الاستعلام المطلوبة على روابط REST (فاضية لو مفيش توكن)
-  static Future<String> queryParam() async {
-    final t = await token();
-    return (t == null || t.isEmpty) ? '' : '?auth=$t';
-  }
-}
-
 class FB {
   static Future<dynamic> get(String path) async {
-    final res = await http.get(Uri.parse('${K.db}/$path.json${await FbAuth.queryParam()}'))
+    final res = await http.get(Uri.parse('${K.db}/$path.json'))
         .timeout(const Duration(seconds: 10));
     if (res.statusCode == 200) return json.decode(res.body);
     throw Exception('HTTP ${res.statusCode}');
@@ -1088,7 +835,7 @@ class FB {
 
   static Future<void> patch(String path, Map<String, dynamic> data) async {
     await http.patch(
-      Uri.parse('${K.db}/$path.json${await FbAuth.queryParam()}'),
+      Uri.parse('${K.db}/$path.json'),
       body: json.encode(data),
     ).timeout(const Duration(seconds: 10));
   }
@@ -1140,7 +887,7 @@ class FB {
     // طيارين الفرع الحالية (اللي بتتغيّر لو الطيار اتنقل أو اتحذف بعدين)
     final pilot = await getPilot(pilotId);
     final res = await http.post(
-      Uri.parse('${K.db}/shifts.json${await FbAuth.queryParam()}'),
+      Uri.parse('${K.db}/shifts.json'),
       body: json.encode({
         'pilotId':    pilotId,
         'pilotName':  pilotName,
@@ -1258,7 +1005,7 @@ class FB {
     required String branchName,
   }) async {
     final res = await http.post(
-      Uri.parse('${K.db}/pilotShiftRequests.json${await FbAuth.queryParam()}'),
+      Uri.parse('${K.db}/pilotShiftRequests.json'),
       body: json.encode({
         'pilotId':     pilotId,
         'pilotName':   pilotName,
@@ -1295,7 +1042,7 @@ class FB {
     required String reason,
   }) async {
     final res = await http.post(
-      Uri.parse('${K.db}/pilotLeaveRequests.json${await FbAuth.queryParam()}'),
+      Uri.parse('${K.db}/pilotLeaveRequests.json'),
       body: json.encode({
         'pilotId':     pilotId,
         'pilotName':   pilotName,
@@ -1534,116 +1281,6 @@ class FB {
       });
     }
   }
-
-  // ── طلب إرجاع الطلب (يحتاج موافقة الفرع/الإدارة) ──────────────────────
-  //
-  // بدل ما الطيار يرجّع الطلب فورًا، بيبعت طلب إرجاع بسبب مكتوب، والطلب ده
-  // بيظهر في لوحتَي الفرع والإدارة (نود pilotReturnRequests زي طلبات الإذن)،
-  // وأي واحد فيهم يوافق أو يرفض. عند الموافقة يتحوّل الأوردر لـ"لم يتم التوصيل".
-
-  /// إرسال طلب إرجاع طلب، وإرجاع مُعرّف الطلب. بنبصم كمان على الأوردر نفسه
-  /// حالة returnStatus='pending' عشان تطبيق الطيار يعرض "بانتظار الموافقة"
-  /// من غير ما يجيب نود الطلبات كامل (توفير بيانات)
-  static Future<String> requestOrderReturn({
-    required String orderId,
-    required String orderNum,
-    required String pilotId,
-    required String pilotName,
-    required String branchId,
-    required String branchName,
-    required String reason,
-  }) async {
-    final now = DateTime.now().toIso8601String();
-    final res = await http.post(
-      Uri.parse('${K.db}/pilotReturnRequests.json${await FbAuth.queryParam()}'),
-      body: json.encode({
-        'orderId':     orderId,
-        'orderNum':    orderNum,
-        'pilotId':     pilotId,
-        'pilotName':   pilotName,
-        'branchId':    branchId,
-        'branchName':  branchName,
-        'reason':      reason,
-        'status':      'pending',
-        'requestedAt': now,
-      }),
-    ).timeout(const Duration(seconds: 10));
-
-    await patch('orders/$orderId', {
-      'returnStatus': 'pending',
-      'returnReason': reason,
-    });
-
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return (data is Map ? data['name'] : null) ?? '';
-    }
-    return '';
-  }
-
-  /// إلغاء علامة الرفض عن الأوردر بعد ما الطيار يشوفها (يرجع الأزرار طبيعية)
-  static Future<void> clearOrderReturnFlag(String orderId) async {
-    await patch('orders/$orderId', {
-      'returnStatus': null,
-      'returnReason': null,
-    });
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-//  LOCATION SENDER — إرسال موقع الطيار بكفاءة (بطارية/بيانات)
-// ════════════════════════════════════════════════════════════════
-//
-// يرسل الموقع مرة كل 60 ثانية كحد أقصى، وميبعتش لو الطيار واقف مكانه
-// (تحرّك أقل من مسافة معقولة) عشان نوفّر البطارية والباقة. بيشتغل من الـ
-// isolate الرئيسي (والتطبيق مفتوح) ومن الخدمة الخلفية (والتطبيق مقفول) —
-// كل واحد بياخد وقته من نفس المفاتيح المحفوظة عشان ما يتزاحموش.
-class LocationSender {
-  static const _minInterval = Duration(seconds: 60); // مرة كل دقيقة كحد أقصى
-  static const _minMoveMeters = 20.0;                // تجاهل الحركة الطفيفة
-
-  /// يجلب الموقع الحالي ويرسله لو مرّ 60ث على آخر إرسال والطيار اتحرّك فعلاً.
-  /// [background] لتقليل دقة الـ GPS في الخلفية (توفير أكبر للبطارية).
-  static Future<void> maybeSend(String pilotId, {bool background = false}) async {
-    if (pilotId.isEmpty) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final nowMs = DateTime.now().millisecondsSinceEpoch;
-      final lastMs = prefs.getInt('loc_last_ms') ?? 0;
-      if (nowMs - lastMs < _minInterval.inMilliseconds) return; // لسه بدري
-
-      if (!await Geolocator.isLocationServiceEnabled()) return;
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) return;
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: LocationSettings(
-          accuracy: background ? LocationAccuracy.medium : LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 15),
-        ),
-      );
-
-      // تجاهل الإرسال لو الطيار مش متحرّك مسافة معقولة (توفير بيانات)
-      final lastLat = prefs.getDouble('loc_last_lat');
-      final lastLng = prefs.getDouble('loc_last_lng');
-      if (lastLat != null && lastLng != null) {
-        final moved = Geolocator.distanceBetween(lastLat, lastLng, pos.latitude, pos.longitude);
-        if (moved < _minMoveMeters) {
-          // واقف مكانه — نحدّث وقت المحاولة بس عشان ما نلحّش على الـ GPS تاني قبل دقيقة
-          await prefs.setInt('loc_last_ms', nowMs);
-          return;
-        }
-      }
-
-      await FB.updateLocation(pilotId, pos.latitude, pos.longitude);
-      await prefs.setInt('loc_last_ms', nowMs);
-      await prefs.setDouble('loc_last_lat', pos.latitude);
-      await prefs.setDouble('loc_last_lng', pos.longitude);
-    } catch (_) {
-      // نتجاهل أخطاء الموقع العابرة (GPS/شبكة) — هيتحاول تاني الدورة الجاية
-    }
-  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1677,22 +1314,6 @@ void main() async {
   });
 
   runApp(TiarApp(session: session));
-
-  // ── تغطية حالة "التطبيق كان مقفول تمامًا" وابتدأ بسبب ضغط "قبول" ──
-  // بنستنى أول فريم يترسم عشان navigatorKey يبقى جاهز فعليًا قبل أي Push
-  final pilotId = session?['pilotId'];
-  if (pilotId != null && pilotId.isNotEmpty) {
-    final alreadyAcceptedId = await IncomingCallService.getAlreadyAcceptedOrderId();
-    if (alreadyAcceptedId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (_) => OrderDetailScreen(orderId: alreadyAcceptedId, pilotId: pilotId),
-          ),
-        );
-      });
-    }
-  }
 }
 
 class TiarApp extends StatelessWidget {
@@ -2349,75 +1970,48 @@ class HomeScreen extends StatefulWidget {
   @override State<HomeScreen> createState() => _HomeState();
 }
 
-class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeState extends State<HomeScreen> {
   int _tab = 0;
   Timer? _refreshTimer;
-  int _refreshTick = 0;    // عدّاد دورات التحديث لتوزيع النداءات
+  StreamSubscription<Position>? _gpsStream;   // stream مستمر من GPS
   Set<String> _knownOrderIds = {};
   bool _firstLoad = true;
-  bool _gpsBusy = false;   // منع التزاحم على إرسال الموقع
+  bool _gpsBusy = false;   // منع التزاحم لو Firebase بطيء
 
   // ── حالة الإذن/الاستراحة المُزامَنة من Firebase ──
   bool _onBreak = false;
   String? _leaveType;
   String? _leaveReason;
-  bool _leaveForced = false; // إيقاف مفروض من الإدارة/الفرع — الطيار ميقدرش ينهيه
+
+  // ── حماية البطارية والبيانات: إرسال الموقع بحد أقصى مرة كل فترة ──
+  DateTime? _lastGpsSentAt;
+  Position?  _lastGpsSentPos;
+  static const _gpsMinInterval = Duration(seconds: 10); // أقصى تردد للإرسال
+  static const _gpsMinDistanceMeters = 15.0;             // تجاهل الحركة الطفيفة
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    // إذن الموقع بيتطلب داخل _initFgService (قبل تشغيل خدمة نوع location)،
-    // وأول إرسال فعلي للموقع بيحصل من مؤقّت التحديث بعد منح الإذن
+    _startGpsStream();
     _loadKnownIdsFromPrefs();
     _loadOrders();
-    // توفير بطارية/بيانات: بنوزّع النداءات بدل ما نعملها كلها كل دورة —
-    // الأوردرات كل 8ث (استجابة سريعة كفاية)، مزامنة حالة الطيار كل 16ث،
-    // والتأكد إن الخدمة الخلفية شغّالة كل 32ث
-    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (!mounted) return;
-      _refreshTick++;
-      _loadOrders();
-      _sendLocation(); // مُقيّد داخليًا بمرة كل 60ث
-      if (_refreshTick % 2 == 0) _syncPilotStatus();
-      if (_refreshTick % 4 == 0) _ensureFgServiceAlive();
+    // من ثانية إلى 5 ثواني — فرق غير محسوس للمستخدم لكنه يقلل
+    // عدد نداءات الشبكة لجلب كل الأوردرات إلى خُمس القيمة
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) { _loadOrders(); _syncPilotStatus(); _ensureFgServiceAlive(); }
     });
-    // الطيار فتح التطبيق فعلياً — نوقف رنين أي طلب كان مستني فورًا
-    _onAppForeground();
+    LocalNotif.clearAll();
+    // الطيار فتح التطبيق فعلياً — نوقف رنين أي طلب كان مستني
+    _clearPendingRing();
     // تشغيل Foreground Service للخلفية
     _initFgService();
   }
 
-  /// مراقبة دورة حياة التطبيق — أي رجوع للواجهة يوقف الرنين الخلفي فورًا،
-  /// وأي خروج للخلفية يسمح للخدمة الخلفية ترن من جديد على أي طلب جديد
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      _onAppForeground();
-    } else if (state == AppLifecycleState.paused ||
-               state == AppLifecycleState.detached) {
-      _markAppBackground();
-    }
-  }
-
-  /// التطبيق بقى قدام الطيار: نرفع فلاج "مفتوح"، نمسح قائمة الرنين، نلغي
-  /// إشعار الرنين الثابت، ونبعت إشارة فورية للخدمة الخلفية توقف النغمة
-  /// في نفس اللحظة (من غير ما نستنى دورتها الجاية)
-  Future<void> _onAppForeground() async {
+  /// يمسح قائمة الطلبات "المعلقة" اللي كان بيرن عليها التطبيق في الخلفية،
+  /// عشان الرنين يوقف بمجرد ما الطيار يفتح التطبيق فعلياً
+  Future<void> _clearPendingRing() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('app_in_foreground', true);
     await prefs.remove('pending_ring_ids');
-    await LocalNotif.cancelRingingNotification();
-    LocalNotif.clearAll();
-    try { FlutterForegroundTask.sendDataToTask('stop_ring'); } catch (_) {}
-  }
-
-  /// التطبيق راح للخلفية: نخفض الفلاج عشان الخدمة الخلفية ترجع ترن على أي
-  /// طلب جديد يوصل والطيار مش شايف
-  Future<void> _markAppBackground() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('app_in_foreground', false);
   }
 
   /// مزامنة حالة الطيار مع Firebase — لاكتشاف: (1) موافقة/رفض/إنهاء
@@ -2454,11 +2048,10 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
           _onBreak = true;
           _leaveType = pilot['leaveType']?.toString();
           _leaveReason = pilot['leaveReason']?.toString();
-          _leaveForced = pilot['leaveForced'] == true; // إيقاف إجباري من الإدارة/الفرع
         });
       } else {
         if (localBreakStart != null) await ShiftService.endBreak();
-        if (mounted && _onBreak) setState(() { _onBreak = false; _leaveType = null; _leaveReason = null; _leaveForced = false; });
+        if (mounted && _onBreak) setState(() { _onBreak = false; _leaveType = null; _leaveReason = null; });
       }
     } catch (_) {
       // نتجاهل أخطاء الشبكة العابرة
@@ -2569,9 +2162,6 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initFgService() async {
-    // مهم: نطلب إذن الموقع الأول ونستناه قبل تشغيل الخدمة، لأن الخدمة من
-    // نوع "location"، وأندرويد 14+ بيرمي استثناء لو اتشغّلت قبل منح الإذن
-    await _ensureLocationPermission();
     // طلب إذن الإشعارات (Android 13+)
     await FlutterForegroundTask.requestNotificationPermission();
     // طلب استثناء التطبيق من تحسين البطارية — أهم خطوة عشان أندرويد
@@ -2612,11 +2202,12 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
           for (final id in added) {
             await ShiftService.addOrder(id);
           }
-          // التطبيق مفتوح قدام الطيار فعلاً — مفيش داعي لرنين مستمر (ده
-          // بيحصل بس والتطبيق مقفول). هنا يكفي تنبيه صوتي لمرة واحدة + بانر،
-          // والطيار شايف الطلب على طول. الرنين الخلفي المستمر بيتولّاه
-          // OrderRinger من الخدمة الخلفية لما التطبيق يكون مقفول/في الخلفية
-          NotificationService.playNewOrder();
+          // نفس شاشة "المكالمة الواردة" بترن باستمرار حتى لو التطبيق فاتح
+          // فعليًا قدام الطيار — سلوك موحّد في كل الحالات (فاتح/خلفية/مقفول)
+          await IncomingCallService.showIncomingOrder(
+            orderId: added.first,
+            count: added.length,
+          );
           _showNewOrderBanner(added.length);
         }
       } else {
@@ -2664,31 +2255,51 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    // التطبيق بيتقفل — نخفض الفلاج عشان الخدمة الخلفية ترجع ترن على الطلبات
-    _markAppBackground();
+    _gpsStream?.cancel();
     _refreshTimer?.cancel();
     NotificationService.dispose();
     super.dispose();
   }
 
-  /// طلب إذن الموقع مرة واحدة عند فتح الشاشة (لا نشغّل stream مستمر عشان
-  /// البطارية — الإرسال بقى دوري كل 60ث عبر LocationSender من مؤقّت التحديث)
-  Future<void> _ensureLocationPermission() async {
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) return;
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-    } catch (_) {}
-  }
+  Future<void> _startGpsStream() async {
+    if (!await Geolocator.isLocationServiceEnabled()) return;
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
 
-  /// إرسال موقع الطيار (foreground) — مُقيّد داخليًا بمرة كل 60ث ولو اتحرّك
-  /// فعلاً، فمفيش استنزاف حتى لو اتنادى كل دورة تحديث
-  Future<void> _sendLocation() async {
-    if (_gpsBusy) return;
-    _gpsBusy = true;
-    try { await LocationSender.maybeSend(widget.pilotId); } catch (_) {}
-    _gpsBusy = false;
+    // Stream مستمر من نظام التشغيل، لكن مفلتر بمسافة معقولة (15م) بدل صفر
+    // لتقليل عدد نبضات الـ GPS من الأساس (توفير بطارية على مستوى النظام)
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 15,
+    );
+
+    _gpsStream = Geolocator.getPositionStream(locationSettings: settings)
+        .listen((pos) async {
+          if (widget.pilotId.isEmpty || _gpsBusy) return;
+
+          // ── حماية إضافية: نبعت لـ Firebase فقط لو فعلاً عدّت المدة
+          // الدنيا أو المسافة الدنيا، حتى لو الـ OS بعت نقطة جديدة ──
+          final now = DateTime.now();
+          if (_lastGpsSentAt != null && _lastGpsSentPos != null) {
+            final elapsed = now.difference(_lastGpsSentAt!);
+            final moved = Geolocator.distanceBetween(
+              _lastGpsSentPos!.latitude, _lastGpsSentPos!.longitude,
+              pos.latitude, pos.longitude,
+            );
+            if (elapsed < _gpsMinInterval && moved < _gpsMinDistanceMeters) {
+              return; // لسه بدري ولا اتحرك مسافة كافية — تجاهل
+            }
+          }
+
+          _gpsBusy = true;
+          try {
+            await FB.updateLocation(widget.pilotId, pos.latitude, pos.longitude);
+            _lastGpsSentAt  = now;
+            _lastGpsSentPos = pos;
+          } catch (_) {}
+          _gpsBusy = false;
+        });
   }
 
   /// إنهاء الوردية فقط (بدون خروج من الحساب)
@@ -2718,6 +2329,7 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _logout() async {
     final ok = await _confirm(context, 'تسجيل الخروج', 'هل تريد الخروج من حسابك؟', K.red, 'خروج');
     if (!ok) return;
+    _gpsStream?.cancel();
     _refreshTimer?.cancel();
     await FgService.stop();
     await ShiftService.endShift(widget.pilotId);
@@ -2734,7 +2346,7 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
     final tabs = [
       OrdersTab(
         pilotId: widget.pilotId, name: widget.name, refreshKey: _knownOrderIds.length, scaffoldKey: _scaffoldKey,
-        onBreak: _onBreak, leaveType: _leaveType, leaveReason: _leaveReason, leaveForced: _leaveForced,
+        onBreak: _onBreak, leaveType: _leaveType, leaveReason: _leaveReason,
         onEndBreak: _endBreak, onRequestLeave: _openLeaveRequestDialog,
       ),
       CompletedTab(pilotId: widget.pilotId),
@@ -2949,12 +2561,11 @@ class OrdersTab extends StatefulWidget {
   final bool onBreak;
   final String? leaveType;
   final String? leaveReason;
-  final bool leaveForced; // إيقاف مفروض من الإدارة/الفرع
   final VoidCallback? onEndBreak;
   final VoidCallback? onRequestLeave;
   const OrdersTab({
     super.key, required this.pilotId, required this.name, required this.refreshKey, required this.scaffoldKey,
-    this.onBreak = false, this.leaveType, this.leaveReason, this.leaveForced = false, this.onEndBreak, this.onRequestLeave,
+    this.onBreak = false, this.leaveType, this.leaveReason, this.onEndBreak, this.onRequestLeave,
   });
   @override State<OrdersTab> createState() => _OrdersTabState();
 }
@@ -3105,45 +2716,21 @@ class _OrdersTabState extends State<OrdersTab> {
                               style: const TextStyle(color: K.grey, fontSize: 12)),
                         ),
                       ),
-                    // لو الإيقاف مفروض من الإدارة/الفرع: الطيار ميقدرش يرجّع
-                    // نفسه — بيظهر تنبيه بس، والعودة بتكون من لوحة الإدارة/الفرع
-                    if (widget.leaveForced)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: K.red.withValues(alpha: .12),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: K.red.withValues(alpha: .3)),
-                          ),
-                          child: Row(children: const [
-                            Icon(Icons.lock_outline_rounded, color: K.red, size: 16),
-                            SizedBox(width: 8),
-                            Expanded(child: Text(
-                              'تم إيقافك من الإدارة/الفرع — العودة للعمل بتكون من عندهم',
-                              style: TextStyle(color: K.red, fontSize: 12, fontWeight: FontWeight.w600),
-                            )),
-                          ]),
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: SizedBox(
-                          width: double.infinity, height: 38,
-                          child: ElevatedButton.icon(
-                            onPressed: widget.onEndBreak,
-                            icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                            label: const Text('عدت للعمل'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: K.green, foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: SizedBox(
+                        width: double.infinity, height: 38,
+                        child: ElevatedButton.icon(
+                          onPressed: widget.onEndBreak,
+                          icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                          label: const Text('عدت للعمل'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: K.green, foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                         ),
                       ),
+                    ),
                   ] else
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
@@ -4008,9 +3595,8 @@ class _OrderDetailState extends State<OrderDetailScreen> {
   void initState() {
     super.initState();
     _load(showSpinner: true);
-    // تحديث تلقائي كل 5 ثواني (بدل كل ثانية) — توفير بطارية/بيانات
-    // مع بقاء الحالة محدّثة بشكل شبه فوري للمستخدم
-    _autoRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
+    // تحديث تلقائي كل ثانية
+    _autoRefresh = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) _load();
     });
   }
@@ -4067,90 +3653,27 @@ class _OrderDetailState extends State<OrderDetailScreen> {
     }
   }
 
-  /// طلب إرجاع الطلب — يفتح نافذة يكتب فيها الطيار السبب، ثم يرسل طلب إذن
-  /// إرجاع للفرع والإدارة (بدل الإرجاع الفوري). عند الموافقة يتحوّل الأوردر
-  /// تلقائيًا لـ"لم يتم التوصيل" من لوحة الفرع/الإدارة.
-  Future<void> _requestReturnOrder() async {
+  /// إرجاع الطلب — لو تعذّر التوصيل فعلياً
+  Future<void> _returnOrder() async {
     if (_order == null) return;
-    final reasonCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: K.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('طلب إرجاع الطلب', style: TextStyle(color: K.white, fontSize: 17, fontWeight: FontWeight.w800)),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('اكتب سبب إرجاع الطلب، وهيتبعت للفرع والإدارة للموافقة عليه.',
-              style: TextStyle(color: K.grey, fontSize: 13, height: 1.5)),
-          const SizedBox(height: 14),
-          TextField(
-            controller: reasonCtrl,
-            maxLines: 3,
-            autofocus: true,
-            style: const TextStyle(color: K.white),
-            decoration: InputDecoration(
-              hintText: 'مثال: العميل مش بيرد / العنوان غلط / العميل رفض الاستلام',
-              hintStyle: const TextStyle(color: K.grey, fontSize: 12),
-              filled: true, fillColor: K.card2,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            ),
-          ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء', style: TextStyle(color: K.grey))),
-          ElevatedButton(
-            onPressed: () {
-              if (reasonCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx, true);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: K.orange, foregroundColor: Colors.white),
-            child: const Text('إرسال الطلب'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
+    final ok = await _confirm(context, 'إرجاع الطلب',
+        'سيتم إرجاع الطلب وتحريره للإدارة أو الفرع لإعادة التعيين.\nهل تريد المتابعة؟',
+        K.orange, 'إرجاع الطلب');
+    if (!ok) return;
     setState(() => _processing = true);
     try {
-      final o = _order!;
-      // نجيب فرع الطيار واسمه عشان الطلب يظهر في لوحة الفرع الصحيح
-      final pilot = await FB.getPilot(widget.pilotId);
-      final branchId = pilot?.assignedBranchId ?? '';
-      final branchName = await FB.getBranchName(branchId);
-      await FB.requestOrderReturn(
-        orderId:    o.id,
-        orderNum:   o.orderNum,
-        pilotId:    widget.pilotId,
-        pilotName:  pilot?.name ?? '',
-        branchId:   branchId,
-        branchName: branchName,
-        reason:     reasonCtrl.text.trim(),
-      );
-      await _load(); // نحدّث الحالة فورًا لعرض "بانتظار الموافقة"
+      await FB.markNotDelivered(_order!.id, 'إرجاع من قبل الطيار');
       if (!mounted) return;
-      setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('📨 تم إرسال طلب الإرجاع — بانتظار موافقة الفرع/الإدارة'),
+        content: const Text('↩️ تم إرجاع الطلب — سيتم إعادة تعيينه'),
         backgroundColor: K.orange,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
+      Navigator.pop(context);
     } catch (_) {
       if (mounted) setState(() => _processing = false);
     }
-  }
-
-  /// الطيار شاف إن طلب الإرجاع اترفض — نمسح العلامة عشان الأزرار ترجع طبيعية
-  Future<void> _acknowledgeRejection() async {
-    if (_order == null) return;
-    setState(() => _processing = true);
-    try {
-      await FB.clearOrderReturnFlag(_order!.id);
-      await _load();
-    } catch (_) {}
-    if (mounted) setState(() => _processing = false);
   }
 
   @override
@@ -4303,88 +3826,19 @@ class _OrderDetailState extends State<OrderDetailScreen> {
               ),
             ),
             const SizedBox(height: 10),
-
-            // ── منطقة إرجاع الطلب (بإذن من الفرع/الإدارة) ──
-            if (o.returnPending) ...[
-              // طلب الإرجاع اتبعت ولسه بانتظار الموافقة
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: K.orange.withValues(alpha: .08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: K.orange.withValues(alpha: .35)),
-                ),
-                child: Row(children: [
-                  const SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(color: K.orange, strokeWidth: 2)),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('طلب الإرجاع قيد المراجعة',
-                        style: TextStyle(color: K.orange, fontSize: 14, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 2),
-                    const Text('بانتظار موافقة الفرع أو الإدارة',
-                        style: TextStyle(color: K.grey, fontSize: 12)),
-                    if (o.returnReason.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text('السبب: ${o.returnReason}',
-                          style: const TextStyle(color: K.grey, fontSize: 12)),
-                    ],
-                  ])),
-                ]),
+            SizedBox(
+              width: double.infinity, height: 46,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: K.orange,
+                    side: const BorderSide(color: K.orange),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                onPressed: _processing ? null : _returnOrder,
+                icon: const Icon(Icons.assignment_return_rounded, size: 18),
+                label: const Text('إرجاع الطلب',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               ),
-            ] else if (o.returnRejected) ...[
-              // الفرع/الإدارة رفض طلب الإرجاع
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: K.red.withValues(alpha: .08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: K.red.withValues(alpha: .35)),
-                ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: const [
-                    Icon(Icons.cancel_rounded, color: K.red, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(child: Text('تم رفض طلب الإرجاع',
-                        style: TextStyle(color: K.red, fontSize: 14, fontWeight: FontWeight.w800))),
-                  ]),
-                  const SizedBox(height: 6),
-                  const Text('برجاء متابعة توصيل الطلب، أو التواصل مع الفرع.',
-                      style: TextStyle(color: K.grey, fontSize: 12)),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity, height: 46,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                      foregroundColor: K.grey,
-                      side: const BorderSide(color: K.border),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  onPressed: _processing ? null : _acknowledgeRejection,
-                  icon: const Icon(Icons.check_rounded, size: 18),
-                  label: const Text('حسنًا، متابعة التوصيل',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ] else ...[
-              // الحالة العادية — زر طلب إرجاع الطلب
-              SizedBox(
-                width: double.infinity, height: 46,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                      foregroundColor: K.orange,
-                      side: const BorderSide(color: K.orange),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  onPressed: _processing ? null : _requestReturnOrder,
-                  icon: const Icon(Icons.assignment_return_rounded, size: 18),
-                  label: const Text('طلب إرجاع الطلب',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
+            ),
             const SizedBox(height: 10),
           ] else ...[
           // بطاقة حالة الأوردر المنتهي
