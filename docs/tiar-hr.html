@@ -3162,18 +3162,366 @@ window.exportReportExcel = function() {
     .dg-input{width:100%;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--night);color:var(--text);font-family:var(--font);font-size:.82rem;outline:none;text-align:center;}
     .dg-input:focus{border-color:var(--sky);}
     .dg-hours-display{display:inline-block;font-weight:700;color:var(--sky);font-size:.85rem;}
+
+    /* ═══ شاشة دخول الدهشان الموحّدة ═══ */
+    /* ══════════════════════════════════════════
+       LOGIN SCREEN — تصميم الدهشان
+    ══════════════════════════════════════════ */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: row-reverse;
+      overflow: hidden;
+    }
+    #login-screen.hidden { display: none; }
+
+    /* ── الجانب الأيسر: صورة الدراجة الحقيقية ── */
+    .login-hero {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #0a0000;
+    }
+    .hero-real-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+    }
+    /* تدرج خفيف فوق الصورة لتحسين قراءة النص */
+    .login-hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,.1) 0%,
+        rgba(0,0,0,.0) 40%,
+        rgba(0,0,0,.0) 70%,
+        rgba(0,0,0,.65) 100%
+      );
+      pointer-events: none;
+    }
+    /* المميزات في الأسفل */
+    .hero-features {
+      position: absolute;
+      bottom: 4%;
+      left: 0; right: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      gap: clamp(16px, 4vw, 48px);
+      padding: 0 24px;
+    }
+    .hero-feature {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,.9);
+      font-size: clamp(.65rem, 1.2vw, .82rem);
+      font-weight: 700;
+      text-align: center;
+      text-shadow: 0 1px 4px rgba(0,0,0,.8);
+    }
+    .hero-feature svg {
+      width: 24px; height: 24px;
+      color: #e8192c;
+      filter: drop-shadow(0 0 4px rgba(232,25,44,.6));
+    }
+
+    /* ── الجانب الأيمن: فورم الدخول ── */
+    .login-panel {
+      width: min(100%, 480px);
+      background: #111111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 24px;
+      position: relative;
+      overflow-y: auto;
+    }
+
+    /* البطاقة الداخلية العائمة */
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: #1c1c1e;
+      border-radius: 20px;
+      padding: 32px 32px 24px;
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+    }
+
+    /* شعار الدهشان في أعلى الكارد */
+    .login-logo-svg {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .dahshan-logo-img {
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* عنوان الفورم */
+    .login-form-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: #e8192c;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .login-form-sub {
+      font-size: .82rem;
+      color: #555;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    /* حقول الإدخال */
+    .lf-input-wrap {
+      width: 100%;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .lf-input-wrap > svg {
+      position: absolute;
+      right: 14px;
+      top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px;
+      color: #555;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .lf-input-wrap .eye-toggle {
+      position: absolute;
+      left: 14px;
+      top: 50%; transform: translateY(-50%);
+      background: none; border: none;
+      cursor: pointer;
+      color: #555;
+      padding: 0;
+      display: flex; align-items: center;
+      z-index: 1;
+    }
+    .lf-input-wrap .eye-toggle:hover { color: #e8192c; }
+    .lf-input {
+      width: 100%;
+      background: #252527;
+      border: 1.5px solid #2e2e30;
+      border-radius: 10px;
+      padding: 13px 44px 13px 44px;
+      font-family: var(--font);
+      font-size: .92rem;
+      color: #d0d0d0;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      direction: rtl;
+      text-align: right;
+    }
+    .lf-input::placeholder { color: #555; direction: rtl; }
+    .lf-input:focus {
+      border-color: #e8192c;
+      box-shadow: 0 0 0 3px rgba(232,25,44,.1);
+    }
+    /* سطر تذكرني + نسيت */
+    .lf-remember-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      font-size: .82rem;
+    }
+    .lf-remember {
+      display: flex; align-items: center; gap: 7px;
+      color: #888; cursor: pointer; user-select: none;
+    }
+    .lf-remember input[type=checkbox] {
+      width: 16px; height: 16px;
+      accent-color: #e8192c;
+      cursor: pointer;
+    }
+    .lf-forgot { color: #e8192c; text-decoration: none; font-weight: 700; font-size: .8rem; }
+    .lf-forgot:hover { text-decoration: underline; }
+    /* زر تسجيل الدخول الرئيسي */
+    .lf-btn-main {
+      width: 100%;
+      padding: 14px 18px;
+      background: #e8192c;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 1rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background .2s, transform .15s, box-shadow .2s;
+      box-shadow: 0 6px 24px rgba(232,25,44,.35);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      letter-spacing: .5px;
+    }
+    .lf-btn-main:hover { background: #c9151f; transform: translateY(-1px); box-shadow: 0 10px 30px rgba(232,25,44,.45); }
+    .lf-btn-main:active { transform: translateY(0); }
+    .lf-btn-main:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+    .lf-btn-main .btn-arrow {
+      width: 36px; height: 36px;
+      background: rgba(0,0,0,.25);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .lf-btn-main .btn-text { flex: 1; text-align: center; }
+    /* فاصل أو */
+    .lf-or {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      color: #3a3a3a;
+      font-size: .8rem;
+    }
+    .lf-or::before, .lf-or::after {
+      content: '';
+      flex: 1; height: 1px;
+      background: #2a2a2a;
+    }
+    /* زر مدير فرع */
+    .lf-btn-secondary {
+      width: 100%;
+      padding: 13px 18px;
+      background: transparent;
+      border: 1.5px solid #2e2e30;
+      border-radius: 10px;
+      color: #999;
+      font-family: var(--font);
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color .2s, color .2s, background .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .lf-btn-secondary:hover { border-color: #e8192c; color: #e8192c; background: rgba(232,25,44,.04); }
+    /* خطأ */
+    .login-error {
+      min-height: 18px;
+      margin-top: 10px;
+      font-size: .82rem;
+      color: #e8192c;
+      text-align: center;
+      font-weight: 700;
+      width: 100%;
+    }
+    /* فوتر الفورم */
+    .login-panel-footer {
+      margin-top: 20px;
+      font-size: .7rem;
+      color: #383838;
+      text-align: center;
+    }
+    /* استجابة موبايل */
+    @media (max-width: 760px) {
+      #login-screen { flex-direction: column; }
+      .login-hero { display: none; }
+      .login-panel { width: 100%; height: 100%; padding: 24px 16px; }
+    }
+
+    /* توافق: بعض التطبيقات بتستخدم #loginError بدل .login-error */
+    #login-screen #loginError {
+      min-height: 18px; margin-top: 10px; font-size: .82rem;
+      color: #e8192c; text-align: center; font-weight: 700; width: 100%;
+    }
+
   </style>
 </head>
 <body>
 
 <div id="login-screen">
-  <div class="login-box">
-    <div class="login-brand">🧑‍💼 طيّار HR</div>
-    <p class="login-sub">نظام إدارة الموارد البشرية</p>
-    <div class="login-field"><label>اسم المستخدم</label><input type="text" id="loginUser" placeholder="أدخل اسم المستخدم" /></div>
-    <div class="login-field"><label>كلمة المرور</label><input type="password" id="loginPass" placeholder="أدخل كلمة المرور" /></div>
-    <div id="loginError"></div>
-    <button class="login-btn" id="loginBtn">دخول</button>
+
+  <!-- الجانب الأيسر: صورة الهيرو -->
+  <div class="login-hero">
+    <img class="hero-real-img" src="assets/hero.png" alt="الدهشان" />
+    <div class="hero-features">
+      <div class="hero-feature">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3L4 14h7v7l9-11h-7V3z"/></svg>
+        <span>سرعة في<br>التوصيل</span>
+      </div>
+      <div class="hero-feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>
+        </svg>
+        <span>أمان في<br>التعامل</span>
+      </div>
+      <div class="hero-feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.63 19.79 19.79 0 010 .18 2 2 0 012.18 0h3a2 2 0 012 1.72"/>
+        </svg>
+        <span>دعم على مدار<br>الساعة</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- الجانب الأيمن: فورم الدخول -->
+  <div class="login-panel">
+    <div class="login-card">
+
+      <div class="login-logo-svg">
+        <img src="assets/logo.png" alt="الدهشان" style="width:220px;height:auto;object-fit:contain;" />
+      </div>
+
+      <div class="login-form-title">تسجيل الدخول</div>
+      <div class="login-form-sub">نظام الموارد البشرية</div>
+
+      <div class="lf-input-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+        <input id="loginUser" class="lf-input" type="text" placeholder="اسم المستخدم"
+               onkeydown="if(event.key==='Enter') document.getElementById('loginPass').focus()" />
+      </div>
+
+      <div class="lf-input-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <input id="loginPass" class="lf-input" type="password" placeholder="كلمة المرور"
+               onkeydown="if(event.key==='Enter') document.getElementById('loginBtn').click()" />
+        <button class="eye-toggle" id="eyeBtn" onclick="togglePass()" type="button">
+          <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="lf-remember-row">
+        <span style="color:#666;font-size:.78rem">🧑‍💼 للموارد البشرية</span>
+      </div>
+
+      <button class="lf-btn-main" id="loginBtn">
+        <span class="btn-text">دخول</span>
+        <span class="btn-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" width="18" height="18">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </span>
+      </button>
+
+      <div class="login-error" id="loginError"></div>
+
+      <div class="login-panel-footer">جميع الحقوق محفوظة © 2024 الدهشان</div>
+    </div>
   </div>
 </div>
 
@@ -4037,5 +4385,20 @@ window.exportReportExcel = function() {
 </div>
 
 
+
+<script>
+  function togglePass() {
+    const inp = document.getElementById('loginPass');
+    const icon = document.getElementById('eyeIcon');
+    if (!inp || !icon) return;
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
+    } else {
+      inp.type = 'password';
+      icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+    }
+  }
+</script>
 </body>
 </html>
