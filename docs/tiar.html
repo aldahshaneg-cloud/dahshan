@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>نظام إدارة الطيارين – طيّار | استلام وتسليم</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script type="module">
@@ -6488,10 +6490,10 @@
       50% { opacity: .55; }
     }
     :root {
-      --sky: #0ea5e9; --sky-d: #0284c7; --night: #0c1624; --panel: #111e2e;
-      --card: #162130; --border: #1e3248; --text: #e2eaf4; --muted: #7a9ab8;
-      --green: #22c55e; --red: #ef4444; --purple: #a855f7; --orange: #f97316;
-      --sidebar-w: 230px; --radius: 12px; --font: 'Segoe UI', 'Cairo', system-ui, sans-serif;
+      --sky: #e8192c; --sky-d: #b91c1c; --night: #0a0a0a; --panel: #111111;
+      --card: #1a1a1a; --border: #2a2a2a; --text: #f0f0f0; --muted: #888888;
+      --green: #22c55e; --red: #e8192c; --purple: #a855f7; --orange: #f97316;
+      --sidebar-w: 230px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
     }
     :root.light {
       --sky: #0284c7; --sky-d: #0369a1; --night: #f0f6ff; --panel: #ffffff;
@@ -7228,12 +7230,12 @@
   <!-- Mobile top bar -->
   <div id="mobile-topbar">
     <button id="hamburger-btn" onclick="toggleSidebar()" aria-label="القائمة">☰</button>
-    <span class="mobile-brand">✈ طيّار - الإدارة</span>
+    <span class="mobile-brand"><img src="assets/logo.png" alt="الدهشان" style="height:26px;width:auto;object-fit:contain;display:block;filter:drop-shadow(0 0 8px rgba(232,25,44,.45))" /></span>
   </div>
   <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
   <aside id="sidebar">
-    <div class="sidebar-brand">✈ طيّار</div>
+    <div class="sidebar-brand" style="flex-direction:column;gap:6px;justify-content:center"><img src="assets/logo.png" alt="الدهشان" style="height:40px;width:auto;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 0 8px rgba(232,25,44,.45))" /><span style="font-size:.72rem;color:var(--muted);font-weight:600">لوحة الإدارة</span></div>
     <nav class="sidebar-nav">
       <span class="sidebar-section-label">الرئيسية</span>
       <button class="nav-item active" onclick="navigateTo('dashboard')">📊 لوحة التحكم</button>
