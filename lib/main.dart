@@ -226,6 +226,15 @@ class OrderRinger {
     if (_audioConfigured) return;
     _audioConfigured = true;
     await _player.setReleaseMode(ReleaseMode.loop);
+    // شبكة أمان: لو النغمة خلصت لأي سبب (المفروض متخلصش مع loop) نرجّعها
+    // فورًا بدل ما نستنى الدورة الجاية بعد 15 ثانية
+    _player.onPlayerComplete.listen((_) async {
+      if (!_ringing) return;
+      try {
+        final soundId = await NotificationService.getSelectedSound();
+        await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
+      } catch (_) {}
+    });
     await _player.setAudioContext(AudioContext(
       android: const AudioContextAndroid(
         isSpeakerphoneOn: false,
@@ -237,26 +246,37 @@ class OrderRinger {
     ));
   }
 
-  /// يبدأ الرنين المستمر — idempotent: لو شغّال بالفعل بيحدّث الإشعار بس
-  /// (عدد الطلبات) من غير ما يقطع النغمة ويشغّلها من الأول
+  /// يبدأ/يكمّل الرنين المستمر. بتتنادى كل دورة طالما فيه طلب معلّق.
+  ///
+  /// مهم: مبنعتمدش على فلاج في الذاكرة يقول "أنا بأرن"، لأن الصوت ممكن
+  /// يقف من ورانا لأسباب كتير — فشل التشغيل أول مرة، مكالمة واردة، تطبيق
+  /// تاني خد تركيز الصوت، أو النظام أوقف المشغّل. الفلاج ساعتها بيفضل
+  /// true والرنين ما بيرجعش أبدًا (ده كان بيخلي الرنة تشتغل مرة وتسكت مرة).
+  /// فبنتحقق من حالة المشغّل الفعلية كل دورة ونرجّعه لو وقف.
   static Future<void> startRinging({required int count}) async {
     await LocalNotif.showRingingNotification(count: count);
-    if (_ringing) return; // شغّال بالفعل — بلاش نعيد تشغيل النغمة/الاهتزاز
-    _ringing = true;
 
+    // ── الصوت: نتأكد إنه فعلاً شغّال، مش إننا "طلبنا" تشغيله قبل كده ──
     try {
-      await _ensureAudioConfig();
-      final soundId = await NotificationService.getSelectedSound();
-      await _player.stop();
-      await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
-    } catch (_) {}
+      if (_player.state != PlayerState.playing) {
+        await _ensureAudioConfig();
+        final soundId = await NotificationService.getSelectedSound();
+        try { await _player.stop(); } catch (_) {}
+        await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
+      }
+    } catch (_) {
+      // فشل التشغيل هذه الدورة — الدورة الجاية هتحاول تاني بدل ما نستسلم
+    }
 
+    // ── الاهتزاز: بعض الأجهزة بتوقفه من نفسها، فبنعيد تشغيله كل دورة ──
     try {
       if (await Vibration.hasVibrator() ?? false) {
         // repeat: 0 → يكرّر النمط من أوله باستمرار لحد ما نستدعي cancel()
         Vibration.vibrate(pattern: [0, 600, 400, 600, 400, 800], repeat: 0);
       }
     } catch (_) {}
+
+    _ringing = true;
   }
 
   /// يوقف الرنين بالكامل ويشيل الإشعار الثابت
@@ -306,7 +326,14 @@ class _OrderTaskHandler extends TaskHandler {
     final pilotId = prefs.getString('pilotId') ?? '';
     if (pilotId.isEmpty) return;
 
-    final appOpen = prefs.getBool('app_in_foreground') ?? false;
+    // "التطبيق مفتوح؟" — مش كفاية فلاج، لأن الفلاج بيتحط false وقت الإغلاق
+    // السليم بس. لو الطيار عمل force-close أو أندرويد قفل التطبيق، الفلاج
+    // بيفضل true للأبد والخدمة تفضل ساكتة ومترنّش خالص.
+    // فبنشترط كمان إن التطبيق بعت إشارة حياة حديثة (كل 8 ثواني وهو مفتوح).
+    final fgFlag = prefs.getBool('app_in_foreground') ?? false;
+    final fgTs   = prefs.getInt('app_fg_ts') ?? 0;
+    final fresh  = DateTime.now().millisecondsSinceEpoch - fgTs < 45000;
+    final appOpen = fgFlag && fresh;
 
     // ── إرسال الموقع في الخلفية (كل 60ث كحد أقصى، ولو الطيار اتحرّك فعلاً) ──
     // لما التطبيق مفتوح، HomeScreen هو اللي بيبعت الموقع من stream الـ GPS،
@@ -2389,6 +2416,7 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       _refreshTick++;
       _loadOrders();
+      _touchForegroundHeartbeat(); // نقول للخدمة الخلفية إن التطبيق لسه مفتوح
       _sendLocation(); // مُقيّد داخليًا بمرة كل 60ث
       if (_refreshTick % 2 == 0) _syncPilotStatus();
       if (_refreshTick % 4 == 0) _ensureFgServiceAlive();
@@ -2418,6 +2446,7 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _onAppForeground() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('app_in_foreground', true);
+    await prefs.setInt('app_fg_ts', DateTime.now().millisecondsSinceEpoch);
     await prefs.remove('pending_ring_ids');
     await LocalNotif.cancelRingingNotification();
     LocalNotif.clearAll();
@@ -2429,6 +2458,17 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _markAppBackground() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('app_in_foreground', false);
+    await prefs.setInt('app_fg_ts', 0);
+  }
+
+  /// إشارة حياة: بتتبعت كل دورة تحديث وإحنا مفتوحين، عشان الخدمة الخلفية
+  /// تعرف إن التطبيق **فعلاً** شغّال. لو التطبيق اتقفل بالعافية (force-close
+  /// أو أندرويد قفله) الإشارة بتتوقف وخلال أقل من دقيقة الخدمة ترجع ترن.
+  Future<void> _touchForegroundHeartbeat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('app_fg_ts', DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
   }
 
   /// مزامنة حالة الطيار مع Firebase — لاكتشاف: (1) موافقة/رفض/إنهاء
