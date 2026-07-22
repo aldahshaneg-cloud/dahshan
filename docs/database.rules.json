@@ -25,6 +25,8 @@
       }
     },
 
+    "counters":               { ".read": "auth != null", ".write": "auth != null" },
+    "closings":               { ".read": "auth != null", ".write": "auth != null" },
     "users":                  { ".read": "auth != null", ".write": "auth != null" },
     "pilots":                 { ".read": "auth != null", ".write": "auth != null" },
     "orders":                 { ".read": "auth != null", ".write": "auth != null" },
