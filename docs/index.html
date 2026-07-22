@@ -933,6 +933,15 @@
       };
     }
 
+    // يدخّل الأدمن فعليًا للبوابة (مستخدمة من زر الدخول ومن استعادة الجلسة)
+    async function enterAsAdmin(user) {
+      const sessionData = buildAdminSession(user);
+      saveSession(sessionData);
+      applySession(sessionData);
+      // الإدارة بس هي اللي تقدر تنشئ المستخدمين الافتراضيين (القواعد بتمنع غيرها)
+      seedDefaultUsers().catch(() => {});
+    }
+
     window.doGoogleLogin = async function() {
       const err = document.getElementById("loginError");
       const btn = document.getElementById("googleBtn");
@@ -960,7 +969,10 @@
           err.textContent = "هذا الحساب غير مصرّح له بالدخول لبوابة الإدارة";
           return;
         }
-        // onAuthStateChanged هيتكفّل بعرض البوابة
+        // بندخّل هنا مباشرةً ومنعتمدش على onAuthStateChanged، لأنه بيشتغل
+        // لحظة نجاح الـ popup — يعني قبل ما تسجيل أول مدير (bootstrap) يخلص،
+        // فكان بيلاقي القائمة فاضية ويسيب المستخدم في شاشة الدخول
+        await enterAsAdmin(cred.user);
       } catch(e) {
         if (e?.code === "auth/popup-closed-by-user" || e?.code === "auth/cancelled-popup-request") {
           err.textContent = "تم إلغاء تسجيل الدخول";
@@ -1017,12 +1029,10 @@
           if (err) err.textContent = "هذا الحساب غير مصرّح له بالدخول لبوابة الإدارة";
           return;
         }
+        // قائمة فاضية = قاعدة بيانات جديدة؛ التسجيل كأول مدير بيتم من زر
+        // الدخول (doGoogleLogin) مش من هنا
         if (admins.length === 0) return;
-        const sessionData = buildAdminSession(user);
-        saveSession(sessionData);
-        applySession(sessionData);
-        // الإدارة بس هي اللي تقدر تنشئ المستخدمين الافتراضيين (القواعد بتمنع غيرها)
-        seedDefaultUsers().catch(() => {});
+        await enterAsAdmin(user);
       } catch(e) {
         if (err) err.textContent = "تعذّر التحقق من الصلاحية: " + (e?.message || e);
       }
