@@ -220,6 +220,7 @@ class OrderRinger {
   static final AudioPlayer _player = AudioPlayer();
   static bool _ringing        = false; // نغمة/اهتزاز شغّالين حاليًا؟
   static bool _audioConfigured = false;
+  static Timer? _watchdog;             // مراقب يضمن استمرار النغمة
 
   /// تهيئة سياق الصوت مرة واحدة: loop + usage=alarm (يرن فوق الصامت)
   static Future<void> _ensureAudioConfig() async {
@@ -241,7 +242,10 @@ class OrderRinger {
         stayAwake:        true,
         contentType:      AndroidContentType.sonification,
         usageType:        AndroidUsageType.alarm,
-        audioFocus:       AndroidAudioFocus.gain,
+        // none = مبنطلبش تركيز الصوت من النظام. لو طلبناه (gain) وتطبيق
+        // تاني خده — مشغّل فيديو، مكالمة، واتساب — النظام بيوقف نغمتنا
+        // وما تفضلش شغّالة. إحنا عايزين رنة إنذار ما تسكتش لأي سبب.
+        audioFocus:       AndroidAudioFocus.none,
       ),
     ));
   }
@@ -254,9 +258,14 @@ class OrderRinger {
   /// true والرنين ما بيرجعش أبدًا (ده كان بيخلي الرنة تشتغل مرة وتسكت مرة).
   /// فبنتحقق من حالة المشغّل الفعلية كل دورة ونرجّعه لو وقف.
   static Future<void> startRinging({required int count}) async {
+    _ringing = true;
     await LocalNotif.showRingingNotification(count: count);
+    await _ensurePlaying();
+    _startWatchdog();
+  }
 
-    // ── الصوت: نتأكد إنه فعلاً شغّال، مش إننا "طلبنا" تشغيله قبل كده ──
+  /// يشغّل النغمة لو مش شغّالة فعلاً + يضمن استمرار الاهتزاز
+  static Future<void> _ensurePlaying() async {
     try {
       if (_player.state != PlayerState.playing) {
         await _ensureAudioConfig();
@@ -265,23 +274,32 @@ class OrderRinger {
         await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
       }
     } catch (_) {
-      // فشل التشغيل هذه الدورة — الدورة الجاية هتحاول تاني بدل ما نستسلم
+      // فشل التشغيل دلوقتي — المراقب هيحاول تاني بعد ثواني بدل ما نستسلم
     }
-
-    // ── الاهتزاز: بعض الأجهزة بتوقفه من نفسها، فبنعيد تشغيله كل دورة ──
     try {
       if (await Vibration.hasVibrator() ?? false) {
         // repeat: 0 → يكرّر النمط من أوله باستمرار لحد ما نستدعي cancel()
         Vibration.vibrate(pattern: [0, 600, 400, 600, 400, 800], repeat: 0);
       }
     } catch (_) {}
+  }
 
-    _ringing = true;
+  /// مراقب الرنين: بيتأكد كل 3 ثواني إن النغمة فعلاً شغّالة ويرجّعها لو
+  /// وقفت لأي سبب. من غيره كنا بنستنى دورة الخدمة (15 ثانية) عشان نكتشف
+  /// إن الصوت سكت — وده اللي كان بيخلي الرنة متقطعة أو تسكت خالص.
+  static void _startWatchdog() {
+    if (_watchdog != null) return;
+    _watchdog = Timer.periodic(const Duration(seconds: 3), (t) async {
+      if (!_ringing) { t.cancel(); _watchdog = null; return; }
+      await _ensurePlaying();
+    });
   }
 
   /// يوقف الرنين بالكامل ويشيل الإشعار الثابت
   static Future<void> stopRinging() async {
     _ringing = false;
+    _watchdog?.cancel();
+    _watchdog = null;
     try { await _player.stop(); } catch (_) {}
     try { await Vibration.cancel(); } catch (_) {}
     await LocalNotif.cancelRingingNotification();
