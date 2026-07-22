@@ -1206,6 +1206,11 @@
         }
 
         toast(`✅ تمّ إرسال الطلب ${orderNum}`, "ok");
+        // مهم: نرجّع الزر والفورم لحالتهم فورًا. من غير كده الزر بيفضل
+        // عالق على "جاري الإرسال…" فالمحل يفتكر إن مفيش حاجة حصلت ويضغط
+        // تاني فيتبعت الطلب مرتين.
+        btn.disabled = false; btn.textContent = "📤 إرسال الطلب";
+        resetForm();
         setTimeout(() => navigateTo("my-orders"), 900);
       } catch (e) {
         toast("خطأ: " + e.message, "err");
