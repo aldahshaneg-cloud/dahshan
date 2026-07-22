@@ -141,11 +141,23 @@
       navigateTo("new-order");
     }
 
-    // Restore session on load
-    try {
-      const saved = localStorage.getItem(SESSION_KEY);
-      if (saved) { const d = JSON.parse(saved); if (d?.branchId) applySession(d); else clearSession(); }
-    } catch { clearSession(); }
+    /* استعادة الجلسة عند التحميل.
+       مهم: لازم تتأجّل لآخر السكربت — applySession بتنادي startListeners
+       اللي بتستدعي renderAddressWidget و addRow، وهما متعرّفين تحت في نفس
+       الملف. لو ناديناها هنا على طول بترمي خطأ، فتفضل الصفحة ناقصة
+       (ودجت العنوان مش ظاهر وقسم الطرود فاضي). setTimeout(0) بتخلّيها
+       تشتغل بعد ما السكربت كله يخلص تعريف دوالّه. */
+    setTimeout(() => {
+      let d = null;
+      try {
+        const saved = localStorage.getItem(SESSION_KEY);
+        d = saved ? JSON.parse(saved) : null;
+      } catch { clearSession(); return; }
+      if (!d?.branchId) { clearSession(); return; }
+      // ما نمسحش الجلسة لمجرد خطأ في العرض — ده كان بيسجّل خروج بلا سبب
+      try { applySession(d); }
+      catch (e) { console.error("تعذّر استعادة الجلسة:", e); }
+    }, 0);
 
     /* ══════════════════════════════════════════════════════
        LOGIN
