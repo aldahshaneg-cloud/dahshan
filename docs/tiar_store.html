@@ -391,13 +391,380 @@
     /* ══════════════════════════════════════════════════════════════════
        ADDRESS WIDGET — مكوّن العنوان المقسّم
     ══════════════════════════════════════════════════════════════════ */
-    window.EG_GOVERNORATES = [
-      "القاهرة","الجيزة","الإسكندرية","الدقهلية","البحيرة","الفيوم",
-      "الغربية","الإسماعيلية","المنوفية","المنيا","القليوبية","الوادي الجديد",
-      "السويس","أسوان","أسيوط","بني سويف","بورسعيد","دمياط","الشرقية",
-      "جنوب سيناء","شمال سيناء","الأقصر","قنا","كفر الشيخ","مطروح",
-      "سوهاج","البحر الأحمر","السادات"
-    ];
+    window.EG_GOVERNORATES = ["القاهرة","الجيزة","الإسكندرية","الدقهلية","البحيرة","الفيوم","الغربية","الإسماعيلية","المنوفية","المنيا","القليوبية","الوادي الجديد","السويس","أسوان","أسيوط","بني سويف","بورسعيد","دمياط","الشرقية","جنوب سيناء","شمال سيناء","الأقصر","قنا","كفر الشيخ","مطروح","سوهاج","البحر الأحمر"];
+
+    // مدن/مراكز كل محافظة — تظهر تلقائيًا عند اختيار المحافظة
+    window.EG_CITIES = {
+          "القاهرة": [
+                "مدينة نصر",
+                "مصر الجديدة",
+                "المعادي",
+                "المقطم",
+                "حلوان",
+                "الزمالك",
+                "وسط البلد",
+                "شبرا",
+                "عين شمس",
+                "المطرية",
+                "حدائق القبة",
+                "الزيتون",
+                "السيدة زينب",
+                "مصر القديمة",
+                "الخليفة",
+                "الوايلي",
+                "الساحل",
+                "روض الفرج",
+                "بولاق",
+                "التجمع الخامس",
+                "الرحاب",
+                "مدينتي",
+                "العبور",
+                "الشروق",
+                "بدر",
+                "15 مايو",
+                "المرج",
+                "السلام",
+                "النزهة",
+                "الأميرية"
+          ],
+          "الجيزة": [
+                "الدقي",
+                "المهندسين",
+                "العجوزة",
+                "إمبابة",
+                "بولاق الدكرور",
+                "الهرم",
+                "فيصل",
+                "6 أكتوبر",
+                "الشيخ زايد",
+                "حدائق الأهرام",
+                "المنيب",
+                "الوراق",
+                "أوسيم",
+                "كرداسة",
+                "البدرشين",
+                "الصف",
+                "أطفيح",
+                "العياط",
+                "الحوامدية",
+                "منشأة القناطر",
+                "أبو النمرس",
+                "الباويطي"
+          ],
+          "الإسكندرية": [
+                "المنتزه",
+                "شرق",
+                "وسط",
+                "غرب",
+                "الجمرك",
+                "العامرية",
+                "برج العرب",
+                "سيدي جابر",
+                "سموحة",
+                "العصافرة",
+                "المندرة",
+                "ميامي",
+                "لوران",
+                "كامب شيزار",
+                "محرم بك",
+                "كرموز",
+                "الدخيلة",
+                "العجمي",
+                "أبو قير",
+                "المعمورة"
+          ],
+          "الدقهلية": [
+                "المنصورة",
+                "طلخا",
+                "ميت غمر",
+                "دكرنس",
+                "أجا",
+                "منية النصر",
+                "السنبلاوين",
+                "الكردي",
+                "بني عبيد",
+                "المنزلة",
+                "تمي الأمديد",
+                "الجمالية",
+                "شربين",
+                "المطرية",
+                "بلقاس",
+                "ميت سلسيل",
+                "جمصة",
+                "محلة دمنة",
+                "نبروه"
+          ],
+          "البحيرة": [
+                "دمنهور",
+                "كفر الدوار",
+                "رشيد",
+                "إدكو",
+                "أبو المطامير",
+                "أبو حمص",
+                "الدلنجات",
+                "المحمودية",
+                "الرحمانية",
+                "إيتاي البارود",
+                "حوش عيسى",
+                "شبراخيت",
+                "كوم حمادة",
+                "بدر",
+                "وادي النطرون",
+                "النوبارية الجديدة"
+          ],
+          "الفيوم": [
+                "الفيوم",
+                "طامية",
+                "سنورس",
+                "إطسا",
+                "إبشواي",
+                "يوسف الصديق",
+                "الفيوم الجديدة"
+          ],
+          "الغربية": [
+                "طنطا",
+                "المحلة الكبرى",
+                "كفر الزيات",
+                "زفتى",
+                "السنطة",
+                "قطور",
+                "بسيون",
+                "سمنود"
+          ],
+          "الإسماعيلية": [
+                "الإسماعيلية",
+                "فايد",
+                "القنطرة شرق",
+                "القنطرة غرب",
+                "التل الكبير",
+                "أبو صوير",
+                "القصاصين الجديدة",
+                "نفيشة"
+          ],
+          "المنوفية": [
+                "شبين الكوم",
+                "منوف",
+                "سرس الليان",
+                "أشمون",
+                "الباجور",
+                "قويسنا",
+                "بركة السبع",
+                "تلا",
+                "الشهداء",
+                "السادات"
+          ],
+          "المنيا": [
+                "المنيا",
+                "العدوة",
+                "مغاغة",
+                "بني مزار",
+                "مطاي",
+                "سمالوط",
+                "المنيا الجديدة",
+                "أبو قرقاص",
+                "ملوي",
+                "دير مواس"
+          ],
+          "القليوبية": [
+                "بنها",
+                "قليوب",
+                "شبرا الخيمة",
+                "القناطر الخيرية",
+                "الخانكة",
+                "كفر شكر",
+                "طوخ",
+                "قها",
+                "العبور",
+                "الخصوص",
+                "شبين القناطر"
+          ],
+          "الوادي الجديد": [
+                "الخارجة",
+                "الداخلة",
+                "الفرافرة",
+                "باريس",
+                "بلاط"
+          ],
+          "السويس": [
+                "السويس",
+                "الأربعين",
+                "عتاقة",
+                "الجناين",
+                "فيصل"
+          ],
+          "أسوان": [
+                "أسوان",
+                "أسوان الجديدة",
+                "دراو",
+                "كوم أمبو",
+                "نصر النوبة",
+                "كلابشة",
+                "إدفو",
+                "الرديسية",
+                "البصيلية",
+                "السباعية",
+                "أبو سمبل"
+          ],
+          "أسيوط": [
+                "أسيوط",
+                "أسيوط الجديدة",
+                "ديروط",
+                "منفلوط",
+                "القوصية",
+                "أبنوب",
+                "أبو تيج",
+                "الغنايم",
+                "ساحل سليم",
+                "البداري",
+                "صدفا"
+          ],
+          "بني سويف": [
+                "بني سويف",
+                "بني سويف الجديدة",
+                "الواسطى",
+                "ناصر",
+                "إهناسيا",
+                "ببا",
+                "سمسطا",
+                "الفشن"
+          ],
+          "بورسعيد": [
+                "بورسعيد",
+                "بورفؤاد",
+                "العرب",
+                "حي الزهور",
+                "حي الضواحي",
+                "حي المناخ",
+                "حي الشرق",
+                "حي الجنوب"
+          ],
+          "دمياط": [
+                "دمياط",
+                "دمياط الجديدة",
+                "رأس البر",
+                "فارسكور",
+                "الزرقا",
+                "السرو",
+                "الروضة",
+                "كفر البطيخ",
+                "عزبة البرج",
+                "كفر سعد"
+          ],
+          "الشرقية": [
+                "الزقازيق",
+                "العاشر من رمضان",
+                "منيا القمح",
+                "بلبيس",
+                "مشتول السوق",
+                "القنايات",
+                "أبو حماد",
+                "القرين",
+                "ههيا",
+                "أبو كبير",
+                "فاقوس",
+                "الصالحية الجديدة",
+                "الإبراهيمية",
+                "ديرب نجم",
+                "كفر صقر",
+                "أولاد صقر",
+                "الحسينية",
+                "صان الحجر",
+                "منشأة أبو عمر"
+          ],
+          "جنوب سيناء": [
+                "الطور",
+                "شرم الشيخ",
+                "دهب",
+                "نويبع",
+                "طابا",
+                "سانت كاترين",
+                "أبو رديس",
+                "أبو زنيمة",
+                "رأس سدر"
+          ],
+          "شمال سيناء": [
+                "العريش",
+                "الشيخ زويد",
+                "رفح",
+                "بئر العبد",
+                "الحسنة",
+                "نخل"
+          ],
+          "الأقصر": [
+                "الأقصر",
+                "الأقصر الجديدة",
+                "إسنا",
+                "أرمنت",
+                "الطود",
+                "الزينية",
+                "البياضية",
+                "القرنة"
+          ],
+          "قنا": [
+                "قنا",
+                "قنا الجديدة",
+                "أبو تشت",
+                "نجع حمادي",
+                "دشنا",
+                "الوقف",
+                "قفط",
+                "نقادة",
+                "فرشوط",
+                "قوص"
+          ],
+          "كفر الشيخ": [
+                "كفر الشيخ",
+                "دسوق",
+                "فوه",
+                "مطوبس",
+                "برج البرلس",
+                "بلطيم",
+                "مصيف بلطيم",
+                "الحامول",
+                "بيلا",
+                "الرياض",
+                "سيدي سالم",
+                "قلين",
+                "سيدي غازي"
+          ],
+          "مطروح": [
+                "مرسى مطروح",
+                "الحمام",
+                "العلمين",
+                "الضبعة",
+                "النجيلة",
+                "سيدي براني",
+                "السلوم",
+                "سيوة"
+          ],
+          "سوهاج": [
+                "سوهاج",
+                "سوهاج الجديدة",
+                "أخميم",
+                "أخميم الجديدة",
+                "البلينا",
+                "المراغة",
+                "المنشأة",
+                "دار السلام",
+                "جرجا",
+                "جهينة الجديدة",
+                "ساقلته",
+                "طما",
+                "طهطا",
+                "الكوثر"
+          ],
+          "البحر الأحمر": [
+                "الغردقة",
+                "رأس غارب",
+                "سفاجا",
+                "القصير",
+                "مرسى علم",
+                "الشلاتين",
+                "حلايب",
+                "الجونة",
+                "سهل حشيش"
+          ]
+    };
 
     window.renderAddressWidget = function(containerId, opts = {}) {
       const el = document.getElementById(containerId);
@@ -414,9 +781,10 @@
               </select>
             </div>
             <div class="addr-field">
-              <label class="addr-label">المنطقة / الحي ${req}</label>
-              <input class="addr-input" id="${containerId}-area"
-                placeholder="المعادي، مدينة نصر…" type="text" />
+              <label class="addr-label">المدينة / الحي ${req}</label>
+              <select class="addr-input" id="${containerId}-area">
+                <option value="">— اختر المحافظة أولاً —</option>
+              </select>
             </div>
           </div>
           <div class="addr-field" style="margin-top:7px">
@@ -426,6 +794,11 @@
           </div>
           <div class="addr-preview" id="${containerId}-preview" style="display:none"></div>
         </div>`;
+      // أول ما المحافظة تتغيّر نملأ مدنها
+      const _govEl = document.getElementById(`${containerId}-gov`);
+      if (_govEl) _govEl.addEventListener('change', () => window.fillCities(containerId));
+      window.fillCities(containerId);
+
       ['gov','area','detail'].forEach(k => {
         const el2 = document.getElementById(`${containerId}-${k}`);
         if (el2) {
@@ -434,6 +807,30 @@
         }
       });
       if (opts.value) window.setAddressValue(containerId, opts.value);
+    };
+
+
+    /* يملأ قائمة المدن حسب المحافظة المختارة. [keep] = نحاول نحافظ على
+       القيمة الحالية (مفيدة وقت تحميل عنوان محفوظ). */
+    window.fillCities = function(containerId, keep) {
+      const govSel  = document.getElementById(`${containerId}-gov`);
+      const citySel = document.getElementById(`${containerId}-area`);
+      if (!govSel || !citySel || citySel.tagName !== 'SELECT') return;
+      const gov    = govSel.value;
+      const cities = (window.EG_CITIES && window.EG_CITIES[gov]) || [];
+      const want   = keep !== undefined ? keep : citySel.value;
+      citySel.innerHTML = gov
+        ? `<option value="">— اختر المدينة —</option>` + cities.map(c => `<option value="${c}">${c}</option>`).join('')
+        : `<option value="">— اختر المحافظة أولاً —</option>`;
+      if (want) {
+        // لو القيمة مش ضمن القائمة (عنوان قديم) نضيفها عشان ما تضيعش
+        if (!cities.includes(want)) {
+          const o = document.createElement('option');
+          o.value = want; o.textContent = want;
+          citySel.appendChild(o);
+        }
+        citySel.value = want;
+      }
     };
 
     window._updateAddrPreview = function(containerId) {
@@ -466,8 +863,12 @@
         }
       }
       govSel.value = foundGov;
+      window.fillCities(containerId, '');   // نجهّز مدن المحافظة قبل تعيين المدينة
       const parts = remaining.split('،').map(p => p.trim()).filter(Boolean);
-      if (parts.length >= 2) { detailSel.value = parts[0]; areaSel.value = parts.slice(1).join('، '); }
+      if (parts.length >= 2) {
+        detailSel.value = parts[0];
+        window.fillCities(containerId, parts.slice(1).join('، '));
+      }
       else if (parts.length === 1) { detailSel.value = parts[0]; areaSel.value = ''; }
       else { detailSel.value = ''; areaSel.value = ''; }
       window._updateAddrPreview(containerId);
@@ -485,7 +886,13 @@
           ${n > 1 ? `<button class="rm-btn" onclick="rmRow(${n})">✕ إزالة</button>` : ""}
         </div>
         <div class="fg" style="position:relative">
-          <label>اسم المستلِم <span class="req">*</span></label>
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span>اسم المستلِم <span class="req">*</span></span>
+            <button type="button" onclick="fillShopAsReceiver(${n})"
+              style="background:rgba(232,25,44,.12);color:var(--sky);border:1px solid var(--sky);border-radius:7px;padding:3px 9px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit">
+              🏪 المحل هو المستلِم
+            </button>
+          </label>
           <input type="text" id="rName-${n}" placeholder="اكتب اسم المستلِم" autocomplete="off"
             oninput="filterContacts(${n},'name')" onfocus="filterContacts(${n},'name')" onblur="hideDropdown(${n},200)" />
           <div class="ac-drop" id="acDrop-${n}"></div>
@@ -526,6 +933,27 @@
       $("delivContainer").appendChild(div);
       window.renderAddressWidget(`rAddrWidget-${n}`, { required: false });
       fillZones(n);
+    };
+
+    /* تبديل بين "المحل هو المرسِل" و"استلام من مكان آخر" */
+    window.togglePickupSender = function() {
+      const on  = document.getElementById("pickupElsewhere")?.checked;
+      const box = document.getElementById("customSenderBox");
+      if (box) box.style.display = on ? "block" : "none";
+      const lbl = document.querySelector(".sender-label");
+      if (lbl) lbl.textContent = on ? "المُرسِل — مكان آخر" : "المُرسِل — محلك";
+    };
+
+    /* يملأ بيانات المستلِم ببيانات المحل (لما المحل هو اللي هيستلم) */
+    window.fillShopAsReceiver = function(n) {
+      const u = window._currentUser;
+      if (!u) return;
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+      set(`rName-${n}`,   u.shopName || u.username);
+      set(`rPhone-${n}`,  u.shopPhone);
+      set(`rPhone2-${n}`, u.shopPhone2);
+      if (u.shopAddress) window.setAddressValue(`rAddrWidget-${n}`, u.shopAddress);
+      toast("تم ملء بيانات المحل كمستلِم ✓", "ok");
     };
 
     window.rmRow = function (n) {
@@ -612,6 +1040,18 @@
         });
       }
 
+      // بيانات المُرسِل: المحل نفسه، أو مكان آخر لو المفتاح مفعّل
+      const _elsewhere = document.getElementById("pickupElsewhere")?.checked;
+      const _snd = _elsewhere
+        ? {
+            name  : (document.getElementById("senderNameIn")?.value   || "").trim(),
+            phone : (document.getElementById("senderPhoneIn")?.value  || "").trim(),
+            phone2: (document.getElementById("senderPhone2In")?.value || "").trim(),
+          }
+        : { name: u.shopName, phone: u.shopPhone, phone2: u.shopPhone2 || "" };
+      if (_elsewhere && !_snd.name)  { toast("يرجى إدخال اسم المُرسِل", "err"); return; }
+      if (_elsewhere && !_snd.phone) { toast("يرجى إدخال هاتف المُرسِل", "err"); return; }
+
       const btn = $("saveBtn");
       btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
       try {
@@ -628,9 +1068,9 @@
         await push(ref(db, "orders"), {
           orderNum,
           senderId    : null,
-          senderName  : u.shopName,
-          senderPhone : u.shopPhone,
-          senderPhone2: u.shopPhone2 || "",
+          senderName  : _snd.name,
+          senderPhone : _snd.phone,
+          senderPhone2: _snd.phone2,
           senderAddress: pickupAddress || u.shopAddress || "",
           branchId    : u.branchId,
           branchName  : u.branchName,
@@ -1561,6 +2001,31 @@
         <div class="sender-meta">
           <span dir="ltr" id="sender-phone">—</span>
         </div>
+
+        <!-- المحل مش شرط يكون هو المرسِل: ممكن الاستلام من مكان تاني -->
+        <label style="display:flex;align-items:center;gap:8px;margin:10px 0 0;cursor:pointer;font-size:.8rem;color:var(--text)">
+          <input type="checkbox" id="pickupElsewhere" onchange="togglePickupSender()"
+                 style="width:16px;height:16px;accent-color:var(--sky);cursor:pointer" />
+          🚚 الاستلام من مكان آخر (المحل مش هو المُرسِل)
+        </label>
+
+        <div id="customSenderBox" style="display:none;margin-top:10px;padding:12px;background:var(--night);border:1px solid var(--border);border-radius:10px">
+          <div class="fg">
+            <label>اسم المُرسِل <span class="req">*</span></label>
+            <input type="text" id="senderNameIn" placeholder="اسم الشخص أو المحل اللي هنستلم منه" />
+          </div>
+          <div class="grid2">
+            <div class="fg">
+              <label>هاتف المُرسِل 1 <span class="req">*</span></label>
+              <input type="tel" id="senderPhoneIn" dir="ltr" placeholder="01xxxxxxxxx" />
+            </div>
+            <div class="fg">
+              <label>هاتف المُرسِل 2</label>
+              <input type="tel" id="senderPhone2In" dir="ltr" placeholder="—" />
+            </div>
+          </div>
+        </div>
+
         <div class="fg" style="margin:10px 0 0">
           <label>📍 عنوان الاستلام</label>
           <div id="pickupAddrWidget"></div>
