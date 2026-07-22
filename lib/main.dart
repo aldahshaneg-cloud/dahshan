@@ -349,7 +349,12 @@ class _OrderTaskHandler extends TaskHandler {
       final pendingSaved = prefs.getStringList('pending_ring_ids') ?? [];
       var pending = pendingSaved.toSet();
 
-      if (!_firstRun) {
+      // نحسب الطلبات الجديدة طالما عندنا سجل سابق محفوظ — حتى لو دي أول
+      // دورة بعد ما الخدمة رجعت. من غير الشرط ده، لو أندرويد قفل الخدمة أو
+      // الموبايل اترستارت ووصل طلب في الوقت ده، كانت أول دورة بتسجّله
+      // كـ"معروف" وما بترنش عليه أبدًا رغم إن الطيار عمره ما شافه.
+      // بنتخطّاها بس في أول تشغيل على جهاز جديد (مفيش سجل أصلاً).
+      if (!_firstRun || _knownIds.isNotEmpty) {
         final added = currentIds.difference(_knownIds);
         if (added.isNotEmpty) pending.addAll(added);
       }
