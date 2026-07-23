@@ -1213,6 +1213,9 @@
         resetForm();
         setTimeout(() => navigateTo("my-orders"), 900);
       } catch (e) {
+        // رسالة ثابتة (alert) بدل التوست العابر — عشان لو الإرسال فشل على
+        // الموبايل، المحل يشوف السبب الحقيقي ويقدر يصوّره (مؤقّت للتشخيص)
+        try { alert("تعذّر إرسال الطلب:\n" + (e && e.message ? e.message : e)); } catch(_) {}
         toast("خطأ: " + e.message, "err");
         btn.disabled = false; btn.textContent = "📤 إرسال الطلب";
       }
