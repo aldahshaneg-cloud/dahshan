@@ -170,19 +170,36 @@ class LocalNotif {
   static const _ringNotifId   = 2001;
   static const _ringChannelId = 'tiar_ring';
 
-  /// يعرض/يحدّث إشعار الرنين الثابت (نفس الـ id دايمًا = إشعار واحد فقط)
-  static Future<void> showRingingNotification({required int count}) async {
+  /// يعرض/يحدّث إشعار الرنين الثابت (نفس الـ id دايمًا = إشعار واحد فقط).
+  ///
+  /// [withSound] بيخلّي الإشعار نفسه يطلّع صوت عن طريق النظام. ده مسار
+  /// احتياطي مهم: تشغيل الصوت من الـ isolate الخلفي عن طريق audioplayers
+  /// ممكن يفشل بصمت على بعض الأجهزة، لكن صوت الإشعار بيشغّله أندرويد
+  /// نفسه فمستحيل يفشل. بنعيد نشر نفس الإشعار كل كام ثانية فيرن من جديد
+  /// (نفس الـ id يعني إشعار واحد مش إشعارات متكررة).
+  static Future<void> showRingingNotification({
+    required int count,
+    bool withSound = false,
+  }) async {
     final title = count <= 1 ? 'طلب توصيل جديد 🚀' : '$count طلبات توصيل جديدة 🚀';
     const body  = 'اضغط لفتح التطبيق وإيقاف التنبيه';
 
+    // قناة منفصلة لكل نغمة — أندرويد بيثبّت صوت القناة لحظة إنشائها
+    final soundId = await NotificationService.getSelectedSound();
+    final rawName = _toRawSoundName(soundId);
+    final channelId = withSound ? '${_ringChannelId}_snd_$rawName' : _ringChannelId;
+
     final androidDetails = AndroidNotificationDetails(
-      _ringChannelId, 'تنبيه الطلبات',
+      channelId, withSound ? 'تنبيه الطلبات (برنين)' : 'تنبيه الطلبات',
       channelDescription: 'رنين مستمر عند وصول طلب توصيل جديد',
       importance:      Importance.max,
       priority:        Priority.high,
-      playSound:       false, // الصوت loop بيتشغّل بشكل منفصل من OrderRinger
+      playSound:       withSound,
+      sound:           withSound ? RawResourceAndroidNotificationSound(rawName) : null,
       enableVibration: false, // الاهتزاز loop بيتشغّل بشكل منفصل من OrderRinger
-      onlyAlertOnce:   true,  // ميعملش heads-up تاني لو اتحدّث → إشعار واحد ثابت
+      // لما نعتمد على صوت الإشعار لازم يرن من جديد مع كل إعادة نشر،
+      // فبنلغي onlyAlertOnce في الحالة دي بس
+      onlyAlertOnce:   !withSound,
       ongoing:         true,  // ثابت — ميتمسحش بالسحب، يجبر الطيار يفتح التطبيق
       autoCancel:      false,
       // category=alarm عشان الرنين يخترق وضع "عدم الإزعاج" زي المنبّه.
@@ -221,6 +238,12 @@ class OrderRinger {
   static bool _ringing        = false; // نغمة/اهتزاز شغّالين حاليًا؟
   static bool _audioConfigured = false;
   static Timer? _watchdog;             // مراقب يضمن استمرار النغمة
+  static int  _lastCount = 1;          // عدد الطلبات المعلّقة (لعنوان الإشعار)
+  static bool _audioOk   = false;      // هل النغمة المتواصلة اشتغلت فعلاً؟
+
+  /// حالة الرنين — بتتكتب في التشخيص عشان نعرف أي مسار صوت اشتغل
+  static String get status =>
+      !_ringing ? 'stopped' : (_audioOk ? 'ringing(loop)' : 'ringing(notif-sound)');
 
   /// تهيئة سياق الصوت مرة واحدة: loop + usage=alarm (يرن فوق الصامت)
   static Future<void> _ensureAudioConfig() async {
@@ -259,23 +282,37 @@ class OrderRinger {
   /// فبنتحقق من حالة المشغّل الفعلية كل دورة ونرجّعه لو وقف.
   static Future<void> startRinging({required int count}) async {
     _ringing = true;
-    await LocalNotif.showRingingNotification(count: count);
+    _lastCount = count;
     await _ensurePlaying();
     _startWatchdog();
   }
 
-  /// يشغّل النغمة لو مش شغّالة فعلاً + يضمن استمرار الاهتزاز
+  /// يضمن إن في صوت شغّال فعلاً — بمسارين:
+  ///  1) نغمة متواصلة عبر audioplayers (الأفضل صوتيًا)
+  ///  2) لو فشلت (بيحصل في الـ isolate الخلفي على بعض الأجهزة): نخلّي
+  ///     **الإشعار نفسه** يرن عن طريق النظام، وبنعيد نشره كل دورة مراقبة
+  ///     فيرن من جديد. المسار ده مستحيل يفشل لأن أندرويد هو اللي بيشغّله.
   static Future<void> _ensurePlaying() async {
+    bool audioOk = false;
     try {
       if (_player.state != PlayerState.playing) {
         await _ensureAudioConfig();
         final soundId = await NotificationService.getSelectedSound();
         try { await _player.stop(); } catch (_) {}
         await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
+        // نستنى لحظة ونتأكد إنه فعلاً اشتغل مش مجرد إن النداء عدّى
+        await Future.delayed(const Duration(milliseconds: 500));
       }
+      audioOk = _player.state == PlayerState.playing;
     } catch (_) {
-      // فشل التشغيل دلوقتي — المراقب هيحاول تاني بعد ثواني بدل ما نستسلم
+      audioOk = false;
     }
+    _audioOk = audioOk;
+
+    // الإشعار: بصوت لو النغمة المتواصلة مش شغّالة، وبدون صوت لو شغّالة
+    // (عشان ما يبقاش في صوتين فوق بعض)
+    await LocalNotif.showRingingNotification(count: _lastCount, withSound: !audioOk);
+
     try {
       if (await Vibration.hasVibrator() ?? false) {
         // repeat: 0 → يكرّر النمط من أوله باستمرار لحد ما نستدعي cancel()
@@ -408,6 +445,17 @@ class _OrderTaskHandler extends TaskHandler {
       // (اتسلّم / اترجع / اتحول لطيار تاني) عشان الرنين يوقف تلقائياً
       pending = pending.intersection(currentIds);
 
+      // تشخيص: نكتب حالة الخدمة في قاعدة البيانات عشان نقدر نشوف من بعيد
+      // إيه اللي بيحصل على الموبايل بالظبط (الخدمة شغّالة؟ شافت الطلب؟
+      // الرنين اشتغل بأي مسار؟) بدل التخمين
+      _writeDiag(pilotId, {
+        'at'        : DateTime.now().toIso8601String(),
+        'orders'    : currentIds.length,
+        'pending'   : pending.length,
+        'ringer'    : OrderRinger.status,
+        'appOpen'   : appOpen,
+      });
+
       if (pending.isNotEmpty) {
         // إشعار ستارة واحد ثابت + نغمة loop مستمرة لحد ما الطيار يفتح
         // التطبيق — يشتغل حتى لو التطبيق مقفول تمامًا (بديل شاشة المكالمة)
@@ -422,6 +470,17 @@ class _OrderTaskHandler extends TaskHandler {
 
       _firstRun = false;
       _knownIds = currentIds;
+    } catch (_) {}
+  }
+
+  /// يكتب نبضة تشخيص في قاعدة البيانات (نجرّبها ونشيلها بعد ما نحل المشكلة).
+  /// بتخلّينا نشوف من بعيد إن الخدمة الخلفية شغّالة فعلاً وإيه حالة الرنين.
+  Future<void> _writeDiag(String pilotId, Map<String, dynamic> data) async {
+    try {
+      await http.put(
+        Uri.parse('$_fbUrl/ringDiag/$pilotId.json${await FbAuth.queryParam()}'),
+        body: json.encode(data),
+      ).timeout(const Duration(seconds: 8));
     } catch (_) {}
   }
 

@@ -25,6 +25,7 @@
       }
     },
 
+    "ringDiag":               { ".read": "auth != null", ".write": "auth != null" },
     "counters":               { ".read": "auth != null", ".write": "auth != null" },
     "closings":               { ".read": "auth != null", ".write": "auth != null" },
     "users":                  { ".read": "auth != null", ".write": "auth != null" },
