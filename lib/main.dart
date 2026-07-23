@@ -404,6 +404,10 @@ class _OrderTaskHandler extends TaskHandler {
     if (appOpen) {
       await OrderRinger.stopRinging();
       _knownIds = (prefs.getStringList('known_order_ids') ?? []).toSet();
+      _diagLog(pilotId, {
+        'branch': 'appOpen', 'fgFlag': fgFlag, 'fresh': fresh,
+        'known': _knownIds.length,
+      });
       _firstRun = false;
       return;
     }
@@ -436,24 +440,23 @@ class _OrderTaskHandler extends TaskHandler {
       // الموبايل اترستارت ووصل طلب في الوقت ده، كانت أول دورة بتسجّله
       // كـ"معروف" وما بترنش عليه أبدًا رغم إن الطيار عمره ما شافه.
       // بنتخطّاها بس في أول تشغيل على جهاز جديد (مفيش سجل أصلاً).
+      final addedNow = currentIds.difference(_knownIds);
       if (!_firstRun || _knownIds.isNotEmpty) {
-        final added = currentIds.difference(_knownIds);
-        if (added.isNotEmpty) pending.addAll(added);
+        if (addedNow.isNotEmpty) pending.addAll(addedNow);
       }
 
       // نشيل من قائمة الرنين أي طلب مبقاش مُسند لهذا الطيار بنفس الحالة
       // (اتسلّم / اترجع / اتحول لطيار تاني) عشان الرنين يوقف تلقائياً
       pending = pending.intersection(currentIds);
 
-      // تشخيص: نكتب حالة الخدمة في قاعدة البيانات عشان نقدر نشوف من بعيد
-      // إيه اللي بيحصل على الموبايل بالظبط (الخدمة شغّالة؟ شافت الطلب؟
-      // الرنين اشتغل بأي مسار؟) بدل التخمين
-      _writeDiag(pilotId, {
-        'at'        : DateTime.now().toIso8601String(),
-        'orders'    : currentIds.length,
-        'pending'   : pending.length,
-        'ringer'    : OrderRinger.status,
-        'appOpen'   : appOpen,
+      _diagLog(pilotId, {
+        'branch' : 'ring',
+        'orders' : currentIds.length,
+        'known'  : _knownIds.length,
+        'added'  : addedNow.length,
+        'pending': pending.length,
+        'ringer' : OrderRinger.status,
+        'first'  : _firstRun,
       });
 
       if (pending.isNotEmpty) {
@@ -473,15 +476,18 @@ class _OrderTaskHandler extends TaskHandler {
     } catch (_) {}
   }
 
-  /// يكتب نبضة تشخيص في قاعدة البيانات (نجرّبها ونشيلها بعد ما نحل المشكلة).
-  /// بتخلّينا نشوف من بعيد إن الخدمة الخلفية شغّالة فعلاً وإيه حالة الرنين.
-  Future<void> _writeDiag(String pilotId, Map<String, dynamic> data) async {
-    try {
-      await http.put(
-        Uri.parse('$_fbUrl/ringDiag/$pilotId.json${await FbAuth.queryParam()}'),
-        body: json.encode(data),
-      ).timeout(const Duration(seconds: 8));
-    } catch (_) {}
+  /// يضيف سطر لسجل تشخيص زمني في قاعدة البيانات (POST = مفتاح جديد كل مرة)
+  /// عشان نشوف تسلسل كل دورة بدل لقطة واحدة. مؤقّت — هيتشال بعد حل المشكلة.
+  void _diagLog(String pilotId, Map<String, dynamic> data) {
+    () async {
+      try {
+        data['t'] = DateTime.now().toIso8601String().substring(11, 19); // HH:MM:SS
+        await http.post(
+          Uri.parse('$_fbUrl/ringDiag/$pilotId/log.json${await FbAuth.queryParam()}'),
+          body: json.encode(data),
+        ).timeout(const Duration(seconds: 8));
+      } catch (_) {}
+    }();
   }
 
   /// استقبال إشارة فورية من التطبيق الرئيسي (مثلاً "الطيار فتح التطبيق")
