@@ -2497,10 +2497,26 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
     // إذن الموقع بيتطلب داخل _initFgService (قبل تشغيل خدمة نوع location)،
     // وأول إرسال فعلي للموقع بيحصل من مؤقّت التحديث بعد منح الإذن
     _loadKnownIdsFromPrefs();
-    _loadOrders();
+    // مؤقّت التحديث بيجلب الأوردرات + heartbeat + الموقع وإحنا مفتوحين. مهم
+    // جدًا: بنوقفه بالكامل أول ما التطبيق يروح للخلفية (شوف _markAppBackground).
+    // السبب: لو فضل شغّال في الخلفية، بيكتب الطلب الجديد في known_order_ids
+    // (قائمة المشوفة) وبيشغّل صوت مرة واحدة — فالخدمة الخلفية تفتكر إن الطلب
+    // "متشاف" وما تبدأش الرنين المستمر ولا تظهر إشعار الستارة. وقت الخلفية
+    // الخدمة الخلفية لوحدها هي اللي بترن (زي حالة التطبيق المقفول بالظبط).
+    _startRefreshTimer();
+    // الطيار فتح التطبيق فعلياً — نوقف رنين أي طلب كان مستني فورًا
+    _onAppForeground();
+    // تشغيل Foreground Service للخلفية
+    _initFgService();
+  }
+
+  /// يشغّل (أو يعيد تشغيل) مؤقّت تحديث الواجهة كل 8 ثواني. بنستدعيه أول
+  /// التشغيل وكل مرة الطيار يرجع للتطبيق، وبنوقفه لما يروح للخلفية.
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _loadOrders(); // تحميل فوري من غير ما نستنى أول 8 ثواني
     // توفير بطارية/بيانات: بنوزّع النداءات بدل ما نعملها كلها كل دورة —
-    // الأوردرات كل 8ث (استجابة سريعة كفاية)، مزامنة حالة الطيار كل 16ث،
-    // والتأكد إن الخدمة الخلفية شغّالة كل 32ث
+    // الأوردرات كل 8ث، مزامنة حالة الطيار كل 16ث، والتأكد إن الخدمة كل 32ث
     _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (!mounted) return;
       _refreshTick++;
@@ -2510,10 +2526,6 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
       if (_refreshTick % 2 == 0) _syncPilotStatus();
       if (_refreshTick % 4 == 0) _ensureFgServiceAlive();
     });
-    // الطيار فتح التطبيق فعلياً — نوقف رنين أي طلب كان مستني فورًا
-    _onAppForeground();
-    // تشغيل Foreground Service للخلفية
-    _initFgService();
   }
 
   /// مراقبة دورة حياة التطبيق — أي رجوع للواجهة يوقف الرنين الخلفي فورًا،
@@ -2522,6 +2534,7 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
+      _startRefreshTimer(); // نرجّع تحديث الواجهة أول ما الطيار يفتح التطبيق
       _onAppForeground();
     } else if (state == AppLifecycleState.paused ||
                state == AppLifecycleState.detached) {
@@ -2545,6 +2558,12 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
   /// التطبيق راح للخلفية: نخفض الفلاج عشان الخدمة الخلفية ترجع ترن على أي
   /// طلب جديد يوصل والطيار مش شايف
   Future<void> _markAppBackground() async {
+    // بنوقف مؤقّت الواجهة تمامًا: من غير كده بيفضل شغّال في الخلفية ويكتب
+    // الطلب الجديد في known_order_ids (فالخدمة تفتكره متشاف وما ترنّش) +
+    // بيشغّل صوت مرة واحدة يتداخل مع رنين الخدمة. دلوقتي الخدمة الخلفية
+    // لوحدها هي اللي بتتعامل مع الطلبات وقت الخلفية.
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('app_in_foreground', false);
     await prefs.setInt('app_fg_ts', 0);
