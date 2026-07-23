@@ -1153,7 +1153,19 @@
 
         if (!name)   { toast(`يرجى إدخال اسم المستلِم — طرد #${n}`, "err"); await _storeDiag({ step: "no-name", parcel: n }); return; }
         if (!phone)  { toast(`يرجى إدخال هاتف المستلِم — طرد #${n}`, "err"); await _storeDiag({ step: "no-phone", parcel: n }); return; }
-        if (!zoneId) { toast(`يرجى اختيار المنطقة — طرد #${n}`, "err"); await _storeDiag({ step: "no-zone", parcel: n, zoneOptions: (zoneSel?.options?.length || 0) }); return; }
+        if (!zoneId) {
+          toast(`⚠️ لازم تختار المنطقة أولاً — طرد #${n}`, "err");
+          // نبرز حقل المنطقة الفاضي ونوديه لعين المستخدم
+          if (zoneSel) {
+            zoneSel.style.borderColor = "#ef4444";
+            zoneSel.style.boxShadow = "0 0 0 3px rgba(239,68,68,.25)";
+            zoneSel.scrollIntoView({ behavior: "smooth", block: "center" });
+            zoneSel.focus();
+            zoneSel.onchange = () => { zoneSel.style.borderColor = ""; zoneSel.style.boxShadow = ""; onZone(n); };
+          }
+          await _storeDiag({ step: "no-zone", parcel: n, zoneOptions: (zoneSel?.options?.length || 0) });
+          return;
+        }
 
         deliveries.push({
           receiverId: null, receiverName: name,
@@ -1373,7 +1385,8 @@
       const t = $("toast");
       t.textContent = msg; t.className = "show " + (type || "");
       clearTimeout(_tTimer);
-      _tTimer = setTimeout(() => t.className = "", 3500);
+      // رسائل الخطأ تفضل أطول (5ث) عشان المستخدم يلحق يقراها
+      _tTimer = setTimeout(() => t.className = "", type === "err" ? 5000 : 3200);
     };
     // alias for external calls
     window.showToast = window.toast;
@@ -1746,19 +1759,23 @@
 
     /* ─── Toast ─── */
     #toast {
-      position: fixed; bottom: calc(var(--nav) + 14px);
-      left: 50%; transform: translateX(-50%);
-      background: #1d3045; color: var(--text);
-      padding: 11px 20px; border-radius: 12px;
-      font-size: .85rem; font-weight: 600;
-      box-shadow: 0 6px 24px rgba(0,0,0,.5);
-      opacity: 0; pointer-events: none; transition: opacity .28s;
-      z-index: 999; max-width: calc(100vw - 28px);
+      /* في النص فوق، مش تحت جنب الزر الأحمر — عشان يبان بوضوح ومايتغطّاش */
+      position: fixed; top: 18px;
+      left: 50%; transform: translateX(-50%) translateY(-16px);
+      background: #1d3045; color: #fff;
+      padding: 14px 22px; border-radius: 12px;
+      font-size: .92rem; font-weight: 800;
+      box-shadow: 0 10px 34px rgba(0,0,0,.6);
+      opacity: 0; pointer-events: none;
+      transition: opacity .28s, transform .28s;
+      z-index: 100000; max-width: calc(100vw - 28px);
       text-align: center; white-space: pre-wrap;
+      border: 1px solid rgba(255,255,255,.1);
     }
-    #toast.show   { opacity: 1; }
-    #toast.ok     { background: rgba(34,197,94,.18);  color: var(--green); }
-    #toast.err    { background: rgba(239,68,68,.18);  color: var(--red);   }
+    #toast.show   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    /* الأخضر والأحمر خلفية غامقة صريحة عشان النص يبان واضح */
+    #toast.ok     { background: #16a34a; color: #fff; border-color: #22c55e; }
+    #toast.err    { background: #dc2626; color: #fff; border-color: #ef4444; }
 
     /* ─── Scrollbar ─── */
     ::-webkit-scrollbar { width: 4px; }
