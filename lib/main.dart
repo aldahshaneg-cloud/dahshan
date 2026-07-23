@@ -189,9 +189,12 @@ class LocalNotif {
     final title = count <= 1 ? 'طلب توصيل جديد 🚀' : '$count طلبات توصيل جديدة 🚀';
     const body  = 'اضغط لفتح التطبيق وإيقاف التنبيه';
 
-    // قناة منفصلة لكل نغمة — أندرويد بيثبّت صوت القناة لحظة إنشائها
-    final soundId = await NotificationService.getSelectedSound();
-    final rawName = _toRawSoundName(soundId);
+    // مهم: صوت الإشعار ده مسار احتياطي بس (لو audioplayers فشل). أندرويد
+    // مبيوقّفش صوت الإشعار لما نلغي الإشعار، فلو استخدمنا الرنة المختارة
+    // الطويلة هتفضل شغّالة بعد ما الطيار يفتح التطبيق. عشان كده بنستخدم
+    // نغمة **قصيرة ثابتة** هنا (الرنة الطويلة المختارة بتشتغل عبر audioplayers
+    // اللي بيتوقف فورًا). قناة منفصلة لأن أندرويد بيثبّت صوت القناة عند إنشائها.
+    const rawName = 'mixkit_double_beep_tone_alert_2868';
     final channelId = withSound ? '${_ringChannelId}_snd_$rawName' : _ringChannelId;
 
     final androidDetails = AndroidNotificationDetails(
@@ -245,7 +248,7 @@ class OrderRinger {
   static Timer? _watchdog;             // مراقب يضمن استمرار النغمة
   static int  _lastCount = 1;          // عدد الطلبات المعلّقة (لعنوان الإشعار)
   static bool _audioOk   = false;      // هل النغمة المتواصلة اشتغلت فعلاً؟
-  static int  _lastNotifSoundMs = 0;   // آخر مرة أطلقنا فيها صوت الإشعار (throttle)
+  static int  _notPlayingStreak = 0;   // كام دورة ورا بعض والمشغّل مش شغّال
 
   /// حالة الرنين — بتتكتب في التشخيص عشان نعرف أي مسار صوت اشتغل
   static String get status =>
@@ -299,37 +302,46 @@ class OrderRinger {
   ///     **الإشعار نفسه** يرن عن طريق النظام، وبنعيد نشره كل دورة مراقبة
   ///     فيرن من جديد. المسار ده مستحيل يفشل لأن أندرويد هو اللي بيشغّله.
   static Future<void> _ensurePlaying() async {
-    bool audioOk = false;
+    // بنحاول نشغّل النغمة عبر audioplayers (loop). ده المسار الأساسي لأنه:
+    //  (1) بيعمل loop للرنة مهما طولها بسلاسة، (2) بيتوقف **فورًا** بستدعاء
+    //  stop لما الطيار يفتح التطبيق. الإشعار بيفضل صامت طول ما ده شغّال.
+    bool playCallOk = false;
     try {
+      await _ensureAudioConfig();
       if (_player.state != PlayerState.playing) {
-        await _ensureAudioConfig();
         final soundId = await NotificationService.getSelectedSound();
         try { await _player.stop(); } catch (_) {}
         await _player.play(AssetSource('sounds/$soundId'), volume: 1.0);
-        // نستنى لحظة ونتأكد إنه فعلاً اشتغل مش مجرد إن النداء عدّى
-        await Future.delayed(const Duration(milliseconds: 500));
       }
-      audioOk = _player.state == PlayerState.playing;
+      playCallOk = true;
     } catch (_) {
-      audioOk = false;
+      playCallOk = false;
     }
+
+    // مهم: مبنحكمش بالفشل من مجرد إن الحالة مش "playing" بعد نص ثانية —
+    // الملفات الكبيرة (زي رنة الآيفون) بتاخد وقت أطول عشان تبدأ، فالحكم
+    // المتسرّع كان بيخلّينا نشغّل صوت الإشعار الطويل بالتوازي مع audioplayers
+    // (تداخل)، وصوت الإشعار ده مبيتوقفش لما نفتح التطبيق. بدل كده بنعدّ كام
+    // دورة مراقبة ورا بعض الحالة فيها مش playing؛ ساعتها بس نعتبره فشل حقيقي.
+    final isPlaying = _player.state == PlayerState.playing;
+    if (playCallOk && (isPlaying || _player.state == PlayerState.paused)) {
+      _notPlayingStreak = 0;
+    } else {
+      _notPlayingStreak++;
+    }
+    final audioOk = playCallOk && _notPlayingStreak < 4; // ~12ث سماح قبل الاحتياطي
     _audioOk = audioOk;
 
     if (audioOk) {
-      // نغمة loop شغّالة بشكل متواصل — الإشعار من غير صوت (عشان ما يبقاش
-      // صوتين فوق بعض). إعادة نشره كل دورة مراقبة مفيهاش ضرر (مفيش صوت يتقطع)
+      // النغمة المتواصلة شغّالة (أو بتحمّل) — الإشعار صامت عشان ما يبقاش
+      // صوتين فوق بعض، والأهم إنه ميسيبش صوت شغّال بعد ما نفتح التطبيق
       await LocalNotif.showRingingNotification(count: _lastCount, withSound: false);
     } else {
-      // مفيش loop (audioplayers فشل في الـ isolate الخلفي) — بنعتمد على صوت
-      // الإشعار نفسه اللي بيشغّله النظام. المشكلة: كل إعادة نشر بتبدأ النغمة
-      // من أولها، فلو أعدنا النشر كل 3ث (زي المراقب) النغمة الطويلة هتتقطّع
-      // لمقاطع 3 ثواني. عشان كده بنعيد نشر الصوت كل ~13ث بس فتشتغل الرنة
-      // الطويلة لآخرها بشكل متواصل. الإشعار الثابت نفسه فاضل ظاهر في الوقت ده.
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastNotifSoundMs >= 13000) {
-        _lastNotifSoundMs = now;
-        await LocalNotif.showRingingNotification(count: _lastCount, withSound: true);
-      }
+      // audioplayers فشل فعليًا كذا دورة — نلجأ لصوت الإشعار من النظام.
+      // بنستخدم نغمة **قصيرة ثابتة** (مش الرنة المختارة الطويلة) عشان لو
+      // فضل شغّال لحظة بعد فتح التطبيق يبقى مش محسوس، وبنعيد نشره كل دورة
+      // مراقبة (3ث) فيرن باستمرار.
+      await LocalNotif.showRingingNotification(count: _lastCount, withSound: true);
     }
 
     try {
@@ -354,7 +366,7 @@ class OrderRinger {
   /// يوقف الرنين بالكامل ويشيل الإشعار الثابت
   static Future<void> stopRinging() async {
     _ringing = false;
-    _lastNotifSoundMs = 0;   // الرنة الجاية تطلّع صوت فورًا من غير انتظار
+    _notPlayingStreak = 0;   // نبدأ عدّ نظيف في الرنة الجاية
     _watchdog?.cancel();
     _watchdog = null;
     try { await _player.stop(); } catch (_) {}

@@ -1,7 +1,7 @@
 name: tiar_pilot
 description: الدهشان — تطبيق الطيار
 publish_to: 'none'
-version: 1.9.0+9
+version: 1.9.1+10
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
