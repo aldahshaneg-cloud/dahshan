@@ -1111,16 +1111,30 @@
       if (prepaidEl) { prepaidEl.value = total > 0 ? total : ""; }
     };
 
+    // تشخيص: بيكتب فين بالظبط وقفت عملية الإرسال في قاعدة البيانات، عشان
+    // نقدر نشوف السبب الحقيقي من بعيد بدل التخمين. (مؤقّت — هيتشال بعد الحل)
+    async function _storeDiag(info) {
+      try {
+        const key = (window._currentUser?.username || "unknown").replace(/[.#$/\[\]]/g, "_");
+        await set(ref(db, "storeDiag/" + key), { at: new Date().toISOString(), ...info });
+      } catch (_) {}
+    }
+
     window.saveOrder = async function () {
+      // مصيدة تغطّي الدالة كلها — حتى أخطاء التحقق أو أي throw غير متوقع
+      // (زي لو عنصر مش موجود) بتتسجّل، فمفيش فشل صامت تاني
+      try {
       const u = window._currentUser;
-      if (!u) return;
+      if (!u) { await _storeDiag({ step: "no-user" }); return; }
 
       const notes    = $("orderNotes").value.trim();
       const rows     = document.querySelectorAll(".parcel-card");
-      if (!rows.length) { toast("أضف وجهة توصيل واحدة على الأقل", "err"); return; }
+      if (!rows.length) { toast("أضف وجهة توصيل واحدة على الأقل", "err"); await _storeDiag({ step: "no-parcels" }); return; }
 
       const pickupAddress = window.getAddressValue("pickupAddrWidget");
-      if (!pickupAddress) { toast("يرجى إدخال عنوان استلام الطلب", "err"); return; }
+      if (!pickupAddress) { toast("يرجى إدخال عنوان استلام الطلب", "err"); await _storeDiag({ step: "no-pickup" }); return; }
+
+      if (!window._rowImages) window._rowImages = {}; // حماية لو ما اتهيّأش
 
       const deliveries = [];
       for (const row of rows) {
@@ -1137,9 +1151,9 @@
         const note       = document.getElementById(`rNote-${n}`)?.value.trim() || "";
         const orderPrice = parseFloat(document.getElementById(`rOrderPrice-${n}`)?.value) || 0;
 
-        if (!name)   { toast(`يرجى إدخال اسم المستلِم — طرد #${n}`, "err"); return; }
-        if (!phone)  { toast(`يرجى إدخال هاتف المستلِم — طرد #${n}`, "err"); return; }
-        if (!zoneId) { toast(`يرجى اختيار المنطقة — طرد #${n}`, "err"); return; }
+        if (!name)   { toast(`يرجى إدخال اسم المستلِم — طرد #${n}`, "err"); await _storeDiag({ step: "no-name", parcel: n }); return; }
+        if (!phone)  { toast(`يرجى إدخال هاتف المستلِم — طرد #${n}`, "err"); await _storeDiag({ step: "no-phone", parcel: n }); return; }
+        if (!zoneId) { toast(`يرجى اختيار المنطقة — طرد #${n}`, "err"); await _storeDiag({ step: "no-zone", parcel: n, zoneOptions: (zoneSel?.options?.length || 0) }); return; }
 
         deliveries.push({
           receiverId: null, receiverName: name,
@@ -1160,8 +1174,10 @@
             phone2: (document.getElementById("senderPhone2In")?.value || "").trim(),
           }
         : { name: u.shopName, phone: u.shopPhone, phone2: u.shopPhone2 || "" };
-      if (_elsewhere && !_snd.name)  { toast("يرجى إدخال اسم المُرسِل", "err"); return; }
-      if (_elsewhere && !_snd.phone) { toast("يرجى إدخال هاتف المُرسِل", "err"); return; }
+      if (_elsewhere && !_snd.name)  { toast("يرجى إدخال اسم المُرسِل", "err"); await _storeDiag({ step: "no-sender-name" }); return; }
+      if (_elsewhere && !_snd.phone) { toast("يرجى إدخال هاتف المُرسِل", "err"); await _storeDiag({ step: "no-sender-phone" }); return; }
+
+      await _storeDiag({ step: "validated", branchId: u.branchId, parcels: deliveries.length });
 
       const btn = $("saveBtn");
       btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
@@ -1205,6 +1221,7 @@
           }).catch(() => {});
         }
 
+        await _storeDiag({ step: "success", orderNum });
         toast(`✅ تمّ إرسال الطلب ${orderNum}`, "ok");
         // مهم: نرجّع الزر والفورم لحالتهم فورًا. من غير كده الزر بيفضل
         // عالق على "جاري الإرسال…" فالمحل يفتكر إن مفيش حاجة حصلت ويضغط
@@ -1213,11 +1230,18 @@
         resetForm();
         setTimeout(() => navigateTo("my-orders"), 900);
       } catch (e) {
-        // رسالة ثابتة (alert) بدل التوست العابر — عشان لو الإرسال فشل على
-        // الموبايل، المحل يشوف السبب الحقيقي ويقدر يصوّره (مؤقّت للتشخيص)
+        // فشل أثناء الحفظ في قاعدة البيانات
+        await _storeDiag({ step: "save-error", error: String(e && e.message ? e.message : e) });
         try { alert("تعذّر إرسال الطلب:\n" + (e && e.message ? e.message : e)); } catch(_) {}
         toast("خطأ: " + e.message, "err");
         btn.disabled = false; btn.textContent = "📤 إرسال الطلب";
+      }
+      } catch (outer) {
+        // أي خطأ غير متوقع في التحقق نفسه (عنصر مفقود، إلخ) — كان بيسبب
+        // "مفيش حاجة بتحصل" الصامت. دلوقتي بيتسجّل ويظهر
+        await _storeDiag({ step: "outer-error", error: String(outer && outer.message ? outer.message : outer) });
+        try { alert("خطأ غير متوقع:\n" + (outer && outer.message ? outer.message : outer)); } catch(_) {}
+        const b = $("saveBtn"); if (b) { b.disabled = false; b.textContent = "📤 إرسال الطلب"; }
       }
     };
 

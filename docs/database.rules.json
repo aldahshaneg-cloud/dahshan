@@ -13,6 +13,10 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "storeDiag": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "counters": {
       ".read": "auth != null",
       ".write": "auth != null"
