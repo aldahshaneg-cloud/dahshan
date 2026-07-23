@@ -352,13 +352,25 @@ class OrderRinger {
     } catch (_) {}
   }
 
-  /// مراقب الرنين: بيتأكد كل 3 ثواني إن النغمة فعلاً شغّالة ويرجّعها لو
-  /// وقفت لأي سبب. من غيره كنا بنستنى دورة الخدمة (15 ثانية) عشان نكتشف
-  /// إن الصوت سكت — وده اللي كان بيخلي الرنة متقطعة أو تسكت خالص.
+  /// مراقب الرنين: بيشتغل كل 3 ثواني وقت الرنين ويعمل حاجتين:
+  ///  1) **الإيقاف الموثوق**: بيقرأ فلاج "التطبيق مفتوح" من القرص مباشرةً
+  ///     ويوقف الرنين لو الطيار فتح التطبيق — من غير ما يعتمد على وصول رسالة
+  ///     stop_ring اللي ممكن تضيع لما الجهاز يعيد تشغيل الخدمة (ده كان سبب
+  ///     "مرة تسكت الرنة عند الفتح ومرة لأ").
+  ///  2) بيتأكد إن النغمة فعلاً شغّالة ويرجّعها لو وقفت لأي سبب.
   static void _startWatchdog() {
     if (_watchdog != null) return;
     _watchdog = Timer.periodic(const Duration(seconds: 3), (t) async {
       if (!_ringing) { t.cancel(); _watchdog = null; return; }
+      // فحص مباشر من القرص: الطيار فتح التطبيق؟ نوقف فورًا (خلال ≤3ث)
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.reload();
+        final fgFlag = prefs.getBool('app_in_foreground') ?? false;
+        final fgTs   = prefs.getInt('app_fg_ts') ?? 0;
+        final fresh  = DateTime.now().millisecondsSinceEpoch - fgTs < 45000;
+        if (fgFlag && fresh) { await stopRinging(); return; }
+      } catch (_) {}
       await _ensurePlaying();
     });
   }
@@ -533,10 +545,9 @@ class FgService {
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        // في الخلفية المستخدم مش بيبص على الشاشة، فمفيش داعي لسرعة
-        // 3 ثواني — 15 ثانية كافية جداً لإشعار بطلب جديد بدون استنزاف
-        // ملحوظ للبطارية والبيانات وهو التطبيق مقفول
-        eventAction: ForegroundTaskEventAction.repeat(15000),
+        // 8 ثواني: توازن بين سرعة الرنين (ما يرنّش متأخر) والبطارية. الإيقاف
+        // بيتم أسرع من كده (كل 3ث عن طريق مراقب الرنين اللي بيقرأ فلاج الفتح)
+        eventAction: ForegroundTaskEventAction.repeat(8000),
         autoRunOnBoot: true,   // يبدأ تلقائي بعد إعادة تشغيل الهاتف
         autoRunOnMyPackageReplaced: true,
         allowWakeLock: true,
