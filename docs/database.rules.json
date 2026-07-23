@@ -9,6 +9,14 @@
         ".validate": "newData.isString() && newData.val().length > 3"
       }
     },
+    "pilotFcmTokens": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "fcmState": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "ringDiag": {
       ".read": "auth != null",
       ".write": "auth != null"

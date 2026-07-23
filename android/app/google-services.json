@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "164254513529",
+    "firebase_url": "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+    "project_id": "aldahshaneg-92f66",
+    "storage_bucket": "aldahshaneg-92f66.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:164254513529:android:f526beb9aebf4862d397a8",
+        "android_client_info": {
+          "package_name": "com.example.tiar_pilot"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "164254513529-2e2f4d6ujpboltjmsdl6jabcndu0481q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9t5nOvuLqhWZwyz9CR-8S4WITl-SJ4UY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "164254513529-2e2f4d6ujpboltjmsdl6jabcndu0481q.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

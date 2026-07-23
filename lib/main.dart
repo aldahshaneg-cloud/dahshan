@@ -14,6 +14,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 // ════════════════════════════════════════════════════════════════
 //  CONSTANTS — الألوان والثوابت
@@ -407,6 +409,9 @@ class _OrderTaskHandler extends TaskHandler {
     // الرئيسي للتطبيق، فمكتبة الإشعارات المحلية لازم تتهيأ من جديد هنا،
     // وإلا الإشعار ممكن يفشل بصمت وهو التطبيق في الخلفية أو مقفول
     await LocalNotif.init();
+    // تقييم فوري بدل انتظار أول دورة (8ث) — مهم جدًا لما الخدمة اتشغّلت
+    // بسبب إشعار FCM: عايزين الرنين يبدأ في ثانية مش بعد 8 ثواني
+    try { await onRepeatEvent(timestamp); } catch (_) {}
   }
 
   @override
@@ -570,6 +575,67 @@ class FgService {
   /// إيقاف الخدمة (عند تسجيل الخروج)
   static Future<void> stop() async {
     await FlutterForegroundTask.stopService();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PUSH (FCM) — إشعار فوري من السيرفر يوقظ التطبيق حتى لو مقفول
+// ════════════════════════════════════════════════════════════════
+//
+// المشكلة اللي بيحلها: نظام الجهاز (شاومي/أوبو) بيقتل عملية التطبيق لدقائق،
+// فالاستطلاع الدوري بيقف ومفيش حاجة تكتشف الأوردر الجديد. FCM بيوصل عن طريق
+// خدمات Google Play (اللي الجهاز مبيقتلهاش)، فبيوقظ التطبيق فورًا لما أوردر
+// يتسند للطيار. رسالة FCM بترسّل "data" فقط (مش notification) عشان الكود
+// بتاعنا هو اللي يتعامل معاها في كل الحالات ويشغّل الرنين المستمر.
+
+/// معالج رسائل FCM لما التطبيق في الخلفية أو مقفول تمامًا — بيشتغل في isolate
+/// منفصل. شغلته الوحيدة: يشغّل الخدمة الخلفية، وهي بتقيّم الطلبات وترن فورًا
+/// (onStart بيعمل تقييم فوري) وتفضل ترن لحد ما الطيار يفتح التطبيق.
+@pragma('vm:entry-point')
+Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
+  // init منفصل: لو الرسالة الجاية لاقت Firebase متهيّأ (isolate اشتغل قبل كده)
+  // بترمي duplicate-app — منعزلها لوحدها عشان ما تمنعش تشغيل الخدمة
+  try { await Firebase.initializeApp(); } catch (_) {}
+  try {
+    FgService.init();
+    await FgService.start();
+  } catch (_) {}
+}
+
+class PushService {
+  /// تهيئة FCM: تسجيل معالج الخلفية + طلب إذن الإشعارات. بتتنادى مرة في main().
+  static Future<void> init() async {
+    try {
+      FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
+      await FirebaseMessaging.instance.requestPermission(
+        alert: true, badge: true, sound: true,
+      );
+      // رسالة والتطبيق مفتوح: الاستطلاع الدوري بيكتشف الأوردر أصلاً، فمش
+      // محتاجين نعمل حاجة تقيلة هنا — بس نضمن إن الخدمة شغّالة
+      FirebaseMessaging.onMessage.listen((_) async {
+        try { if (!await FlutterForegroundTask.isRunningService) await FgService.start(); } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
+  /// يخزّن توكن الجهاز تحت pilotFcmTokens/{pilotId} عشان السكريبت المُرسِل
+  /// يعرف يبعت الإشعار للطيار ده. بيتنادى بعد ما نعرف الـ pilotId (بعد الدخول).
+  static Future<void> registerToken(String pilotId) async {
+    if (pilotId.isEmpty) return;
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) await _saveToken(pilotId, token);
+      FirebaseMessaging.instance.onTokenRefresh.listen((t) => _saveToken(pilotId, t));
+    } catch (_) {}
+  }
+
+  static Future<void> _saveToken(String pilotId, String token) async {
+    try {
+      await http.put(
+        Uri.parse('$_fbUrl/pilotFcmTokens/$pilotId.json${await FbAuth.queryParam()}'),
+        body: json.encode(token),
+      );
+    } catch (_) {}
   }
 }
 
@@ -1801,6 +1867,10 @@ class LocationSender {
 // ════════════════════════════════════════════════════════════════
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── تهيئة Firebase (لازمة لـ FCM) — الإشعار الفوري اللي بيوقظ التطبيق ──
+  try { await Firebase.initializeApp(); } catch (_) {}
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor:          Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -1812,6 +1882,9 @@ void main() async {
 
   // ── تهيئة Foreground Service ──
   FgService.init();
+
+  // ── تهيئة FCM: معالج الخلفية + إذن الإشعارات ──
+  await PushService.init();
 
   // ── الاستماع لحدث "قبول" من شاشة المكالمة الواردة ──
   // بيشتغل سواء التطبيق كان فاتح أو لسه بيفتح لأول مرة بسبب الضغط على قبول
@@ -2769,6 +2842,8 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
     await prefs.setString('pilotId', widget.pilotId);
     // تشغيل الخدمة
     await FgService.start();
+    // تسجيل توكن FCM لهذا الطيار عشان السكريبت المُرسِل يقدر يوقظه بالإشعار
+    await PushService.registerToken(widget.pilotId);
   }
 
   /// نحمّل الـ IDs المحفوظة من Workmanager عشان ما نعيد إشعار لأوردر قديم

@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
+    // لازم بعد أندرويد وفلاتر — بيفعّل ربط Firebase من google-services.json
+    id("com.google.gms.google-services")
 }
 
 android {
