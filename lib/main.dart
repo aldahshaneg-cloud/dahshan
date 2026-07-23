@@ -52,7 +52,12 @@ class SoundOption {
 }
 
 /// ─── قائمة النغمات — أضف ملفاتك هنا ───
+/// النغمة الأولى في القائمة هي الافتراضية (kSoundOptions.first). نخلّي
+/// أطول رنة (آيفون) هي الافتراضية عشان تفضل شغّالة أطول قبل ما الجهاز
+/// يعيد تشغيل الخدمة الخلفية — فتقلّ فجوات السكوت على شاومي/أوبو.
 const List<SoundOption> kSoundOptions = [
+  SoundOption(id: 'iphone-2g.mp3',                                 label: 'آيفون كلاسيك',  emoji: '📱'),
+  SoundOption(id: 'iphone-4s.mp3',                                 label: 'آيفون',         emoji: '📲'),
   SoundOption(id: 'mixkit-access-allowed-tone-2869.wav',           label: 'وصول مسموح',    emoji: '✅'),
   SoundOption(id: 'mixkit-arabian-mystery-harp-notification-2489.wav', label: 'هارب عربي', emoji: '🎵'),
   SoundOption(id: 'mixkit-bell-notification-933.wav',              label: 'جرس',           emoji: '🔔'),
@@ -240,6 +245,7 @@ class OrderRinger {
   static Timer? _watchdog;             // مراقب يضمن استمرار النغمة
   static int  _lastCount = 1;          // عدد الطلبات المعلّقة (لعنوان الإشعار)
   static bool _audioOk   = false;      // هل النغمة المتواصلة اشتغلت فعلاً؟
+  static int  _lastNotifSoundMs = 0;   // آخر مرة أطلقنا فيها صوت الإشعار (throttle)
 
   /// حالة الرنين — بتتكتب في التشخيص عشان نعرف أي مسار صوت اشتغل
   static String get status =>
@@ -309,9 +315,22 @@ class OrderRinger {
     }
     _audioOk = audioOk;
 
-    // الإشعار: بصوت لو النغمة المتواصلة مش شغّالة، وبدون صوت لو شغّالة
-    // (عشان ما يبقاش في صوتين فوق بعض)
-    await LocalNotif.showRingingNotification(count: _lastCount, withSound: !audioOk);
+    if (audioOk) {
+      // نغمة loop شغّالة بشكل متواصل — الإشعار من غير صوت (عشان ما يبقاش
+      // صوتين فوق بعض). إعادة نشره كل دورة مراقبة مفيهاش ضرر (مفيش صوت يتقطع)
+      await LocalNotif.showRingingNotification(count: _lastCount, withSound: false);
+    } else {
+      // مفيش loop (audioplayers فشل في الـ isolate الخلفي) — بنعتمد على صوت
+      // الإشعار نفسه اللي بيشغّله النظام. المشكلة: كل إعادة نشر بتبدأ النغمة
+      // من أولها، فلو أعدنا النشر كل 3ث (زي المراقب) النغمة الطويلة هتتقطّع
+      // لمقاطع 3 ثواني. عشان كده بنعيد نشر الصوت كل ~13ث بس فتشتغل الرنة
+      // الطويلة لآخرها بشكل متواصل. الإشعار الثابت نفسه فاضل ظاهر في الوقت ده.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastNotifSoundMs >= 13000) {
+        _lastNotifSoundMs = now;
+        await LocalNotif.showRingingNotification(count: _lastCount, withSound: true);
+      }
+    }
 
     try {
       if (await Vibration.hasVibrator() ?? false) {
@@ -335,6 +354,7 @@ class OrderRinger {
   /// يوقف الرنين بالكامل ويشيل الإشعار الثابت
   static Future<void> stopRinging() async {
     _ringing = false;
+    _lastNotifSoundMs = 0;   // الرنة الجاية تطلّع صوت فورًا من غير انتظار
     _watchdog?.cancel();
     _watchdog = null;
     try { await _player.stop(); } catch (_) {}
@@ -395,12 +415,9 @@ class _OrderTaskHandler extends TaskHandler {
     // ── التطبيق مفتوح قدام الطيار؟ ──
     // لو الطيار فاتح التطبيق، مفيش داعي لأي رنين خلفي، ولا حتى جلب شجرة
     // الأوردرات كاملة من هنا (توفير بيانات) — HomeScreen بيتولّى ده بنفسه
-    // ويحدّث known_order_ids باستمرار. بس نعيد ضبط الـ baseline المحلي منها
+    // ويحدّث known_order_ids (قائمة المشوفة) باستمرار وهو حي
     if (appOpen) {
       await OrderRinger.stopRinging();
-      // التطبيق مفتوح والطيار شايف — نعتبر baseline متأسّس (عشان ما نرنّش
-      // بأثر رجعي على طلبات كانت موجودة). HomeScreen بيحدّث known_order_ids
-      await prefs.setBool('ring_baseline_set', true);
       _diagLog(pilotId, {
         'branch': 'appOpen', 'fgFlag': fgFlag, 'fresh': fresh,
         'known': (prefs.getStringList('known_order_ids') ?? []).length,
@@ -426,49 +443,32 @@ class _OrderTaskHandler extends TaskHandler {
           .map((e) => e.key)
           .toSet();
 
-      // ── مهم جدًا: نقرأ الحالة من التخزين المحلي (prefs) مش من الذاكرة ──
-      // بعض الأجهزة (شاومي/أوبو/…) بتقتل وتعيد تشغيل الخدمة الخلفية كل دورة،
-      // فأي متغيّر في الذاكرة (_knownIds/_firstRun) بيضيع ويرجع لقيمته
-      // الأولية — وده كان بيمنع الطلب الجديد من دخول قائمة الرنين نهائيًا.
-      // prefs بيفضل موجود على القرص مهما الخدمة اترستارت، فهو المرجع الوحيد.
-      final knownSaved  = (prefs.getStringList('known_order_ids') ?? <String>[]).toSet();
-      final hasBaseline = prefs.getBool('ring_baseline_set') ?? false;
+      // ── منطق الرنين: الخلفية "تقرأ بس" ولا تكتب أي حاجة ──
+      // الجهاز بيقتل الخدمة أسرع من ما SharedPreferences يحفظ، فأي كتابة من
+      // الخلفية مش بتفضل. الحل: قائمة "المشوفة" (seen) بيكتبها التطبيق وهو
+      // مفتوح فقط (وقتها مضمون إنه بيتحفظ لأن التطبيق حي). الخلفية بترن على
+      // أي طلب مُسند مش موجود في المشوفة، وبتحسبها من جديد كل دورة — من غير
+      // ما تعتمد على أي كتابة أو حالة في الذاكرة تخصّها.
+      final seen = (prefs.getStringList('known_order_ids') ?? <String>[]).toSet();
 
-      final pendingSaved = prefs.getStringList('pending_ring_ids') ?? <String>[];
-      var pending = pendingSaved.toSet();
-
-      // الطلبات الجديدة = اللي مش في السجل المحفوظ. بنضيفها للرنين طالما
-      // الـ baseline اتأسّس قبل كده (عشان أول تشغيل على جهاز جديد ما يرنّش
-      // على الطلبات الموجودة سلفًا). أول دورة بتأسّس baseline بس.
-      final addedNow = currentIds.difference(knownSaved);
-      if (hasBaseline && addedNow.isNotEmpty) pending.addAll(addedNow);
-
-      // نشيل من قائمة الرنين أي طلب مبقاش مُسند لهذا الطيار بنفس الحالة
-      // (اتسلّم / اترجع / اتحول لطيار تاني) عشان الرنين يوقف تلقائياً
-      pending = pending.intersection(currentIds);
+      // الطلبات اللي محتاجة رنين = المُسندة حاليًا ومش مشوفة بعد
+      final pending = currentIds.difference(seen);
 
       _diagLog(pilotId, {
         'branch'  : 'ring',
         'orders'  : currentIds.length,
-        'known'   : knownSaved.length,
-        'added'   : addedNow.length,
+        'seen'    : seen.length,
         'pending' : pending.length,
         'ringer'  : OrderRinger.status,
-        'baseline': hasBaseline,
       });
 
       if (pending.isNotEmpty) {
         // إشعار ستارة واحد ثابت + نغمة loop مستمرة لحد ما الطيار يفتح
-        // التطبيق — يشتغل حتى لو التطبيق مقفول تمامًا (بديل شاشة المكالمة)
+        // التطبيق (اللي بيحدّث قائمة المشوفة) — يشتغل حتى لو مقفول تمامًا
         await OrderRinger.startRinging(count: pending.length);
       } else {
-        // مفيش طلب معلّق — نوقف أي رنين شغّال ونشيل الإشعار
         await OrderRinger.stopRinging();
       }
-
-      await prefs.setStringList('known_order_ids', currentIds.toList());
-      await prefs.setStringList('pending_ring_ids', pending.toList());
-      await prefs.setBool('ring_baseline_set', true);   // اتأسّس من أول دورة
     } catch (_) {}
   }
 
@@ -562,6 +562,16 @@ class NotificationService {
   /// يجيب اسم ملف الصوت المحفوظ (أو الافتراضي)
   static Future<String> getSelectedSound() async {
     final p = await SharedPreferences.getInstance();
+    // هجرة لمرة واحدة: الطيّار اللي لسه ماشي على الافتراضي القديم القصير
+    // (وصول مسموح) نحوّله للرنة الأطول (آيفون) عشان تفضل شغّالة أطول قبل
+    // ما الجهاز يرستارت الخدمة. اللي اختار نغمة تانية بإيده يفضل عليها.
+    if (!(p.getBool('sound_default_migrated_v2') ?? false)) {
+      final cur = p.getString(_prefKey);
+      if (cur == null || cur == 'mixkit-access-allowed-tone-2869.wav') {
+        await p.setString(_prefKey, 'iphone-2g.mp3');
+      }
+      await p.setBool('sound_default_migrated_v2', true);
+    }
     return p.getString(_prefKey) ?? kSoundOptions.first.id;
   }
 
