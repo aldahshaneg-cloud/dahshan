@@ -354,8 +354,8 @@ void _startForegroundCallback() {
 }
 
 class _OrderTaskHandler extends TaskHandler {
-  Set<String> _knownIds = {};
-  bool _firstRun = true;
+  // ملحوظة: مبنعتمدش على أي حالة في الذاكرة هنا — بعض الأجهزة بتعيد تشغيل
+  // الخدمة كل دورة فتضيع. كل الحالة (known/pending/baseline) في prefs.
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -363,11 +363,6 @@ class _OrderTaskHandler extends TaskHandler {
     // الرئيسي للتطبيق، فمكتبة الإشعارات المحلية لازم تتهيأ من جديد هنا،
     // وإلا الإشعار ممكن يفشل بصمت وهو التطبيق في الخلفية أو مقفول
     await LocalNotif.init();
-    // نحمّل الـ IDs المحفوظة عند البدء
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('known_order_ids') ?? [];
-    _knownIds = saved.toSet();
-    _firstRun = true;
   }
 
   @override
@@ -403,12 +398,13 @@ class _OrderTaskHandler extends TaskHandler {
     // ويحدّث known_order_ids باستمرار. بس نعيد ضبط الـ baseline المحلي منها
     if (appOpen) {
       await OrderRinger.stopRinging();
-      _knownIds = (prefs.getStringList('known_order_ids') ?? []).toSet();
+      // التطبيق مفتوح والطيار شايف — نعتبر baseline متأسّس (عشان ما نرنّش
+      // بأثر رجعي على طلبات كانت موجودة). HomeScreen بيحدّث known_order_ids
+      await prefs.setBool('ring_baseline_set', true);
       _diagLog(pilotId, {
         'branch': 'appOpen', 'fgFlag': fgFlag, 'fresh': fresh,
-        'known': _knownIds.length,
+        'known': (prefs.getStringList('known_order_ids') ?? []).length,
       });
-      _firstRun = false;
       return;
     }
 
@@ -430,33 +426,35 @@ class _OrderTaskHandler extends TaskHandler {
           .map((e) => e.key)
           .toSet();
 
-      // ── قائمة الطلبات التي لسه الطيار ما فتحش التطبيق يشوفها ──
-      // نفضل نرن عليها لحد ما يفتح التطبيق فعليًا (اللي بيمسح القائمة دي)
-      final pendingSaved = prefs.getStringList('pending_ring_ids') ?? [];
+      // ── مهم جدًا: نقرأ الحالة من التخزين المحلي (prefs) مش من الذاكرة ──
+      // بعض الأجهزة (شاومي/أوبو/…) بتقتل وتعيد تشغيل الخدمة الخلفية كل دورة،
+      // فأي متغيّر في الذاكرة (_knownIds/_firstRun) بيضيع ويرجع لقيمته
+      // الأولية — وده كان بيمنع الطلب الجديد من دخول قائمة الرنين نهائيًا.
+      // prefs بيفضل موجود على القرص مهما الخدمة اترستارت، فهو المرجع الوحيد.
+      final knownSaved  = (prefs.getStringList('known_order_ids') ?? <String>[]).toSet();
+      final hasBaseline = prefs.getBool('ring_baseline_set') ?? false;
+
+      final pendingSaved = prefs.getStringList('pending_ring_ids') ?? <String>[];
       var pending = pendingSaved.toSet();
 
-      // نحسب الطلبات الجديدة طالما عندنا سجل سابق محفوظ — حتى لو دي أول
-      // دورة بعد ما الخدمة رجعت. من غير الشرط ده، لو أندرويد قفل الخدمة أو
-      // الموبايل اترستارت ووصل طلب في الوقت ده، كانت أول دورة بتسجّله
-      // كـ"معروف" وما بترنش عليه أبدًا رغم إن الطيار عمره ما شافه.
-      // بنتخطّاها بس في أول تشغيل على جهاز جديد (مفيش سجل أصلاً).
-      final addedNow = currentIds.difference(_knownIds);
-      if (!_firstRun || _knownIds.isNotEmpty) {
-        if (addedNow.isNotEmpty) pending.addAll(addedNow);
-      }
+      // الطلبات الجديدة = اللي مش في السجل المحفوظ. بنضيفها للرنين طالما
+      // الـ baseline اتأسّس قبل كده (عشان أول تشغيل على جهاز جديد ما يرنّش
+      // على الطلبات الموجودة سلفًا). أول دورة بتأسّس baseline بس.
+      final addedNow = currentIds.difference(knownSaved);
+      if (hasBaseline && addedNow.isNotEmpty) pending.addAll(addedNow);
 
       // نشيل من قائمة الرنين أي طلب مبقاش مُسند لهذا الطيار بنفس الحالة
       // (اتسلّم / اترجع / اتحول لطيار تاني) عشان الرنين يوقف تلقائياً
       pending = pending.intersection(currentIds);
 
       _diagLog(pilotId, {
-        'branch' : 'ring',
-        'orders' : currentIds.length,
-        'known'  : _knownIds.length,
-        'added'  : addedNow.length,
-        'pending': pending.length,
-        'ringer' : OrderRinger.status,
-        'first'  : _firstRun,
+        'branch'  : 'ring',
+        'orders'  : currentIds.length,
+        'known'   : knownSaved.length,
+        'added'   : addedNow.length,
+        'pending' : pending.length,
+        'ringer'  : OrderRinger.status,
+        'baseline': hasBaseline,
       });
 
       if (pending.isNotEmpty) {
@@ -470,9 +468,7 @@ class _OrderTaskHandler extends TaskHandler {
 
       await prefs.setStringList('known_order_ids', currentIds.toList());
       await prefs.setStringList('pending_ring_ids', pending.toList());
-
-      _firstRun = false;
-      _knownIds = currentIds;
+      await prefs.setBool('ring_baseline_set', true);   // اتأسّس من أول دورة
     } catch (_) {}
   }
 
