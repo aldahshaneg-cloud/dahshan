@@ -1,0 +1,3617 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الدهشان | النظام المحاسبي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  /* ══════════════════════════════════════════════════════════════
+     DESIGN TOKENS — مطابقة لباقي برامج الدهشان
+  ══════════════════════════════════════════════════════════════ */
+  :root {
+    --sky: #e8192c; --sky-d: #b91c1c; --night: #0a0a0a; --panel: #111111;
+    --card: #1a1a1a; --border: #2a2a2a; --text: #f0f0f0; --muted: #888888;
+    --green: #22c55e; --red: #e8192c; --purple: #a855f7; --orange: #f97316;
+    --blue: #3b82f6; --teal: #14b8a6;
+    --sidebar-w: 236px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
+  }
+  :root.light {
+    --sky: #0284c7; --sky-d: #0369a1; --night: #f0f6ff; --panel: #ffffff;
+    --card: #f0f6ff; --border: #bfd8f0; --text: #0c1e35; --muted: #4d7a9e;
+    --green: #16a34a; --red: #dc2626; --purple: #7c3aed; --orange: #ea580c;
+    --blue: #2563eb; --teal: #0d9488;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--night); color: var(--text); transition: background-color .25s, color .2s; }
+  #sidebar, #login-screen, .login-box, .modal-box, .stat-card, .table-wrap, .nav-item, input, textarea, select { transition: background-color .25s, border-color .25s, color .2s; }
+  input, textarea, select, button { font-family: var(--font); }
+
+  /* ── LOGIN ── */
+  #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--night); position: fixed; inset: 0; z-index: 1000;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232,25,44,.07) 0%, transparent 60%); }
+  .login-box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 44px 38px; width: 100%; max-width: 420px; }
+  .login-brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1.55rem; font-weight: 800; color: var(--sky); margin-bottom: 6px; }
+  .login-sub { text-align: center; color: var(--muted); font-size: .84rem; margin-bottom: 26px; }
+  .login-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+  .login-field label { font-size: .8rem; color: var(--muted); font-weight: 600; }
+  .login-field input { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 12px 16px; outline: none; font-size: .92rem; }
+  .login-field input:focus { border-color: var(--sky); }
+  #loginError { font-size: .82rem; color: var(--red); margin-bottom: 12px; text-align: center; min-height: 18px; }
+  .login-btn { width: 100%; background: var(--sky); color: #fff; border: none; padding: 13px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: .95rem; }
+  .login-btn:hover { background: var(--sky-d); }
+  .login-btn:disabled { opacity: .6; cursor: not-allowed; }
+  .login-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: .76rem; color: var(--muted); line-height: 1.8; text-align: center; }
+
+  /* ── LAYOUT ── */
+  #app { display: none; min-height: 100vh; }
+  #app.visible { display: flex; }
+  #sidebar { width: var(--sidebar-w); min-height: 100vh; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+  .sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 20px 18px 16px; font-size: 1.16rem; font-weight: 800; color: var(--sky); border-bottom: 1px solid var(--border); }
+  .sidebar-nav { padding: 12px 9px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .sidebar-section-label { font-size: .66rem; color: var(--muted); letter-spacing: .1em; padding: 12px 12px 5px; opacity: .6; font-weight: 700; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border-radius: 9px; cursor: pointer; font-size: .87rem; color: var(--muted); border: none; background: none; width: 100%; text-align: right; }
+  .nav-item:hover { background: var(--card); color: var(--text); }
+  .nav-item.active { background: rgba(232,25,44,.12); color: var(--sky); font-weight: 700; }
+  .sidebar-footer { padding: 12px 9px; border-top: 1px solid var(--border); }
+  .theme-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 13px; border-radius: 8px; border: 1px solid var(--border); background: none; font-size: .82rem; color: var(--muted); cursor: pointer; width: 100%; margin-bottom: 8px; }
+  .theme-toggle:hover { background: var(--card); color: var(--text); }
+  .toggle-pill { width: 34px; height: 18px; background: var(--border); border-radius: 9px; position: relative; flex-shrink: 0; }
+  .toggle-pill::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .25s; }
+  :root.light .toggle-pill { background: var(--sky); }
+  :root.light .toggle-pill::after { transform: translateX(-16px); background: #fff; }
+  .sidebar-user { display: flex; align-items: center; gap: 10px; padding: 9px 11px; margin-bottom: 8px; }
+  .user-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(232,25,44,.18); color: var(--sky); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+  #sidebar-username { font-size: .85rem; font-weight: 700; color: var(--text); }
+  #sidebar-role { font-size: .72rem; color: var(--muted); }
+  .sidebar-logout { width: 100%; background: rgba(232,25,44,.08); color: var(--red); border: 1px solid rgba(232,25,44,.2); padding: 9px 13px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 600; }
+  .sidebar-logout:hover { background: rgba(232,25,44,.18); }
+  #main { flex: 1; min-width: 0; }
+  .page { display: none; padding: 26px 30px 60px; width: 100%; }
+  .page.active { display: block; }
+
+  /* ── SHARED UI ── */
+  .sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .sec-title { font-size: 1.08rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .sec-sub { font-size: .78rem; color: var(--muted); font-weight: 500; margin-top: 3px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .field { padding: 8px 11px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: .83rem; outline: none; }
+  .field:focus { border-color: var(--sky); }
+  .add-btn { background: var(--sky); color: #fff; border: none; padding: 9px 18px; border-radius: 8px; font-size: .85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .add-btn:hover { background: var(--sky-d); }
+  .add-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-ghost { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 600; cursor: pointer; }
+  .btn-ghost:hover { border-color: var(--sky); color: var(--sky); }
+  .btn-green { background: rgba(34,197,94,.14); color: var(--green); border: 1px solid rgba(34,197,94,.3); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 700; cursor: pointer; }
+  .btn-green:hover { background: var(--green); color: #fff; }
+  .btn-red { background: rgba(232,25,44,.12); color: var(--red); border: 1px solid rgba(232,25,44,.28); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 700; cursor: pointer; }
+  .btn-red:hover { background: var(--red); color: #fff; }
+  .btn-xs { padding: 4px 9px; font-size: .74rem; border-radius: 6px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .stat-label { font-size: .74rem; color: var(--muted); display: block; margin-bottom: 6px; font-weight: 600; }
+  .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--sky); line-height: 1.15; display: block; font-variant-numeric: tabular-nums; }
+  .stat-sub { font-size: .72rem; color: var(--muted); margin-top: 4px; display: block; }
+
+  .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+  thead { background: var(--panel); position: sticky; top: 0; z-index: 2; }
+  th { padding: 11px 13px; text-align: right; font-weight: 700; font-size: .74rem; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 10px 13px; border-bottom: 1px solid var(--border); color: var(--text); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(232,25,44,.035); }
+  .num { font-variant-numeric: tabular-nums; text-align: left; direction: ltr; white-space: nowrap; }
+  .empty-row { text-align: center; color: var(--muted); padding: 38px; }
+  .idx { color: var(--muted); font-size: .77rem; }
+  tr.total-row td { font-weight: 800; background: var(--panel); border-top: 2px solid var(--border); }
+
+  .sub-tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+  .sub-tab { background: none; border: none; border-bottom: 3px solid transparent; color: var(--muted); font-size: .89rem; font-weight: 700; padding: 9px 17px; cursor: pointer; margin-bottom: -2px; border-radius: 6px 6px 0 0; }
+  .sub-tab:hover { color: var(--text); background: var(--card); }
+  .sub-tab.active { color: var(--sky); border-bottom-color: var(--sky); background: rgba(232,25,44,.06); }
+
+  .badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; }
+  .bg-green { background: rgba(34,197,94,.15); color: var(--green); }
+  .bg-red { background: rgba(232,25,44,.15); color: var(--red); }
+  .bg-orange { background: rgba(249,115,22,.15); color: var(--orange); }
+  .bg-purple { background: rgba(168,85,247,.15); color: var(--purple); }
+  .bg-blue { background: rgba(59,130,246,.15); color: var(--blue); }
+  .bg-muted { background: rgba(136,136,136,.13); color: var(--muted); }
+
+  .info-box { background: rgba(59,130,246,.07); border: 1px solid rgba(59,130,246,.22); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
+  .warn-box { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.25); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
+
+  /* ── MODAL ── */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(5px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 18px; }
+  .modal.open { display: flex; }
+  .modal-box { background: var(--night); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+  .modal-box.wide { max-width: 980px; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 17px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--night); z-index: 3; border-radius: 16px 16px 0 0; }
+  .modal-title { font-size: 1rem; font-weight: 800; }
+  .modal-close { background: var(--card); border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem; }
+  .modal-close:hover { color: var(--red); border-color: var(--red); }
+  .modal-body { padding: 18px 20px; }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 9px; justify-content: flex-start; position: sticky; bottom: 0; background: var(--night); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-bottom: 13px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: .79rem; color: var(--muted); font-weight: 700; }
+  .form-group input, .form-group select, .form-group textarea { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 13px; outline: none; font-size: .88rem; width: 100%; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--sky); }
+
+  /* ── TOAST ── */
+  #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(120px); background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 13px 26px; border-radius: 10px; font-weight: 700; font-size: .88rem; z-index: 99999; transition: transform .3s; box-shadow: 0 8px 30px rgba(0,0,0,.45); max-width: 90vw; text-align: center; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+
+  /* ── COA TREE ── */
+  .coa-node { border-bottom: 1px solid var(--border); }
+  .coa-row { display: flex; align-items: center; gap: 10px; padding: 9px 13px; cursor: pointer; }
+  .coa-row:hover { background: rgba(232,25,44,.04); }
+  .coa-caret { width: 16px; text-align: center; color: var(--muted); font-size: .7rem; flex-shrink: 0; }
+  .coa-code { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .8rem; font-weight: 700; min-width: 62px; direction: ltr; text-align: left; }
+  .coa-name { flex: 1; font-size: .88rem; font-weight: 600; }
+  .coa-name.group { font-weight: 800; }
+  .coa-bal { font-variant-numeric: tabular-nums; font-size: .85rem; font-weight: 700; direction: ltr; }
+
+  /* ── JOURNAL LINES EDITOR ── */
+  .jl-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  .jl-table th { padding: 8px 6px; font-size: .72rem; }
+  .jl-table td { padding: 5px 4px; border-bottom: 1px solid var(--border); }
+  .jl-table input, .jl-table select { background: var(--card); border: 1px solid var(--border); border-radius: 7px; color: var(--text); padding: 7px 9px; outline: none; font-size: .83rem; width: 100%; }
+  .jl-table input:focus, .jl-table select:focus { border-color: var(--sky); }
+  .jl-del { background: rgba(232,25,44,.1); color: var(--red); border: 1px solid rgba(232,25,44,.25); width: 28px; height: 28px; border-radius: 6px; cursor: pointer; }
+  .jl-balance { display: flex; gap: 18px; align-items: center; justify-content: flex-end; padding: 12px 6px 0; font-size: .88rem; font-weight: 800; flex-wrap: wrap; }
+
+  /* ── PRINT ── */
+  @media print {
+    #sidebar, .toolbar, .sub-tabs, .no-print { display: none !important; }
+    body, .page { background: #fff !important; color: #000 !important; }
+    .table-wrap, .stat-card { border-color: #ccc !important; background: #fff !important; }
+    td, th { color: #000 !important; border-color: #ddd !important; }
+    .page { padding: 0 !important; }
+  }
+  @media (max-width: 900px) {
+    #sidebar { position: fixed; right: -260px; z-index: 500; transition: right .25s; }
+    #sidebar.open { right: 0; }
+    .form-grid { grid-template-columns: 1fr; }
+    .page { padding: 18px 14px 50px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     LOGIN
+═══════════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-brand">📒 النظام المحاسبي</div>
+    <div class="login-sub">الدهشان — محاسبة مزدوجة كاملة</div>
+    <div class="login-field">
+      <label>اسم المستخدم</label>
+      <input type="text" id="loginUser" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <div class="login-field">
+      <label>كلمة المرور</label>
+      <input type="password" id="loginPass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <div id="loginError"></div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">دخول</button>
+    <div class="login-note">
+      الدخول متاح <b>للإدارة</b> (تلقائيًا بحساب جوجل من البوابة الرئيسية)<br>
+      و<b>للمحاسب</b> باسم المستخدم وكلمة المرور.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     APP
+═══════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="sidebar-brand">📒 <span>الحسابات</span></div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" onclick="navigateTo('dashboard')">📊 اللوحة المالية</button>
+
+      <div class="sidebar-section-label">الدليل والقيود</div>
+      <button class="nav-item" onclick="navigateTo('coa')">🗂️ شجرة الحسابات</button>
+      <button class="nav-item" onclick="navigateTo('journal')">📝 دفتر اليومية</button>
+      <button class="nav-item" onclick="navigateTo('ledger')">📖 دفتر الأستاذ</button>
+
+      <div class="sidebar-section-label">القوائم المالية</div>
+      <button class="nav-item" onclick="navigateTo('trial')">⚖️ ميزان المراجعة</button>
+      <button class="nav-item" onclick="navigateTo('income')">📈 قائمة الدخل</button>
+      <button class="nav-item" onclick="navigateTo('balance')">🏛️ الميزانية العمومية</button>
+      <button class="nav-item" onclick="navigateTo('cashflow')">💧 التدفقات النقدية</button>
+
+      <div class="sidebar-section-label">الأطراف والخزن</div>
+      <button class="nav-item" onclick="navigateTo('parties')">👥 حسابات الأطراف</button>
+      <button class="nav-item" onclick="navigateTo('treasury')">🏦 الخزن والبنوك</button>
+
+      <div class="sidebar-section-label">التشغيل</div>
+      <button class="nav-item" onclick="navigateTo('autopost')" id="navAutopost">🔄 الترحيل التلقائي</button>
+      <button class="nav-item" onclick="navigateTo('periods')">📅 الفترات والإقفال</button>
+      <button class="nav-item" onclick="navigateTo('settings')">⚙️ الإعدادات</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <span style="display:flex;align-items:center;gap:8px"><span id="themeIcon">☀️</span><span id="themeLabel">الوضع النهاري</span></span>
+        <span class="toggle-pill"></span>
+      </button>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">؟</div>
+        <div style="min-width:0">
+          <div id="sidebar-username">—</div>
+          <div id="sidebar-role">—</div>
+        </div>
+      </div>
+      <button class="sidebar-logout" onclick="doLogout()">🚪 تسجيل خروج</button>
+    </div>
+  </aside>
+
+  <main id="main">
+
+    <!-- ═══ 1) اللوحة المالية ═══ -->
+    <div class="page active" id="page-dashboard">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">📊 اللوحة المالية</div>
+          <div class="sec-sub" id="dashPeriodLabel">—</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="dashPeriod" onchange="renderDashboard()"></select>
+          <button class="btn-ghost" onclick="renderDashboard()">🔄 تحديث</button>
+        </div>
+      </div>
+
+      <div class="stats" id="dashStats"></div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+        <div>
+          <div class="sec-header"><div class="sec-title" style="font-size:.95rem">🏢 الأداء حسب الفرع (مركز التكلفة)</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>الفرع</th><th class="num">الإيراد</th><th class="num">المصروف</th><th class="num">الصافي</th></tr></thead>
+              <tbody id="dashBranchBody"><tr><td colspan="4" class="empty-row">—</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="sec-header"><div class="sec-title" style="font-size:.95rem">🧾 آخر القيود</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>التاريخ</th><th>البيان</th><th class="num">المبلغ</th></tr></thead>
+              <tbody id="dashJournalBody"><tr><td colspan="4" class="empty-row">—</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 2) شجرة الحسابات ═══ -->
+    <div class="page" id="page-coa">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🗂️ شجرة الحسابات</div>
+          <div class="sec-sub">الدليل المحاسبي — الحسابات التجميعية لا تقبل قيودًا مباشرة</div>
+        </div>
+        <div class="toolbar">
+          <input class="field" id="coaSearch" placeholder="🔎 بحث بالكود أو الاسم…" oninput="renderCOA()" style="width:210px" />
+          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">
+            <input type="checkbox" id="coaShowBalances" checked onchange="renderCOA()" /> عرض الأرصدة
+          </label>
+          <button class="btn-ghost" onclick="expandAllCOA(true)">توسيع الكل</button>
+          <button class="btn-ghost" onclick="expandAllCOA(false)">طي الكل</button>
+          <button class="add-btn" onclick="openAccountModal()">➕ حساب جديد</button>
+        </div>
+      </div>
+      <div class="info-box" id="coaInfo">—</div>
+      <div class="table-wrap" style="padding:4px 0"><div id="coaTree"></div></div>
+    </div>
+
+    <!-- ═══ 3) دفتر اليومية ═══ -->
+    <div class="page" id="page-journal">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">📝 دفتر اليومية</div>
+          <div class="sec-sub">كل القيود — يدوية وتلقائية</div>
+        </div>
+        <div class="toolbar">
+          <input type="date" class="field" id="jFrom" onchange="renderJournal()" />
+          <input type="date" class="field" id="jTo" onchange="renderJournal()" />
+          <select class="field" id="jSource" onchange="renderJournal()">
+            <option value="">كل المصادر</option>
+            <option value="manual">يدوي</option>
+            <option value="order">أوردرات</option>
+            <option value="commission">عمولات</option>
+            <option value="cash">خزينة</option>
+            <option value="custody">عهد</option>
+            <option value="expense">مصروفات</option>
+            <option value="payroll">رواتب</option>
+            <option value="opening">افتتاحي</option>
+            <option value="closing">إقفال</option>
+          </select>
+          <select class="field" id="jStatus" onchange="renderJournal()">
+            <option value="">كل الحالات</option>
+            <option value="posted">مُرحَّل</option>
+            <option value="draft">مسودة</option>
+            <option value="void">ملغي</option>
+          </select>
+          <input class="field" id="jSearch" placeholder="🔎 بحث في البيان…" oninput="renderJournal()" style="width:180px" />
+          <button class="btn-ghost" onclick="exportJournalExcel()">📥 Excel</button>
+          <button class="add-btn" onclick="openJournalModal()">➕ قيد جديد</button>
+        </div>
+      </div>
+      <div class="stats" id="journalStats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>رقم</th><th>التاريخ</th><th>البيان</th><th>المصدر</th><th class="num">مدين</th><th class="num">دائن</th><th>الحالة</th><th>إجراء</th></tr></thead>
+          <tbody id="journalBody"><tr><td colspan="8" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 4) دفتر الأستاذ ═══ -->
+    <div class="page" id="page-ledger">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">📖 دفتر الأستاذ</div>
+          <div class="sec-sub">كشف حركة الحساب مع الرصيد الجاري</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="ledgerAccount" onchange="renderLedger()" style="min-width:260px"></select>
+          <input type="date" class="field" id="ledgerFrom" onchange="renderLedger()" />
+          <input type="date" class="field" id="ledgerTo" onchange="renderLedger()" />
+          <select class="field" id="ledgerBranch" onchange="renderLedger()"></select>
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-ghost" onclick="exportLedgerExcel()">📥 Excel</button>
+        </div>
+      </div>
+      <div class="stats" id="ledgerStats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>التاريخ</th><th>قيد</th><th>البيان</th><th>الفرع</th><th class="num">مدين</th><th class="num">دائن</th><th class="num">الرصيد</th></tr></thead>
+          <tbody id="ledgerBody"><tr><td colspan="7" class="empty-row">اختر حسابًا</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 5) ميزان المراجعة ═══ -->
+    <div class="page" id="page-trial">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">⚖️ ميزان المراجعة</div>
+          <div class="sec-sub" id="trialSub">—</div>
+        </div>
+        <div class="toolbar">
+          <input type="date" class="field" id="trialFrom" onchange="renderTrial()" />
+          <input type="date" class="field" id="trialTo" onchange="renderTrial()" />
+          <select class="field" id="trialBranch" onchange="renderTrial()"></select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">
+            <input type="checkbox" id="trialHideZero" checked onchange="renderTrial()" /> إخفاء الأرصدة الصفرية
+          </label>
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-ghost" onclick="exportTrialExcel()">📥 Excel</button>
+        </div>
+      </div>
+      <div id="trialAlert"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>الكود</th><th>الحساب</th>
+            <th class="num">رصيد أول المدة</th>
+            <th class="num">حركة مدين</th><th class="num">حركة دائن</th>
+            <th class="num">رصيد مدين</th><th class="num">رصيد دائن</th>
+          </tr></thead>
+          <tbody id="trialBody"><tr><td colspan="7" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 6) قائمة الدخل ═══ -->
+    <div class="page" id="page-income">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">📈 قائمة الدخل</div>
+          <div class="sec-sub" id="incomeSub">—</div>
+        </div>
+        <div class="toolbar">
+          <input type="date" class="field" id="incFrom" onchange="renderIncome()" />
+          <input type="date" class="field" id="incTo" onchange="renderIncome()" />
+          <select class="field" id="incBranch" onchange="renderIncome()"></select>
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-ghost" onclick="exportIncomeExcel()">📥 Excel</button>
+        </div>
+      </div>
+      <div class="stats" id="incomeStats"></div>
+      <div class="table-wrap"><table><tbody id="incomeBody"><tr><td class="empty-row">جاري التحميل…</td></tr></tbody></table></div>
+    </div>
+
+    <!-- ═══ 7) الميزانية العمومية ═══ -->
+    <div class="page" id="page-balance">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🏛️ الميزانية العمومية</div>
+          <div class="sec-sub" id="balanceSub">—</div>
+        </div>
+        <div class="toolbar">
+          <input type="date" class="field" id="balAsOf" onchange="renderBalanceSheet()" />
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-ghost" onclick="exportBalanceExcel()">📥 Excel</button>
+        </div>
+      </div>
+      <div id="balanceAlert"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px">
+        <div class="table-wrap"><table><tbody id="balAssetsBody"></tbody></table></div>
+        <div class="table-wrap"><table><tbody id="balLiabEqBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ═══ 8) التدفقات النقدية ═══ -->
+    <div class="page" id="page-cashflow">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">💧 التدفقات النقدية</div>
+          <div class="sec-sub">حركة النقدية والبنوك خلال الفترة</div>
+        </div>
+        <div class="toolbar">
+          <input type="date" class="field" id="cfFrom" onchange="renderCashflow()" />
+          <input type="date" class="field" id="cfTo" onchange="renderCashflow()" />
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+        </div>
+      </div>
+      <div class="stats" id="cfStats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>البند</th><th class="num">وارد</th><th class="num">صادر</th><th class="num">الصافي</th></tr></thead>
+          <tbody id="cfBody"><tr><td colspan="4" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 9) حسابات الأطراف ═══ -->
+    <div class="page" id="page-parties">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">👥 حسابات الأطراف</div>
+          <div class="sec-sub">أرصدة الطيارين والمحلات والموظفين والموردين</div>
+        </div>
+        <div class="toolbar">
+          <input class="field" id="partySearch" placeholder="🔎 بحث بالاسم…" oninput="renderParties()" style="width:200px" />
+          <button class="btn-ghost" onclick="exportPartiesExcel()">📥 Excel</button>
+        </div>
+      </div>
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-party="pilot" onclick="switchPartyTab('pilot')">✈️ الطيارون</button>
+        <button class="sub-tab" data-party="store" onclick="switchPartyTab('store')">🏪 المحلات</button>
+        <button class="sub-tab" data-party="employee" onclick="switchPartyTab('employee')">🧑‍💼 الموظفون</button>
+        <button class="sub-tab" data-party="supplier" onclick="switchPartyTab('supplier')">📦 الموردون</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>الاسم</th><th>الحساب</th><th class="num">مدين</th><th class="num">دائن</th><th class="num">الرصيد</th><th>الحالة</th><th>إجراء</th></tr></thead>
+          <tbody id="partiesBody"><tr><td colspan="8" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 10) الخزن والبنوك ═══ -->
+    <div class="page" id="page-treasury">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🏦 الخزن والبنوك</div>
+          <div class="sec-sub">أرصدة دفترية من القيود مقابل الأرصدة الفعلية في النظام التشغيلي</div>
+        </div>
+        <div class="toolbar">
+          <button class="add-btn" onclick="openTransferModal()">🔁 تحويل بين خزن</button>
+        </div>
+      </div>
+      <div class="stats" id="treasuryStats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>الخزنة</th><th>الفرع</th><th class="num">الرصيد الدفتري</th><th class="num">الرصيد الفعلي</th><th class="num">الفرق</th><th>إجراء</th></tr></thead>
+          <tbody id="treasuryBody"><tr><td colspan="7" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 11) الترحيل التلقائي ═══ -->
+    <div class="page" id="page-autopost">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🔄 الترحيل التلقائي</div>
+          <div class="sec-sub">توليد القيود من العمليات التشغيلية — لا يُرحَّل أي مستند مرتين</div>
+        </div>
+        <div class="toolbar">
+          <button class="btn-ghost" onclick="scanAutoPost()">🔍 فحص غير المُرحَّل</button>
+          <button class="add-btn" id="runPostBtn" onclick="runAutoPost()">▶️ ترحيل الآن</button>
+        </div>
+      </div>
+      <div class="warn-box" id="autopostNote">—</div>
+      <div class="stats" id="autopostStats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>المصدر</th><th>الوصف</th><th class="num">مستندات غير مُرحَّلة</th><th class="num">القيمة</th><th>الحالة</th></tr></thead>
+          <tbody id="autopostBody"><tr><td colspan="5" class="empty-row">اضغط «فحص غير المُرحَّل»</td></tr></tbody>
+        </table>
+      </div>
+      <div class="sec-header" style="margin-top:26px"><div class="sec-title" style="font-size:.95rem">📜 سجل عمليات الترحيل</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>التاريخ</th><th>بواسطة</th><th>النطاق</th><th class="num">عدد القيود</th><th class="num">القيمة</th></tr></thead>
+          <tbody id="autopostLogBody"><tr><td colspan="5" class="empty-row">—</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 12) الفترات والإقفال ═══ -->
+    <div class="page" id="page-periods">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">📅 الفترات المحاسبية والإقفال</div>
+          <div class="sec-sub">الفترة المقفولة لا تقبل أي قيد جديد أو تعديل</div>
+        </div>
+      </div>
+      <div class="info-box">
+        <b>الإقفال الشهري:</b> يمنع أي قيد جديد داخل الشهر المقفول.<br>
+        <b>الإقفال السنوي:</b> يُرحِّل أرصدة الإيرادات والمصروفات إلى حساب <b>الأرباح المُرحَّلة</b> ويصفّرها استعدادًا للسنة الجديدة.
+      </div>
+      <div class="sec-header"><div class="sec-title" style="font-size:.95rem">الشهور</div>
+        <button class="btn-red" onclick="openYearEndModal()">🔒 إقفال سنوي</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>الفترة</th><th class="num">عدد القيود</th><th class="num">مدين</th><th class="num">دائن</th><th class="num">صافي الربح</th><th>الحالة</th><th>إجراء</th></tr></thead>
+          <tbody id="periodsBody"><tr><td colspan="7" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ 13) الإعدادات ═══ -->
+    <div class="page" id="page-settings">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">⚙️ إعدادات النظام المحاسبي</div>
+          <div class="sec-sub">ربط الحسابات الافتراضية التي يستخدمها محرك الترحيل التلقائي</div>
+        </div>
+        <div class="toolbar"><button class="add-btn" onclick="saveMapping()">💾 حفظ الإعدادات</button></div>
+      </div>
+
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-set="general" onclick="switchSetTab('general')">🧭 عام</button>
+        <button class="sub-tab" data-set="mapping" onclick="switchSetTab('mapping')">🔗 ربط الحسابات</button>
+        <button class="sub-tab" data-set="tools" onclick="switchSetTab('tools')">🛠️ أدوات وصيانة</button>
+      </div>
+
+      <div id="set-general">
+        <div class="table-wrap" style="padding:20px">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>اسم المنشأة (يظهر في التقارير المطبوعة)</label>
+              <input id="setOrgName" placeholder="الدهشان لخدمات التوصيل" />
+            </div>
+            <div class="form-group">
+              <label>تاريخ بداية النظام المحاسبي</label>
+              <input type="date" id="setStartDate" />
+            </div>
+            <div class="form-group">
+              <label>بداية السنة المالية</label>
+              <select id="setFiscalStart">
+                <option value="1">يناير</option><option value="7">يوليو</option>
+                <option value="4">أبريل</option><option value="10">أكتوبر</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>رسوم التطوير لكل أوردر (ج.م)</label>
+              <input type="number" id="setDevFee" step="0.25" min="0" />
+            </div>
+            <div class="form-group full">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="setTrackPrepaid" style="width:auto" />
+                تتبّع عهدة المحل (storePrepaid) بحساب نظامي
+              </label>
+              <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
+                مبلغ العهدة يدفعه الطيار للمحل ويسترده من العميل — مبلغ عابر لا يؤثر على الأرباح.
+                فعِّل الخيار فقط لو عايز تتبعه بحساب نظامي مستقل.
+              </div>
+            </div>
+            <div class="form-group full">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="setAutoPostLive" style="width:auto" />
+                ترحيل تلقائي فوري (بدون الضغط على «ترحيل الآن»)
+              </label>
+              <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
+                لما يكون مفعّلًا، أي عملية جديدة تتحوّل لقيد فور فتح البرنامج.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="set-mapping" style="display:none">
+        <div class="info-box">اختر الحساب الذي يستخدمه المحرك في كل حالة. الحسابات التي تُنشأ تلقائيًا (خزن/طيارين/محلات) لا تحتاج ربطًا يدويًا.</div>
+        <div class="table-wrap" style="padding:20px"><div class="form-grid" id="mappingGrid"></div></div>
+      </div>
+
+      <div id="set-tools" style="display:none">
+        <div class="warn-box">
+          ⚠️ الأدوات دي بتأثر على بيانات القيود. اقرأ الوصف كويس قبل التنفيذ — العمليات دي لا يمكن التراجع عنها.
+        </div>
+        <div class="table-wrap">
+          <table>
+            <tbody id="toolsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════════════════════════ -->
+<div class="modal" id="modal-account">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="accountModalTitle">➕ حساب جديد</span>
+      <button class="modal-close" onclick="closeModal('account')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="accId" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>كود الحساب *</label>
+          <input id="accCode" dir="ltr" style="text-align:left" placeholder="مثال: 1103" />
+        </div>
+        <div class="form-group">
+          <label>اسم الحساب *</label>
+          <input id="accName" placeholder="مثال: خزينة فرع المنصورة" />
+        </div>
+        <div class="form-group">
+          <label>الحساب الأب</label>
+          <select id="accParent"></select>
+        </div>
+        <div class="form-group">
+          <label>نوع الحساب *</label>
+          <select id="accType" onchange="onAccTypeChange()">
+            <option value="asset">أصول</option>
+            <option value="liability">خصوم</option>
+            <option value="equity">حقوق ملكية</option>
+            <option value="revenue">إيرادات</option>
+            <option value="expense">مصروفات</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>طبيعة الرصيد</label>
+          <select id="accNature"><option value="debit">مدين</option><option value="credit">دائن</option></select>
+        </div>
+        <div class="form-group">
+          <label>نوع الطرف (اختياري)</label>
+          <select id="accPartyType">
+            <option value="">— لا يوجد —</option>
+            <option value="pilot">طيار</option>
+            <option value="store">محل</option>
+            <option value="employee">موظف</option>
+            <option value="supplier">مورد</option>
+            <option value="customer">عميل</option>
+            <option value="cash">خزينة/بنك</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="accIsGroup" style="width:auto" /> حساب تجميعي (لا يقبل قيودًا مباشرة)
+          </label>
+        </div>
+        <div class="form-group full">
+          <label>ملاحظات</label>
+          <input id="accNotes" placeholder="اختياري" />
+        </div>
+      </div>
+      <div id="accModalError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" id="accSaveBtn" onclick="saveAccount()">💾 حفظ</button>
+      <button class="btn-ghost" onclick="closeModal('account')">إلغاء</button>
+      <button class="btn-red" id="accDeleteBtn" style="margin-inline-start:auto;display:none" onclick="deleteAccount()">🗑️ حذف</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-journal">
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <span class="modal-title" id="journalModalTitle">➕ قيد يومية جديد</span>
+      <button class="modal-close" onclick="closeModal('journal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="jeId" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>التاريخ *</label>
+          <input type="date" id="jeDate" onchange="checkJePeriod()" />
+        </div>
+        <div class="form-group">
+          <label>رقم القيد</label>
+          <input id="jeNo" readonly style="opacity:.7" />
+        </div>
+        <div class="form-group full">
+          <label>البيان *</label>
+          <input id="jeDesc" placeholder="وصف العملية" />
+        </div>
+      </div>
+      <div id="jePeriodWarn"></div>
+
+      <div class="sec-header" style="margin:14px 0 8px">
+        <span style="font-size:.86rem;font-weight:800">سطور القيد</span>
+        <button class="btn-ghost btn-xs" onclick="addJeLine()">➕ إضافة سطر</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="jl-table">
+          <thead><tr>
+            <th style="min-width:230px">الحساب</th>
+            <th style="min-width:150px">البيان</th>
+            <th style="min-width:130px">الفرع</th>
+            <th style="min-width:110px">مدين</th>
+            <th style="min-width:110px">دائن</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="jeLinesBody"></tbody>
+        </table>
+      </div>
+      <div class="jl-balance">
+        <span>إجمالي المدين: <span id="jeTotalDebit" style="color:var(--green)">0.00</span></span>
+        <span>إجمالي الدائن: <span id="jeTotalCredit" style="color:var(--orange)">0.00</span></span>
+        <span id="jeDiff" class="badge bg-muted">متوازن</span>
+      </div>
+      <div id="jeError" style="color:var(--red);font-size:.82rem;min-height:18px;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" id="jeSaveBtn" onclick="saveJournalEntry('posted')">💾 حفظ وترحيل</button>
+      <button class="btn-ghost" onclick="saveJournalEntry('draft')">📄 حفظ كمسودة</button>
+      <button class="btn-ghost" onclick="closeModal('journal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-view">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="viewModalTitle">عرض القيد</span>
+      <button class="modal-close" onclick="closeModal('view')">✕</button>
+    </div>
+    <div class="modal-body" id="viewModalBody"></div>
+    <div class="modal-foot" id="viewModalFoot"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-transfer">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">🔁 تحويل بين الخزن</span>
+      <button class="modal-close" onclick="closeModal('transfer')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>من خزنة *</label><select id="trFrom"></select></div>
+        <div class="form-group"><label>إلى خزنة *</label><select id="trTo"></select></div>
+        <div class="form-group"><label>المبلغ *</label><input type="number" id="trAmount" min="0" step="0.5" dir="ltr" style="text-align:left" /></div>
+        <div class="form-group"><label>التاريخ *</label><input type="date" id="trDate" /></div>
+        <div class="form-group full"><label>البيان</label><input id="trDesc" placeholder="تحويل نقدية بين الخزن" /></div>
+      </div>
+      <div id="trError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="saveTransfer()">💾 تنفيذ التحويل</button>
+      <button class="btn-ghost" onclick="closeModal('transfer')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-yearend">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">🔒 الإقفال السنوي</span>
+      <button class="modal-close" onclick="closeModal('yearend')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warn-box">
+        الإقفال السنوي بيولّد <b>قيد إقفال</b> يصفّر كل حسابات الإيرادات والمصروفات
+        ويحوّل صافي النتيجة إلى حساب <b>الأرباح المُرحَّلة</b>. العملية دي لا يمكن التراجع عنها إلا بإلغاء القيد يدويًا.
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>السنة المالية *</label><input type="number" id="yeYear" min="2020" max="2100" /></div>
+        <div class="form-group"><label>تاريخ القيد *</label><input type="date" id="yeDate" /></div>
+      </div>
+      <div id="yePreview" style="font-size:.85rem;line-height:2"></div>
+      <div id="yeError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" onclick="previewYearEnd()">🔍 معاينة</button>
+      <button class="btn-red" onclick="runYearEnd()">🔒 تنفيذ الإقفال</button>
+      <button class="btn-ghost" onclick="closeModal('yearend')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════════════
+   النظام المحاسبي — الدهشان
+   محاسبة مزدوجة كاملة على Firebase Realtime Database
+   ──────────────────────────────────────────────────────────────────────
+   البنية:  accounting/accounts     شجرة الحسابات
+            accounting/journal      القيود (header + lines)
+            accounting/periods      الفترات المحاسبية
+            accounting/mapping      الإعدادات وربط الحسابات
+            accounting/postedRefs   بصمات المستندات المُرحَّلة (منع التكرار)
+            accounting/postLog      سجل عمليات الترحيل
+   ══════════════════════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, set, get, update, remove, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, onAuthStateChanged, signOut, signInAnonymously }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8",
+  measurementId: "G-F9R1E5P5GS"
+};
+
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+
+const ACC_ROOT = "accounting";
+
+/* ══════════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════════ */
+const S = {
+  user      : null,
+  accounts  : [],          // شجرة الحسابات
+  accById   : new Map(),
+  accByCode : new Map(),
+  journal   : [],          // القيود
+  periods   : {},          // الفترات
+  mapping   : {},          // الإعدادات
+  postedRefs: {},          // بصمات الترحيل
+  postLog   : [],
+  // بيانات تشغيلية (قراءة فقط)
+  orders    : [],
+  pilots    : [],
+  branches  : [],
+  stores    : [],          // cashStores
+  cashTxns  : [],
+  custodyTxns: [],
+  expenses  : [],
+  payroll   : {},
+  users     : [],
+  ready     : { accounts:false, journal:false, ops:false }
+};
+window._S = S;
+
+/* ══════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+
+function fmt(n) {
+  const v = Number(n) || 0;
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmt0(n) { return (Number(n) || 0).toLocaleString("en-US"); }
+function money(n) { return fmt(n) + " ج.م"; }
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function monthOf(dateStr) { return String(dateStr || "").slice(0, 7); }
+function firstOfMonth(d = new Date()) {
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+/** يحوّل أي تاريخ (ISO / Date / YYYY-MM-DD) إلى YYYY-MM-DD */
+function toDateStr(v) {
+  if (!v) return "";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  // نستخدم التوقيت المحلي عشان التاريخ ما يزحفش يوم للخلف
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+window.showToast = function(msg, type = "") {
+  const t = $("toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.className = "show " + type;
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => { t.className = ""; }, 3400);
+};
+const showToast = window.showToast;
+
+window.openModal  = t => { $("modal-" + t)?.classList.add("open"); document.body.style.overflow = "hidden"; };
+window.closeModal = t => { $("modal-" + t)?.classList.remove("open"); document.body.style.overflow = ""; };
+
+window.toggleTheme = function() {
+  const light = document.documentElement.classList.toggle("light");
+  localStorage.setItem("tiar-acc-theme", light ? "light" : "dark");
+  $("themeIcon").textContent  = light ? "🌙" : "☀️";
+  $("themeLabel").textContent = light ? "الوضع الليلي" : "الوضع النهاري";
+};
+(function initTheme() {
+  if (localStorage.getItem("tiar-acc-theme") === "light") {
+    document.documentElement.classList.add("light");
+    document.addEventListener("DOMContentLoaded", () => {
+      $("themeIcon").textContent = "🌙"; $("themeLabel").textContent = "الوضع الليلي";
+    });
+  }
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   AUTH + SESSION
+   الإدارة: تلقائيًا بحساب جوجل (adminEmails) — زي باقي البرامج
+   المحاسب: اسم مستخدم/كلمة مرور من users بدور "محاسب"
+══════════════════════════════════════════════════════════════ */
+const SESSION_KEY = "tiar-acc-session";
+const ACCOUNTANT_ROLES = ["محاسب", "مدير حسابات", "accountant"];
+const ADMIN_ROLES = ["مدير", "مدير عام", "admin"];
+
+async function isAdminEmail(email) {
+  if (!email) return false;
+  const snap = await get(ref(db, "adminEmails"));
+  if (!snap.exists()) return false;
+  const val = snap.val();
+  const list = Array.isArray(val) ? val : Object.values(val);
+  return list.filter(Boolean).map(e => String(e).trim().toLowerCase())
+             .includes(String(email).trim().toLowerCase());
+}
+
+onAuthStateChanged(auth, async (user) => {
+  try {
+    if (!user) {
+      // القواعد بتطلب auth != null — بندخل مجهول عشان القراءة تشتغل
+      signInAnonymously(auth).catch(e => console.warn("anonymous auth:", e?.code || e));
+      return;
+    }
+    if (S.user) return;
+    const email = (user.email || "").toLowerCase();
+    if (!email) return;                       // جلسة مجهولة
+    if (!await isAdminEmail(email)) return;   // مش أدمن → تفضل شاشة الدخول
+    const data = {
+      username: email,
+      displayName: user.displayName || email,
+      role: "مدير عام",
+      canEdit: true,
+      branchId: "",
+      via: "google"
+    };
+    saveSession(data);
+    applySession(data);
+  } catch (e) { console.error("google admin auto-login:", e); }
+});
+
+function saveSession(d) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(d)); } catch {} }
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+function applySession(d) {
+  S.user = d;
+  $("login-screen").style.display = "none";
+  $("app").classList.add("visible");
+  $("sidebar-username").textContent = d.displayName || d.username;
+  $("sidebar-role").textContent     = d.role || "";
+  $("userAvatar").textContent       = (d.displayName || d.username || "؟").trim().charAt(0);
+  // المشرف بصلاحية قراءة فقط: نخفي أزرار التعديل
+  if (!d.canEdit) document.querySelectorAll(".add-btn, .btn-red").forEach(b => b.style.display = "none");
+  startListeners();
+  navigateTo("dashboard");
+}
+
+window.doLogin = async function() {
+  const username = $("loginUser").value.trim();
+  const password = $("loginPass").value;
+  const err = $("loginError"), btn = $("loginBtn");
+  err.textContent = "";
+  if (!username || !password) { err.textContent = "يرجى إدخال بيانات الدخول"; return; }
+  btn.disabled = true; btn.textContent = "جاري التحقق…";
+  try {
+    const snap = await get(ref(db, "users/" + username));
+    if (!snap.exists()) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+    const u = snap.val();
+    if (u.password !== password) {
+      err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة";
+      $("loginPass").value = ""; return;
+    }
+    const role = String(u.role || "").trim();
+    const isAccountant = ACCOUNTANT_ROLES.includes(role);
+    const isAdmin      = ADMIN_ROLES.includes(role);
+    if (!isAccountant && !isAdmin) {
+      err.textContent = "هذا البرنامج مخصّص للمحاسبين والإدارة فقط"; return;
+    }
+    const data = {
+      username,
+      displayName: u.displayName || u.name || username,
+      role: role || "محاسب",
+      canEdit: true,
+      branchId: u.branchId || "",
+      via: "password"
+    };
+    saveSession(data);
+    applySession(data);
+  } catch (e) {
+    err.textContent = "خطأ في الاتصال: " + e.message;
+  } finally { btn.disabled = false; btn.textContent = "دخول"; }
+};
+
+window.doLogout = function() {
+  S.user = null;
+  clearSession();
+  signOut(auth).catch(() => {});
+  $("app").classList.remove("visible");
+  $("login-screen").style.display = "flex";
+  $("loginUser").value = ""; $("loginPass").value = ""; $("loginError").textContent = "";
+};
+
+// استعادة الجلسة المحفوظة
+setTimeout(() => {
+  let d = null;
+  try { const raw = localStorage.getItem(SESSION_KEY); d = raw ? JSON.parse(raw) : null; }
+  catch { clearSession(); return; }
+  if (!d?.username) return;
+  try { applySession(d); } catch (e) { console.error("تعذّر استعادة الجلسة:", e); }
+}, 0);
+
+/* ══════════════════════════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════════════════════════ */
+const PAGE_RENDERERS = {
+  dashboard: () => renderDashboard(),
+  coa      : () => renderCOA(),
+  journal  : () => renderJournal(),
+  ledger   : () => renderLedger(),
+  trial    : () => renderTrial(),
+  income   : () => renderIncome(),
+  balance  : () => renderBalanceSheet(),
+  cashflow : () => renderCashflow(),
+  parties  : () => renderParties(),
+  treasury : () => renderTreasury(),
+  autopost : () => renderAutopostPage(),
+  periods  : () => renderPeriods(),
+  settings : () => renderSettings()
+};
+
+window.navigateTo = function(page) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $("page-" + page)?.classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+  const btn = [...document.querySelectorAll(".nav-item")]
+    .find(b => (b.getAttribute("onclick") || "").includes(`'${page}'`));
+  btn?.classList.add("active");
+  window.scrollTo(0, 0);
+  try { PAGE_RENDERERS[page]?.(); } catch (e) { console.error("render " + page, e); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   DEFAULT CHART OF ACCOUNTS — الدليل المحاسبي الافتراضي
+   [code, name, type, isGroup, nature]
+══════════════════════════════════════════════════════════════ */
+const DEFAULT_COA = [
+  // ── 1 الأصول ──────────────────────────────────────────────
+  ["1",    "الأصول",                          "asset", 1, "debit"],
+  ["11",   "الأصول المتداولة",                 "asset", 1, "debit"],
+  ["111",  "النقدية وما في حكمها",             "asset", 1, "debit"],
+  ["1111", "الخزينة الرئيسية",                 "asset", 0, "debit"],
+  ["1112", "البنك",                            "asset", 0, "debit"],
+  ["112",  "المدينون",                         "asset", 1, "debit"],
+  ["1121", "مدينون — طيارون (تحصيلات)",        "asset", 0, "debit"],
+  ["1122", "مدينون — محلات",                   "asset", 0, "debit"],
+  ["1123", "مدينون متنوعون",                   "asset", 0, "debit"],
+  ["113",  "عُهَد الطيارين",                    "asset", 1, "debit"],
+  ["1131", "عُهَد الطيارين — عام",              "asset", 0, "debit"],
+  ["114",  "عُهَد التوصيل لدى العملاء",         "asset", 0, "debit"],
+  ["115",  "مصروفات مدفوعة مقدمًا",             "asset", 0, "debit"],
+  ["116",  "سُلف الموظفين",                     "asset", 0, "debit"],
+  ["119",  "مبالغ تحت التسوية",                 "asset", 0, "debit"],
+  ["12",   "الأصول الثابتة",                    "asset", 1, "debit"],
+  ["121",  "مركبات ودراجات",                    "asset", 0, "debit"],
+  ["122",  "أجهزة ومعدات",                      "asset", 0, "debit"],
+  ["123",  "أثاث وتجهيزات",                     "asset", 0, "debit"],
+  ["129",  "مجمع إهلاك الأصول الثابتة",         "asset", 0, "credit"],
+
+  // ── 2 الخصوم ──────────────────────────────────────────────
+  ["2",    "الخصوم",                            "liability", 1, "credit"],
+  ["21",   "الخصوم المتداولة",                  "liability", 1, "credit"],
+  ["211",  "الدائنون",                          "liability", 1, "credit"],
+  ["2111", "دائنون — طيارون (عمولات مستحقة)",   "liability", 0, "credit"],
+  ["2112", "دائنون — محلات",                    "liability", 0, "credit"],
+  ["2113", "موردون",                            "liability", 0, "credit"],
+  ["212",  "رواتب وأجور مستحقة",                "liability", 0, "credit"],
+  ["213",  "مصروفات مستحقة",                    "liability", 0, "credit"],
+  ["214",  "ضرائب مستحقة",                      "liability", 0, "credit"],
+  ["22",   "الخصوم طويلة الأجل",                "liability", 1, "credit"],
+  ["221",  "قروض طويلة الأجل",                  "liability", 0, "credit"],
+
+  // ── 3 حقوق الملكية ────────────────────────────────────────
+  ["3",    "حقوق الملكية",                      "equity", 1, "credit"],
+  ["31",   "رأس المال",                         "equity", 0, "credit"],
+  ["32",   "جاري الشركاء",                      "equity", 0, "credit"],
+  ["33",   "الأرباح المُرحَّلة",                  "equity", 0, "credit"],
+
+  // ── 4 الإيرادات ───────────────────────────────────────────
+  ["4",    "الإيرادات",                         "revenue", 1, "credit"],
+  ["41",   "إيراد التوصيل",                     "revenue", 0, "credit"],
+  ["42",   "إيرادات أخرى",                      "revenue", 0, "credit"],
+  ["43",   "خصومات ومردودات",                   "revenue", 0, "debit"],
+
+  // ── 5 المصروفات ───────────────────────────────────────────
+  ["5",    "المصروفات",                         "expense", 1, "debit"],
+  ["51",   "مصروفات التشغيل",                   "expense", 1, "debit"],
+  ["511",  "عمولات الطيارين",                   "expense", 0, "debit"],
+  ["512",  "رسوم التطوير",                      "expense", 0, "debit"],
+  ["513",  "وقود وصيانة",                       "expense", 0, "debit"],
+  ["514",  "مصروفات تشغيل أخرى",                "expense", 0, "debit"],
+  ["52",   "مصروفات إدارية وعمومية",             "expense", 1, "debit"],
+  ["521",  "رواتب وأجور",                       "expense", 0, "debit"],
+  ["522",  "إيجارات",                           "expense", 0, "debit"],
+  ["523",  "كهرباء ومياه",                      "expense", 0, "debit"],
+  ["524",  "اتصالات وإنترنت",                   "expense", 0, "debit"],
+  ["525",  "مصروفات إدارية أخرى",               "expense", 0, "debit"],
+  ["53",   "مصروفات أخرى",                      "expense", 1, "debit"],
+  ["531",  "إهلاك الأصول الثابتة",              "expense", 0, "debit"],
+  ["532",  "مصروفات بنكية",                     "expense", 0, "debit"],
+  ["533",  "ديون معدومة",                       "expense", 0, "debit"]
+];
+
+/** الربط الافتراضي — كود الحساب لكل دور في محرك الترحيل */
+const DEFAULT_MAPPING = {
+  orgName        : "الدهشان لخدمات التوصيل",
+  startDate      : firstOfMonth(),
+  fiscalStart    : 1,
+  devFeePerOrder : 2,
+  trackPrepaid   : false,
+  autoPostLive   : false,
+  seeded         : false,
+  acc: {
+    arPilots        : "1121",  // مدينون — طيارون
+    arStores        : "1122",  // مدينون — محلات
+    custody         : "1131",  // عهد الطيارين
+    prepaidCustomers: "114",   // عهد التوصيل لدى العملاء (نظامي)
+    cashDefault     : "1111",  // الخزينة الرئيسية
+    apPilots        : "2111",  // دائنون — طيارون (عمولات)
+    apStores        : "2112",  // دائنون — محلات
+    apSuppliers     : "2113",  // موردون
+    apSalaries      : "212",   // رواتب مستحقة
+    apAccrued       : "213",   // مصروفات مستحقة
+    suspense        : "119",   // مبالغ تحت التسوية
+    empAdvances     : "116",   // سُلف الموظفين
+    revDelivery     : "41",    // إيراد التوصيل
+    revOther        : "42",
+    expCommission   : "511",   // عمولات الطيارين
+    expDevFee       : "512",   // رسوم التطوير
+    expSalaries     : "521",   // رواتب وأجور
+    expDefault      : "514",   // مصروفات تشغيل أخرى
+    retained        : "33",    // الأرباح المُرحَّلة
+    capital         : "31"     // رأس المال
+  }
+};
+
+/** وصف بنود الربط لشاشة الإعدادات */
+const MAPPING_FIELDS = [
+  ["arPilots",         "مدينون — طيارون (تحصيلات التوصيل)"],
+  ["arStores",         "مدينون — محلات"],
+  ["custody",          "عُهَد الطيارين"],
+  ["prepaidCustomers", "عُهَد التوصيل لدى العملاء (نظامي)"],
+  ["cashDefault",      "الخزينة الافتراضية"],
+  ["apPilots",         "دائنون — طيارون (عمولات مستحقة)"],
+  ["apStores",         "دائنون — محلات"],
+  ["apSuppliers",      "موردون"],
+  ["apSalaries",       "رواتب وأجور مستحقة"],
+  ["apAccrued",        "مصروفات مستحقة"],
+  ["suspense",         "مبالغ تحت التسوية (الحساب الوسيط)"],
+  ["empAdvances",      "سُلف الموظفين"],
+  ["revDelivery",      "إيراد التوصيل"],
+  ["revOther",         "إيرادات أخرى"],
+  ["expCommission",    "مصروف عمولات الطيارين"],
+  ["expDevFee",        "مصروف رسوم التطوير"],
+  ["expSalaries",      "مصروف رواتب وأجور"],
+  ["expDefault",       "المصروف الافتراضي"],
+  ["retained",         "الأرباح المُرحَّلة"],
+  ["capital",          "رأس المال"]
+];
+
+const TYPE_LABEL = {
+  asset: "أصول", liability: "خصوم", equity: "حقوق ملكية",
+  revenue: "إيرادات", expense: "مصروفات"
+};
+const SOURCE_LABEL = {
+  manual: "يدوي", order: "أوردر", commission: "عمولة", cash: "خزينة",
+  custody: "عهدة", expense: "مصروف", payroll: "راتب",
+  opening: "افتتاحي", closing: "إقفال", transfer: "تحويل"
+};
+
+/* ══════════════════════════════════════════════════════════════
+   FIREBASE LISTENERS
+══════════════════════════════════════════════════════════════ */
+function listMap(snapVal) {
+  return snapVal ? Object.entries(snapVal).map(([id, v]) => ({ id, ...(v || {}) })) : [];
+}
+
+function startListeners() {
+  // ── الحسابات ──
+  onValue(ref(db, `${ACC_ROOT}/accounts`), snap => {
+    S.accounts = listMap(snap.val());
+    reindexAccounts();
+    S.ready.accounts = true;
+    maybeSeed();
+    refreshCurrentPage();
+  });
+
+  // ── القيود ──
+  onValue(ref(db, `${ACC_ROOT}/journal`), snap => {
+    S.journal = listMap(snap.val()).map(j => ({ ...j, lines: j.lines || [] }));
+    S.journal.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.no || 0) - (b.no || 0));
+    S.ready.journal = true;
+    refreshCurrentPage();
+  });
+
+  onValue(ref(db, `${ACC_ROOT}/periods`),    s => { S.periods    = s.val() || {}; refreshCurrentPage(); });
+  onValue(ref(db, `${ACC_ROOT}/postedRefs`), s => { S.postedRefs = s.val() || {}; });
+  onValue(ref(db, `${ACC_ROOT}/postLog`),    s => { S.postLog    = listMap(s.val()); });
+
+  onValue(ref(db, `${ACC_ROOT}/mapping`), snap => {
+    const stored = snap.val() || {};
+    S.mapping = { ...DEFAULT_MAPPING, ...stored, acc: { ...DEFAULT_MAPPING.acc, ...(stored.acc || {}) } };
+    maybeSeed();
+    refreshCurrentPage();
+  });
+
+  // ── البيانات التشغيلية (قراءة فقط — مصدر الترحيل التلقائي) ──
+  onValue(ref(db, "orders"),              s => { S.orders      = listMap(s.val()); S.ready.ops = true; refreshCurrentPage(); });
+  onValue(ref(db, "pilots"),              s => { S.pilots      = listMap(s.val()); refreshCurrentPage(); });
+  onValue(ref(db, "branches"),            s => { S.branches    = listMap(s.val()); fillBranchSelects(); refreshCurrentPage(); });
+  onValue(ref(db, "cashStores"),          s => { S.stores      = listMap(s.val()); refreshCurrentPage(); });
+  onValue(ref(db, "cashTransactions"),    s => { S.cashTxns    = listMap(s.val()); });
+  onValue(ref(db, "custodyTransactions"), s => { S.custodyTxns = listMap(s.val()); });
+  onValue(ref(db, "expenses"),            s => { S.expenses    = listMap(s.val()); });
+  onValue(ref(db, "payroll"),             s => { S.payroll     = s.val() || {}; });
+  onValue(ref(db, "users"),               s => {
+    S.users = s.val() ? Object.entries(s.val()).map(([k, v]) => ({ username: k, ...(v || {}) })) : [];
+  });
+}
+
+function refreshCurrentPage() {
+  const active = document.querySelector(".page.active");
+  if (!active) return;
+  const key = active.id.replace("page-", "");
+  clearTimeout(window._refreshT);
+  window._refreshT = setTimeout(() => {
+    try { PAGE_RENDERERS[key]?.(); } catch (e) { console.error("refresh " + key, e); }
+  }, 120);
+}
+
+function reindexAccounts() {
+  S.accById = new Map();
+  S.accByCode = new Map();
+  for (const a of S.accounts) {
+    S.accById.set(a.id, a);
+    if (a.code) S.accByCode.set(String(a.code), a);
+  }
+  // بناء علاقة الأبناء
+  for (const a of S.accounts) a._children = [];
+  for (const a of S.accounts) {
+    const p = a.parentId ? S.accById.get(a.parentId) : null;
+    if (p) p._children.push(a);
+  }
+  for (const a of S.accounts) a._children.sort((x, y) => String(x.code).localeCompare(String(y.code), "en"));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SEEDING — زرع الدليل المحاسبي أول مرة
+══════════════════════════════════════════════════════════════ */
+let _seeding = false;
+async function maybeSeed() {
+  if (_seeding) return;
+  if (!S.ready.accounts || !S.mapping) return;
+  if (S.accounts.length > 0) return;          // الدليل موجود بالفعل
+  if (!S.user?.canEdit) return;
+  _seeding = true;
+  try {
+    showToast("جاري إنشاء الدليل المحاسبي لأول مرة…");
+    await seedChartOfAccounts();
+    showToast("تم إنشاء الدليل المحاسبي ✓", "success");
+  } catch (e) {
+    console.error("seed error", e);
+    showToast("تعذّر إنشاء الدليل: " + e.message, "error");
+  } finally { _seeding = false; }
+}
+
+async function seedChartOfAccounts() {
+  const payload = {};
+  const idByCode = {};
+  // أنشئ المعرفات أولًا حتى نربط الأب بالابن في كتابة واحدة
+  for (const [code] of DEFAULT_COA) {
+    idByCode[code] = push(ref(db, `${ACC_ROOT}/accounts`)).key;
+  }
+  const now = new Date().toISOString();
+  for (const [code, name, type, isGroup, nature] of DEFAULT_COA) {
+    const parentCode = code.length > 1 ? code.slice(0, -1) : "";
+    payload[idByCode[code]] = {
+      code, name, type,
+      isGroup: !!isGroup,
+      nature,
+      parentId: idByCode[parentCode] || "",
+      partyType: "",
+      linkId: "",
+      system: true,          // حساب أساسي — لا يُحذف
+      active: true,
+      notes: "",
+      createdAt: now,
+      createdBy: S.user?.username || ""
+    };
+  }
+  await update(ref(db, `${ACC_ROOT}/accounts`), payload);
+  if (!S.mapping.seeded) {
+    await update(ref(db, `${ACC_ROOT}/mapping`), { ...DEFAULT_MAPPING, seeded: true, seededAt: now });
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ACCOUNT HELPERS
+══════════════════════════════════════════════════════════════ */
+function accByCode(code) { return S.accByCode.get(String(code)) || null; }
+function mapAcc(key) {
+  const code = S.mapping?.acc?.[key] || DEFAULT_MAPPING.acc[key];
+  return accByCode(code);
+}
+function accLabel(a) { return a ? `${a.code} — ${a.name}` : "—"; }
+
+/** الحسابات التي تقبل قيودًا (غير تجميعية ونشطة) */
+function postableAccounts() {
+  return S.accounts.filter(a => !a.isGroup && a.active !== false)
+                   .sort((a, b) => String(a.code).localeCompare(String(b.code), "en"));
+}
+
+/** كل الحسابات مرتبة هرميًا (جذور ثم أبناء) */
+function accountsTree() {
+  const roots = S.accounts.filter(a => !a.parentId || !S.accById.has(a.parentId));
+  return roots.sort((a, b) => String(a.code).localeCompare(String(b.code), "en"));
+}
+
+/** كل الأبناء (بشكل متداخل) لحساب معيّن — بما فيهم هو */
+function descendantIds(accId, out = new Set()) {
+  out.add(accId);
+  const a = S.accById.get(accId);
+  for (const c of (a?._children || [])) descendantIds(c.id, out);
+  return out;
+}
+
+/**
+ * يبحث عن حساب فرعي مربوط بكيان تشغيلي (طيار/محل/خزنة)، وينشئه لو مش موجود.
+ * @returns {Promise<object>} الحساب
+ */
+async function ensureLinkedAccount({ parentCode, linkId, name, partyType, type, nature }) {
+  const existing = S.accounts.find(a => a.linkId === linkId && a.partyType === partyType);
+  if (existing) return existing;
+  const parent = accByCode(parentCode);
+  if (!parent) throw new Error(`الحساب الأب ${parentCode} غير موجود`);
+
+  // كود جديد = كود الأب + تسلسل من رقمين
+  const siblings = (parent._children || []).map(c => String(c.code));
+  let seq = 1, code;
+  do { code = String(parent.code) + String(seq).padStart(2, "0"); seq++; }
+  while (siblings.includes(code) && seq < 999);
+
+  const id = push(ref(db, `${ACC_ROOT}/accounts`)).key;
+  const acc = {
+    id, code, name, type: type || parent.type,
+    isGroup: false,
+    nature: nature || parent.nature,
+    parentId: parent.id,
+    partyType, linkId,
+    system: false, active: true, notes: "",
+    auto: true,
+    createdAt: new Date().toISOString(),
+    createdBy: S.user?.username || "auto"
+  };
+  const { id: _drop, ...rec } = acc;
+  await set(ref(db, `${ACC_ROOT}/accounts/${id}`), rec);
+  // نحدّث الحالة محليًا فورًا عشان الترحيل المتتابع ما ينشئش نسخة تانية
+  S.accounts.push(acc);
+  reindexAccounts();
+  return acc;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BALANCES ENGINE — محرك الأرصدة
+══════════════════════════════════════════════════════════════ */
+/**
+ * يحسب حركة كل حساب خلال فترة.
+ * @param {object} opt { from, to, branchId, includeDrafts }
+ * @returns {Map<accountId, {debit, credit}>}
+ */
+function movementsMap({ from = "", to = "", branchId = "", includeDrafts = false } = {}) {
+  const m = new Map();
+  for (const je of S.journal) {
+    if (je.status === "void") continue;
+    if (!includeDrafts && je.status !== "posted") continue;
+    const d = je.date || "";
+    if (from && d < from) continue;
+    if (to && d > to) continue;
+    for (const ln of (je.lines || [])) {
+      if (branchId && (ln.branchId || "") !== branchId) continue;
+      const cur = m.get(ln.accountId) || { debit: 0, credit: 0 };
+      cur.debit  += Number(ln.debit)  || 0;
+      cur.credit += Number(ln.credit) || 0;
+      m.set(ln.accountId, cur);
+    }
+  }
+  return m;
+}
+
+/** الرصيد الصافي (مدين - دائن) لحساب واحد بما فيه أبناؤه */
+function accountNet(accId, mv) {
+  let net = 0;
+  for (const id of descendantIds(accId)) {
+    const x = mv.get(id);
+    if (x) net += (x.debit - x.credit);
+  }
+  return round2(net);
+}
+
+/** حركة الحساب نفسه فقط (بدون الأبناء) */
+function ownMovement(accId, mv) {
+  const x = mv.get(accId) || { debit: 0, credit: 0 };
+  return { debit: round2(x.debit), credit: round2(x.credit) };
+}
+
+/** حركة الحساب مع أبنائه */
+function rolledMovement(accId, mv) {
+  let debit = 0, credit = 0;
+  for (const id of descendantIds(accId)) {
+    const x = mv.get(id);
+    if (x) { debit += x.debit; credit += x.credit; }
+  }
+  return { debit: round2(debit), credit: round2(credit) };
+}
+
+/**
+ * الرصيد المعروض حسب طبيعة الحساب (موجب = في اتجاه الطبيعة).
+ * أصول/مصروفات: مدين - دائن | خصوم/حقوق/إيرادات: دائن - مدين
+ */
+function naturalBalance(acc, mv) {
+  const net = accountNet(acc.id, mv);
+  return (acc.nature === "credit") ? round2(-net) : net;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PERIOD GUARD — منع الكتابة في فترة مقفولة
+══════════════════════════════════════════════════════════════ */
+function isPeriodClosed(dateStr) {
+  const p = S.periods?.[monthOf(dateStr)];
+  return p?.status === "closed";
+}
+function assertPeriodOpen(dateStr) {
+  if (isPeriodClosed(dateStr))
+    throw new Error(`الفترة ${monthOf(dateStr)} مقفولة — لا يمكن إضافة أو تعديل قيود فيها`);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   JOURNAL ENGINE — محرك القيود
+══════════════════════════════════════════════════════════════ */
+function nextJournalNo() {
+  let max = 0;
+  for (const j of S.journal) if ((j.no || 0) > max) max = j.no;
+  return max + 1;
+}
+
+/**
+ * ينشئ قيد يومية بعد التحقق من التوازن وفتح الفترة.
+ * @param {object} entry { date, desc, lines[], refType, refId, status }
+ * @param {object} opt   { batch } لو مرّرت batch بيتجمّع فيها بدل الكتابة الفورية
+ */
+async function createJournalEntry(entry, opt = {}) {
+  const date = toDateStr(entry.date) || todayStr();
+  assertPeriodOpen(date);
+
+  const lines = (entry.lines || [])
+    .map(l => ({
+      accountId  : l.accountId,
+      accountCode: S.accById.get(l.accountId)?.code || "",
+      accountName: S.accById.get(l.accountId)?.name || "",
+      debit      : round2(l.debit),
+      credit     : round2(l.credit),
+      branchId   : l.branchId || "",
+      branchName : S.branches.find(b => b.id === l.branchId)?.name || "",
+      partyId    : l.partyId || "",
+      note       : l.note || ""
+    }))
+    .filter(l => l.accountId && (l.debit || l.credit));
+
+  if (lines.length < 2) throw new Error("القيد يحتاج سطرين على الأقل");
+
+  for (const l of lines) {
+    const acc = S.accById.get(l.accountId);
+    if (!acc)        throw new Error("حساب غير موجود في أحد السطور");
+    if (acc.isGroup) throw new Error(`الحساب «${acc.name}» تجميعي ولا يقبل قيودًا مباشرة`);
+    if (l.debit && l.credit) throw new Error("السطر لا يمكن أن يكون مدينًا ودائنًا في نفس الوقت");
+  }
+
+  const totalDebit  = round2(lines.reduce((s, l) => s + l.debit,  0));
+  const totalCredit = round2(lines.reduce((s, l) => s + l.credit, 0));
+  if (Math.abs(totalDebit - totalCredit) > 0.009)
+    throw new Error(`القيد غير متوازن — الفرق ${fmt(totalDebit - totalCredit)} ج.م`);
+  if (totalDebit === 0) throw new Error("القيد بقيمة صفر");
+
+  const id = push(ref(db, `${ACC_ROOT}/journal`)).key;
+  const rec = {
+    no        : entry.no || nextJournalNo(),
+    date,
+    period    : monthOf(date),
+    desc      : entry.desc || "",
+    refType   : entry.refType || "manual",
+    refId     : entry.refId || "",
+    status    : entry.status || "posted",
+    lines, totalDebit, totalCredit,
+    createdBy : S.user?.username || "",
+    createdAt : new Date().toISOString()
+  };
+
+  if (opt.batch) {
+    opt.batch[`journal/${id}`] = rec;
+    if (rec.refType !== "manual" && rec.refId) opt.batch[`postedRefs/${refKey(rec.refType, rec.refId)}`] = id;
+    // تحديث الحالة محليًا حتى يتسلسل الترقيم داخل نفس الدفعة
+    S.journal.push({ id, ...rec });
+    return { id, ...rec };
+  }
+
+  const updates = { [`journal/${id}`]: rec };
+  if (rec.refType !== "manual" && rec.refId) updates[`postedRefs/${refKey(rec.refType, rec.refId)}`] = id;
+  await update(ref(db, ACC_ROOT), updates);
+  return { id, ...rec };
+}
+
+/** مفتاح بصمة المستند — Firebase لا يقبل . $ # [ ] / في المفاتيح */
+function refKey(type, id) {
+  return `${type}__${String(id).replace(/[.$#\[\]\/]/g, "_")}`;
+}
+function isPosted(type, id) { return !!S.postedRefs[refKey(type, id)]; }
+
+/** إلغاء قيد (لا يُحذف — يُعلَّم void حفاظًا على التسلسل) */
+async function voidJournalEntry(id, reason) {
+  const je = S.journal.find(j => j.id === id);
+  if (!je) throw new Error("القيد غير موجود");
+  assertPeriodOpen(je.date);
+  const updates = {
+    [`journal/${id}/status`]  : "void",
+    [`journal/${id}/voidedAt`]: new Date().toISOString(),
+    [`journal/${id}/voidedBy`]: S.user?.username || "",
+    [`journal/${id}/voidReason`]: reason || ""
+  };
+  // نحرّر بصمة المستند حتى يمكن إعادة ترحيله
+  if (je.refType !== "manual" && je.refId) updates[`postedRefs/${refKey(je.refType, je.refId)}`] = null;
+  await update(ref(db, ACC_ROOT), updates);
+}
+
+/* تعريض الدوال للاستخدام من باقي السكربتات */
+Object.assign(window, {
+  db, ref, push, set, get, update, remove, onValue,
+  S, $, fmt, fmt0, money, esc, todayStr, monthOf, firstOfMonth, round2, toDateStr,
+  accByCode, mapAcc, accLabel, postableAccounts, accountsTree, descendantIds,
+  ensureLinkedAccount, movementsMap, accountNet, ownMovement, rolledMovement, naturalBalance,
+  isPeriodClosed, assertPeriodOpen, createJournalEntry, voidJournalEntry,
+  nextJournalNo, refKey, isPosted, listMap, reindexAccounts, seedChartOfAccounts,
+  DEFAULT_COA, DEFAULT_MAPPING, MAPPING_FIELDS, TYPE_LABEL, SOURCE_LABEL, ACC_ROOT
+});
+
+/* ══════════════════════════════════════════════════════════════
+   SELECT FILLERS
+══════════════════════════════════════════════════════════════ */
+function fillBranchSelects() {
+  const opts = `<option value="">— كل الفروع —</option>` +
+    S.branches.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
+  ["ledgerBranch", "trialBranch", "incBranch"].forEach(id => {
+    const el = $(id); if (!el) return;
+    const cur = el.value; el.innerHTML = opts; el.value = cur;
+  });
+}
+window.fillBranchSelects = fillBranchSelects;
+
+/** خيارات الحسابات القابلة للقيد — تُستخدم في القوائم المنسدلة */
+window.accountOptions = function(selectedId = "", placeholder = "— اختر حسابًا —") {
+  return `<option value="">${placeholder}</option>` + postableAccounts()
+    .map(a => `<option value="${esc(a.id)}"${a.id === selectedId ? " selected" : ""}>${esc(a.code)} — ${esc(a.name)}</option>`)
+    .join("");
+};
+
+/** خيارات كل الحسابات (بما فيها التجميعية) — لاختيار الحساب الأب */
+window.allAccountOptions = function(selectedId = "", excludeId = "") {
+  const ex = excludeId ? descendantIds(excludeId) : new Set();
+  return `<option value="">— بدون أب (حساب رئيسي) —</option>` +
+    S.accounts.filter(a => !ex.has(a.id))
+      .sort((a, b) => String(a.code).localeCompare(String(b.code), "en"))
+      .map(a => `<option value="${esc(a.id)}"${a.id === selectedId ? " selected" : ""}>${esc(a.code)} — ${esc(a.name)}</option>`)
+      .join("");
+};
+
+/** خيارات الفروع لسطور القيد */
+window.branchOptions = function(selectedId = "") {
+  return `<option value="">— عام —</option>` + S.branches
+    .map(b => `<option value="${esc(b.id)}"${b.id === selectedId ? " selected" : ""}>${esc(b.name)}</option>`)
+    .join("");
+};
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   محرك الترحيل التلقائي — AUTO-POSTING ENGINE
+   ──────────────────────────────────────────────────────────────────────
+   المبادئ:
+   1) كل مستند تشغيلي له بصمة (refType + refId) — لا يُرحَّل مرتين أبدًا.
+   2) أرصدة الخزن الدفترية تأتي حصريًا من cashTransactions حتى تطابق
+      الأرصدة الفعلية في cashStores — أي مصدر آخر يمرّ عبر «مبالغ تحت التسوية».
+   3) أساس الاستحقاق: الإيراد يُثبَت لحظة التسليم لا لحظة التحصيل.
+   4) حسابات الأطراف = حسابات مراقبة + أستاذ مساعد عبر partyId على السطر.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* تصنيف المصروف تلقائيًا حسب البند */
+const EXPENSE_KEYWORDS = [
+  [/بنزين|وقود|سولار|صيان|زيت|إطار|اطار|قطع غيار/, "513"],
+  [/إيجار|ايجار/,                                    "522"],
+  [/كهرب|مياه|ميه|غاز|فاتورة مرافق/,                  "523"],
+  [/انترنت|إنترنت|نت |تليفون|هاتف|موبايل|شحن رصيد/,   "524"],
+  [/مرتب|راتب|أجور|اجور|حافز|مكاف/,                   "521"],
+  [/بنك|عمولة تحويل/,                                 "532"],
+  [/إهلاك|اهلاك/,                                     "531"]
+];
+
+function expenseAccountFor(item) {
+  const txt = String(item || "");
+  for (const [re, code] of EXPENSE_KEYWORDS) {
+    if (re.test(txt)) { const a = accByCode(code); if (a) return a; }
+  }
+  return mapAcc("expDefault") || accByCode("514");
+}
+
+/* ── عدد الطرود في الأوردر (نفس منطق لوحة الإدارة) ───────────────── */
+function parcelCount(order) {
+  const c = (order?.deliveries || []).length;
+  return c > 0 ? c : 1;
+}
+
+/* ── عمولة الطيار على أوردر (نفس معادلة tiar.html) ────────────────── */
+function pilotCommissionFor(pilot, order) {
+  const price = Number(order?.totalDeliveryPrice) || 0;
+  const type  = pilot?.commissionType || "percent";
+  const val   = Number(pilot?.commissionValue) || 0;
+  if (!val) return 0;
+  return round2(type === "fixed" ? val * parcelCount(order) : (price * val / 100));
+}
+window.parcelCount = parcelCount;
+window.pilotCommissionFor = pilotCommissionFor;
+
+/* ── الخزنة: حساب فرعي حقيقي لكل خزنة تحت 111 ────────────────────── */
+async function cashAccountFor(store) {
+  return ensureLinkedAccount({
+    parentCode: "111",
+    linkId    : store.id,
+    name      : store.name + (store.branchName ? ` — ${store.branchName}` : ""),
+    partyType : "cash",
+    type      : "asset",
+    nature    : "debit"
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   بناء القيود من كل مصدر
+   كل دالة تُرجع كائن قيد جاهز لـ createJournalEntry أو null
+══════════════════════════════════════════════════════════════ */
+
+/** أوردر مُسلَّم → إيراد التوصيل + عمولة الطيار + رسوم التطوير */
+function buildOrderEntry(order) {
+  const price = round2(order.totalDeliveryPrice);
+  if (price <= 0) return null;
+
+  const arAcc   = mapAcc("arPilots");
+  const revAcc  = mapAcc("revDelivery");
+  const commExp = mapAcc("expCommission");
+  const apPilot = mapAcc("apPilots");
+  if (!arAcc || !revAcc) return null;
+
+  const pilot    = S.pilots.find(p => p.id === order.pilotId);
+  const branchId = order.branchId || "";
+  const date     = toDateStr(order.deliveredAt || order.createdAt);
+  const pName    = pilot?.name || order.pilotName || "غير محدد";
+  const parcels  = parcelCount(order);
+  const lines    = [];
+
+  // 1) إثبات الإيراد — الطيار حصّل قيمة التوصيل من العميل فأصبح مدينًا لنا
+  lines.push({ accountId: arAcc.id,  debit: price, credit: 0, branchId,
+               partyId: order.pilotId || "", note: `تحصيل توصيل — ${pName}` });
+  lines.push({ accountId: revAcc.id, debit: 0, credit: price, branchId,
+               note: `أوردر ${order.orderNumber || order.id} — ${parcels} طرد` });
+
+  // 2) عمولة الطيار — مصروف علينا والتزام له
+  const comm = pilotCommissionFor(pilot, order);
+  if (comm > 0 && commExp && apPilot) {
+    lines.push({ accountId: commExp.id, debit: comm, credit: 0, branchId,
+                 partyId: order.pilotId || "", note: `عمولة — ${pName}` });
+    lines.push({ accountId: apPilot.id, debit: 0, credit: comm, branchId,
+                 partyId: order.pilotId || "", note: `عمولة مستحقة — ${pName}` });
+  }
+
+  // 3) رسوم التطوير — تُقتطع من إيراد الفرع
+  const feeRate = Number(S.mapping?.devFeePerOrder) || 0;
+  const devFee  = round2(feeRate * parcels);
+  const feeExp  = mapAcc("expDevFee");
+  const accrued = mapAcc("apAccrued");
+  if (devFee > 0 && feeExp && accrued) {
+    lines.push({ accountId: feeExp.id,  debit: devFee, credit: 0, branchId,
+                 note: `رسوم تطوير — ${parcels} طرد` });
+    lines.push({ accountId: accrued.id, debit: 0, credit: devFee, branchId,
+                 note: `رسوم تطوير مستحقة` });
+  }
+
+  // 4) عهدة المحل (storePrepaid) — مبلغ عابر: الطيار يدفعه للمحل ويسترده من
+  //    العميل، فلا يمسّ الأرباح. يُسجَّل ذهابًا وإيابًا فقط لتوثيق الحركة.
+  const prepaid = round2(order.storePrepaid);
+  if (S.mapping?.trackPrepaid && prepaid > 0) {
+    const memo    = mapAcc("prepaidCustomers");
+    const custody = mapAcc("custody");
+    if (memo && custody) {
+      lines.push({ accountId: memo.id,    debit: prepaid, credit: 0, branchId, note: "عهدة دُفعت للمحل" });
+      lines.push({ accountId: custody.id, debit: 0, credit: prepaid, branchId,
+                   partyId: order.pilotId || "", note: "من عهدة الطيار" });
+      lines.push({ accountId: custody.id, debit: prepaid, credit: 0, branchId,
+                   partyId: order.pilotId || "", note: "استرداد العهدة من العميل" });
+      lines.push({ accountId: memo.id,    debit: 0, credit: prepaid, branchId, note: "إقفال عهدة التوصيل" });
+    }
+  }
+
+  return {
+    date,
+    desc   : `أوردر ${order.orderNumber || ""} — ${pName}${order.receiverName ? " → " + order.receiverName : ""}`.trim(),
+    refType: "order",
+    refId  : order.id,
+    lines
+  };
+}
+
+/** حركة خزينة → القيد المقابل حسب سبب الحركة */
+async function buildCashEntry(tx) {
+  const amount = round2(tx.amount);
+  if (amount <= 0 || tx.type === "pending" || !tx.storeId) return null;
+
+  const store = S.stores.find(s => s.id === tx.storeId);
+  if (!store) return null;
+  const cashAcc = await cashAccountFor(store);
+
+  const reason   = String(tx.reason || "") + " " + String(tx.notes || "");
+  const branchId = tx.branchId || store.branchId || "";
+  const pilotId  = tx.relatedPilotId || "";
+  const pName    = tx.relatedPilotName || "";
+
+  // تحديد الطرف المقابل
+  let counter = null, note = tx.reason || "حركة خزينة";
+  if (tx.relatedExpenseId) {
+    // مصروف مدفوع من الخزنة — يقفل الالتزام المستحق الناتج عن قيد المصروف
+    counter = mapAcc("apAccrued");
+    note = "سداد مصروف";
+  } else if (pilotId) {
+    if (/عهد/.test(reason))       counter = mapAcc("custody");
+    else if (/عمول/.test(reason)) counter = mapAcc("apPilots");
+    else                          counter = mapAcc("arPilots");
+  } else if (/مصروف|صرف/.test(reason)) {
+    counter = mapAcc("apAccrued");
+  } else {
+    counter = mapAcc("suspense");
+    note = (tx.reason || "حركة خزينة") + " — يحتاج تسوية";
+  }
+  if (!counter) return null;
+
+  const inFlow = tx.type === "in";
+  const lines = [
+    { accountId: cashAcc.id, debit: inFlow ? amount : 0, credit: inFlow ? 0 : amount,
+      branchId, note },
+    { accountId: counter.id, debit: inFlow ? 0 : amount, credit: inFlow ? amount : 0,
+      branchId, partyId: pilotId, note: pName || note }
+  ];
+
+  return {
+    date   : toDateStr(tx.createdAt),
+    desc   : `${inFlow ? "وارد" : "صادر"} ${store.name} — ${tx.reason || ""}`.trim(),
+    refType: "cash",
+    refId  : tx.id,
+    lines
+  };
+}
+
+/** مصروف يدوي → مصروف مقابل التزام مستحق */
+function buildExpenseEntry(exp) {
+  const amount = round2(exp.amount);
+  if (amount <= 0) return null;
+  const expAcc  = expenseAccountFor(exp.item);
+  const accrued = mapAcc("apAccrued");
+  if (!expAcc || !accrued) return null;
+  const branchId = exp.branchId || "";
+  return {
+    date   : toDateStr(exp.date),
+    desc   : `مصروف — ${exp.item || ""}${exp.notes ? " (" + exp.notes + ")" : ""}`,
+    refType: "expense",
+    refId  : exp.id,
+    lines  : [
+      { accountId: expAcc.id,  debit: amount, credit: 0, branchId, note: exp.item || "" },
+      { accountId: accrued.id, debit: 0, credit: amount, branchId, note: "مستحق الدفع" }
+    ]
+  };
+}
+
+/** بند رواتب (أساسي / مكافأة / خصم / سلفة) → قيد مستقل لكل بند */
+function buildPayrollEntry({ month, empKey, kind, entryKey, amount, note, date }) {
+  const amt = round2(amount);
+  if (amt <= 0) return null;
+
+  const salExp   = mapAcc("expSalaries");
+  const salAcc   = mapAcc("apSalaries");
+  const advances = mapAcc("empAdvances");
+  if (!salExp || !salAcc) return null;
+
+  const empName = employeeNameOf(empKey);
+  const d = date || `${month}-28`;
+  let lines, desc;
+
+  if (kind === "advance") {
+    // سلفة تُدفع نقدًا وتُخصم لاحقًا من المرتب.
+    // الطرف المقابل حساب وسيط تُقفله حركة الخزنة عند ترحيلها.
+    const susp = mapAcc("suspense");
+    if (!advances || !susp) return null;
+    lines = [
+      { accountId: advances.id, debit: amt, credit: 0, partyId: empKey, note: note || "سلفة موظف" },
+      { accountId: susp.id,     debit: 0, credit: amt, partyId: empKey, note: "سلفة — بانتظار حركة الخزنة" }
+    ];
+    desc = `سلفة — ${empName} (${month})`;
+  } else if (kind === "deduction") {
+    lines = [
+      { accountId: salAcc.id, debit: amt, credit: 0, partyId: empKey, note: note || "خصم" },
+      { accountId: salExp.id, debit: 0, credit: amt, partyId: empKey, note: "تخفيض مصروف الرواتب" }
+    ];
+    desc = `خصم — ${empName} (${month})`;
+  } else {
+    const label = kind === "salary" ? "راتب أساسي"
+                : kind === "bonus"  ? "مكافأة"
+                : kind === "incentive" ? "حافز" : "مستحقات أخرى";
+    lines = [
+      { accountId: salExp.id, debit: amt, credit: 0, partyId: empKey, note: `${label} — ${empName}` },
+      { accountId: salAcc.id, debit: 0, credit: amt, partyId: empKey, note: "مستحق للموظف" }
+    ];
+    desc = `${label} — ${empName} (${month})`;
+  }
+
+  return { date: d, desc, refType: "payroll", refId: `${month}_${empKey}_${entryKey}`, lines };
+}
+
+function employeeNameOf(empKey) {
+  const key = String(empKey || "");
+  if (key.startsWith("user_")) {
+    const u = S.users.find(x => x.username === key.slice(5));
+    return u?.displayName || u?.name || key.slice(5);
+  }
+  return key.replace(/^manual_/, "");
+}
+window.employeeNameOf = employeeNameOf;
+
+/* ══════════════════════════════════════════════════════════════
+   جمع المستندات غير المُرحَّلة
+══════════════════════════════════════════════════════════════ */
+function pendingDocuments() {
+  const start = S.mapping?.startDate || DEFAULT_MAPPING.startDate;
+  const inWindow = d => { const s = toDateStr(d); return s && s >= start; };
+
+  const orders = S.orders.filter(o =>
+    o.status === "تم التسليم" &&
+    inWindow(o.deliveredAt || o.createdAt) &&
+    Number(o.totalDeliveryPrice) > 0 &&
+    !isPosted("order", o.id));
+
+  const cash = S.cashTxns.filter(t =>
+    t.type !== "pending" && Number(t.amount) > 0 && t.storeId &&
+    inWindow(t.createdAt) && !isPosted("cash", t.id));
+
+  const expenses = S.expenses.filter(e =>
+    Number(e.amount) > 0 && inWindow(e.date) && !isPosted("expense", e.id));
+
+  // بنود الرواتب — كل بند مستند مستقل
+  const payroll = [];
+  for (const [month, emps] of Object.entries(S.payroll || {})) {
+    if (!/^\d{4}-\d{2}$/.test(month)) continue;
+    if (`${month}-01` < start.slice(0, 7) + "-01") continue;
+    for (const [empKey, rec] of Object.entries(emps || {})) {
+      const salary = Number(rec?.salary) || 0;
+      if (salary > 0 && !isPosted("payroll", `${month}_${empKey}_salary`)) {
+        payroll.push({ month, empKey, kind: "salary", entryKey: "salary",
+                       amount: salary, date: `${month}-28`, note: "الراتب الأساسي" });
+      }
+      for (const [ek, en] of Object.entries(rec?.entries || {})) {
+        const amt = Number(en?.amount) || 0;
+        if (amt <= 0) continue;
+        if (isPosted("payroll", `${month}_${empKey}_${ek}`)) continue;
+        payroll.push({ month, empKey, kind: en.type || "allowance", entryKey: ek,
+                       amount: amt, date: toDateStr(en.date) || `${month}-28`, note: en.note || "" });
+      }
+    }
+  }
+
+  return { orders, cash, expenses, payroll };
+}
+window.pendingDocuments = pendingDocuments;
+
+/* ══════════════════════════════════════════════════════════════
+   القيد الافتتاحي
+   رصيد أول المدة = الرصيد الحالي − حركات ما بعد تاريخ البداية
+══════════════════════════════════════════════════════════════ */
+function computeOpeningBalances() {
+  const start = S.mapping?.startDate || DEFAULT_MAPPING.startDate;
+
+  const cash = S.stores.map(st => {
+    const since = S.cashTxns
+      .filter(t => t.storeId === st.id && toDateStr(t.createdAt) >= start && t.type !== "pending")
+      .reduce((s, t) => s + (t.type === "in" ? 1 : -1) * (Number(t.amount) || 0), 0);
+    return { store: st, opening: round2((Number(st.balance) || 0) - since) };
+  });
+
+  const custody = S.pilots.map(p => {
+    const since = S.custodyTxns
+      .filter(t => t.pilotId === p.id && toDateStr(t.createdAt) >= start)
+      .reduce((s, t) => s + (t.type === "give" ? 1 : -1) * (Number(t.amount) || 0), 0);
+    return { pilot: p, opening: round2((Number(p.custodyBalance) || 0) - since) };
+  }).filter(x => Math.abs(x.opening) > 0.009);
+
+  return { start, cash, custody };
+}
+window.computeOpeningBalances = computeOpeningBalances;
+
+async function buildOpeningEntry() {
+  const { start, cash, custody } = computeOpeningBalances();
+  const custodyAcc  = mapAcc("custody");
+  const retainedAcc = mapAcc("retained");
+  if (!retainedAcc) throw new Error("حساب الأرباح المُرحَّلة غير موجود");
+
+  const lines = [];
+  let total = 0;
+
+  for (const { store, opening } of cash) {
+    if (Math.abs(opening) < 0.009) continue;
+    const acc = await cashAccountFor(store);
+    lines.push({ accountId: acc.id, debit: opening > 0 ? opening : 0, credit: opening < 0 ? -opening : 0,
+                 branchId: store.branchId || "", note: "رصيد افتتاحي" });
+    total += opening;
+  }
+
+  if (custodyAcc) {
+    for (const { pilot, opening } of custody) {
+      lines.push({ accountId: custodyAcc.id, debit: opening > 0 ? opening : 0, credit: opening < 0 ? -opening : 0,
+                   partyId: pilot.id, branchId: pilot.assignedBranchId || "",
+                   note: `عهدة افتتاحية — ${pilot.name}` });
+      total += opening;
+    }
+  }
+
+  if (!lines.length) throw new Error("لا توجد أرصدة افتتاحية للترحيل");
+
+  // الطرف المُوازِن: صافي الأصول الافتتاحية يقابله حقوق ملكية
+  total = round2(total);
+  lines.push({ accountId: retainedAcc.id, debit: total < 0 ? -total : 0, credit: total > 0 ? total : 0,
+               note: "صافي الأصول الافتتاحية" });
+
+  // تاريخ القيد = اليوم السابق لبداية النظام حتى لا يختلط بحركة الفترة
+  const d = new Date(start + "T00:00:00");
+  d.setDate(d.getDate() - 1);
+
+  return {
+    date   : toDateStr(d),
+    desc   : `قيد افتتاحي — أرصدة ${start}`,
+    refType: "opening",
+    refId  : "opening_" + start,
+    lines
+  };
+}
+window.buildOpeningEntry = buildOpeningEntry;
+
+window.postOpeningEntry = async function() {
+  if (isPosted("opening", "opening_" + (S.mapping?.startDate || ""))) {
+    showToast("القيد الافتتاحي مُرحَّل بالفعل", "error"); return;
+  }
+  try {
+    const entry = await buildOpeningEntry();
+    const preview = entry.lines.length + " سطر — إجمالي " +
+      fmt(entry.lines.reduce((s, l) => s + l.debit, 0)) + " ج.م";
+    if (!confirm(`سيتم إنشاء القيد الافتتاحي بتاريخ ${entry.date}\n${preview}\n\nمتابعة؟`)) return;
+    await createJournalEntry(entry);
+    showToast("تم إنشاء القيد الافتتاحي ✓", "success");
+    renderAutopostPage();
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   تنفيذ الترحيل
+══════════════════════════════════════════════════════════════ */
+let _posting = false;
+
+window.runAutoPost = async function() {
+  if (_posting) return;
+  if (!S.user?.canEdit) { showToast("ليس لديك صلاحية الترحيل", "error"); return; }
+  if (!S.accounts.length) { showToast("الدليل المحاسبي لم يُنشأ بعد", "error"); return; }
+
+  const pend = pendingDocuments();
+  const count = pend.orders.length + pend.cash.length + pend.expenses.length + pend.payroll.length;
+  if (!count) { showToast("لا توجد مستندات جديدة للترحيل", "success"); return; }
+  if (!confirm(`سيتم ترحيل ${fmt0(count)} مستند إلى دفتر اليومية.\n\nمتابعة؟`)) return;
+
+  _posting = true;
+  const btn = $("runPostBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ جاري الترحيل…"; }
+
+  let done = 0, skipped = 0, value = 0;
+  const errors = [];
+  let batch = {};
+  let batchCount = 0;
+
+  const flush = async () => {
+    if (!batchCount) return;
+    await update(ref(db, ACC_ROOT), batch);
+    batch = {}; batchCount = 0;
+  };
+
+  const emit = async (entry, label) => {
+    if (!entry) { skipped++; return; }
+    try {
+      if (isPeriodClosed(entry.date)) { skipped++; return; }
+      const je = await createJournalEntry(entry, { batch });
+      batchCount++;
+      done++;
+      value += je.totalDebit;
+      if (batchCount >= 150) await flush();
+    } catch (e) {
+      skipped++;
+      if (errors.length < 8) errors.push(`${label}: ${e.message}`);
+    }
+  };
+
+  try {
+    for (const o of pend.orders)   await emit(buildOrderEntry(o),        `أوردر ${o.orderNumber || o.id}`);
+    for (const t of pend.cash)     await emit(await buildCashEntry(t),   `خزينة ${t.reason || t.id}`);
+    for (const e of pend.expenses) await emit(buildExpenseEntry(e),      `مصروف ${e.item || e.id}`);
+    for (const p of pend.payroll)  await emit(buildPayrollEntry(p),      `راتب ${p.empKey}`);
+    await flush();
+
+    // سجل عملية الترحيل
+    await push(ref(db, `${ACC_ROOT}/postLog`), {
+      at: new Date().toISOString(),
+      by: S.user?.username || "",
+      scope: `أوردرات:${pend.orders.length} خزينة:${pend.cash.length} مصروفات:${pend.expenses.length} رواتب:${pend.payroll.length}`,
+      count: done, value: round2(value)
+    });
+
+    let msg = `تم ترحيل ${fmt0(done)} قيد بقيمة ${money(value)}`;
+    if (skipped) msg += ` — تم تخطي ${fmt0(skipped)}`;
+    showToast(msg, "success");
+    if (errors.length) console.warn("أخطاء الترحيل:", errors);
+    if (skipped && errors.length) {
+      alert("بعض المستندات لم تُرحَّل:\n\n" + errors.join("\n"));
+    }
+  } catch (e) {
+    console.error("autopost", e);
+    showToast("خطأ في الترحيل: " + e.message, "error");
+  } finally {
+    _posting = false;
+    if (btn) { btn.disabled = false; btn.textContent = "▶️ ترحيل الآن"; }
+    renderAutopostPage();
+  }
+};
+
+window.scanAutoPost = function() { renderAutopostPage(true); };
+</script>
+
+<!-- @@AUTOPOST_END@@ -->
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشاشات — الجزء الأول: اللوحة المالية + شجرة الحسابات
+   ══════════════════════════════════════════════════════════════════════ */
+
+/** يضبط قيمة افتراضية لحقل تاريخ مرة واحدة فقط */
+function initDate(id, val) { const el = $(id); if (el && !el.value) el.value = val; }
+function defFrom() { return S.mapping?.startDate || firstOfMonth(); }
+
+function statCard(label, value, color, sub) {
+  return `<div class="stat-card">
+    <span class="stat-label">${esc(label)}</span>
+    <span class="stat-value" style="color:${color}">${esc(value)}</span>
+    ${sub ? `<span class="stat-sub">${esc(sub)}</span>` : ""}</div>`;
+}
+window.statCard = statCard;
+
+/* ══════════════════════ 1) اللوحة المالية ══════════════════════ */
+window.renderDashboard = function() {
+  const sel = $("dashPeriod");
+  if (sel && !sel.options.length) {
+    const months = [...new Set(S.journal.map(j => j.period).filter(Boolean))].sort().reverse();
+    const cur = monthOf(todayStr());
+    if (!months.includes(cur)) months.unshift(cur);
+    sel.innerHTML = `<option value="">كل الفترات</option>` +
+      months.map(m => `<option value="${m}">${m}</option>`).join("");
+    sel.value = cur;
+  }
+  const period = sel?.value || "";
+  const from = period ? period + "-01" : "";
+  const to   = period ? period + "-31" : "";
+  $("dashPeriodLabel").textContent = period ? `الفترة: ${period}` : "كل الفترات";
+
+  const mv = movementsMap({ from, to });
+  const revAcc = accByCode("4"), expAcc = accByCode("5");
+  const revenue = revAcc ? -accountNet(revAcc.id, mv) : 0;
+  const expense = expAcc ?  accountNet(expAcc.id, mv) : 0;
+  const profit  = round2(revenue - expense);
+
+  // الأرصدة التراكمية حتى نهاية الفترة (لا تتأثر ببداية المدى)
+  const cum = movementsMap({ to });
+  const cashAcc = accByCode("111"), arAcc = accByCode("112"),
+        custAcc = accByCode("113"), apAcc = accByCode("21");
+  const cash    = cashAcc ? accountNet(cashAcc.id, cum) : 0;
+  const ar      = arAcc   ? accountNet(arAcc.id,   cum) : 0;
+  const custody = custAcc ? accountNet(custAcc.id, cum) : 0;
+  const liab    = apAcc   ? -accountNet(apAcc.id,  cum) : 0;
+
+  $("dashStats").innerHTML =
+    statCard("الإيرادات", money(revenue), "var(--green)", period || "إجمالي") +
+    statCard("المصروفات", money(expense), "var(--red)", period || "إجمالي") +
+    statCard("صافي الربح", money(profit), profit >= 0 ? "var(--green)" : "var(--red)",
+             revenue ? `هامش ${fmt(profit / revenue * 100)}%` : "") +
+    statCard("النقدية والبنوك", money(cash), "var(--blue)", "رصيد دفتري") +
+    statCard("مستحق لدى الطيارين والمحلات", money(ar), "var(--orange)", "تحصيلات لم تُورَّد") +
+    statCard("عُهَد الطيارين", money(custody), "var(--purple)", "مبالغ في ذمة الطيارين") +
+    statCard("الالتزامات المتداولة", money(liab), "var(--red)", "مستحق علينا");
+
+  // الأداء حسب الفرع
+  const rows = S.branches.map(b => {
+    const bmv = movementsMap({ from, to, branchId: b.id });
+    const r = revAcc ? -accountNet(revAcc.id, bmv) : 0;
+    const e = expAcc ?  accountNet(expAcc.id, bmv) : 0;
+    return { name: b.name, rev: r, exp: e, net: round2(r - e) };
+  }).filter(r => r.rev || r.exp).sort((a, b) => b.net - a.net);
+
+  $("dashBranchBody").innerHTML = rows.length ? rows.map(r => `<tr>
+      <td>${esc(r.name)}</td>
+      <td class="num" style="color:var(--green)">${fmt(r.rev)}</td>
+      <td class="num" style="color:var(--red)">${fmt(r.exp)}</td>
+      <td class="num" style="font-weight:800;color:${r.net >= 0 ? "var(--green)" : "var(--red)"}">${fmt(r.net)}</td>
+    </tr>`).join("") : `<tr><td colspan="4" class="empty-row">لا توجد حركة</td></tr>`;
+
+  const recent = S.journal.filter(j => j.status !== "void").slice(-12).reverse();
+  $("dashJournalBody").innerHTML = recent.length ? recent.map(j => `<tr>
+      <td class="idx">${j.no || "—"}</td>
+      <td class="num">${esc(j.date)}</td>
+      <td style="max-width:280px">${esc(j.desc || "")}</td>
+      <td class="num">${fmt(j.totalDebit)}</td>
+    </tr>`).join("") : `<tr><td colspan="4" class="empty-row">لا توجد قيود بعد</td></tr>`;
+};
+
+/* ══════════════════════ 2) شجرة الحسابات ══════════════════════ */
+const _coaCollapsed = new Set();
+
+window.expandAllCOA = function(expand) {
+  _coaCollapsed.clear();
+  if (!expand) S.accounts.filter(a => a._children?.length).forEach(a => _coaCollapsed.add(a.id));
+  renderCOA();
+};
+window.toggleCoaNode = function(id) {
+  _coaCollapsed.has(id) ? _coaCollapsed.delete(id) : _coaCollapsed.add(id);
+  renderCOA();
+};
+
+window.renderCOA = function() {
+  const box = $("coaTree");
+  if (!box) return;
+  if (!S.accounts.length) {
+    box.innerHTML = `<div class="empty-row">لم يُنشأ الدليل المحاسبي بعد — سيتم إنشاؤه تلقائيًا.</div>`;
+    $("coaInfo").innerHTML = "—"; return;
+  }
+
+  const q = ($("coaSearch")?.value || "").trim().toLowerCase();
+  const showBal = $("coaShowBalances")?.checked;
+  const mv = showBal ? movementsMap({}) : null;
+
+  const groups = S.accounts.filter(a => a.isGroup).length;
+  $("coaInfo").innerHTML =
+    `إجمالي الحسابات: <b>${fmt0(S.accounts.length)}</b> — منها <b>${fmt0(groups)}</b> تجميعية ` +
+    `و<b>${fmt0(S.accounts.length - groups)}</b> تقبل القيود. ` +
+    `الحسابات المميزة بـ ⚙️ حسابات أساسية لا يمكن حذفها.`;
+
+  // البحث: نعرض قائمة مسطّحة
+  if (q) {
+    const hits = S.accounts.filter(a =>
+      String(a.code).includes(q) || String(a.name).toLowerCase().includes(q));
+    box.innerHTML = hits.length ? hits
+      .sort((a, b) => String(a.code).localeCompare(String(b.code), "en"))
+      .map(a => coaRowHTML(a, 0, mv, false)).join("")
+      : `<div class="empty-row">لا نتائج</div>`;
+    return;
+  }
+
+  let html = "";
+  const walk = (acc, depth) => {
+    const kids = acc._children || [];
+    const collapsed = _coaCollapsed.has(acc.id);
+    html += coaRowHTML(acc, depth, mv, kids.length > 0, collapsed);
+    if (!collapsed) for (const k of kids) walk(k, depth + 1);
+  };
+  accountsTree().forEach(a => walk(a, 0));
+  box.innerHTML = html || `<div class="empty-row">لا توجد حسابات</div>`;
+};
+
+function coaRowHTML(a, depth, mv, hasKids, collapsed) {
+  const bal = mv ? naturalBalance(a, mv) : null;
+  const balColor = bal === null ? "" : (Math.abs(bal) < 0.005 ? "var(--muted)"
+                    : bal > 0 ? "var(--green)" : "var(--red)");
+  const caret = hasKids ? (collapsed ? "▶" : "▼") : "";
+  return `<div class="coa-node"><div class="coa-row" style="padding-inline-start:${13 + depth * 20}px"
+      onclick="${hasKids ? `toggleCoaNode('${a.id}')` : `openAccountModal('${a.id}')`}">
+    <span class="coa-caret">${caret}</span>
+    <span class="coa-code">${esc(a.code)}</span>
+    <span class="coa-name${a.isGroup ? " group" : ""}">${esc(a.name)}
+      ${a.system ? '<span title="حساب أساسي" style="opacity:.5">⚙️</span>' : ""}
+      ${a.auto ? '<span class="badge bg-blue" style="font-size:.66rem">تلقائي</span>' : ""}
+      ${a.active === false ? '<span class="badge bg-muted" style="font-size:.66rem">موقوف</span>' : ""}
+    </span>
+    <span class="badge ${a.nature === "credit" ? "bg-orange" : "bg-blue"}" style="font-size:.66rem">
+      ${a.nature === "credit" ? "دائن" : "مدين"}</span>
+    ${bal !== null ? `<span class="coa-bal" style="color:${balColor};min-width:110px;text-align:left">${fmt(bal)}</span>` : ""}
+    <button class="btn-ghost btn-xs" onclick="event.stopPropagation();openAccountModal('${a.id}')">✏️</button>
+  </div></div>`;
+}
+
+window.onAccTypeChange = function() {
+  const t = $("accType").value;
+  $("accNature").value = (t === "liability" || t === "equity" || t === "revenue") ? "credit" : "debit";
+};
+
+window.openAccountModal = function(id) {
+  const a = id ? S.accById.get(id) : null;
+  $("accId").value        = id || "";
+  $("accModalError").textContent = "";
+  $("accountModalTitle").textContent = a ? "✏️ تعديل حساب" : "➕ حساب جديد";
+  $("accCode").value      = a?.code || "";
+  $("accName").value      = a?.name || "";
+  $("accType").value      = a?.type || "asset";
+  $("accNature").value    = a?.nature || "debit";
+  $("accPartyType").value = a?.partyType || "";
+  $("accNotes").value     = a?.notes || "";
+  $("accIsGroup").checked = !!a?.isGroup;
+  $("accParent").innerHTML = allAccountOptions(a?.parentId || "", id || "");
+  $("accCode").readOnly   = !!a?.system;
+  $("accDeleteBtn").style.display = (a && !a.system) ? "" : "none";
+  if (!a) onAccTypeChange();
+  openModal("account");
+};
+
+window.saveAccount = async function() {
+  const err = $("accModalError");
+  err.textContent = "";
+  const id       = $("accId").value;
+  const code     = $("accCode").value.trim();
+  const name     = $("accName").value.trim();
+  const parentId = $("accParent").value;
+  const type     = $("accType").value;
+  const nature   = $("accNature").value;
+  const isGroup  = $("accIsGroup").checked;
+
+  if (!code || !name) { err.textContent = "الكود والاسم مطلوبان"; return; }
+  const dup = S.accounts.find(a => String(a.code) === code && a.id !== id);
+  if (dup) { err.textContent = `الكود ${code} مستخدم بالفعل في «${dup.name}»`; return; }
+
+  // حساب تجميعي لا يصح لو عليه قيود
+  if (isGroup && id) {
+    const used = S.journal.some(j => j.status !== "void" && (j.lines || []).some(l => l.accountId === id));
+    if (used) { err.textContent = "لا يمكن تحويله لحساب تجميعي — توجد قيود مُرحَّلة عليه"; return; }
+  }
+  if (parentId && id && descendantIds(id).has(parentId)) {
+    err.textContent = "لا يمكن اختيار حساب فرعي كحساب أب"; return;
+  }
+
+  const btn = $("accSaveBtn");
+  btn.disabled = true; btn.textContent = "جاري الحفظ…";
+  try {
+    const data = {
+      code, name, type, nature, isGroup, parentId,
+      partyType: $("accPartyType").value,
+      notes: $("accNotes").value.trim(),
+      updatedAt: new Date().toISOString(),
+      updatedBy: S.user?.username || ""
+    };
+    if (id) {
+      await update(ref(db, `${ACC_ROOT}/accounts/${id}`), data);
+      showToast("تم تحديث الحساب ✓", "success");
+    } else {
+      data.active = true; data.linkId = ""; data.system = false;
+      data.createdAt = new Date().toISOString();
+      data.createdBy = S.user?.username || "";
+      await push(ref(db, `${ACC_ROOT}/accounts`), data);
+      showToast("تم إضافة الحساب ✓", "success");
+    }
+    closeModal("account");
+  } catch (e) { err.textContent = "خطأ: " + e.message; }
+  finally { btn.disabled = false; btn.textContent = "💾 حفظ"; }
+};
+
+window.deleteAccount = async function() {
+  const id = $("accId").value;
+  const a = S.accById.get(id);
+  if (!a) return;
+  if (a.system) { showToast("لا يمكن حذف حساب أساسي", "error"); return; }
+  if ((a._children || []).length) { showToast("احذف الحسابات الفرعية أولًا", "error"); return; }
+  const used = S.journal.some(j => (j.lines || []).some(l => l.accountId === id));
+  if (used) { showToast("لا يمكن الحذف — توجد قيود على الحساب. أوقفه بدلًا من ذلك", "error"); return; }
+  if (!confirm(`حذف الحساب «${a.name}» نهائيًا؟`)) return;
+  try {
+    await remove(ref(db, `${ACC_ROOT}/accounts/${id}`));
+    showToast("تم حذف الحساب ✓", "success");
+    closeModal("account");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشاشات — الجزء الثاني: دفتر اليومية + محرر القيود + دفتر الأستاذ
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════ 3) دفتر اليومية ══════════════════════ */
+function filteredJournal() {
+  initDate("jFrom", defFrom());
+  initDate("jTo", todayStr());
+  const from = $("jFrom")?.value || "";
+  const to   = $("jTo")?.value || "";
+  const src  = $("jSource")?.value || "";
+  const st   = $("jStatus")?.value || "";
+  const q    = ($("jSearch")?.value || "").trim().toLowerCase();
+
+  return S.journal.filter(j => {
+    if (from && (j.date || "") < from) return false;
+    if (to   && (j.date || "") > to)   return false;
+    if (src  && j.refType !== src)     return false;
+    if (st   && j.status  !== st)      return false;
+    if (q) {
+      const hay = (j.desc || "") + " " + (j.no || "") + " " +
+                  (j.lines || []).map(l => `${l.accountName} ${l.note}`).join(" ");
+      if (!hay.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.no || 0) - (a.no || 0));
+}
+
+window.renderJournal = function() {
+  const rows = filteredJournal();
+  const posted = rows.filter(r => r.status === "posted");
+  const totalD = posted.reduce((s, r) => s + (r.totalDebit || 0), 0);
+
+  $("journalStats").innerHTML =
+    statCard("عدد القيود", fmt0(rows.length), "var(--sky)", `${fmt0(posted.length)} مُرحَّل`) +
+    statCard("إجمالي المدين", money(totalD), "var(--green)") +
+    statCard("مسودات", fmt0(rows.filter(r => r.status === "draft").length), "var(--orange)") +
+    statCard("ملغاة", fmt0(rows.filter(r => r.status === "void").length), "var(--muted)");
+
+  const badge = st => st === "posted" ? '<span class="badge bg-green">مُرحَّل</span>'
+                    : st === "draft"  ? '<span class="badge bg-orange">مسودة</span>'
+                    : '<span class="badge bg-muted">ملغي</span>';
+
+  $("journalBody").innerHTML = rows.length ? rows.slice(0, 400).map(j => `<tr>
+      <td class="idx">${j.no || "—"}</td>
+      <td class="num">${esc(j.date)}</td>
+      <td style="max-width:320px">${esc(j.desc || "")}</td>
+      <td><span class="badge ${j.refType === "manual" ? "bg-purple" : "bg-blue"}">${esc(SOURCE_LABEL[j.refType] || j.refType)}</span></td>
+      <td class="num" style="color:var(--green)">${fmt(j.totalDebit)}</td>
+      <td class="num" style="color:var(--orange)">${fmt(j.totalCredit)}</td>
+      <td>${badge(j.status)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-ghost btn-xs" onclick="viewJournalEntry('${j.id}')">👁️</button>
+        ${j.status !== "void" && S.user?.canEdit
+          ? `<button class="btn-red btn-xs" onclick="promptVoidJE('${j.id}')">✖</button>` : ""}
+      </td>
+    </tr>`).join("") : `<tr><td colspan="8" class="empty-row">لا توجد قيود مطابقة</td></tr>`;
+
+  if (rows.length > 400) {
+    $("journalBody").insertAdjacentHTML("beforeend",
+      `<tr><td colspan="8" class="empty-row">عرض أول 400 قيد من ${fmt0(rows.length)} — ضيّق نطاق البحث</td></tr>`);
+  }
+};
+
+window.viewJournalEntry = function(id) {
+  const j = S.journal.find(x => x.id === id);
+  if (!j) return;
+  $("viewModalTitle").textContent = `قيد رقم ${j.no || "—"} — ${j.date}`;
+  $("viewModalBody").innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:.85rem">
+      <div><span style="color:var(--muted)">البيان:</span> <b>${esc(j.desc || "—")}</b></div>
+      <div><span style="color:var(--muted)">المصدر:</span> <b>${esc(SOURCE_LABEL[j.refType] || j.refType)}</b></div>
+      <div><span style="color:var(--muted)">الفترة:</span> <b>${esc(j.period || "")}</b></div>
+      <div><span style="color:var(--muted)">الحالة:</span> <b>${j.status === "posted" ? "مُرحَّل" : j.status === "draft" ? "مسودة" : "ملغي"}</b></div>
+      <div><span style="color:var(--muted)">بواسطة:</span> <b>${esc(j.createdBy || "—")}</b></div>
+      <div><span style="color:var(--muted)">المرجع:</span> <b style="font-size:.75rem">${esc(j.refId || "—")}</b></div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>الحساب</th><th>البيان</th><th>الفرع</th><th class="num">مدين</th><th class="num">دائن</th></tr></thead>
+      <tbody>${(j.lines || []).map(l => `<tr>
+        <td><span style="color:var(--muted);font-size:.78rem">${esc(l.accountCode)}</span> ${esc(l.accountName)}</td>
+        <td style="font-size:.8rem">${esc(l.note || "")}</td>
+        <td style="font-size:.8rem">${esc(l.branchName || "—")}</td>
+        <td class="num" style="color:var(--green)">${l.debit ? fmt(l.debit) : ""}</td>
+        <td class="num" style="color:var(--orange)">${l.credit ? fmt(l.credit) : ""}</td></tr>`).join("")}
+        <tr class="total-row"><td colspan="3">الإجمالي</td>
+          <td class="num">${fmt(j.totalDebit)}</td><td class="num">${fmt(j.totalCredit)}</td></tr>
+      </tbody></table></div>
+    ${j.status === "void" ? `<div class="warn-box" style="margin-top:14px">
+      ملغي بواسطة ${esc(j.voidedBy || "")} — ${esc(j.voidReason || "بدون سبب")}</div>` : ""}`;
+  $("viewModalFoot").innerHTML = `<button class="btn-ghost" onclick="closeModal('view')">إغلاق</button>
+    <button class="btn-ghost" onclick="printJournalEntry('${j.id}')">🖨️ طباعة</button>`;
+  openModal("view");
+};
+
+window.printJournalEntry = function(id) {
+  const j = S.journal.find(x => x.id === id);
+  if (!j) return;
+  const org = S.mapping?.orgName || "الدهشان";
+  const w = window.open("", "_blank");
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+    <title>قيد ${j.no}</title><style>
+    body{font-family:'Cairo',sans-serif;padding:30px;color:#000}
+    h2{margin:0 0 4px} .sub{color:#666;font-size:.85rem;margin-bottom:18px}
+    table{width:100%;border-collapse:collapse;font-size:.88rem}
+    th,td{border:1px solid #ccc;padding:8px;text-align:right}
+    th{background:#f3f3f3} .num{text-align:left;direction:ltr}
+    tfoot td{font-weight:800;background:#fafafa}</style></head><body>
+    <h2>${esc(org)}</h2><div class="sub">قيد يومية رقم ${j.no} — ${esc(j.date)}</div>
+    <p><b>البيان:</b> ${esc(j.desc || "")}</p>
+    <table><thead><tr><th>الحساب</th><th>البيان</th><th>الفرع</th><th>مدين</th><th>دائن</th></tr></thead>
+    <tbody>${(j.lines || []).map(l => `<tr><td>${esc(l.accountCode)} — ${esc(l.accountName)}</td>
+      <td>${esc(l.note || "")}</td><td>${esc(l.branchName || "—")}</td>
+      <td class="num">${l.debit ? fmt(l.debit) : ""}</td>
+      <td class="num">${l.credit ? fmt(l.credit) : ""}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><td colspan="3">الإجمالي</td><td class="num">${fmt(j.totalDebit)}</td>
+      <td class="num">${fmt(j.totalCredit)}</td></tr></tfoot></table>
+    <p style="margin-top:40px;font-size:.85rem">المحاسب: ..................... &nbsp;&nbsp; المراجع: ..................... </p>
+    </body></html>`);
+  w.document.close(); w.print();
+};
+
+window.promptVoidJE = async function(id) {
+  const reason = prompt("سبب إلغاء القيد:");
+  if (reason === null) return;
+  try {
+    await voidJournalEntry(id, reason);
+    showToast("تم إلغاء القيد ✓", "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ── محرر القيد اليدوي ─────────────────────────────────────── */
+let _jeLines = [];
+
+window.openJournalModal = function() {
+  if (!postableAccounts().length) { showToast("لا توجد حسابات تقبل القيود بعد", "error"); return; }
+  $("jeId").value   = "";
+  $("jeDate").value = todayStr();
+  $("jeNo").value   = nextJournalNo();
+  $("jeDesc").value = "";
+  $("jeError").textContent = "";
+  _jeLines = [{}, {}];
+  renderJeLines();
+  checkJePeriod();
+  openModal("journal");
+};
+
+window.addJeLine = function() { _jeLines.push({}); renderJeLines(); };
+window.removeJeLine = function(i) {
+  if (_jeLines.length <= 2) { _jeLines[i] = {}; } else { _jeLines.splice(i, 1); }
+  renderJeLines();
+};
+
+function readJeLines() {
+  _jeLines = [..._jeLines].map((_, i) => ({
+    accountId: $(`jeAcc${i}`)?.value || "",
+    note     : $(`jeNote${i}`)?.value || "",
+    branchId : $(`jeBr${i}`)?.value || "",
+    debit    : Number($(`jeDr${i}`)?.value) || 0,
+    credit   : Number($(`jeCr${i}`)?.value) || 0
+  }));
+}
+
+function renderJeLines() {
+  $("jeLinesBody").innerHTML = _jeLines.map((l, i) => `<tr>
+    <td><select id="jeAcc${i}">${accountOptions(l.accountId || "")}</select></td>
+    <td><input id="jeNote${i}" value="${esc(l.note || "")}" placeholder="بيان السطر" /></td>
+    <td><select id="jeBr${i}">${branchOptions(l.branchId || "")}</select></td>
+    <td><input id="jeDr${i}" type="number" step="0.01" min="0" dir="ltr" value="${l.debit || ""}"
+        oninput="onJeAmount(${i},'dr')" /></td>
+    <td><input id="jeCr${i}" type="number" step="0.01" min="0" dir="ltr" value="${l.credit || ""}"
+        oninput="onJeAmount(${i},'cr')" /></td>
+    <td><button class="jl-del" onclick="removeJeLine(${i})">✕</button></td>
+  </tr>`).join("");
+  updateJeTotals();
+}
+
+/** إدخال مبلغ في عمود يصفّر العمود المقابل تلقائيًا */
+window.onJeAmount = function(i, side) {
+  if (side === "dr" && Number($(`jeDr${i}`).value) > 0) $(`jeCr${i}`).value = "";
+  if (side === "cr" && Number($(`jeCr${i}`).value) > 0) $(`jeDr${i}`).value = "";
+  updateJeTotals();
+};
+
+function updateJeTotals() {
+  let d = 0, c = 0;
+  for (let i = 0; i < _jeLines.length; i++) {
+    d += Number($(`jeDr${i}`)?.value) || 0;
+    c += Number($(`jeCr${i}`)?.value) || 0;
+  }
+  d = round2(d); c = round2(c);
+  $("jeTotalDebit").textContent  = fmt(d);
+  $("jeTotalCredit").textContent = fmt(c);
+  const diff = round2(d - c);
+  const el = $("jeDiff");
+  if (Math.abs(diff) < 0.005 && d > 0) { el.className = "badge bg-green"; el.textContent = "✓ متوازن"; }
+  else if (d === 0 && c === 0)         { el.className = "badge bg-muted";  el.textContent = "فارغ"; }
+  else { el.className = "badge bg-red"; el.textContent = `فرق ${fmt(diff)}`; }
+}
+
+window.checkJePeriod = function() {
+  const d = $("jeDate").value;
+  $("jePeriodWarn").innerHTML = (d && isPeriodClosed(d))
+    ? `<div class="warn-box" style="margin:0 0 12px">⚠️ الفترة <b>${monthOf(d)}</b> مقفولة — لن يُقبل الحفظ. افتح الفترة أولًا من «الفترات والإقفال».</div>`
+    : "";
+};
+
+window.saveJournalEntry = async function(status) {
+  const err = $("jeError");
+  err.textContent = "";
+  readJeLines();
+  const btn = $("jeSaveBtn");
+  btn.disabled = true;
+  try {
+    await createJournalEntry({
+      date  : $("jeDate").value,
+      desc  : $("jeDesc").value.trim(),
+      lines : _jeLines,
+      status: status,
+      refType: "manual"
+    });
+    showToast(status === "draft" ? "تم الحفظ كمسودة ✓" : "تم ترحيل القيد ✓", "success");
+    closeModal("journal");
+  } catch (e) { err.textContent = e.message; }
+  finally { btn.disabled = false; }
+};
+
+/* ══════════════════════ 4) دفتر الأستاذ ══════════════════════ */
+window.renderLedger = function() {
+  const sel = $("ledgerAccount");
+  const cur = sel.value;
+  sel.innerHTML = accountOptions(cur, "— اختر حسابًا —");
+  sel.value = cur;
+  initDate("ledgerFrom", defFrom());
+  initDate("ledgerTo", todayStr());
+
+  const accId  = sel.value;
+  const from   = $("ledgerFrom").value;
+  const to     = $("ledgerTo").value;
+  const branch = $("ledgerBranch").value;
+
+  if (!accId) {
+    $("ledgerBody").innerHTML = `<tr><td colspan="7" class="empty-row">اختر حسابًا لعرض كشف الحركة</td></tr>`;
+    $("ledgerStats").innerHTML = "";
+    return;
+  }
+
+  const acc = S.accById.get(accId);
+  const ids = descendantIds(accId);
+
+  // رصيد ما قبل الفترة
+  let opening = 0;
+  const rows = [];
+  for (const j of S.journal) {
+    if (j.status !== "posted") continue;
+    for (const l of (j.lines || [])) {
+      if (!ids.has(l.accountId)) continue;
+      if (branch && (l.branchId || "") !== branch) continue;
+      const net = (Number(l.debit) || 0) - (Number(l.credit) || 0);
+      if (from && (j.date || "") < from) { opening += net; continue; }
+      if (to && (j.date || "") > to) continue;
+      rows.push({ date: j.date, no: j.no, desc: j.desc, line: l, net });
+    }
+  }
+  rows.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.no || 0) - (b.no || 0));
+
+  const sign = acc.nature === "credit" ? -1 : 1;
+  let run = opening;
+  const totD = rows.reduce((s, r) => s + (Number(r.line.debit) || 0), 0);
+  const totC = rows.reduce((s, r) => s + (Number(r.line.credit) || 0), 0);
+  const closing = round2(opening + totD - totC);
+
+  $("ledgerStats").innerHTML =
+    statCard("الحساب", `${acc.code}`, "var(--sky)", acc.name) +
+    statCard("رصيد أول المدة", money(round2(opening * sign)), "var(--muted)") +
+    statCard("حركة مدين", money(totD), "var(--green)") +
+    statCard("حركة دائن", money(totC), "var(--orange)") +
+    statCard("رصيد آخر المدة", money(round2(closing * sign)),
+             closing * sign >= 0 ? "var(--green)" : "var(--red)",
+             acc.nature === "credit" ? "طبيعة دائنة" : "طبيعة مدينة");
+
+  let html = `<tr style="background:var(--panel)"><td colspan="6"><b>رصيد ما قبل ${esc(from || "البداية")}</b></td>
+    <td class="num"><b>${fmt(opening * sign)}</b></td></tr>`;
+  html += rows.map(r => {
+    run += r.net;
+    return `<tr>
+      <td class="num">${esc(r.date)}</td>
+      <td class="idx">${r.no || ""}</td>
+      <td style="max-width:300px">${esc(r.line.note || r.desc || "")}</td>
+      <td style="font-size:.8rem">${esc(r.line.branchName || "—")}</td>
+      <td class="num" style="color:var(--green)">${r.line.debit ? fmt(r.line.debit) : ""}</td>
+      <td class="num" style="color:var(--orange)">${r.line.credit ? fmt(r.line.credit) : ""}</td>
+      <td class="num" style="font-weight:700">${fmt(run * sign)}</td></tr>`;
+  }).join("");
+  html += `<tr class="total-row"><td colspan="4">إجمالي الحركة</td>
+    <td class="num">${fmt(totD)}</td><td class="num">${fmt(totC)}</td>
+    <td class="num">${fmt(closing * sign)}</td></tr>`;
+
+  $("ledgerBody").innerHTML = rows.length ? html
+    : `<tr><td colspan="7" class="empty-row">لا توجد حركة على هذا الحساب في الفترة</td></tr>`;
+};
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشاشات — الجزء الثالث: القوائم المالية
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════ 5) ميزان المراجعة ══════════════════════ */
+window.renderTrial = function() {
+  initDate("trialFrom", defFrom());
+  initDate("trialTo", todayStr());
+  const from   = $("trialFrom").value;
+  const to     = $("trialTo").value;
+  const branch = $("trialBranch").value;
+  const hideZero = $("trialHideZero").checked;
+
+  const mvPeriod = movementsMap({ from, to, branchId: branch });
+  const mvBefore = from ? movementsMap({ to: prevDay(from), branchId: branch }) : new Map();
+
+  $("trialSub").textContent = `من ${from || "البداية"} إلى ${to || "اليوم"}` +
+    (branch ? ` — ${S.branches.find(b => b.id === branch)?.name || ""}` : "");
+
+  const leaves = S.accounts.filter(a => !a.isGroup)
+    .sort((a, b) => String(a.code).localeCompare(String(b.code), "en"));
+
+  let sumOpen = 0, sumD = 0, sumC = 0, sumBalD = 0, sumBalC = 0;
+  const rows = [];
+
+  for (const a of leaves) {
+    const open = accountNet(a.id, mvBefore);
+    const mvOwn = ownMovement(a.id, mvPeriod);
+    const close = round2(open + mvOwn.debit - mvOwn.credit);
+    if (hideZero && !open && !mvOwn.debit && !mvOwn.credit) continue;
+
+    const balD = close > 0 ? close : 0;
+    const balC = close < 0 ? -close : 0;
+    sumOpen += open; sumD += mvOwn.debit; sumC += mvOwn.credit;
+    sumBalD += balD; sumBalC += balC;
+
+    rows.push(`<tr>
+      <td class="num idx">${esc(a.code)}</td>
+      <td>${esc(a.name)}</td>
+      <td class="num" style="color:var(--muted)">${open ? fmt(open) : "—"}</td>
+      <td class="num" style="color:var(--green)">${mvOwn.debit ? fmt(mvOwn.debit) : "—"}</td>
+      <td class="num" style="color:var(--orange)">${mvOwn.credit ? fmt(mvOwn.credit) : "—"}</td>
+      <td class="num" style="font-weight:700">${balD ? fmt(balD) : "—"}</td>
+      <td class="num" style="font-weight:700">${balC ? fmt(balC) : "—"}</td></tr>`);
+  }
+
+  rows.push(`<tr class="total-row">
+    <td colspan="2">الإجمالي</td>
+    <td class="num">${fmt(sumOpen)}</td>
+    <td class="num">${fmt(sumD)}</td>
+    <td class="num">${fmt(sumC)}</td>
+    <td class="num">${fmt(sumBalD)}</td>
+    <td class="num">${fmt(sumBalC)}</td></tr>`);
+
+  $("trialBody").innerHTML = rows.join("");
+
+  const diff = round2(sumBalD - sumBalC);
+  $("trialAlert").innerHTML = Math.abs(diff) < 0.01
+    ? `<div class="info-box" style="border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.06)">
+         ✅ الميزان متوازن — إجمالي الأرصدة المدينة يساوي الدائنة (${fmt(sumBalD)} ج.م)</div>`
+    : `<div class="warn-box" style="border-color:rgba(232,25,44,.4)">
+         ⚠️ الميزان غير متوازن بفرق <b>${fmt(diff)} ج.م</b>.
+         ${branch ? "السبب غالبًا فلترة الفرع — بعض السطور غير مرتبطة بفرع. أزل الفلتر للتحقق." : "راجع القيود المُرحَّلة."}</div>`;
+};
+
+function prevDay(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() - 1);
+  return toDateStr(d);
+}
+window.prevDay = prevDay;
+
+/* ══════════════════════ 6) قائمة الدخل ══════════════════════ */
+function incomeData() {
+  initDate("incFrom", defFrom());
+  initDate("incTo", todayStr());
+  const from   = $("incFrom").value;
+  const to     = $("incTo").value;
+  const branch = $("incBranch").value;
+  const mv = movementsMap({ from, to, branchId: branch });
+
+  const build = (rootCode, flip) => {
+    const root = accByCode(rootCode);
+    if (!root) return { total: 0, groups: [] };
+    const groups = (root._children || []).map(g => {
+      const items = (g._children || []).length
+        ? g._children.map(c => ({ name: c.name, code: c.code, amount: round2(accountNet(c.id, mv) * flip) }))
+        : [{ name: g.name, code: g.code, amount: round2(accountNet(g.id, mv) * flip) }];
+      return {
+        name: g.name, code: g.code,
+        total: round2(accountNet(g.id, mv) * flip),
+        items: items.filter(i => Math.abs(i.amount) > 0.005),
+        isLeaf: !(g._children || []).length
+      };
+    }).filter(g => Math.abs(g.total) > 0.005);
+    return { total: round2(accountNet(root.id, mv) * flip), groups };
+  };
+
+  const rev = build("4", -1);   // الإيرادات دائنة → نقلب الإشارة
+  const exp = build("5",  1);
+  return { from, to, branch, rev, exp, profit: round2(rev.total - exp.total) };
+}
+
+window.renderIncome = function() {
+  const d = incomeData();
+  $("incomeSub").textContent = `من ${d.from || "البداية"} إلى ${d.to || "اليوم"}` +
+    (d.branch ? ` — ${S.branches.find(b => b.id === d.branch)?.name || ""}` : " — كل الفروع");
+
+  const margin = d.rev.total ? (d.profit / d.rev.total * 100) : 0;
+  $("incomeStats").innerHTML =
+    statCard("إجمالي الإيرادات", money(d.rev.total), "var(--green)") +
+    statCard("إجمالي المصروفات", money(d.exp.total), "var(--red)") +
+    statCard("صافي الربح", money(d.profit), d.profit >= 0 ? "var(--green)" : "var(--red)") +
+    statCard("هامش الربح", fmt(margin) + " %", margin >= 0 ? "var(--green)" : "var(--red)");
+
+  const section = (title, data, color) => {
+    let h = `<tr style="background:var(--panel)"><td colspan="2" style="font-weight:800;color:${color};padding:12px 14px">${esc(title)}</td></tr>`;
+    for (const g of data.groups) {
+      if (!g.isLeaf) {
+        h += `<tr><td style="font-weight:700;padding-inline-start:26px">${esc(g.name)}</td>
+              <td class="num" style="font-weight:700">${fmt(g.total)}</td></tr>`;
+        for (const i of g.items) {
+          h += `<tr><td style="padding-inline-start:48px;color:var(--muted);font-size:.83rem">${esc(i.code)} — ${esc(i.name)}</td>
+                <td class="num" style="color:var(--muted)">${fmt(i.amount)}</td></tr>`;
+        }
+      } else {
+        h += `<tr><td style="padding-inline-start:26px">${esc(g.code)} — ${esc(g.name)}</td>
+              <td class="num">${fmt(g.total)}</td></tr>`;
+      }
+    }
+    h += `<tr class="total-row"><td>إجمالي ${esc(title)}</td><td class="num" style="color:${color}">${fmt(data.total)}</td></tr>`;
+    return h;
+  };
+
+  $("incomeBody").innerHTML =
+    section("الإيرادات", d.rev, "var(--green)") +
+    `<tr><td colspan="2" style="height:14px"></td></tr>` +
+    section("المصروفات", d.exp, "var(--red)") +
+    `<tr class="total-row" style="font-size:1.02rem">
+       <td>صافي ${d.profit >= 0 ? "الربح" : "الخسارة"}</td>
+       <td class="num" style="color:${d.profit >= 0 ? "var(--green)" : "var(--red)"}">${fmt(Math.abs(d.profit))}</td></tr>`;
+};
+
+/* ══════════════════════ 7) الميزانية العمومية ══════════════════════ */
+window.renderBalanceSheet = function() {
+  initDate("balAsOf", todayStr());
+  const asOf = $("balAsOf").value || todayStr();
+  const mv = movementsMap({ to: asOf });
+
+  $("balanceSub").textContent = `كما في ${asOf}`;
+
+  // صافي نتيجة الأعمال حتى التاريخ (يُضاف لحقوق الملكية)
+  const revRoot = accByCode("4"), expRoot = accByCode("5");
+  const revenue = revRoot ? -accountNet(revRoot.id, mv) : 0;
+  const expense = expRoot ?  accountNet(expRoot.id, mv) : 0;
+  const profit  = round2(revenue - expense);
+
+  const renderSide = (rootCode, flip, title, color, extraRows = "") => {
+    const root = accByCode(rootCode);
+    if (!root) return { html: "", total: 0 };
+    let html = `<tr style="background:var(--panel)"><td colspan="2" style="font-weight:800;color:${color};padding:13px 14px;font-size:.96rem">${esc(title)}</td></tr>`;
+    let total = 0;
+    for (const g of (root._children || [])) {
+      const gTotal = round2(accountNet(g.id, mv) * flip);
+      const kids = (g._children || []).filter(c => Math.abs(accountNet(c.id, mv)) > 0.005);
+      if (Math.abs(gTotal) < 0.005 && !kids.length) continue;
+      total += gTotal;
+      html += `<tr><td style="font-weight:700;padding-inline-start:24px">${esc(g.name)}</td>
+               <td class="num" style="font-weight:700">${fmt(gTotal)}</td></tr>`;
+      for (const c of kids) {
+        html += `<tr><td style="padding-inline-start:46px;color:var(--muted);font-size:.83rem">${esc(c.code)} — ${esc(c.name)}</td>
+                 <td class="num" style="color:var(--muted)">${fmt(round2(accountNet(c.id, mv) * flip))}</td></tr>`;
+      }
+    }
+    return { html, total: round2(total), extraRows };
+  };
+
+  const assets = renderSide("1", 1, "الأصول", "var(--blue)");
+  $("balAssetsBody").innerHTML = assets.html +
+    `<tr class="total-row" style="font-size:1rem"><td>إجمالي الأصول</td>
+     <td class="num" style="color:var(--blue)">${fmt(assets.total)}</td></tr>`;
+
+  const liab = renderSide("2", -1, "الخصوم", "var(--orange)");
+  const eq   = renderSide("3", -1, "حقوق الملكية", "var(--purple)");
+  const eqTotal = round2(eq.total + profit);
+
+  $("balLiabEqBody").innerHTML = liab.html +
+    `<tr class="total-row"><td>إجمالي الخصوم</td>
+     <td class="num" style="color:var(--orange)">${fmt(liab.total)}</td></tr>
+     <tr><td colspan="2" style="height:12px"></td></tr>` +
+    eq.html +
+    `<tr><td style="font-weight:700;padding-inline-start:24px">${profit >= 0 ? "أرباح" : "خسائر"} الفترة الحالية</td>
+     <td class="num" style="font-weight:700;color:${profit >= 0 ? "var(--green)" : "var(--red)"}">${fmt(profit)}</td></tr>
+     <tr class="total-row"><td>إجمالي حقوق الملكية</td>
+     <td class="num" style="color:var(--purple)">${fmt(eqTotal)}</td></tr>
+     <tr class="total-row" style="font-size:1rem"><td>إجمالي الخصوم وحقوق الملكية</td>
+     <td class="num">${fmt(round2(liab.total + eqTotal))}</td></tr>`;
+
+  const diff = round2(assets.total - (liab.total + eqTotal));
+  $("balanceAlert").innerHTML = Math.abs(diff) < 0.01
+    ? `<div class="info-box" style="border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.06)">
+         ✅ الميزانية متوازنة — الأصول = الخصوم + حقوق الملكية = <b>${fmt(assets.total)} ج.م</b></div>`
+    : `<div class="warn-box" style="border-color:rgba(232,25,44,.4)">
+         ⚠️ فرق <b>${fmt(diff)} ج.م</b> بين الأصول والخصوم — راجع ميزان المراجعة.</div>`;
+};
+
+/* ══════════════════════ 8) التدفقات النقدية ══════════════════════ */
+window.renderCashflow = function() {
+  initDate("cfFrom", defFrom());
+  initDate("cfTo", todayStr());
+  const from = $("cfFrom").value, to = $("cfTo").value;
+
+  const cashRoot = accByCode("111");
+  if (!cashRoot) { $("cfBody").innerHTML = `<tr><td colspan="4" class="empty-row">—</td></tr>`; return; }
+  const cashIds = descendantIds(cashRoot.id);
+
+  const before = movementsMap({ to: prevDay(from) });
+  const opening = accountNet(cashRoot.id, before);
+
+  // نجمّع الطرف المقابل لكل حركة نقدية
+  const buckets = new Map();
+  let totalIn = 0, totalOut = 0;
+
+  for (const j of S.journal) {
+    if (j.status !== "posted") continue;
+    if (from && (j.date || "") < from) continue;
+    if (to   && (j.date || "") > to)   continue;
+    const lines = j.lines || [];
+    const cashLines = lines.filter(l => cashIds.has(l.accountId));
+    if (!cashLines.length) continue;
+    const others = lines.filter(l => !cashIds.has(l.accountId));
+
+    for (const cl of cashLines) {
+      const inAmt  = Number(cl.debit)  || 0;
+      const outAmt = Number(cl.credit) || 0;
+      totalIn += inAmt; totalOut += outAmt;
+      // ننسب الحركة لأول حساب مقابل (يكفي للتصنيف العملي)
+      const key = others[0]
+        ? `${others[0].accountCode} — ${others[0].accountName}`
+        : "غير مصنّف";
+      const b = buckets.get(key) || { in: 0, out: 0 };
+      b.in += inAmt; b.out += outAmt;
+      buckets.set(key, b);
+    }
+  }
+
+  const closing = round2(opening + totalIn - totalOut);
+  $("cfStats").innerHTML =
+    statCard("رصيد أول المدة", money(opening), "var(--muted)") +
+    statCard("إجمالي الوارد", money(totalIn), "var(--green)") +
+    statCard("إجمالي الصادر", money(totalOut), "var(--red)") +
+    statCard("رصيد آخر المدة", money(closing), "var(--blue)");
+
+  const rows = [...buckets.entries()]
+    .map(([k, v]) => ({ k, ...v, net: round2(v.in - v.out) }))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+  $("cfBody").innerHTML = rows.length ? rows.map(r => `<tr>
+      <td>${esc(r.k)}</td>
+      <td class="num" style="color:var(--green)">${r.in ? fmt(r.in) : "—"}</td>
+      <td class="num" style="color:var(--red)">${r.out ? fmt(r.out) : "—"}</td>
+      <td class="num" style="font-weight:700;color:${r.net >= 0 ? "var(--green)" : "var(--red)"}">${fmt(r.net)}</td>
+    </tr>`).join("") +
+    `<tr class="total-row"><td>الإجمالي</td>
+      <td class="num">${fmt(totalIn)}</td><td class="num">${fmt(totalOut)}</td>
+      <td class="num">${fmt(round2(totalIn - totalOut))}</td></tr>`
+    : `<tr><td colspan="4" class="empty-row">لا توجد حركة نقدية في الفترة</td></tr>`;
+};
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشاشات — الجزء الرابع: الأطراف + الخزن + الترحيل + الفترات
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════ 9) حسابات الأطراف ══════════════════════ */
+let _partyTab = "pilot";
+
+window.switchPartyTab = function(t) {
+  _partyTab = t;
+  document.querySelectorAll("[data-party]").forEach(b =>
+    b.classList.toggle("active", b.dataset.party === t));
+  renderParties();
+};
+
+/**
+ * الأستاذ المساعد: أرصدة الأطراف تُحسب من partyId على سطور القيود
+ * مقابل حسابات المراقبة الخاصة بكل نوع طرف.
+ */
+function partyBalances(controlCodes) {
+  const ids = new Set();
+  for (const code of controlCodes) {
+    const a = accByCode(code);
+    if (a) for (const id of descendantIds(a.id)) ids.add(id);
+  }
+  const map = new Map();
+  for (const j of S.journal) {
+    if (j.status !== "posted") continue;
+    for (const l of (j.lines || [])) {
+      if (!ids.has(l.accountId)) continue;
+      const pid = l.partyId || "";
+      if (!pid) continue;
+      const cur = map.get(pid) || { debit: 0, credit: 0 };
+      cur.debit  += Number(l.debit)  || 0;
+      cur.credit += Number(l.credit) || 0;
+      map.set(pid, cur);
+    }
+  }
+  return map;
+}
+
+const PARTY_CONFIG = {
+  pilot   : { codes: ["1121", "2111", "113"], label: "الطيارون" },
+  store   : { codes: ["1122", "2112"],        label: "المحلات" },
+  employee: { codes: ["212", "116"],          label: "الموظفون" },
+  supplier: { codes: ["2113"],                label: "الموردون" }
+};
+
+window.renderParties = function() {
+  const cfg = PARTY_CONFIG[_partyTab];
+  const map = partyBalances(cfg.codes);
+  const q = ($("partySearch")?.value || "").trim().toLowerCase();
+
+  let list = [];
+  if (_partyTab === "pilot") {
+    list = S.pilots.map(p => ({ id: p.id, name: p.name, meta: p.phone1 || "" }));
+    for (const [pid] of map) if (!list.find(x => x.id === pid)) list.push({ id: pid, name: pid, meta: "غير معروف" });
+  } else if (_partyTab === "employee") {
+    const keys = new Set([...map.keys()]);
+    list = [...keys].map(k => ({ id: k, name: employeeNameOf(k), meta: k }));
+  } else if (_partyTab === "store") {
+    list = S.users.filter(u => String(u.role || "").includes("محل"))
+      .map(u => ({ id: u.username, name: u.shopName || u.username, meta: u.branchName || "" }));
+    for (const [pid] of map) if (!list.find(x => x.id === pid)) list.push({ id: pid, name: pid, meta: "" });
+  } else {
+    list = [...map.keys()].map(k => ({ id: k, name: k, meta: "" }));
+  }
+
+  const rows = list.map(p => {
+    const b = map.get(p.id) || { debit: 0, credit: 0 };
+    return { ...p, debit: round2(b.debit), credit: round2(b.credit), net: round2(b.debit - b.credit) };
+  }).filter(r => (r.debit || r.credit) && (!q || r.name.toLowerCase().includes(q)))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+  const totD = rows.reduce((s, r) => s + r.debit, 0);
+  const totC = rows.reduce((s, r) => s + r.credit, 0);
+
+  $("partiesBody").innerHTML = rows.length ? rows.map((r, i) => `<tr>
+      <td class="idx">${i + 1}</td>
+      <td><b>${esc(r.name)}</b>${r.meta ? `<div style="font-size:.73rem;color:var(--muted)">${esc(r.meta)}</div>` : ""}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(cfg.label)}</td>
+      <td class="num" style="color:var(--green)">${r.debit ? fmt(r.debit) : "—"}</td>
+      <td class="num" style="color:var(--orange)">${r.credit ? fmt(r.credit) : "—"}</td>
+      <td class="num" style="font-weight:800;color:${r.net >= 0 ? "var(--green)" : "var(--red)"}">${fmt(Math.abs(r.net))}</td>
+      <td>${Math.abs(r.net) < 0.01 ? '<span class="badge bg-muted">مُسوّى</span>'
+            : r.net > 0 ? '<span class="badge bg-green">له علينا مدين</span>'
+                        : '<span class="badge bg-orange">علينا له</span>'}</td>
+      <td><button class="btn-ghost btn-xs" onclick="viewPartyStatement('${esc(r.id)}','${esc(r.name)}')">📄 كشف حساب</button></td>
+    </tr>`).join("") +
+    `<tr class="total-row"><td colspan="3">الإجمالي</td>
+      <td class="num">${fmt(totD)}</td><td class="num">${fmt(totC)}</td>
+      <td class="num">${fmt(Math.abs(round2(totD - totC)))}</td><td colspan="2"></td></tr>`
+    : `<tr><td colspan="8" class="empty-row">لا توجد أرصدة لهذه الفئة</td></tr>`;
+};
+
+window.viewPartyStatement = function(partyId, name) {
+  const cfg = PARTY_CONFIG[_partyTab];
+  const ids = new Set();
+  for (const code of cfg.codes) {
+    const a = accByCode(code);
+    if (a) for (const id of descendantIds(a.id)) ids.add(id);
+  }
+
+  const rows = [];
+  for (const j of S.journal) {
+    if (j.status !== "posted") continue;
+    for (const l of (j.lines || [])) {
+      if (!ids.has(l.accountId) || (l.partyId || "") !== partyId) continue;
+      rows.push({ date: j.date, no: j.no, desc: j.desc, l });
+    }
+  }
+  rows.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.no || 0) - (b.no || 0));
+
+  let run = 0;
+  const body = rows.map(r => {
+    run += (Number(r.l.debit) || 0) - (Number(r.l.credit) || 0);
+    return `<tr>
+      <td class="num">${esc(r.date)}</td><td class="idx">${r.no || ""}</td>
+      <td style="font-size:.82rem">${esc(r.l.accountName)}</td>
+      <td style="font-size:.82rem;max-width:220px">${esc(r.l.note || r.desc || "")}</td>
+      <td class="num" style="color:var(--green)">${r.l.debit ? fmt(r.l.debit) : ""}</td>
+      <td class="num" style="color:var(--orange)">${r.l.credit ? fmt(r.l.credit) : ""}</td>
+      <td class="num" style="font-weight:700">${fmt(run)}</td></tr>`;
+  }).join("");
+
+  $("viewModalTitle").textContent = `📄 كشف حساب — ${name}`;
+  $("viewModalBody").innerHTML = rows.length
+    ? `<div class="table-wrap"><table>
+        <thead><tr><th>التاريخ</th><th>قيد</th><th>الحساب</th><th>البيان</th>
+        <th class="num">مدين</th><th class="num">دائن</th><th class="num">الرصيد</th></tr></thead>
+        <tbody>${body}<tr class="total-row"><td colspan="6">الرصيد النهائي</td>
+        <td class="num" style="color:${run >= 0 ? "var(--green)" : "var(--red)"}">${fmt(run)}</td></tr></tbody></table></div>
+       <div style="font-size:.8rem;color:var(--muted);margin-top:10px">
+        ${run > 0 ? "رصيد مدين — المبلغ مستحق <b>لنا</b> على الطرف."
+                  : run < 0 ? "رصيد دائن — المبلغ مستحق <b>علينا</b> للطرف." : "الحساب مُسوّى."}</div>`
+    : `<div class="empty-row">لا توجد حركة</div>`;
+  $("viewModalFoot").innerHTML = `<button class="btn-ghost" onclick="closeModal('view')">إغلاق</button>
+    <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>`;
+  openModal("view");
+};
+
+/* ══════════════════════ 10) الخزن والبنوك ══════════════════════ */
+window.renderTreasury = function() {
+  const mv = movementsMap({});
+  const cashRoot = accByCode("111");
+  let bookTotal = 0, actualTotal = 0;
+
+  const rows = S.stores.map((st, i) => {
+    const acc = S.accounts.find(a => a.linkId === st.id && a.partyType === "cash");
+    const book = acc ? accountNet(acc.id, mv) : 0;
+    const actual = round2(st.balance);
+    bookTotal += book; actualTotal += actual;
+    const diff = round2(book - actual);
+    return { i, st, acc, book, actual, diff };
+  });
+
+  // حسابات نقدية بدون خزنة مقابلة (الخزينة الرئيسية والبنك)
+  const extra = (cashRoot?._children || []).filter(a => !a.linkId).map(a => ({
+    i: -1, st: { name: a.name, branchId: "" }, acc: a,
+    book: accountNet(a.id, mv), actual: null, diff: null
+  })).filter(r => Math.abs(r.book) > 0.005);
+  extra.forEach(r => bookTotal += r.book);
+
+  const diffTotal = round2(bookTotal - actualTotal);
+  $("treasuryStats").innerHTML =
+    statCard("إجمالي الرصيد الدفتري", money(bookTotal), "var(--blue)", "من القيود المُرحَّلة") +
+    statCard("إجمالي الرصيد الفعلي", money(actualTotal), "var(--green)", "من النظام التشغيلي") +
+    statCard("الفرق", money(diffTotal), Math.abs(diffTotal) < 0.01 ? "var(--green)" : "var(--orange)",
+             Math.abs(diffTotal) < 0.01 ? "مطابق ✓" : "يحتاج ترحيل أو تسوية") +
+    statCard("عدد الخزن", fmt0(S.stores.length), "var(--purple)");
+
+  const all = [...rows, ...extra];
+  $("treasuryBody").innerHTML = all.length ? all.map((r, i) => `<tr>
+      <td class="idx">${i + 1}</td>
+      <td><b>${esc(r.st.name)}</b>${r.acc ? `<div style="font-size:.73rem;color:var(--muted)">${esc(r.acc.code)}</div>` : ""}</td>
+      <td style="font-size:.82rem">${esc(S.branches.find(b => b.id === r.st.branchId)?.name || "—")}</td>
+      <td class="num" style="font-weight:700">${fmt(r.book)}</td>
+      <td class="num">${r.actual === null ? "—" : fmt(r.actual)}</td>
+      <td class="num" style="color:${r.diff === null ? "var(--muted)" : Math.abs(r.diff) < 0.01 ? "var(--green)" : "var(--orange)"};font-weight:700">
+        ${r.diff === null ? "—" : fmt(r.diff)}</td>
+      <td>${r.acc ? `<button class="btn-ghost btn-xs" onclick="openLedgerFor('${r.acc.id}')">📖 كشف</button>` : ""}</td>
+    </tr>`).join("") : `<tr><td colspan="7" class="empty-row">لا توجد خزن</td></tr>`;
+};
+
+window.openLedgerFor = function(accId) {
+  navigateTo("ledger");
+  setTimeout(() => { $("ledgerAccount").value = accId; renderLedger(); }, 60);
+};
+
+window.openTransferModal = function() {
+  const cashRoot = accByCode("111");
+  const opts = cashRoot
+    ? [...descendantIds(cashRoot.id)].map(id => S.accById.get(id)).filter(a => a && !a.isGroup)
+        .sort((a, b) => String(a.code).localeCompare(String(b.code), "en"))
+        .map(a => `<option value="${a.id}">${esc(a.code)} — ${esc(a.name)}</option>`).join("")
+    : "";
+  $("trFrom").innerHTML = `<option value="">— اختر —</option>` + opts;
+  $("trTo").innerHTML   = `<option value="">— اختر —</option>` + opts;
+  $("trAmount").value = ""; $("trDesc").value = "";
+  $("trDate").value = todayStr(); $("trError").textContent = "";
+  openModal("transfer");
+};
+
+window.saveTransfer = async function() {
+  const err = $("trError");
+  const from = $("trFrom").value, to = $("trTo").value;
+  const amount = round2($("trAmount").value);
+  err.textContent = "";
+  if (!from || !to)   { err.textContent = "اختر الخزنتين"; return; }
+  if (from === to)    { err.textContent = "لا يمكن التحويل لنفس الخزنة"; return; }
+  if (amount <= 0)    { err.textContent = "أدخل مبلغًا صحيحًا"; return; }
+  try {
+    await createJournalEntry({
+      date: $("trDate").value,
+      desc: $("trDesc").value.trim() || "تحويل نقدية بين الخزن",
+      refType: "transfer",
+      lines: [
+        { accountId: to,   debit: amount, credit: 0, note: "تحويل وارد" },
+        { accountId: from, debit: 0, credit: amount, note: "تحويل صادر" }
+      ]
+    });
+    showToast("تم تنفيذ التحويل ✓", "success");
+    closeModal("transfer");
+  } catch (e) { err.textContent = e.message; }
+};
+
+/* ══════════════════════ 11) الترحيل التلقائي ══════════════════════ */
+window.renderAutopostPage = function(scan) {
+  const start = S.mapping?.startDate || DEFAULT_MAPPING.startDate;
+  const openingDone = isPosted("opening", "opening_" + start);
+
+  $("autopostNote").innerHTML =
+    `تاريخ بداية النظام: <b>${esc(start)}</b> — المستندات الأقدم من التاريخ ده مش بتترحّل.<br>
+     أرصدة الخزن الدفترية بتيجي <b>حصريًا</b> من حركات الخزينة عشان تطابق الأرصدة الفعلية.
+     أي حركة مش معروف طرفها بتروح لحساب <b>مبالغ تحت التسوية</b> عشان تراجعها.<br>
+     ${openingDone
+       ? '✅ القيد الافتتاحي مُرحَّل.'
+       : `⚠️ لسه ما اتعملش قيد افتتاحي. <button class="btn-green btn-xs" onclick="postOpeningEntry()">إنشاء القيد الافتتاحي</button>`}`;
+
+  if (!scan && $("autopostBody").dataset.scanned !== "1") {
+    $("autopostStats").innerHTML = "";
+    return;
+  }
+
+  const p = pendingDocuments();
+  $("autopostBody").dataset.scanned = "1";
+
+  const val = arr => round2(arr.reduce((s, x) =>
+    s + (Number(x.totalDeliveryPrice) || Number(x.amount) || 0), 0));
+
+  const groups = [
+    { key: "أوردرات مُسلَّمة", desc: "إيراد التوصيل + عمولة الطيار + رسوم التطوير", n: p.orders.length,   v: val(p.orders) },
+    { key: "حركات الخزينة",   desc: "وارد/صادر الخزن والعُهَد والتحصيلات",          n: p.cash.length,     v: val(p.cash) },
+    { key: "المصروفات",       desc: "مصروف مقابل التزام مستحق",                     n: p.expenses.length, v: val(p.expenses) },
+    { key: "الرواتب",         desc: "رواتب ومكافآت وخصومات وسُلف",                   n: p.payroll.length,  v: val(p.payroll) }
+  ];
+
+  const total = groups.reduce((s, g) => s + g.n, 0);
+  const totalVal = groups.reduce((s, g) => s + g.v, 0);
+
+  $("autopostStats").innerHTML =
+    statCard("مستندات غير مُرحَّلة", fmt0(total), total ? "var(--orange)" : "var(--green)") +
+    statCard("قيمتها", money(totalVal), "var(--blue)") +
+    statCard("إجمالي القيود الحالية", fmt0(S.journal.filter(j => j.status === "posted").length), "var(--sky)") +
+    statCard("آخر ترحيل", S.postLog.length
+      ? toDateStr(S.postLog[S.postLog.length - 1].at) : "—", "var(--muted)");
+
+  $("autopostBody").innerHTML = groups.map(g => `<tr>
+      <td><b>${esc(g.key)}</b></td>
+      <td style="font-size:.82rem;color:var(--muted)">${esc(g.desc)}</td>
+      <td class="num" style="font-weight:700;color:${g.n ? "var(--orange)" : "var(--green)"}">${fmt0(g.n)}</td>
+      <td class="num">${g.v ? fmt(g.v) : "—"}</td>
+      <td>${g.n ? '<span class="badge bg-orange">بانتظار الترحيل</span>' : '<span class="badge bg-green">مُحدَّث ✓</span>'}</td>
+    </tr>`).join("");
+
+  const log = [...S.postLog].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 20);
+  $("autopostLogBody").innerHTML = log.length ? log.map(l => `<tr>
+      <td class="num">${esc(String(l.at || "").slice(0, 16).replace("T", " "))}</td>
+      <td>${esc(l.by || "—")}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(l.scope || "")}</td>
+      <td class="num">${fmt0(l.count)}</td>
+      <td class="num">${fmt(l.value)}</td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty-row">لم تُنفَّذ أي عملية ترحيل بعد</td></tr>`;
+};
+
+/* ══════════════════════ 12) الفترات والإقفال ══════════════════════ */
+window.renderPeriods = function() {
+  const months = [...new Set(S.journal.map(j => j.period).filter(Boolean))].sort().reverse();
+  const cur = monthOf(todayStr());
+  if (!months.includes(cur)) months.unshift(cur);
+
+  const revRoot = accByCode("4"), expRoot = accByCode("5");
+
+  $("periodsBody").innerHTML = months.map(m => {
+    const js = S.journal.filter(j => j.period === m && j.status === "posted");
+    const d = round2(js.reduce((s, j) => s + (j.totalDebit || 0), 0));
+    const c = round2(js.reduce((s, j) => s + (j.totalCredit || 0), 0));
+    const mv = movementsMap({ from: m + "-01", to: m + "-31" });
+    const profit = round2((revRoot ? -accountNet(revRoot.id, mv) : 0) - (expRoot ? accountNet(expRoot.id, mv) : 0));
+    const closed = S.periods?.[m]?.status === "closed";
+    return `<tr>
+      <td><b class="num">${esc(m)}</b></td>
+      <td class="num">${fmt0(js.length)}</td>
+      <td class="num" style="color:var(--green)">${fmt(d)}</td>
+      <td class="num" style="color:var(--orange)">${fmt(c)}</td>
+      <td class="num" style="font-weight:700;color:${profit >= 0 ? "var(--green)" : "var(--red)"}">${fmt(profit)}</td>
+      <td>${closed ? '<span class="badge bg-red">🔒 مقفولة</span>' : '<span class="badge bg-green">🔓 مفتوحة</span>'}</td>
+      <td>${S.user?.canEdit
+        ? `<button class="${closed ? "btn-green" : "btn-red"} btn-xs" onclick="togglePeriod('${m}',${closed})">
+             ${closed ? "🔓 فتح" : "🔒 إقفال"}</button>` : ""}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty-row">لا توجد فترات</td></tr>`;
+};
+
+window.togglePeriod = async function(month, isClosed) {
+  const action = isClosed ? "فتح" : "إقفال";
+  if (!confirm(`${action} الفترة ${month}؟` + (isClosed ? "" : "\n\nلن يمكن إضافة أو تعديل أي قيد داخلها."))) return;
+  try {
+    await update(ref(db, `${ACC_ROOT}/periods/${month}`), {
+      status: isClosed ? "open" : "closed",
+      [isClosed ? "openedAt" : "closedAt"]: new Date().toISOString(),
+      [isClosed ? "openedBy" : "closedBy"]: S.user?.username || ""
+    });
+    showToast(`تم ${action} الفترة ${month} ✓`, "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ── الإقفال السنوي ─────────────────────────────────────────── */
+window.openYearEndModal = function() {
+  const y = new Date().getFullYear();
+  $("yeYear").value = y;
+  $("yeDate").value = `${y}-12-31`;
+  $("yePreview").innerHTML = "";
+  $("yeError").textContent = "";
+  openModal("yearend");
+};
+
+function yearEndData() {
+  const year = Number($("yeYear").value);
+  const from = `${year}-01-01`, to = `${year}-12-31`;
+  const mv = movementsMap({ from, to });
+  const lines = [];
+  let revenue = 0, expense = 0;
+
+  for (const a of S.accounts.filter(x => !x.isGroup && (x.type === "revenue" || x.type === "expense"))) {
+    const own = ownMovement(a.id, mv);
+    const net = round2(own.debit - own.credit);
+    if (Math.abs(net) < 0.005) continue;
+    // نعكس الرصيد لتصفير الحساب
+    lines.push({ accountId: a.id, debit: net < 0 ? -net : 0, credit: net > 0 ? net : 0,
+                 note: `إقفال ${a.name}` });
+    if (a.type === "revenue") revenue += -net; else expense += net;
+  }
+  return { year, from, to, lines, revenue: round2(revenue), expense: round2(expense),
+           profit: round2(revenue - expense) };
+}
+
+window.previewYearEnd = function() {
+  try {
+    const d = yearEndData();
+    $("yePreview").innerHTML = d.lines.length ? `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div>عدد الحسابات المُقفلة: <b>${fmt0(d.lines.length)}</b></div>
+        <div>إجمالي الإيرادات: <b style="color:var(--green)">${money(d.revenue)}</b></div>
+        <div>إجمالي المصروفات: <b style="color:var(--red)">${money(d.expense)}</b></div>
+        <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+          صافي ${d.profit >= 0 ? "الربح" : "الخسارة"}:
+          <b style="color:${d.profit >= 0 ? "var(--green)" : "var(--red)"};font-size:1.1rem">${money(Math.abs(d.profit))}</b>
+          → يُرحَّل إلى <b>الأرباح المُرحَّلة</b></div>
+      </div>` : `<div class="empty-row">لا توجد أرصدة إيرادات أو مصروفات في سنة ${d.year}</div>`;
+    $("yeError").textContent = "";
+  } catch (e) { $("yeError").textContent = e.message; }
+};
+
+window.runYearEnd = async function() {
+  const err = $("yeError");
+  err.textContent = "";
+  try {
+    const d = yearEndData();
+    if (!d.lines.length) { err.textContent = "لا توجد أرصدة للإقفال"; return; }
+    const retained = mapAcc("retained");
+    if (!retained) { err.textContent = "حساب الأرباح المُرحَّلة غير موجود"; return; }
+    if (isPosted("closing", "yearend_" + d.year)) { err.textContent = `سنة ${d.year} مُقفلة بالفعل`; return; }
+    if (!confirm(`تنفيذ الإقفال السنوي لسنة ${d.year}؟\n\nصافي النتيجة ${fmt(d.profit)} ج.م سيُرحَّل للأرباح المُرحَّلة.\nالعملية لا يمكن التراجع عنها.`)) return;
+
+    const lines = [...d.lines, {
+      accountId: retained.id,
+      debit : d.profit < 0 ? -d.profit : 0,
+      credit: d.profit > 0 ?  d.profit : 0,
+      note  : `صافي نتيجة أعمال ${d.year}`
+    }];
+
+    await createJournalEntry({
+      date   : $("yeDate").value || `${d.year}-12-31`,
+      desc   : `قيد الإقفال السنوي — ${d.year}`,
+      refType: "closing",
+      refId  : "yearend_" + d.year,
+      lines
+    });
+    showToast(`تم الإقفال السنوي لسنة ${d.year} ✓`, "success");
+    closeModal("yearend");
+  } catch (e) { err.textContent = e.message; }
+};
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشاشات — الجزء الخامس: الإعدادات + التصدير
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════ 13) الإعدادات ══════════════════════ */
+window.switchSetTab = function(t) {
+  document.querySelectorAll("[data-set]").forEach(b => b.classList.toggle("active", b.dataset.set === t));
+  ["general", "mapping", "tools"].forEach(k => {
+    const el = $("set-" + k); if (el) el.style.display = (k === t) ? "" : "none";
+  });
+};
+
+window.renderSettings = function() {
+  const m = S.mapping || DEFAULT_MAPPING;
+  $("setOrgName").value     = m.orgName || "";
+  $("setStartDate").value   = m.startDate || firstOfMonth();
+  $("setFiscalStart").value = String(m.fiscalStart || 1);
+  $("setDevFee").value      = m.devFeePerOrder ?? 2;
+  $("setTrackPrepaid").checked = !!m.trackPrepaid;
+  $("setAutoPostLive").checked = !!m.autoPostLive;
+
+  $("mappingGrid").innerHTML = MAPPING_FIELDS.map(([key, label]) => {
+    const code = m.acc?.[key] || DEFAULT_MAPPING.acc[key];
+    const acc  = accByCode(code);
+    return `<div class="form-group">
+      <label>${esc(label)}</label>
+      <select id="map_${key}">${accountOptions(acc?.id || "", "— غير محدد —")}</select>
+    </div>`;
+  }).join("");
+
+  const postedCount = S.journal.filter(j => j.status === "posted").length;
+  $("toolsBody").innerHTML = `
+    <tr>
+      <td style="width:60%"><b>إعادة إنشاء الدليل المحاسبي</b>
+        <div style="font-size:.8rem;color:var(--muted)">يضيف الحسابات الأساسية الناقصة فقط — لا يحذف ولا يعدّل الموجود.</div></td>
+      <td><button class="btn-ghost" onclick="repairChartOfAccounts()">🔧 إصلاح الدليل</button></td>
+    </tr>
+    <tr>
+      <td><b>إعادة ترحيل شامل من أول التاريخ</b>
+        <div style="font-size:.8rem;color:var(--muted)">يرجع تاريخ البداية لأقدم عملية في النظام ويرحّل كل التاريخ.
+        عدد القيود هيزيد كتير — استخدمه لو عايز سجل محاسبي كامل من البداية.</div></td>
+      <td><button class="btn-ghost" onclick="rebaseToFullHistory()">⏪ ترحيل كل التاريخ</button></td>
+    </tr>
+    <tr>
+      <td><b>فحص سلامة القيود</b>
+        <div style="font-size:.8rem;color:var(--muted)">يكشف القيود غير المتوازنة أو المرتبطة بحسابات محذوفة.</div></td>
+      <td><button class="btn-ghost" onclick="auditJournal()">🩺 فحص</button></td>
+    </tr>
+    <tr>
+      <td><b>حذف كل القيود والبدء من جديد</b>
+        <div style="font-size:.8rem;color:var(--red)">⚠️ يحذف ${fmt0(postedCount)} قيد نهائيًا. الدليل المحاسبي والإعدادات تبقى كما هي.</div></td>
+      <td><button class="btn-red" onclick="wipeJournal()">🗑️ حذف كل القيود</button></td>
+    </tr>`;
+};
+
+window.saveMapping = async function() {
+  if (!S.user?.canEdit) { showToast("ليس لديك صلاحية", "error"); return; }
+  try {
+    const acc = {};
+    for (const [key] of MAPPING_FIELDS) {
+      const id = $("map_" + key)?.value;
+      const a  = id ? S.accById.get(id) : null;
+      acc[key] = a?.code || DEFAULT_MAPPING.acc[key];
+    }
+    await update(ref(db, `${ACC_ROOT}/mapping`), {
+      orgName       : $("setOrgName").value.trim() || DEFAULT_MAPPING.orgName,
+      startDate     : $("setStartDate").value || firstOfMonth(),
+      fiscalStart   : Number($("setFiscalStart").value) || 1,
+      devFeePerOrder: Number($("setDevFee").value) || 0,
+      trackPrepaid  : $("setTrackPrepaid").checked,
+      autoPostLive  : $("setAutoPostLive").checked,
+      acc,
+      seeded        : true,
+      updatedAt     : new Date().toISOString(),
+      updatedBy     : S.user?.username || ""
+    });
+    showToast("تم حفظ الإعدادات ✓", "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ── أدوات الصيانة ─────────────────────────────────────────── */
+window.repairChartOfAccounts = async function() {
+  const missing = DEFAULT_COA.filter(([code]) => !accByCode(code));
+  if (!missing.length) { showToast("الدليل كامل — لا يوجد ناقص ✓", "success"); return; }
+  if (!confirm(`سيتم إضافة ${missing.length} حساب ناقص:\n\n${missing.map(m => m[0] + " " + m[1]).join("\n")}\n\nمتابعة؟`)) return;
+  try {
+    const now = new Date().toISOString();
+    const payload = {};
+    const newIds = {};
+    for (const [code] of missing) newIds[code] = push(ref(db, `${ACC_ROOT}/accounts`)).key;
+    for (const [code, name, type, isGroup, nature] of missing) {
+      const parentCode = code.length > 1 ? code.slice(0, -1) : "";
+      payload[newIds[code]] = {
+        code, name, type, isGroup: !!isGroup, nature,
+        parentId: accByCode(parentCode)?.id || newIds[parentCode] || "",
+        partyType: "", linkId: "", system: true, active: true, notes: "",
+        createdAt: now, createdBy: S.user?.username || ""
+      };
+    }
+    await update(ref(db, `${ACC_ROOT}/accounts`), payload);
+    showToast(`تمت إضافة ${missing.length} حساب ✓`, "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+window.rebaseToFullHistory = async function() {
+  const dates = [
+    ...S.orders.map(o => toDateStr(o.deliveredAt || o.createdAt)),
+    ...S.cashTxns.map(t => toDateStr(t.createdAt)),
+    ...S.expenses.map(e => toDateStr(e.date))
+  ].filter(Boolean).sort();
+  if (!dates.length) { showToast("لا توجد بيانات تشغيلية", "error"); return; }
+  const oldest = dates[0];
+  if (!confirm(`سيتم تغيير تاريخ بداية النظام إلى ${oldest} وترحيل كل التاريخ.\n\n` +
+               `ملاحظة: لو كان فيه قيد افتتاحي مُرحَّل، ألغِه أولًا حتى لا تتضاعف الأرصدة.\n\nمتابعة؟`)) return;
+  try {
+    await update(ref(db, `${ACC_ROOT}/mapping`), { startDate: oldest });
+    showToast(`تم ضبط البداية على ${oldest} — اضغط «ترحيل الآن» من صفحة الترحيل`, "success");
+    navigateTo("autopost");
+    setTimeout(() => renderAutopostPage(true), 300);
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+window.auditJournal = function() {
+  const issues = [];
+  for (const j of S.journal) {
+    if (j.status === "void") continue;
+    const d = round2((j.lines || []).reduce((s, l) => s + (Number(l.debit) || 0), 0));
+    const c = round2((j.lines || []).reduce((s, l) => s + (Number(l.credit) || 0), 0));
+    if (Math.abs(d - c) > 0.009) issues.push(`قيد ${j.no}: غير متوازن (فرق ${fmt(d - c)})`);
+    for (const l of (j.lines || [])) {
+      if (!S.accById.has(l.accountId)) issues.push(`قيد ${j.no}: حساب محذوف «${l.accountName || l.accountId}»`);
+      else if (S.accById.get(l.accountId).isGroup) issues.push(`قيد ${j.no}: قيد على حساب تجميعي «${l.accountName}»`);
+    }
+  }
+  const susp = mapAcc("suspense");
+  if (susp) {
+    const bal = accountNet(susp.id, movementsMap({}));
+    if (Math.abs(bal) > 0.009) issues.push(`رصيد «مبالغ تحت التسوية» = ${fmt(bal)} ج.م — يحتاج تسوية يدوية`);
+  }
+  alert(issues.length
+    ? `تم العثور على ${issues.length} ملاحظة:\n\n` + issues.slice(0, 40).join("\n")
+    : "✅ كل القيود سليمة ومتوازنة، ولا يوجد رصيد تحت التسوية.");
+};
+
+window.wipeJournal = async function() {
+  if (!confirm("⚠️ سيتم حذف كل القيود وبصمات الترحيل نهائيًا.\n\nمتأكد؟")) return;
+  if (prompt('اكتب "حذف" للتأكيد:') !== "حذف") { showToast("تم الإلغاء"); return; }
+  try {
+    await update(ref(db, ACC_ROOT), { journal: null, postedRefs: null, postLog: null, periods: null });
+    showToast("تم حذف كل القيود", "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   EXCEL EXPORT
+══════════════════════════════════════════════════════════════ */
+function downloadSheet(rows, sheetName, fileName) {
+  if (typeof XLSX === "undefined") { showToast("مكتبة Excel غير محمّلة", "error"); return; }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, fileName);
+  showToast("تم تصدير الملف ✓", "success");
+}
+
+window.exportJournalExcel = function() {
+  const rows = [["رقم", "التاريخ", "البيان", "المصدر", "الحساب", "بيان السطر", "الفرع", "مدين", "دائن", "الحالة"]];
+  for (const j of filteredJournal()) {
+    for (const l of (j.lines || [])) {
+      rows.push([j.no, j.date, j.desc, SOURCE_LABEL[j.refType] || j.refType,
+                 `${l.accountCode} — ${l.accountName}`, l.note || "", l.branchName || "",
+                 Number(l.debit) || 0, Number(l.credit) || 0,
+                 j.status === "posted" ? "مُرحَّل" : j.status === "draft" ? "مسودة" : "ملغي"]);
+    }
+  }
+  downloadSheet(rows, "دفتر اليومية", `journal_${todayStr()}.xlsx`);
+};
+
+window.exportLedgerExcel = function() {
+  const accId = $("ledgerAccount").value;
+  if (!accId) { showToast("اختر حسابًا أولًا", "error"); return; }
+  const acc = S.accById.get(accId);
+  const rows = [["التاريخ", "قيد", "البيان", "الفرع", "مدين", "دائن", "الرصيد"]];
+  document.querySelectorAll("#ledgerBody tr").forEach(tr => {
+    const tds = [...tr.querySelectorAll("td")].map(td => td.textContent.trim());
+    if (tds.length === 7) rows.push(tds);
+  });
+  downloadSheet(rows, "دفتر الأستاذ", `ledger_${acc.code}_${todayStr()}.xlsx`);
+};
+
+window.exportTrialExcel = function() {
+  const rows = [["الكود", "الحساب", "رصيد أول المدة", "حركة مدين", "حركة دائن", "رصيد مدين", "رصيد دائن"]];
+  document.querySelectorAll("#trialBody tr").forEach(tr => {
+    const tds = [...tr.querySelectorAll("td")].map(td => td.textContent.trim());
+    if (tds.length === 7) rows.push(tds);
+    else if (tds.length === 6) rows.push(["", ...tds]);   // صف الإجمالي (colspan)
+  });
+  downloadSheet(rows, "ميزان المراجعة", `trial_balance_${todayStr()}.xlsx`);
+};
+
+window.exportIncomeExcel = function() {
+  const d = incomeData();
+  const rows = [[S.mapping?.orgName || "الدهشان"], [`قائمة الدخل من ${d.from} إلى ${d.to}`], [], ["البند", "المبلغ"]];
+  rows.push(["الإيرادات", ""]);
+  d.rev.groups.forEach(g => { rows.push(["  " + g.name, g.total]); g.items.forEach(i => rows.push(["    " + i.name, i.amount])); });
+  rows.push(["إجمالي الإيرادات", d.rev.total], []);
+  rows.push(["المصروفات", ""]);
+  d.exp.groups.forEach(g => { rows.push(["  " + g.name, g.total]); g.items.forEach(i => rows.push(["    " + i.name, i.amount])); });
+  rows.push(["إجمالي المصروفات", d.exp.total], []);
+  rows.push([d.profit >= 0 ? "صافي الربح" : "صافي الخسارة", Math.abs(d.profit)]);
+  downloadSheet(rows, "قائمة الدخل", `income_statement_${todayStr()}.xlsx`);
+};
+
+window.exportBalanceExcel = function() {
+  const rows = [[S.mapping?.orgName || "الدهشان"], [`الميزانية العمومية كما في ${$("balAsOf").value}`], []];
+  rows.push(["الأصول", ""]);
+  document.querySelectorAll("#balAssetsBody tr").forEach(tr => {
+    const tds = [...tr.querySelectorAll("td")].map(td => td.textContent.trim());
+    if (tds.length === 2) rows.push(tds);
+  });
+  rows.push([], ["الخصوم وحقوق الملكية", ""]);
+  document.querySelectorAll("#balLiabEqBody tr").forEach(tr => {
+    const tds = [...tr.querySelectorAll("td")].map(td => td.textContent.trim());
+    if (tds.length === 2) rows.push(tds);
+  });
+  downloadSheet(rows, "الميزانية العمومية", `balance_sheet_${todayStr()}.xlsx`);
+};
+
+window.exportPartiesExcel = function() {
+  const rows = [["#", "الاسم", "الفئة", "مدين", "دائن", "الرصيد", "الحالة"]];
+  document.querySelectorAll("#partiesBody tr").forEach(tr => {
+    const tds = [...tr.querySelectorAll("td")].map(td => td.textContent.trim());
+    if (tds.length === 8) rows.push(tds.slice(0, 7));
+  });
+  downloadSheet(rows, "حسابات الأطراف", `parties_${todayStr()}.xlsx`);
+};
+
+/* ══════════════════════════════════════════════════════════════
+   الترحيل التلقائي الفوري (اختياري من الإعدادات)
+══════════════════════════════════════════════════════════════ */
+let _liveChecked = false;
+setInterval(() => {
+  if (_liveChecked) return;
+  if (!S.user?.canEdit || !S.mapping?.autoPostLive) return;
+  if (!S.ready.accounts || !S.ready.journal || !S.ready.ops) return;
+  if (!S.accounts.length) return;
+  _liveChecked = true;
+  const p = pendingDocuments();
+  const n = p.orders.length + p.cash.length + p.expenses.length + p.payroll.length;
+  if (n > 0) showToast(`يوجد ${fmt0(n)} مستند غير مُرحَّل — افتح «الترحيل التلقائي»`, "");
+}, 6000);
+</script>
+
+
+</body>
+</html>

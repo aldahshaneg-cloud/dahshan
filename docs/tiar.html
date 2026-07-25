@@ -1210,7 +1210,7 @@
       // المصروفات
       const sortedExpenses = [...expenses].sort((a,b) => (b.date||"").localeCompare(a.date||""));
       if (!sortedExpenses.length) {
-        expensesBody.innerHTML = `<tr><td colspan="7" class="empty-row">لا توجد مصروفات مسجّلة</td></tr>`;
+        expensesBody.innerHTML = `<tr><td colspan="8" class="empty-row">لا توجد مصروفات مسجّلة</td></tr>`;
       } else {
         expensesBody.innerHTML = sortedExpenses.map((e,i) => {
           const branchName = e.branchId ? (branches.find(b => b.id === e.branchId)?.name || "—") : "—";
@@ -1220,6 +1220,9 @@
             <td><b>${e.item || "—"}</b></td>
             <td style="color:var(--red);font-weight:700">${e.amount || 0} ج.م</td>
             <td>${branchName}</td>
+            <td>${e.cashTxnId
+              ? `<span style="background:rgba(34,197,94,.14);color:var(--green);font-weight:700;padding:3px 9px;border-radius:6px;font-size:.76rem">💵 مدفوع — ${e.cashStoreName || "خزنة"}</span>`
+              : `<span style="background:rgba(249,115,22,.13);color:var(--orange);font-weight:700;padding:3px 9px;border-radius:6px;font-size:.76rem">⏳ مستحق</span>`}</td>
             <td style="font-size:.78rem;color:var(--muted)">${e.notes || "—"}</td>
             <td>
               <button class="view-btn" onclick="openEditExpense('${e.id}')">✏️ تعديل</button>
@@ -1235,6 +1238,17 @@
         expBranchSel.innerHTML = `<option value="">— عام (غير مرتبط بفرع) —</option>` +
           branches.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
       }
+
+      // ضبط قائمة الخزن في نموذج المصروف (تتحدّث دائمًا لأن الأرصدة متغيّرة)
+      const expStoreSel = document.getElementById("expenseStore");
+      if (expStoreSel) {
+        const keep = expStoreSel.value;
+        expStoreSel.innerHTML = `<option value="">— لم يُدفع نقدًا بعد (التزام مستحق) —</option>` +
+          (window._cashStoresData || []).map(s =>
+            `<option value="${s.id}">${s.name} — ${s.branchName || "—"} (${(Number(s.balance)||0).toFixed(2)} ج.م)</option>`
+          ).join("");
+        expStoreSel.value = keep;
+      }
     };
 
     window.submitExpense = async function() {
@@ -1244,18 +1258,58 @@
       const amount = Number(document.getElementById("expenseAmount").value) || 0;
       const branchId = document.getElementById("expenseBranch").value || "";
       const notes  = document.getElementById("expenseNotes").value.trim();
+      const storeId = document.getElementById("expenseStore")?.value || "";
       if (!date || !item || !amount) { showToast("يرجى تعبئة التاريخ والبند والمبلغ", "error"); return; }
+
+      // مصروف قديم مسجَّلة له حركة خزنة: ما نكرّرش الخصم
+      const existing = id ? (window._expensesData || []).find(x => x.id === id) : null;
+      const alreadyPaid = !!existing?.cashTxnId;
+      if (alreadyPaid && storeId && storeId !== existing.cashStoreId) {
+        showToast("حركة الخزنة مسجّلة بالفعل لهذا المصروف — عدّلها من سجل الخزنة", "error");
+        return;
+      }
+
+      const store = storeId ? (window._cashStoresData || []).find(s => s.id === storeId) : null;
+      if (storeId && !store) { showToast("الخزنة المختارة غير موجودة", "error"); return; }
+      if (store && !alreadyPaid && (Number(store.balance) || 0) < amount) {
+        if (!confirm(`رصيد «${store.name}» هو ${(Number(store.balance)||0).toFixed(2)} ج.م وأقل من المصروف (${amount} ج.م).\n\nهل تريد المتابعة ويصبح الرصيد بالسالب؟`)) return;
+      }
+
       const btn = document.getElementById("submitExpenseBtn");
       btn.disabled = true; btn.textContent = "جاري الحفظ…";
       try {
         const data = { date, item, amount, branchId, notes, updatedAt: new Date().toISOString() };
+        if (storeId) { data.cashStoreId = storeId; data.cashStoreName = store.name; }
+
+        let expenseId = id;
         if (id) {
           await update(ref(db, "expenses/" + id), data);
-          showToast("تمّ تحديث المصروف ✓", "success");
         } else {
           data.createdAt = new Date().toISOString();
-          await push(ref(db, "expenses"), data);
-          showToast("تمّ إضافة المصروف ✓", "success");
+          const r = await push(ref(db, "expenses"), data);
+          expenseId = r.key;
+        }
+
+        // خصم من الخزنة + تسجيل حركة صادر (مرّة واحدة فقط لكل مصروف)
+        if (store && !alreadyPaid) {
+          const newBalance = (Number(store.balance) || 0) - amount;
+          await update(ref(db, "cashStores/" + storeId), { balance: newBalance });
+          const txnRef = await push(ref(db, "cashTransactions"), {
+            storeId, storeName: store.name,
+            type: "out", amount,
+            reason: `مصروف — ${item}`,
+            notes: notes || "",
+            relatedPilotId: "", relatedPilotName: "",
+            branchId: branchId || store.branchId || "",
+            branchName: store.branchName || "",
+            relatedExpenseId: expenseId,
+            createdBy: window._currentUser?.username || "",
+            createdAt: new Date().toISOString()
+          });
+          await update(ref(db, "expenses/" + expenseId), { cashTxnId: txnRef.key });
+          showToast(`تمّ حفظ المصروف وخصم ${amount} ج.م من ${store.name} ✓`, "success");
+        } else {
+          showToast(id ? "تمّ تحديث المصروف ✓" : "تمّ إضافة المصروف ✓", "success");
         }
         closeModal("expense");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
@@ -1271,13 +1325,34 @@
       document.getElementById("expenseAmount").value = e.amount || "";
       document.getElementById("expenseBranch").value = e.branchId || "";
       document.getElementById("expenseNotes").value  = e.notes || "";
+
+      // الخزنة: لو المصروف اتدفع فعلًا، نقفل الحقل ونوضّح السبب
+      const storeSel  = document.getElementById("expenseStore");
+      const storeHint = document.getElementById("expenseStoreHint");
+      if (storeSel) {
+        storeSel.value    = e.cashStoreId || "";
+        storeSel.disabled = !!e.cashTxnId;
+        if (storeHint) {
+          storeHint.innerHTML = e.cashTxnId
+            ? `🔒 المصروف مدفوع بالفعل من «${e.cashStoreName || "خزنة"}» وحركة الخزنة مسجّلة — لتعديلها استخدم سجل الخزنة.`
+            : "لو اخترت خزنة، هيتخصم المبلغ من رصيدها وتتسجّل حركة صادر في سجل الخزنة تلقائيًا.";
+        }
+      }
       document.querySelector("#modal-expense .modal-title").textContent = "✏️ تعديل مصروف";
       document.getElementById("submitExpenseBtn").textContent = "تحديث المصروف";
       openModal("expense");
     };
 
     window.deleteExpense = async function(id) {
-      if (!confirm("هل تريد حذف هذا المصروف؟")) return;
+      const e = (window._expensesData || []).find(x => x.id === id);
+      // المصروف المدفوع له حركة خزنة خصمت الرصيد فعلًا — الحذف لوحده هيخلّي
+      // الخزنة ناقصة بلا سبب مسجَّل، فبنسأل صراحةً قبل ما نكمّل
+      if (e?.cashTxnId) {
+        if (!confirm(
+          `⚠️ المصروف ده مدفوع من «${e.cashStoreName || "خزنة"}» وخُصم من رصيدها.\n\n` +
+          `حذفه هيسيب حركة الخزنة زي ما هي (الرصيد هيفضل ناقص) من غير مصروف مقابل.\n\n` +
+          `الأفضل تعكس الحركة من سجل الخزنة الأول. تحب تكمّل الحذف؟`)) return;
+      } else if (!confirm("هل تريد حذف هذا المصروف؟")) return;
       try { await remove(ref(db, "expenses/" + id)); showToast("تمّ حذف المصروف", "success"); }
       catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
@@ -8215,8 +8290,8 @@
         <div class="sec-header"><span class="sec-title">🧾 المصروفات اليدوية</span><button class="add-btn" onclick="resetExpenseModal();openModal('expense')">➕ إضافة مصروف</button></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>التاريخ</th><th>البند</th><th>المبلغ</th><th>الفرع</th><th>ملاحظات</th><th>إجراء</th></tr></thead>
-            <tbody id="accExpensesBody"><tr><td colspan="7" class="empty-row">جاري التحميل…</td></tr></tbody>
+            <thead><tr><th>#</th><th>التاريخ</th><th>البند</th><th>المبلغ</th><th>الفرع</th><th>حالة الدفع</th><th>ملاحظات</th><th>إجراء</th></tr></thead>
+            <tbody id="accExpensesBody"><tr><td colspan="8" class="empty-row">جاري التحميل…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -8531,6 +8606,12 @@
         <div class="form-group full"><label>البند <span class="req">*</span></label><input id="expenseItem" type="text" placeholder="مثال: إيجار، رواتب، صيانة..." required /></div>
         <div class="form-group full"><label>الفرع (اختياري)</label>
           <select id="expenseBranch"><option value="">— عام (غير مرتبط بفرع) —</option></select>
+        </div>
+        <div class="form-group full"><label>الخزنة التي دُفع منها المصروف (اختياري)</label>
+          <select id="expenseStore"><option value="">— لم يُدفع نقدًا بعد (التزام مستحق) —</option></select>
+          <div id="expenseStoreHint" style="font-size:.74rem;color:var(--muted);margin-top:5px">
+            لو اخترت خزنة، هيتخصم المبلغ من رصيدها وتتسجّل حركة صادر في سجل الخزنة تلقائيًا.
+          </div>
         </div>
         <div class="form-group full"><label>ملاحظات</label><textarea id="expenseNotes"></textarea></div>
       </div>
@@ -8866,7 +8947,7 @@
       <div class="form-grid">
         <div class="form-group full"><label>اسم المستخدم <span class="req">*</span></label><input id="newUsername" type="text" dir="ltr" required /></div>
         <div class="form-group full"><label>كلمة المرور <span class="req">*</span></label><input id="newPassword" type="password" dir="ltr" required /></div>
-        <div class="form-group full"><label>الدور</label><select id="newRole" onchange="toggleBranchSupervisorField()"><option value="موظف">موظف</option><option value="مشرف فرع">مشرف فرع</option><option value="مشرف">مشرف</option><option value="مدير">مدير</option><option value="سائق">سائق</option><option value="كول سنتر">كول سنتر</option><option value="صاحب محل">🏪 صاحب محل</option></select></div>
+        <div class="form-group full"><label>الدور</label><select id="newRole" onchange="toggleBranchSupervisorField()"><option value="موظف">موظف</option><option value="مشرف فرع">مشرف فرع</option><option value="مشرف">مشرف</option><option value="مدير">مدير</option><option value="سائق">سائق</option><option value="كول سنتر">كول سنتر</option><option value="محاسب">📒 محاسب</option><option value="صاحب محل">🏪 صاحب محل</option></select></div>
         <div class="form-group full" id="branchSupervisorField" style="display:none">
           <label>الفرع المسؤول عنه <span class="req">*</span></label>
           <select id="newUserBranch"><option value="">— اختر الفرع —</option></select>
@@ -9028,6 +9109,10 @@
   function resetExpenseModal() {
     document.getElementById("addExpenseForm").reset();
     document.getElementById("expenseId").value = "";
+    const storeSel  = document.getElementById("expenseStore");
+    const storeHint = document.getElementById("expenseStoreHint");
+    if (storeSel) { storeSel.value = ""; storeSel.disabled = false; }
+    if (storeHint) storeHint.innerHTML = "لو اخترت خزنة، هيتخصم المبلغ من رصيدها وتتسجّل حركة صادر في سجل الخزنة تلقائيًا.";
     document.querySelector("#modal-expense .modal-title").textContent = "🧾 إضافة مصروف";
     document.getElementById("submitExpenseBtn").textContent = "حفظ المصروف";
     const d = new Date();

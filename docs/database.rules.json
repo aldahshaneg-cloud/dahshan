@@ -124,6 +124,22 @@
     "pilotTransfers": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "accounting": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "accounts": {
+        "$acc": {
+          ".validate": "newData.hasChildren(['code','name','type'])"
+        }
+      },
+      "journal": {
+        "$entry": {
+          ".validate": "newData.hasChildren(['date','lines','totalDebit','totalCredit'])",
+          "totalDebit":  { ".validate": "newData.isNumber()" },
+          "totalCredit": { ".validate": "newData.isNumber()" }
+        }
+      }
     }
   }
 }
