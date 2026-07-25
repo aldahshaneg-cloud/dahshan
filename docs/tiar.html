@@ -3340,9 +3340,108 @@
     };
 
     /* ═══════════════════════════════════════════════════════════════
-       TRANSFER ORDER TO ANOTHER PILOT (نقل الطلب من طيار لآخر)
-       يُستخدم عند تعرّض الطيار الحالي لحادث/ظرف طارئ في الطريق
+       نقل الأوردر بين الطيارين — منطق موحّد
+       ───────────────────────────────────────────────────────────────
+       ٣ قواعد لازم تتحقق مع كل نقل، وكانت مكسورة قبل كده:
+
+       ١) وقت الأوردر يكمّل ولا يبدأ من جديد. عمر الأوردر بيتقاس من
+          statusSince (أول تحميل على طيار)، فممنوع نلمسه عند النقل —
+          وإلا الوقت الكلي بيضيع ومش هنعرف الأوردر خد كام من أول ما
+          خرج من الفرع. وقت الطيار الحالي بيتسجّل منفصل في
+          currentPilotSince.
+
+       ٢) لون الطيار على الخريطة بيتبع pilotStatus، فلازم يتحدّث
+          للطيارين الاتنين. القديم يرجع waiting (أخضر) لو مبقاش معاه
+          أوردرات، والجديد يبقى delivering (أزرق). الحساب بيتم من
+          الأوردرات الفعلية مش من حالة الطيار المخزّنة، عشان ما يعتمدش
+          على إن الحالة القديمة كانت مظبوطة.
+
+       ٣) shiftId لازم ينتقل لوردية الطيار الجديد. تقفيلة الوردية
+          بتحسب الأوردرات بـ shiftId بينما تقارير العمولة بتحسب بـ
+          pilotId — فلو shiftId ما اتحدّثش، الأوردر يفضل محسوب على
+          وردية الطيار الأول. وتطبيق الطيار بيبصم shiftId مرة واحدة بس
+          (addOrder فيه شرط !list.contains) فمش هيصلّحها لوحده لما
+          الأوردر يرجع لطيار كان معاه قبل كده.
     ═══════════════════════════════════════════════════════════════ */
+
+    /**
+     * يحسب أوردرات الطيار النشطة مع أخذ نقل لسه محصلش في الاعتبار،
+     * بدل الاعتماد على الكاش اللي لسه ما اتحدّثش من الـ listener.
+     */
+    function activeOrdersForPilot(pilotId, movedOrderId, movedToPilotId) {
+      return (window._ordersData || []).filter(o => {
+        const pid = (movedOrderId && o.id === movedOrderId) ? movedToPilotId : o.pilotId;
+        return pid === pilotId && o.status === "جاري التوصيل";
+      });
+    }
+
+    /**
+     * يضبط حالة الطيار من أوردراته الفعلية — المصدر الوحيد للون الخريطة.
+     * الطيار اللي في إذن بيتساب زي ما هو.
+     */
+    async function syncPilotStatus(pilotId, now, movedOrderId, movedToPilotId) {
+      if (!pilotId) return;
+      const pilot = (window._pilotsData || []).find(p => p.id === pilotId);
+      if (!pilot || pilot.pilotStatus === "onLeave") return;
+
+      const busy = activeOrdersForPilot(pilotId, movedOrderId, movedToPilotId).length > 0;
+
+      if (busy) {
+        if (pilot.pilotStatus === "delivering") return;
+        await update(ref(db, "pilots/" + pilotId), {
+          pilotStatus: "delivering", queueNo: null, statusSince: now
+        });
+        if (pilot.queueNo) await shiftQueueAfterRemoval(pilot.assignedBranchId, pilot.queueNo);
+      } else {
+        if (pilot.pilotStatus === "waiting") return;
+        const nextNo = await getNextQueueNo(pilot.assignedBranchId || null);
+        await update(ref(db, "pilots/" + pilotId), {
+          pilotStatus: "waiting", queueNo: nextNo, statusSince: now
+        });
+      }
+    }
+    window.syncPilotStatus = syncPilotStatus;
+
+    /** ينفّذ النقل كاملًا: الأوردر + الوردية + حالة الطيارين */
+    async function applyOrderTransfer({ order, fromPilot, toPilot }) {
+      const now = new Date().toISOString();
+      const orderId = order.id;
+
+      // وردية الطيار الجديد — الأوردر يتحاسب عليها من دلوقتي
+      const newShift = findActivePilotShift(toPilot.id);
+
+      const history = Array.isArray(order.transferHistory) ? order.transferHistory.slice() : [];
+      history.push({
+        fromId: fromPilot?.id || "", fromName: fromPilot?.name || "",
+        toId: toPilot.id, toName: toPilot.name,
+        fromShiftId: order.shiftId || "", toShiftId: newShift?.id || "",
+        at: now, by: window._currentUser?.username || ""
+      });
+
+      const upd = {};
+      upd[`orders/${orderId}/pilotId`]     = toPilot.id;
+      upd[`orders/${orderId}/pilotName`]   = toPilot.name;
+      upd[`orders/${orderId}/shiftId`]     = newShift?.id || null;
+      // statusSince مش بيتلمس — عمر الأوردر بيكمّل من أول تحميل
+      upd[`orders/${orderId}/currentPilotSince`]   = now;
+      upd[`orders/${orderId}/transferredFrom`]     = fromPilot?.id || null;
+      upd[`orders/${orderId}/transferredFromName`] = fromPilot?.name || null;
+      upd[`orders/${orderId}/transferredAt`]       = now;
+      upd[`orders/${orderId}/transferCount`]       = history.length;
+      upd[`orders/${orderId}/transferHistory`]     = history;
+      await update(ref(db), upd);
+
+      // حالة الطيارين بعد النقل — الجديد مشغول والقديم يتحرر لو فضي
+      await syncPilotStatus(toPilot.id, now, orderId, toPilot.id);
+      if (fromPilot?.id) await syncPilotStatus(fromPilot.id, now, orderId, toPilot.id);
+
+      if (!newShift) {
+        showToast(`⚠️ ${toPilot.name} مالوش وردية مفتوحة — الأوردر مش هيتحسب في تقفيلة وردية`, "error");
+      }
+      return now;
+    }
+    window.applyOrderTransfer = applyOrderTransfer;
+
     window.transferOrderPilot = async function(orderId) {
       const order = window._ordersData.find(o => o.id === orderId);
       if (!order) return;
@@ -3396,38 +3495,7 @@
         if (!confirm(`تأكيد نقل الطلب ${order.orderNum} من ${currentPilot ? currentPilot.name : "—"} إلى ${newPilot.name}؟`)) return;
 
         try {
-          const now = new Date().toISOString();
-
-          await update(ref(db, "orders/" + orderId), {
-            pilotId: newPilotId,
-            pilotName: newPilot.name,
-            statusSince: now,
-            transferredFrom: currentPilotId || null,
-            transferredFromName: currentPilot ? currentPilot.name : null,
-            transferredAt: now
-          });
-
-          if (newPilot.pilotStatus === "waiting") {
-            await update(ref(db, "pilots/" + newPilotId), {
-              pilotStatus: "delivering",
-              queueNo: null,
-              statusSince: now
-            });
-            await shiftQueueAfterRemoval(newPilot.assignedBranchId, newPilot.queueNo);
-          }
-
-          if (currentPilotId) {
-            const remaining = (window._ordersData || []).filter(o => o.pilotId === currentPilotId && o.status === "جاري التوصيل" && o.id !== orderId);
-            if (!remaining.length) {
-              const nextNo = await getNextQueueNo(currentPilot?.assignedBranchId || null);
-              await update(ref(db, "pilots/" + currentPilotId), {
-                pilotStatus: "waiting",
-                queueNo: nextNo,
-                statusSince: now
-              });
-            }
-          }
-
+          await applyOrderTransfer({ order, fromPilot: currentPilot, toPilot: newPilot });
           showToast(`تمّ نقل الطلب إلى ${newPilot.name} ✓`, "success");
           box.remove();
         } catch(e) { showToast("خطأ: " + e.message, "error"); }
@@ -3767,6 +3835,11 @@
                 const stages = [];
                 stages.push({ icon:"📥", label:"وصول الطلب للفرع", time:o.createdAt, color:"14,165,233" });
                 if (o.statusSince) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:o.statusSince, color:"249,115,22" });
+                // مراحل النقل بين الطيارين — الوقت بيكمّل ولا يبدأ من جديد
+                for (const t of (Array.isArray(o.transferHistory) ? o.transferHistory : [])) {
+                  stages.push({ icon:"🔄", label:`نقل من ${t.fromName || "—"} إلى ${t.toName || "—"}`,
+                                time:t.at, color:"249,115,22" });
+                }
                 if (o.receivedAt) stages.push({ icon:"📦", label:"استلام الطلب", time:o.receivedAt, color:"20,184,166" });
                 if (o.tripStartedAt) stages.push({ icon:"🚀", label:"بدء الرحلة", time:o.tripStartedAt, color:"139,92,246" });
 

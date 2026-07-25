@@ -2782,7 +2782,85 @@
     /* ═══════════════════════════════════════════════════════════════
        TRANSFER ORDER TO ANOTHER PILOT (نقل الطلب من طيار لآخر)
        يُستخدم عند تعرّض الطيار الحالي لحادث/ظرف طارئ في الطريق
+       ───────────────────────────────────────────────────────────────
+       ٣ قواعد لازم تتحقق مع كل نقل:
+       ١) وقت الأوردر يكمّل ولا يبدأ من جديد — ممنوع نلمس statusSince،
+          ووقت الطيار الحالي بيتسجّل منفصل في currentPilotSince.
+       ٢) لون الطيارين على الخريطة يتحدّث — القديم أخضر لو فضي والجديد
+          أزرق، محسوبين من الأوردرات الفعلية مش من الحالة المخزّنة.
+       ٣) shiftId ينتقل لوردية الطيار الجديد — تقفيلة الوردية بتحسب
+          بـ shiftId، وتطبيق الطيار بيبصمه مرة واحدة بس فمش هيصلّحها.
     ═══════════════════════════════════════════════════════════════ */
+
+    /** أوردرات الطيار النشطة مع أخذ نقل لسه محصلش في الاعتبار */
+    function activeOrdersForPilot(pilotId, movedOrderId, movedToPilotId) {
+      const src = window._allOrdersData || window._ordersData || [];
+      return src.filter(o => {
+        const pid = (movedOrderId && o.id === movedOrderId) ? movedToPilotId : o.pilotId;
+        return pid === pilotId && o.status === "جاري التوصيل";
+      });
+    }
+
+    /** يضبط حالة الطيار من أوردراته الفعلية — مصدر لون الخريطة */
+    async function syncPilotStatus(pilotId, now, movedOrderId, movedToPilotId) {
+      if (!pilotId) return;
+      const pilot = (window._allPilotsData || window._pilotsData || []).find(p => p.id === pilotId);
+      if (!pilot || pilot.pilotStatus === "onLeave") return;
+
+      const busy = activeOrdersForPilot(pilotId, movedOrderId, movedToPilotId).length > 0;
+      const brId = pilot.assignedBranchId || window._currentUser?.branchId;
+
+      if (busy) {
+        if (pilot.pilotStatus === "delivering") return;
+        await update(ref(db, "pilots/" + pilotId), {
+          pilotStatus: "delivering", queueNo: null, statusSince: now });
+        if (pilot.queueNo) await shiftQueueAfterRemoval(brId, pilot.queueNo);
+      } else {
+        if (pilot.pilotStatus === "waiting") return;
+        const nextNo = await getNextQueueNo(brId);
+        await update(ref(db, "pilots/" + pilotId), {
+          pilotStatus: "waiting", queueNo: nextNo, statusSince: now });
+      }
+    }
+    window.syncPilotStatus = syncPilotStatus;
+
+    /** ينفّذ النقل كاملًا: الأوردر + الوردية + حالة الطيارين */
+    async function applyOrderTransfer({ order, fromPilot, toPilot }) {
+      const now = new Date().toISOString();
+      const orderId = order.id;
+      const newShift = findActivePilotShift(toPilot.id);
+
+      const history = Array.isArray(order.transferHistory) ? order.transferHistory.slice() : [];
+      history.push({
+        fromId: fromPilot?.id || "", fromName: fromPilot?.name || "",
+        toId: toPilot.id, toName: toPilot.name,
+        fromShiftId: order.shiftId || "", toShiftId: newShift?.id || "",
+        at: now, by: window._currentUser?.username || ""
+      });
+
+      const upd = {};
+      upd[`orders/${orderId}/pilotId`]   = toPilot.id;
+      upd[`orders/${orderId}/pilotName`] = toPilot.name;
+      upd[`orders/${orderId}/shiftId`]   = newShift?.id || null;
+      // statusSince مش بيتلمس — عمر الأوردر بيكمّل من أول تحميل
+      upd[`orders/${orderId}/currentPilotSince`]   = now;
+      upd[`orders/${orderId}/transferredFrom`]     = fromPilot?.id || null;
+      upd[`orders/${orderId}/transferredFromName`] = fromPilot?.name || null;
+      upd[`orders/${orderId}/transferredAt`]       = now;
+      upd[`orders/${orderId}/transferCount`]       = history.length;
+      upd[`orders/${orderId}/transferHistory`]     = history;
+      await update(ref(db), upd);
+
+      await syncPilotStatus(toPilot.id, now, orderId, toPilot.id);
+      if (fromPilot?.id) await syncPilotStatus(fromPilot.id, now, orderId, toPilot.id);
+
+      if (!newShift) {
+        showToast(`⚠️ ${toPilot.name} مالوش وردية مفتوحة — الأوردر مش هيتحسب في تقفيلة وردية`, "error");
+      }
+      return now;
+    }
+    window.applyOrderTransfer = applyOrderTransfer;
+
     window.transferOrderPilot = async function(orderId) {
       const order = window._ordersData.find(o => o.id === orderId);
       if (!order) return;
@@ -2840,41 +2918,7 @@
         if (!confirm(`تأكيد نقل الطلب ${order.orderNum} من ${currentPilot ? currentPilot.name : "—"} إلى ${newPilot.name}؟`)) return;
 
         try {
-          const now = new Date().toISOString();
-
-          // تحديث الطلب بالطيار الجديد
-          await update(ref(db, "orders/" + orderId), {
-            pilotId: newPilotId,
-            pilotName: newPilot.name,
-            statusSince: now,
-            transferredFrom: currentPilotId || null,
-            transferredFromName: currentPilot ? currentPilot.name : null,
-            transferredAt: now
-          });
-
-          // تحديث حالة الطيار الجديد إن كان في الانتظار
-          if (newPilot.pilotStatus === "waiting") {
-            await update(ref(db, "pilots/" + newPilotId), {
-              pilotStatus: "delivering",
-              queueNo: null,
-              statusSince: now
-            });
-            await shiftQueueAfterRemoval(newPilot.assignedBranchId || window._currentUser?.branchId, newPilot.queueNo);
-          }
-
-          // تحديث حالة الطيار القديم: إن لم يتبقَّ له طلبات نشطة أخرى يعود للانتظار
-          if (currentPilotId) {
-            const remaining = window._ordersData.filter(o => o.pilotId === currentPilotId && o.status === "جاري التوصيل" && o.id !== orderId);
-            if (!remaining.length) {
-              const nextNo = await getNextQueueNo(currentPilot?.assignedBranchId || window._currentUser?.branchId);
-              await update(ref(db, "pilots/" + currentPilotId), {
-                pilotStatus: "waiting",
-                queueNo: nextNo,
-                statusSince: now
-              });
-            }
-          }
-
+          await applyOrderTransfer({ order, fromPilot: currentPilot, toPilot: newPilot });
           showToast(`تمّ نقل الطلب إلى ${newPilot.name} ✓`, "success");
           box.remove();
         } catch(e) { showToast("خطأ: " + e.message, "error"); }
