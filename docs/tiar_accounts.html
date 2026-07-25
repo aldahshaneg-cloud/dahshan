@@ -336,7 +336,8 @@
             <option value="cash">خزينة</option>
             <option value="custody">عهد</option>
             <option value="expense">مصروفات</option>
-            <option value="payroll">رواتب</option>
+            <option value="payroll">رواتب (النظام القديم)</option>
+            <option value="hrpayroll">مسير رواتب HR</option>
             <option value="opening">افتتاحي</option>
             <option value="closing">إقفال</option>
           </select>
@@ -902,6 +903,8 @@ const S = {
   custodyTxns: [],
   expenses  : [],
   payroll   : {},
+  hrRuns    : {},          // hr/payrollRuns — مسيرات الموارد البشرية
+  hrEmployees: [],         // hr/employees — لعرض الأسماء
   users     : [],
   ready     : { accounts:false, journal:false, ops:false }
 };
@@ -1244,7 +1247,7 @@ const TYPE_LABEL = {
 };
 const SOURCE_LABEL = {
   manual: "يدوي", order: "أوردر", commission: "عمولة", cash: "خزينة",
-  custody: "عهدة", expense: "مصروف", payroll: "راتب",
+  custody: "عهدة", expense: "مصروف", payroll: "راتب", hrpayroll: "مسير رواتب",
   opening: "افتتاحي", closing: "إقفال", transfer: "تحويل"
 };
 
@@ -1293,6 +1296,11 @@ function startListeners() {
   onValue(ref(db, "custodyTransactions"), s => { S.custodyTxns = listMap(s.val()); });
   onValue(ref(db, "expenses"),            s => { S.expenses    = listMap(s.val()); });
   onValue(ref(db, "payroll"),             s => { S.payroll     = s.val() || {}; });
+  // نظام الموارد البشرية الجديد — يُقرأ لسببين:
+  // 1) منع ازدواج ترحيل الرواتب: الشهر اللي الـHR رحّله بنتجاهل فيه عقدة payroll القديمة
+  // 2) عرض أسماء الموظفين في الأستاذ المساعد بدل معرّفاتهم
+  onValue(ref(db, "hr/payrollRuns"),      s => { S.hrRuns      = s.val() || {}; refreshCurrentPage(); });
+  onValue(ref(db, "hr/employees"),        s => { S.hrEmployees = listMap(s.val()); });
   onValue(ref(db, "users"),               s => {
     S.users = s.val() ? Object.entries(s.val()).map(([k, v]) => ({ username: k, ...(v || {}) })) : [];
   });
@@ -1910,6 +1918,10 @@ function buildPayrollEntry({ month, empKey, kind, entryKey, amount, note, date }
 
 function employeeNameOf(empKey) {
   const key = String(empKey || "");
+  // معرّف من سجل الموارد البشرية الموحّد (المصدر الأحدث للأسماء)
+  const hrEmp = (S.hrEmployees || []).find(e => e.id === key);
+  if (hrEmp) return hrEmp.name || key;
+  // مفاتيح النظام القديم: user_{username} / manual_{id}
   if (key.startsWith("user_")) {
     const u = S.users.find(x => x.username === key.slice(5));
     return u?.displayName || u?.name || key.slice(5);
@@ -1938,11 +1950,14 @@ function pendingDocuments() {
   const expenses = S.expenses.filter(e =>
     Number(e.amount) > 0 && inWindow(e.date) && !isPosted("expense", e.id));
 
-  // بنود الرواتب — كل بند مستند مستقل
+  // بنود الرواتب من عقدة payroll القديمة — كل بند مستند مستقل.
+  // الشهر اللي نظام الموارد البشرية الجديد رحّله بنتجاهله هنا تمامًا،
+  // وإلا كانت الرواتب هتتحسب مرتين (مرة من hr/payrollRuns ومرة من payroll).
   const payroll = [];
   for (const [month, emps] of Object.entries(S.payroll || {})) {
     if (!/^\d{4}-\d{2}$/.test(month)) continue;
     if (`${month}-01` < start.slice(0, 7) + "-01") continue;
+    if (isPosted("hrpayroll", month)) continue;
     for (const [empKey, rec] of Object.entries(emps || {})) {
       const salary = Number(rec?.salary) || 0;
       if (salary > 0 && !isPosted("payroll", `${month}_${empKey}_salary`)) {

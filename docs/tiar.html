@@ -7012,6 +7012,11 @@
     .nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 14px; border-radius: 9px; cursor: pointer; font-size: .9rem; color: var(--muted); border: none; background: none; width: 100%; text-align: right; }
     .nav-item:hover { background: var(--card); color: var(--text); }
     .nav-item.active { background: rgba(14,165,233,.12); color: var(--sky); font-weight: 600; }
+    /* روابط التطبيقات الأخرى — مميّزة عن صفحات لوحة الإدارة نفسها */
+    .nav-item.nav-external { justify-content: space-between; opacity: .82; }
+    .nav-item.nav-external:hover { opacity: 1; background: rgba(232,25,44,.08); color: var(--sky); }
+    .nav-item.nav-external .ext-icon { font-size: .78rem; opacity: .5; }
+    .nav-item.nav-external:hover .ext-icon { opacity: 1; }
     .sidebar-footer { padding: 14px 10px; border-top: 1px solid var(--border); }
     .sidebar-user { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px; }
     .user-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(14,165,233,.2); color: var(--sky); display: flex; align-items: center; justify-content: center; font-weight: 700; }
@@ -7755,6 +7760,19 @@
       <button class="nav-item" onclick="navigateTo('reports')">📊 التقارير</button>
       <span class="sidebar-section-label">الإعدادات</span>
       <button class="nav-item" onclick="navigateTo('settings')">⚙️ الإعدادات</button>
+
+      <!-- روابط للتطبيقات الأخرى — تفتح في تاب جديد حتى لا تُفقد الشاشة الحالية -->
+      <span class="sidebar-section-label">التطبيقات الأخرى</span>
+      <button class="nav-item nav-external" onclick="openOtherApp('tiar_accounts.html')">
+        📒 النظام المحاسبي <span class="ext-icon">↗</span></button>
+      <button class="nav-item nav-external" onclick="openOtherApp('tiar_hr.html')">
+        🧑‍💼 الموارد البشرية <span class="ext-icon">↗</span></button>
+      <button class="nav-item nav-external" onclick="openOtherApp('tiar_branch.html')">
+        🏢 تطبيق الفروع <span class="ext-icon">↗</span></button>
+      <button class="nav-item nav-external" onclick="openOtherApp('tiar_store.html')">
+        🏪 بوابة المحلات <span class="ext-icon">↗</span></button>
+      <button class="nav-item nav-external" onclick="openOtherApp('index.html')">
+        🏠 البوابة الرئيسية <span class="ext-icon">↗</span></button>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user"><div class="user-avatar">A</div><div><span id="sidebar-username">—</span><br><span id="sidebar-role" style="font-size:.74rem">—</span></div></div>
@@ -9027,6 +9045,14 @@
     document.getElementById("sidebar").classList.remove("open");
     document.getElementById("sidebar-overlay").classList.remove("open");
   }
+  /* يفتح تطبيقًا آخر في تاب جديد — لوحة الإدارة تفضل مفتوحة زي ما هي.
+     التطبيقات على نفس الدومين فبتشوف جلسة جوجل نفسها وتفتح بدون تسجيل دخول. */
+  window.openOtherApp = function(file) {
+    if (window.innerWidth <= 900) closeSidebar();
+    const w = window.open(file, "_blank");
+    // لو المتصفح حجب النوافذ المنبثقة نوجّه التاب الحالي بدلًا من الفشل الصامت
+    if (!w) window.location.href = file;
+  };
   (function() {
     if (localStorage.getItem("tiar-theme") === "light") document.documentElement.classList.add("light");
   })();

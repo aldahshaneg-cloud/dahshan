@@ -527,6 +527,7 @@
           <button class="btn-ghost" onclick="exportPayrollExcel()">📥 Excel</button>
           <button class="btn-orange" id="payCalcBtn" onclick="calculatePayroll()">🧮 حساب المسير</button>
           <button class="btn-green" id="payApproveBtn" onclick="approvePayroll()">✅ اعتماد</button>
+          <button class="btn-ghost" id="payPostBtn" onclick="postPayrollToAccounting($('payMonth').value)">📒 ترحيل للمحاسبة</button>
         </div>
       </div>
       <div id="payrollAlert"></div>
@@ -590,6 +591,16 @@
         <div class="form-group"><label>مدة فترة التجربة (بالشهور)</label><input type="number" id="setProbation" min="0" max="12" /></div>
         <div class="form-group full"><label>معايير تقييم الأداء (افصل بينها بفاصلة)</label>
           <input id="setReviewCriteria" placeholder="الالتزام, جودة العمل, التعاون, المبادرة, الانضباط" /></div>
+        <div class="form-group full">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="setPostToAccounting" style="width:auto" />
+            ترحيل مسير الرواتب للنظام المحاسبي تلقائيًا عند الاعتماد
+          </label>
+          <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
+            يولّد قيدًا واحدًا للشهر: <b>مدين</b> مصروف رواتب وأجور، <b>دائن</b> رواتب مستحقة،
+            و<b>دائن</b> سُلف الموظفين بقيمة السلف المستردة. لو قفلته تقدر ترحّل يدويًا من شاشة المسير.
+          </div>
+        </div>
       </div></div></div>
 
       <div id="set-policy" style="display:none">
@@ -788,6 +799,8 @@ const S = {
   settings: {},
   // مصادر خارجية (قراءة فقط)
   users: [], pilots: [], manualEmps: [], branches: [], legacyAtt: {},
+  // النظام المحاسبي — لترحيل قيد الرواتب
+  accAccounts: [], accMapping: {}, accPostedRefs: {}, accPeriods: {},
   ready: false
 };
 window._S = S;
@@ -890,6 +903,7 @@ const DEFAULT_SETTINGS = {
   weekStart: 6,
   probationMonths: 3,
   reviewCriteria: "الالتزام بالمواعيد, جودة العمل, التعاون مع الفريق, المبادرة, الانضباط",
+  postToAccounting: true,
   // سياسة الخصم
   absentMultiplier: 1,
   absentFreeDays: 0,
@@ -1037,6 +1051,14 @@ function startListeners() {
   onValue(ref(db, "manualEmployees"),  s => { S.manualEmps = listMap(s.val()); refresh(); });
   onValue(ref(db, "branches"),         s => { S.branches   = listMap(s.val()); fillSelects(); refresh(); });
   onValue(ref(db, "attendance"),       s => { S.legacyAtt  = s.val() || {}; });
+
+  // ── النظام المحاسبي: نقرأ الحد الأدنى اللازم لتوليد قيد الرواتب ──
+  // دفتر اليومية نفسه مش بنستمع له (تقيل) — بنقرأه مرة واحدة وقت الترحيل
+  // عشان نجيب رقم القيد التالي.
+  onValue(ref(db, "accounting/accounts"),   s => { S.accAccounts   = listMap(s.val()); refresh(); });
+  onValue(ref(db, "accounting/mapping"),    s => { S.accMapping    = s.val() || {}; refresh(); });
+  onValue(ref(db, "accounting/postedRefs"), s => { S.accPostedRefs = s.val() || {}; refresh(); });
+  onValue(ref(db, "accounting/periods"),    s => { S.accPeriods    = s.val() || {}; });
 }
 
 function refresh() {
@@ -2782,14 +2804,32 @@ window.renderPayroll = function() {
               : status === "draft"    ? '<span class="badge bg-orange">📄 مسودة</span>'
               : '<span class="badge bg-muted">لم يُحسب</span>';
 
+  // حالة الترحيل للنظام المحاسبي
+  const posted = isPayrollPosted(ym);
+  const accIssue = accountingReady();
+  const accLine = posted
+    ? `<br>📒 <b style="color:var(--green)">مُرحَّل للنظام المحاسبي</b>
+       ${run?.accountingPostedAt ? `في ${esc(String(run.accountingPostedAt).slice(0,10))}` : ""} —
+       أي تعديل بعد كده محتاج تلغي القيد من دفتر اليومية وترحّل تاني.`
+    : accIssue
+      ? `<br>📒 <span style="color:var(--orange)">الترحيل للمحاسبة غير متاح: ${esc(accIssue)}</span>`
+      : `<br>📒 <span style="color:var(--muted)">لم يُرحَّل للمحاسبة بعد — بيتم تلقائيًا مع الاعتماد،
+         أو بزر «ترحيل للمحاسبة».</span>`;
+
+  const postBtn = $("payPostBtn");
+  if (postBtn) {
+    postBtn.disabled = posted || !!accIssue || !(status === "approved" || status === "paid");
+    postBtn.textContent = posted ? "📒 مُرحَّل ✓" : "📒 ترحيل للمحاسبة";
+  }
+
   $("payrollAlert").innerHTML =
     status === "approved" || status === "paid"
       ? `<div class="info-box" style="border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.06)">
           ${badge} مسير ${ym} معتمد بواسطة <b>${esc(run.approvedBy||"")}</b>
-          في ${esc(String(run.approvedAt||"").slice(0,10))}. إعادة الحساب هتلغي الاعتماد.</div>`
+          في ${esc(String(run.approvedAt||"").slice(0,10))}. إعادة الحساب هتلغي الاعتماد.${accLine}</div>`
       : `<div class="info-box">${badge} — الأرقام محسوبة لحظيًا من الحضور والجزاءات والإجازات.
           البنود اليدوية (مكافأة/خصم/سلفة) تتضاف من زر ✏️ لكل موظف.
-          اضغط <b>«اعتماد»</b> بعد المراجعة لتثبيت المسير.</div>`;
+          اضغط <b>«اعتماد»</b> بعد المراجعة لتثبيت المسير.${accLine}</div>`;
 
   const slips = emps.map(e => computePayslip(e, ym));
   const T = k => round2(slips.reduce((s,x) => s + (x[k]||0), 0));
@@ -2893,18 +2933,180 @@ window.calculatePayroll = async function() {
   finally { btn.disabled = false; btn.textContent = "🧮 حساب المسير"; }
 };
 
+/* ══════════════════════════════════════════════════════════════════════
+   ترحيل مسير الرواتب للنظام المحاسبي
+   ──────────────────────────────────────────────────────────────────────
+   القيد لكل موظف:
+     مدين  مصروف رواتب وأجور   = الصافي + السلف المستردة
+     دائن  رواتب وأجور مستحقة  = الصافي
+     دائن  سُلف الموظفين        = السلف المستردة (تقفل المديونية)
+
+   المصروف = ما استحقه الموظف فعلًا، أي بعد خصم الغياب والتأخير
+   والإجازات غير المدفوعة والجزاءات — دي مش مصروف على الشركة.
+   السلفة المستردة تقفل حساب «سُلف الموظفين» اللي اتفتح وقت صرفها.
+
+   بصمة المستند refType=hrpayroll و refId=YYYY-MM، والنظام المحاسبي
+   بيتجاهل عقدة payroll القديمة لنفس الشهر فمفيش ازدواج.
+   ══════════════════════════════════════════════════════════════════════ */
+const ACC_FALLBACK = { expSalaries:"521", apSalaries:"212", empAdvances:"116" };
+
+function accByCodeHR(code) {
+  return (S.accAccounts || []).find(a => String(a.code) === String(code)) || null;
+}
+function accMapped(key) {
+  const code = S.accMapping?.acc?.[key] || ACC_FALLBACK[key];
+  return accByCodeHR(code);
+}
+/** هل مسير الشهر مُرحَّل للمحاسبة؟ */
+function isPayrollPosted(ym) {
+  return !!S.accPostedRefs?.[`hrpayroll__${ym}`];
+}
+/** هل النظام المحاسبي جاهز لاستقبال القيد؟ */
+function accountingReady() {
+  if (!(S.accAccounts||[]).length) return "الدليل المحاسبي لم يُنشأ بعد — افتح النظام المحاسبي مرة واحدة أولًا";
+  for (const k of ["expSalaries","apSalaries"]) {
+    if (!accMapped(k)) return `حساب «${k}» غير موجود في الدليل المحاسبي`;
+  }
+  return null;
+}
+window.isPayrollPosted = isPayrollPosted;
+window.accountingReady = accountingReady;
+
+window.postPayrollToAccounting = async function(ym, opts = {}) {
+  const silent = !!opts.silent;
+  const fail = m => { if (!silent) showToast(m, "error"); return false; };
+
+  const run = S.payrollRuns?.[ym];
+  if (!run?.items) return fail("احسب المسير الأول");
+  if (run.status !== "approved" && run.status !== "paid") return fail("اعتمد المسير قبل ترحيله للمحاسبة");
+  if (isPayrollPosted(ym)) {
+    if (!silent) showToast(`مسير ${ym} مُرحَّل للمحاسبة بالفعل`, "");
+    return false;
+  }
+  const notReady = accountingReady();
+  if (notReady) return fail(notReady);
+
+  // آخر يوم في الشهر = تاريخ القيد
+  const [y, m] = ym.split("-").map(Number);
+  const date = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2,"0")}`;
+  if (S.accPeriods?.[ym]?.status === "closed")
+    return fail(`الفترة ${ym} مقفولة في النظام المحاسبي — افتحها أولًا`);
+
+  const expAcc = accMapped("expSalaries");
+  const payAcc = accMapped("apSalaries");
+  const advAcc = accMapped("empAdvances");
+
+  const lines = [];
+  let totalExp = 0, totalNet = 0, totalAdv = 0, count = 0;
+
+  for (const [empId, it] of Object.entries(run.items)) {
+    const emp = S.empById.get(empId);
+    const net = round2(it.net);
+    const adv = round2(it.advance);
+    const expense = round2(net + adv);
+    if (expense <= 0 && adv <= 0) continue;   // موظف بلا مستحق
+    const nm = emp?.name || empId;
+    const branchId = emp?.branchId || "";
+
+    if (expense > 0) {
+      lines.push({ accountId: expAcc.id, debit: expense, credit: 0,
+                   branchId, partyId: empId, note: `راتب ${ym} — ${nm}` });
+      totalExp += expense;
+    }
+    if (net > 0) {
+      lines.push({ accountId: payAcc.id, debit: 0, credit: net,
+                   branchId, partyId: empId, note: `مستحق للموظف — ${nm}` });
+      totalNet += net;
+    }
+    if (adv > 0 && advAcc) {
+      lines.push({ accountId: advAcc.id, debit: 0, credit: adv,
+                   branchId, partyId: empId, note: `استرداد سلفة — ${nm}` });
+      totalAdv += adv;
+    } else if (adv > 0 && !advAcc) {
+      // بدون حساب سلف، نضيفها للمستحق حتى يتوازن القيد
+      lines.push({ accountId: payAcc.id, debit: 0, credit: adv,
+                   branchId, partyId: empId, note: `سلفة مستردة — ${nm}` });
+      totalNet += adv;
+    }
+    count++;
+  }
+
+  if (!lines.length) return fail("مفيش مبالغ للترحيل في المسير");
+
+  const totalDebit  = round2(lines.reduce((s,l) => s + l.debit,  0));
+  const totalCredit = round2(lines.reduce((s,l) => s + l.credit, 0));
+  if (Math.abs(totalDebit - totalCredit) > 0.009)
+    return fail(`القيد غير متوازن (فرق ${fmt(totalDebit-totalCredit)}) — لم يُرحَّل`);
+
+  if (!silent && !confirm(
+    `ترحيل مسير رواتب ${ym} للنظام المحاسبي؟\n\n` +
+    `عدد الموظفين: ${count}\n` +
+    `مدين «${expAcc.name}»: ${fmt(totalExp)} ج.م\n` +
+    `دائن «${payAcc.name}»: ${fmt(totalNet)} ج.م\n` +
+    (totalAdv ? `دائن «${advAcc.name}»: ${fmt(totalAdv)} ج.م\n` : "") +
+    `\nمتابعة؟`)) return false;
+
+  try {
+    // رقم القيد التالي — قراءة لمرة واحدة بدل الاستماع لدفتر اليومية كله
+    const snap = await get(ref(db, "accounting/journal"));
+    let maxNo = 0;
+    if (snap.exists()) for (const j of Object.values(snap.val())) if ((j?.no||0) > maxNo) maxNo = j.no;
+
+    const enriched = lines.map(l => {
+      const a = accByCodeHR(S.accAccounts.find(x => x.id === l.accountId)?.code);
+      return { ...l, accountCode: a?.code || "", accountName: a?.name || "",
+               branchName: branchName(l.branchId) === "—" ? "" : branchName(l.branchId) };
+    });
+
+    const jid = push(ref(db, "accounting/journal")).key;
+    await update(ref(db, "accounting"), {
+      [`journal/${jid}`]: {
+        no: maxNo + 1, date, period: ym,
+        desc: `مسير رواتب ${ym} — ${count} موظف`,
+        refType: "hrpayroll", refId: ym, status: "posted",
+        lines: enriched, totalDebit, totalCredit,
+        createdBy: S.user?.username || "", createdAt: new Date().toISOString()
+      },
+      [`postedRefs/hrpayroll__${ym}`]: jid
+    });
+    await update(ref(db, `${HR}/payrollRuns/${ym}`), {
+      accountingJournalId: jid, accountingPostedAt: new Date().toISOString() });
+
+    if (!silent) showToast(`تم ترحيل مسير ${ym} للمحاسبة — قيد رقم ${maxNo+1} ✓`, "success");
+    return true;
+  } catch (e) {
+    return fail("خطأ في الترحيل: " + e.message);
+  }
+};
+
 window.approvePayroll = async function() {
   const ym = $("payMonth").value || monthOf(todayStr());
   const run = S.payrollRuns?.[ym];
   if (!run?.items) { showToast("احسب المسير الأول", "error"); return; }
   if (run.status === "approved" || run.status === "paid") { showToast("المسير معتمد بالفعل", ""); return; }
   const total = round2(Object.values(run.items).reduce((s,x) => s + (x.net||0), 0));
+  const willPost = S.settings?.postToAccounting !== false && !isPayrollPosted(ym);
+  const accIssue = willPost ? accountingReady() : null;
   if (!confirm(`اعتماد مسير رواتب ${ym}؟\n\nعدد الموظفين: ${Object.keys(run.items).length}\n` +
-               `صافي المسير: ${money(total)}\n\nبعد الاعتماد أي تعديل هيرجّعه مسودة.`)) return;
+               `صافي المسير: ${money(total)}\n\n` +
+               (willPost
+                 ? (accIssue ? `⚠️ الترحيل للمحاسبة مش هيتم: ${accIssue}\n\n`
+                             : `سيتم كذلك ترحيله للنظام المحاسبي كقيد رواتب.\n\n`)
+                 : "") +
+               `بعد الاعتماد أي تعديل هيرجّعه مسودة.`)) return;
   try {
     await update(ref(db, `${HR}/payrollRuns/${ym}`), {
       status: "approved", approvedBy: S.user?.username || "", approvedAt: new Date().toISOString() });
     showToast(`تم اعتماد مسير ${ym} ✓`, "success");
+    // الترحيل بعد الاعتماد — بصمت، وأي فشل بيتقال في رسالة منفصلة
+    if (willPost && !accIssue) {
+      setTimeout(async () => {
+        const ok = await postPayrollToAccounting(ym, { silent: true });
+        showToast(ok ? `تم ترحيل مسير ${ym} للنظام المحاسبي ✓`
+                     : `تم الاعتماد — لكن الترحيل للمحاسبة فشل، جرّبه من زر «ترحيل للمحاسبة»`,
+                  ok ? "success" : "error");
+      }, 600);
+    }
   } catch (e) { showToast("خطأ: " + e.message, "error"); }
 };
 
@@ -3180,6 +3382,7 @@ window.renderSettings = function() {
   set("setOrgName", s.orgName); set("setMonthDays", s.monthDays);
   set("setWeekStart", s.weekStart); set("setProbation", s.probationMonths);
   set("setReviewCriteria", s.reviewCriteria);
+  $("setPostToAccounting").checked = s.postToAccounting !== false;
   set("setAbsentMul", s.absentMultiplier); set("setAbsentFree", s.absentFreeDays);
   set("setLateGrace", s.lateGraceExtra); set("setLateMode", s.lateMode);
   set("setLateFixed", s.lateFixed); set("setLateFree", s.lateFreeCount);
@@ -3221,6 +3424,7 @@ window.saveSettings = async function() {
       weekStart: Number($("setWeekStart").value),
       probationMonths: Number($("setProbation").value)||0,
       reviewCriteria: $("setReviewCriteria").value.trim() || DEFAULT_SETTINGS.reviewCriteria,
+      postToAccounting: $("setPostToAccounting").checked,
       absentMultiplier: Number($("setAbsentMul").value)||0,
       absentFreeDays: Number($("setAbsentFree").value)||0,
       lateGraceExtra: Number($("setLateGrace").value)||0,
