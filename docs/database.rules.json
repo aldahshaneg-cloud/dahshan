@@ -125,6 +125,10 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "hr": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "accounting": {
       ".read": "auth != null",
       ".write": "auth != null",

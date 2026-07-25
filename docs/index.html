@@ -906,7 +906,8 @@
         admin:  "tiar.html",
         branch: "tiar_branch.html",
         store:  "tiar_store.html",
-        hr:     "tiar-hr.html",
+        hr:     "tiar_hr.html",
+        hrOld:  "tiar-hr.html",
         accounts: "tiar_accounts.html"
       };
       if (!urls[appKey]) return;
@@ -930,6 +931,7 @@
       const role = (userData.role || "").trim();
       if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "accounts"];
       if (["محاسب", "مدير حسابات", "accountant"].includes(role))    return ["accounts"];
+      if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(role)) return ["hr"];
       if (["مشرف فرع", "مشرف", "branch"].includes(role))           return ["branch"];
       if (["صاحب محل", "تاجر", "محل", "store"].includes(role))     return ["store"];
       // أي دور غير معروف → إدارة فقط (الأكثر أماناً للمستخدمين القدامى)
