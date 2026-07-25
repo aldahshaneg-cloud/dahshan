@@ -1755,7 +1755,7 @@ function buildOrderEntry(order) {
   lines.push({ accountId: arAcc.id,  debit: price, credit: 0, branchId,
                partyId: order.pilotId || "", note: `تحصيل توصيل — ${pName}` });
   lines.push({ accountId: revAcc.id, debit: 0, credit: price, branchId,
-               note: `أوردر ${order.orderNumber || order.id} — ${parcels} طرد` });
+               note: `أوردر ${order.orderNum || order.id} — ${parcels} طرد` });
 
   // 2) عمولة الطيار — مصروف علينا والتزام له
   const comm = pilotCommissionFor(pilot, order);
@@ -1794,9 +1794,15 @@ function buildOrderEntry(order) {
     }
   }
 
+  // اسم المستلِم على الطرود مش على الأوردر — ناخد الأول ونشير لباقي الطرود
+  const firstRecv = (order.deliveries || [])[0]?.receiverName || "";
+  const recvLabel = firstRecv
+    ? ` → ${firstRecv}${parcels > 1 ? ` +${parcels - 1}` : ""}`
+    : "";
+
   return {
     date,
-    desc   : `أوردر ${order.orderNumber || ""} — ${pName}${order.receiverName ? " → " + order.receiverName : ""}`.trim(),
+    desc   : `أوردر ${order.orderNum || order.id} — ${pName}${recvLabel}`.trim(),
     refType: "order",
     refId  : order.id,
     lines
@@ -2111,7 +2117,7 @@ window.runAutoPost = async function() {
   };
 
   try {
-    for (const o of pend.orders)   await emit(buildOrderEntry(o),        `أوردر ${o.orderNumber || o.id}`);
+    for (const o of pend.orders)   await emit(buildOrderEntry(o),        `أوردر ${o.orderNum || o.id}`);
     for (const t of pend.cash)     await emit(await buildCashEntry(t),   `خزينة ${t.reason || t.id}`);
     for (const e of pend.expenses) await emit(buildExpenseEntry(e),      `مصروف ${e.item || e.id}`);
     for (const p of pend.payroll)  await emit(buildPayrollEntry(p),      `راتب ${p.empKey}`);

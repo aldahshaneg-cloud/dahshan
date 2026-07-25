@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الدهشان | الكول سنتر</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --sky: #e8192c; --sky-d: #b91c1c; --night: #0a0a0a; --panel: #111111;
+    --card: #1a1a1a; --border: #2a2a2a; --text: #f0f0f0; --muted: #888888;
+    --green: #22c55e; --red: #e8192c; --purple: #a855f7; --orange: #f97316;
+    --blue: #3b82f6; --teal: #14b8a6; --yellow: #eab308;
+    --sidebar-w: 232px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
+  }
+  :root.light {
+    --sky: #0284c7; --sky-d: #0369a1; --night: #f0f6ff; --panel: #ffffff;
+    --card: #f0f6ff; --border: #bfd8f0; --text: #0c1e35; --muted: #4d7a9e;
+    --green: #16a34a; --red: #dc2626; --purple: #7c3aed; --orange: #ea580c;
+    --blue: #2563eb; --teal: #0d9488; --yellow: #ca8a04;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--night); color: var(--text); transition: background-color .25s, color .2s; }
+  input, textarea, select, button { font-family: var(--font); }
+
+  /* ── LOGIN ── */
+  #login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--night);
+    position:fixed; inset:0; z-index:1000;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232,25,44,.07) 0%, transparent 60%); }
+  .login-box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:44px 38px; width:100%; max-width:420px; }
+  .login-brand { display:flex; align-items:center; justify-content:center; gap:10px; font-size:1.55rem; font-weight:800; color:var(--sky); margin-bottom:6px; }
+  .login-sub { text-align:center; color:var(--muted); font-size:.84rem; margin-bottom:26px; }
+  .login-field { display:flex; flex-direction:column; gap:7px; margin-bottom:16px; }
+  .login-field label { font-size:.8rem; color:var(--muted); font-weight:600; }
+  .login-field input { background:var(--card); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px 16px; outline:none; font-size:.92rem; }
+  .login-field input:focus { border-color:var(--sky); }
+  #loginError { font-size:.82rem; color:var(--red); margin-bottom:12px; text-align:center; min-height:18px; }
+  .login-btn { width:100%; background:var(--sky); color:#fff; border:none; padding:13px; border-radius:8px; font-weight:700; cursor:pointer; font-size:.95rem; }
+  .login-btn:hover { background:var(--sky-d); }
+  .login-btn:disabled { opacity:.6; cursor:not-allowed; }
+  .login-note { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); font-size:.76rem; color:var(--muted); line-height:1.8; text-align:center; }
+
+  /* ── LAYOUT ── */
+  #app { display:none; min-height:100vh; }
+  #app.visible { display:flex; }
+  #sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--panel); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; flex-shrink:0; }
+  .sidebar-brand { display:flex; align-items:center; gap:9px; padding:20px 18px 16px; font-size:1.14rem; font-weight:800; color:var(--sky); border-bottom:1px solid var(--border); }
+  .sidebar-nav { padding:12px 9px; display:flex; flex-direction:column; gap:2px; flex:1; }
+  .sidebar-section-label { font-size:.66rem; color:var(--muted); letter-spacing:.1em; padding:12px 12px 5px; opacity:.6; font-weight:700; }
+  .nav-item { display:flex; align-items:center; gap:10px; padding:10px 13px; border-radius:9px; cursor:pointer; font-size:.88rem;
+    color:var(--muted); border:none; background:none; width:100%; text-align:right; position:relative; }
+  .nav-item:hover { background:var(--card); color:var(--text); }
+  .nav-item.active { background:rgba(232,25,44,.12); color:var(--sky); font-weight:700; }
+  .nav-item.nav-primary { background:var(--sky); color:#fff; font-weight:800; margin-bottom:6px; }
+  .nav-item.nav-primary:hover { background:var(--sky-d); color:#fff; }
+  .nav-item.nav-external { justify-content:space-between; opacity:.75; font-size:.83rem; }
+  .nav-item.nav-external:hover { opacity:1; }
+  .nav-badge { position:absolute; left:10px; background:var(--orange); color:#fff; font-size:.66rem; font-weight:800;
+    min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+  .sidebar-footer { padding:12px 9px; border-top:1px solid var(--border); }
+  .theme-toggle { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 13px; border-radius:8px;
+    border:1px solid var(--border); background:none; font-size:.82rem; color:var(--muted); cursor:pointer; width:100%; margin-bottom:8px; }
+  .theme-toggle:hover { background:var(--card); color:var(--text); }
+  .toggle-pill { width:34px; height:18px; background:var(--border); border-radius:9px; position:relative; flex-shrink:0; }
+  .toggle-pill::after { content:''; position:absolute; top:2px; right:2px; width:14px; height:14px; border-radius:50%; background:var(--muted); transition:transform .25s; }
+  :root.light .toggle-pill { background:var(--sky); }
+  :root.light .toggle-pill::after { transform:translateX(-16px); background:#fff; }
+  .sidebar-user { display:flex; align-items:center; gap:10px; padding:9px 11px; margin-bottom:8px; }
+  .user-avatar { width:34px; height:34px; border-radius:50%; background:rgba(232,25,44,.18); color:var(--sky);
+    display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0; }
+  #sidebar-username { font-size:.85rem; font-weight:700; color:var(--text); }
+  #sidebar-role { font-size:.72rem; color:var(--muted); }
+  .sidebar-logout { width:100%; background:rgba(232,25,44,.08); color:var(--red); border:1px solid rgba(232,25,44,.2);
+    padding:9px 13px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:.84rem; font-weight:600; }
+  .sidebar-logout:hover { background:rgba(232,25,44,.18); }
+  #main { flex:1; min-width:0; }
+  .page { display:none; padding:24px 28px 60px; width:100%; }
+  .page.active { display:block; }
+
+  /* ── SHARED ── */
+  .sec-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap; }
+  .sec-title { font-size:1.08rem; font-weight:800; display:flex; align-items:center; gap:8px; }
+  .sec-sub { font-size:.78rem; color:var(--muted); font-weight:500; margin-top:3px; }
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .field { padding:8px 11px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:.83rem; outline:none; }
+  .field:focus { border-color:var(--sky); }
+  .add-btn { background:var(--sky); color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:.85rem; font-weight:700;
+    cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .add-btn:hover { background:var(--sky-d); }
+  .add-btn:disabled { opacity:.55; cursor:not-allowed; }
+  .btn-ghost { background:var(--card); color:var(--text); border:1px solid var(--border); padding:8px 15px; border-radius:8px; font-size:.83rem; font-weight:600; cursor:pointer; }
+  .btn-ghost:hover { border-color:var(--sky); color:var(--sky); }
+  .btn-green { background:rgba(34,197,94,.14); color:var(--green); border:1px solid rgba(34,197,94,.3); padding:8px 15px; border-radius:8px; font-size:.83rem; font-weight:700; cursor:pointer; }
+  .btn-green:hover { background:var(--green); color:#fff; }
+  .btn-red { background:rgba(232,25,44,.12); color:var(--red); border:1px solid rgba(232,25,44,.28); padding:8px 15px; border-radius:8px; font-size:.83rem; font-weight:700; cursor:pointer; }
+  .btn-red:hover { background:var(--red); color:#fff; }
+  .btn-orange { background:rgba(249,115,22,.13); color:var(--orange); border:1px solid rgba(249,115,22,.3); padding:8px 15px; border-radius:8px; font-size:.83rem; font-weight:700; cursor:pointer; }
+  .btn-orange:hover { background:var(--orange); color:#fff; }
+  .btn-xs { padding:4px 9px; font-size:.74rem; border-radius:6px; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:13px; margin-bottom:22px; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:15px 18px; }
+  .stat-card.clickable { cursor:pointer; }
+  .stat-card.clickable:hover { border-color:var(--sky); }
+  .stat-label { font-size:.73rem; color:var(--muted); display:block; margin-bottom:5px; font-weight:600; }
+  .stat-value { font-size:1.55rem; font-weight:800; color:var(--sky); line-height:1.15; display:block; font-variant-numeric:tabular-nums; }
+  .stat-sub { font-size:.71rem; color:var(--muted); margin-top:4px; display:block; }
+
+  .table-wrap { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); overflow:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  thead { background:var(--panel); position:sticky; top:0; z-index:2; }
+  th { padding:11px 12px; text-align:right; font-weight:700; font-size:.73rem; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:rgba(232,25,44,.035); }
+  .num { font-variant-numeric:tabular-nums; text-align:left; direction:ltr; white-space:nowrap; }
+  .empty-row { text-align:center; color:var(--muted); padding:38px; }
+  .idx { color:var(--muted); font-size:.77rem; }
+  tr.total-row td { font-weight:800; background:var(--panel); border-top:2px solid var(--border); }
+
+  .badge { padding:3px 10px; border-radius:20px; font-weight:700; font-size:.74rem; display:inline-block; white-space:nowrap; }
+  .bg-green { background:rgba(34,197,94,.15); color:var(--green); }
+  .bg-red { background:rgba(232,25,44,.15); color:var(--red); }
+  .bg-orange { background:rgba(249,115,22,.15); color:var(--orange); }
+  .bg-purple { background:rgba(168,85,247,.15); color:var(--purple); }
+  .bg-blue { background:rgba(59,130,246,.15); color:var(--blue); }
+  .bg-teal { background:rgba(20,184,166,.15); color:var(--teal); }
+  .bg-yellow { background:rgba(234,179,8,.15); color:var(--yellow); }
+  .bg-muted { background:rgba(136,136,136,.13); color:var(--muted); }
+
+  .info-box { background:rgba(59,130,246,.07); border:1px solid rgba(59,130,246,.22); border-radius:10px; padding:13px 16px;
+    font-size:.82rem; color:var(--muted); line-height:1.85; margin-bottom:16px; }
+  .warn-box { background:rgba(249,115,22,.07); border:1px solid rgba(249,115,22,.25); border-radius:10px; padding:13px 16px;
+    font-size:.82rem; color:var(--muted); line-height:1.85; margin-bottom:16px; }
+  .ok-box { background:rgba(34,197,94,.07); border:1px solid rgba(34,197,94,.28); border-radius:10px; padding:13px 16px;
+    font-size:.82rem; color:var(--muted); line-height:1.85; margin-bottom:16px; }
+
+  /* ══════════ شاشة الأوردر الجديد — مُحسَّنة للسرعة أثناء المكالمة ══════════ */
+  .call-grid { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:18px; align-items:start; }
+  @media (max-width:1100px) { .call-grid { grid-template-columns:1fr; } }
+  .call-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:16px; }
+  .call-card-title { font-size:.9rem; font-weight:800; margin-bottom:14px; display:flex; align-items:center; gap:8px;
+    padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .call-step { width:24px; height:24px; border-radius:50%; background:var(--sky); color:#fff;
+    display:inline-flex; align-items:center; justify-content:center; font-size:.78rem; font-weight:800; flex-shrink:0; }
+  .fgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .fgrid.one { grid-template-columns:1fr; }
+  @media (max-width:700px) { .fgrid { grid-template-columns:1fr; } }
+  .fg { display:flex; flex-direction:column; gap:6px; }
+  .fg.full { grid-column:1/-1; }
+  .fg label { font-size:.78rem; color:var(--muted); font-weight:700; }
+  .fg input, .fg select, .fg textarea { background:var(--panel); border:1px solid var(--border); border-radius:9px;
+    color:var(--text); padding:11px 13px; outline:none; font-size:.9rem; width:100%; }
+  .fg input:focus, .fg select:focus, .fg textarea:focus { border-color:var(--sky); }
+  .fg input.big { font-size:1.05rem; font-weight:700; padding:13px; }
+  .req { color:var(--red); }
+
+  /* بحث ذكي بنتائج منسدلة */
+  .smart { position:relative; }
+  .smart-results { position:absolute; top:100%; right:0; left:0; z-index:60; background:var(--panel);
+    border:1px solid var(--sky); border-top:none; border-radius:0 0 10px 10px; max-height:260px; overflow-y:auto;
+    box-shadow:0 10px 30px rgba(0,0,0,.5); display:none; }
+  .smart-results.open { display:block; }
+  .smart-item { padding:10px 13px; cursor:pointer; border-bottom:1px solid var(--border); font-size:.85rem; }
+  .smart-item:last-child { border-bottom:none; }
+  .smart-item:hover, .smart-item.sel { background:rgba(232,25,44,.1); }
+  .smart-item .si-main { font-weight:700; }
+  .smart-item .si-sub { font-size:.75rem; color:var(--muted); margin-top:2px; }
+  .smart-item mark { background:rgba(232,25,44,.3); color:var(--text); border-radius:3px; padding:0 2px; }
+  .smart-new { padding:10px 13px; cursor:pointer; font-size:.83rem; color:var(--green); font-weight:700;
+    background:rgba(34,197,94,.07); border-top:1px solid var(--border); }
+  .smart-new:hover { background:rgba(34,197,94,.16); }
+
+  /* نتيجة استنتاج الفرع */
+  .branch-hit { background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.35); border-radius:11px;
+    padding:13px 15px; margin-top:10px; display:flex; align-items:center; gap:13px; flex-wrap:wrap; }
+  .branch-hit.warn { background:rgba(249,115,22,.08); border-color:rgba(249,115,22,.4); }
+  .branch-hit.err { background:rgba(232,25,44,.08); border-color:rgba(232,25,44,.4); }
+  .bh-icon { font-size:1.5rem; }
+  .bh-branch { font-size:1.02rem; font-weight:800; color:var(--green); }
+  .branch-hit.warn .bh-branch { color:var(--orange); }
+  .branch-hit.err .bh-branch { color:var(--red); }
+  .bh-price { font-size:1.25rem; font-weight:800; color:var(--teal); margin-inline-start:auto; }
+
+  /* الطرود */
+  .parcel { background:var(--panel); border:1px solid var(--border); border-radius:11px; padding:15px; margin-bottom:12px; position:relative; }
+  .parcel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .parcel-num { font-size:.82rem; font-weight:800; color:var(--sky); }
+  .parcel-del { background:rgba(232,25,44,.1); color:var(--red); border:1px solid rgba(232,25,44,.25);
+    width:28px; height:28px; border-radius:7px; cursor:pointer; }
+  .parcel-del:hover { background:var(--red); color:#fff; }
+
+  /* ملخص الأوردر — عمود جانبي ثابت */
+  .summary { position:sticky; top:20px; background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .summary-head { padding:14px 17px; background:var(--panel); border-bottom:1px solid var(--border); font-weight:800; font-size:.92rem; }
+  .summary-body { padding:15px 17px; }
+  .sum-line { display:flex; justify-content:space-between; gap:10px; padding:7px 0; font-size:.85rem; border-bottom:1px dashed var(--border); }
+  .sum-line:last-of-type { border-bottom:none; }
+  .sum-line span:first-child { color:var(--muted); }
+  .sum-line b { text-align:left; }
+  .sum-total { display:flex; justify-content:space-between; padding:13px 0 0; margin-top:9px; border-top:2px solid var(--border);
+    font-size:1.12rem; font-weight:800; }
+  .summary-foot { padding:14px 17px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:9px; }
+  .btn-save-order { background:var(--green); color:#fff; border:none; padding:15px; border-radius:11px;
+    font-size:1rem; font-weight:800; cursor:pointer; width:100%; }
+  .btn-save-order:hover { background:#16a34a; }
+  .btn-save-order:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* بطاقة تتبع الأوردر */
+  .track-card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:17px 19px; margin-bottom:14px; }
+  .track-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:13px;
+    padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .track-num { font-size:1.15rem; font-weight:800; color:var(--sky); }
+  .timeline { display:flex; gap:0; margin:14px 0; flex-wrap:wrap; }
+  .tl-step { flex:1; min-width:90px; text-align:center; position:relative; font-size:.74rem; }
+  .tl-dot { width:26px; height:26px; border-radius:50%; background:var(--border); color:var(--muted);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 6px; font-size:.8rem; font-weight:800; }
+  .tl-step.done .tl-dot { background:var(--green); color:#fff; }
+  .tl-step.cur .tl-dot { background:var(--sky); color:#fff; box-shadow:0 0 0 4px rgba(232,25,44,.2); }
+  .tl-step.fail .tl-dot { background:var(--red); color:#fff; }
+  .tl-step.done .tl-label, .tl-step.cur .tl-label { color:var(--text); font-weight:700; }
+  .tl-label { color:var(--muted); }
+  .tl-time { font-size:.66rem; color:var(--muted); margin-top:2px; }
+
+  /* ── MODAL ── */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.72); backdrop-filter:blur(5px); z-index:9000; display:none; align-items:center; justify-content:center; padding:18px; }
+  .modal.open { display:flex; }
+  .modal-box { background:var(--night); border:1px solid var(--border); border-radius:16px; width:100%; max-width:620px; max-height:92vh; overflow-y:auto; }
+  .modal-box.wide { max-width:980px; }
+  .modal-head { display:flex; justify-content:space-between; align-items:center; padding:17px 20px; border-bottom:1px solid var(--border);
+    position:sticky; top:0; background:var(--night); z-index:3; border-radius:16px 16px 0 0; }
+  .modal-title { font-size:1rem; font-weight:800; }
+  .modal-close { background:var(--card); border:1px solid var(--border); color:var(--muted); width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:1rem; }
+  .modal-close:hover { color:var(--red); border-color:var(--red); }
+  .modal-body { padding:18px 20px; }
+  .modal-foot { padding:14px 20px; border-top:1px solid var(--border); display:flex; gap:9px; position:sticky; bottom:0; background:var(--night); }
+
+  /* ── TOAST ── */
+  #toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--panel);
+    border:1px solid var(--border); color:var(--text); padding:14px 28px; border-radius:11px; font-weight:700; font-size:.9rem;
+    z-index:99999; transition:transform .3s; box-shadow:0 8px 30px rgba(0,0,0,.5); max-width:90vw; text-align:center; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+  #toast.success { border-color:var(--green); color:var(--green); }
+  #toast.error { border-color:var(--red); color:var(--red); }
+
+  @media (max-width:900px) {
+    #sidebar { position:fixed; right:-250px; z-index:500; transition:right .25s; }
+    #sidebar.open { right:0; }
+    .page { padding:16px 13px 50px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN ═══════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-brand">📞 الكول سنتر</div>
+    <div class="login-sub">الدهشان — استقبال الطلبات وتوزيعها على الفروع</div>
+    <div class="login-field"><label>اسم المستخدم</label>
+      <input type="text" id="loginUser" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+    <div class="login-field"><label>كلمة المرور</label>
+      <input type="password" id="loginPass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+    <div id="loginError"></div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">دخول</button>
+    <div class="login-note">
+      الدخول <b>لموظفي الكول سنتر</b> باسم المستخدم وكلمة المرور،<br>
+      و<b>للإدارة</b> تلقائيًا بحساب جوجل من البوابة الرئيسية.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP ═══════════════ -->
+<div id="app">
+  <aside id="sidebar">
+    <div class="sidebar-brand">📞 <span>الكول سنتر</span></div>
+    <nav class="sidebar-nav">
+      <button class="nav-item nav-primary" onclick="navigateTo('neworder')">➕ أوردر جديد</button>
+      <button class="nav-item" onclick="navigateTo('dashboard')">📊 لوحة اليوم</button>
+
+      <div class="sidebar-section-label">المتابعة</div>
+      <button class="nav-item" onclick="navigateTo('orders')" id="navOrders">📋 الأوردرات</button>
+      <button class="nav-item" onclick="navigateTo('search')">🔎 بحث سريع</button>
+      <button class="nav-item" onclick="navigateTo('complaints')" id="navComplaints">⚠️ الشكاوى</button>
+
+      <div class="sidebar-section-label">المراجع</div>
+      <button class="nav-item" onclick="navigateTo('zones')">🗺️ دليل المناطق</button>
+      <button class="nav-item" onclick="navigateTo('perf')">📈 أدائي</button>
+      <button class="nav-item" onclick="navigateTo('settings')">⚙️ الإعدادات</button>
+
+      <div class="sidebar-section-label">التطبيقات الأخرى</div>
+      <button class="nav-item nav-external" onclick="openOtherApp('index.html')">🏠 البوابة الرئيسية <span style="opacity:.5">↗</span></button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <span style="display:flex;align-items:center;gap:8px"><span id="themeIcon">☀️</span><span id="themeLabel">الوضع النهاري</span></span>
+        <span class="toggle-pill"></span>
+      </button>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">؟</div>
+        <div style="min-width:0"><div id="sidebar-username">—</div><div id="sidebar-role">—</div></div>
+      </div>
+      <button class="sidebar-logout" onclick="doLogout()">🚪 تسجيل خروج</button>
+    </div>
+  </aside>
+
+  <main id="main">
+
+    <!-- ═══════════ أوردر جديد ═══════════ -->
+    <div class="page active" id="page-neworder">
+      <div class="sec-header">
+        <div><div class="sec-title">📞 أوردر جديد</div>
+          <div class="sec-sub">اكتب المنطقة والنظام يحدد الفرع المسؤول والسعر تلقائيًا</div></div>
+        <div class="toolbar">
+          <button class="btn-ghost" onclick="resetNewOrder(true)">🔄 إفراغ النموذج</button>
+        </div>
+      </div>
+
+      <div class="call-grid">
+        <div>
+          <!-- ١) جهة الاستلام -->
+          <div class="call-card">
+            <div class="call-card-title"><span class="call-step">١</span> جهة الاستلام (المحل / المُرسِل)</div>
+            <div class="fgrid">
+              <div class="fg full smart">
+                <label>الاسم أو رقم الهاتف <span class="req">*</span></label>
+                <input class="big" id="senderSearch" placeholder="اكتب اسم المحل أو رقم التليفون…"
+                       autocomplete="off" oninput="onSenderSearch()" onkeydown="onSmartKey(event,'sender')" />
+                <div class="smart-results" id="senderResults"></div>
+              </div>
+              <div class="fg"><label>هاتف <span class="req">*</span></label>
+                <input id="senderPhone" dir="ltr" style="text-align:left" oninput="updateSummary()" /></div>
+              <div class="fg"><label>هاتف احتياطي</label>
+                <input id="senderPhone2" dir="ltr" style="text-align:left" /></div>
+              <div class="fg full"><label>عنوان الاستلام <span class="req">*</span></label>
+                <input id="senderAddress" oninput="updateSummary()" /></div>
+            </div>
+            <div id="senderState"></div>
+          </div>
+
+          <!-- ٢) الطرود -->
+          <div class="call-card">
+            <div class="call-card-title"><span class="call-step">٢</span> وجهات التسليم
+              <button class="btn-ghost btn-xs" style="margin-inline-start:auto" onclick="addParcel()">➕ وجهة أخرى</button>
+            </div>
+            <div id="branchLock"></div>
+            <div id="parcels"></div>
+          </div>
+
+          <!-- ٣) تفاصيل إضافية -->
+          <div class="call-card">
+            <div class="call-card-title"><span class="call-step">٣</span> تفاصيل إضافية</div>
+            <div class="fgrid">
+              <div class="fg"><label>عهدة يدفعها الطيار للمحل (ج.م)</label>
+                <input type="number" id="storePrepaid" min="0" step="0.5" dir="ltr" style="text-align:left"
+                       placeholder="0" oninput="updateSummary()" /></div>
+              <div class="fg"><label>سبب العهدة</label>
+                <input id="storePrepaidNote" placeholder="مثال: محل جديد" /></div>
+              <div class="fg full"><label>ملاحظات على الأوردر</label>
+                <textarea id="orderNotes" rows="2" placeholder="أي تعليمات للطيار أو الفرع…"></textarea></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ملخص الأوردر -->
+        <div>
+          <div class="summary">
+            <div class="summary-head">🧾 ملخص الأوردر</div>
+            <div class="summary-body" id="summaryBody"></div>
+            <div class="summary-foot">
+              <button class="btn-save-order" id="saveOrderBtn" onclick="saveOrder()">💾 حفظ وإرسال للفرع</button>
+              <div style="font-size:.73rem;color:var(--muted);text-align:center;line-height:1.6" id="saveHint">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ لوحة اليوم ═══════════ -->
+    <div class="page" id="page-dashboard">
+      <div class="sec-header">
+        <div><div class="sec-title">📊 لوحة اليوم</div><div class="sec-sub" id="dashDate">—</div></div>
+        <div class="toolbar"><button class="btn-ghost" onclick="renderDashboard()">🔄 تحديث</button></div>
+      </div>
+      <div class="stats" id="dashStats"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+        <div>
+          <div class="sec-header"><div class="sec-title" style="font-size:.95rem">🏢 توزيع أوردرات اليوم على الفروع</div></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>الفرع</th><th class="num">أوردرات</th><th class="num">قيد التنفيذ</th><th class="num">تم التسليم</th><th class="num">التحصيل</th></tr></thead>
+            <tbody id="dashBranchBody"></tbody></table></div>
+        </div>
+        <div>
+          <div class="sec-header"><div class="sec-title" style="font-size:.95rem">⏳ أوردرات محتاجة متابعة</div></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>الأوردر</th><th>الفرع</th><th>الحالة</th><th class="num">منتظر</th></tr></thead>
+            <tbody id="dashStaleBody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ الأوردرات ═══════════ -->
+    <div class="page" id="page-orders">
+      <div class="sec-header">
+        <div><div class="sec-title">📋 الأوردرات</div><div class="sec-sub" id="ordersSub">—</div></div>
+        <div class="toolbar">
+          <input class="field" id="oSearch" placeholder="🔎 رقم الأوردر / اسم / تليفون…" oninput="renderOrders()" style="width:210px" />
+          <select class="field" id="oStatus" onchange="renderOrders()">
+            <option value="">كل الحالات</option>
+            <option value="قيد التنفيذ">قيد التنفيذ</option>
+            <option value="جاري التوصيل">جاري التوصيل</option>
+            <option value="تم التسليم">تم التسليم</option>
+            <option value="لم يتم التوصيل">لم يتم التوصيل</option>
+            <option value="ملغي">ملغي</option>
+          </select>
+          <select class="field" id="oBranch" onchange="renderOrders()"></select>
+          <select class="field" id="oSource" onchange="renderOrders()">
+            <option value="">كل المصادر</option>
+            <option value="callcenter">الكول سنتر</option>
+            <option value="mine">أوردراتي أنا</option>
+            <option value="admin">الإدارة</option>
+            <option value="branch">الفروع</option>
+            <option value="store">المحلات</option>
+          </select>
+          <select class="field" id="oRange" onchange="renderOrders()">
+            <option value="today">اليوم</option>
+            <option value="7">آخر 7 أيام</option>
+            <option value="30">آخر 30 يوم</option>
+            <option value="">الكل</option>
+          </select>
+        </div>
+      </div>
+      <div class="stats" id="ordersStats"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>رقم الأوردر</th><th>الاستلام</th><th>التسليم / المنطقة</th><th>الفرع</th>
+          <th class="num">التوصيل</th><th>الحالة</th><th>الطيار</th><th>المصدر</th><th class="num">الوقت</th><th>إجراء</th></tr></thead>
+        <tbody id="ordersBody"><tr><td colspan="11" class="empty-row">جاري التحميل…</td></tr></tbody></table></div>
+    </div>
+
+    <!-- ═══════════ بحث سريع ═══════════ -->
+    <div class="page" id="page-search">
+      <div class="sec-header">
+        <div><div class="sec-title">🔎 بحث سريع</div>
+          <div class="sec-sub">لما العميل يتصل يسأل عن أوردره — ابحث برقم الأوردر أو التليفون</div></div>
+      </div>
+      <div class="call-card">
+        <div class="fg full">
+          <label>رقم الأوردر أو رقم التليفون أو اسم العميل</label>
+          <input class="big" id="qSearch" placeholder="مثال: MNS-014 أو 01012345678 أو اسم العميل…"
+                 autocomplete="off" oninput="renderQuickSearch()" />
+        </div>
+      </div>
+      <div id="qResults"></div>
+    </div>
+
+    <!-- ═══════════ الشكاوى ═══════════ -->
+    <div class="page" id="page-complaints">
+      <div class="sec-header">
+        <div><div class="sec-title">⚠️ الشكاوى والمتابعة</div>
+          <div class="sec-sub">تسجيل شكاوى العملاء ومتابعة حلها</div></div>
+        <div class="toolbar">
+          <select class="field" id="cStatus" onchange="renderComplaints()">
+            <option value="open">المفتوحة</option>
+            <option value="">الكل</option>
+            <option value="resolved">المحلولة</option>
+          </select>
+          <button class="add-btn" onclick="openComplaintModal()">➕ تسجيل شكوى</button>
+        </div>
+      </div>
+      <div class="stats" id="compStats"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>التاريخ</th><th>الأوردر</th><th>العميل</th><th>النوع</th>
+          <th>التفاصيل</th><th>الحالة</th><th>بواسطة</th><th>إجراء</th></tr></thead>
+        <tbody id="compBody"></tbody></table></div>
+    </div>
+
+    <!-- ═══════════ دليل المناطق ═══════════ -->
+    <div class="page" id="page-zones">
+      <div class="sec-header">
+        <div><div class="sec-title">🗺️ دليل المناطق</div>
+          <div class="sec-sub">أي منطقة تتبع أي فرع وبكام — مرجع سريع أثناء المكالمة</div></div>
+        <div class="toolbar">
+          <input class="field" id="zSearch" placeholder="🔎 اكتب اسم المنطقة…" oninput="renderZones()" style="width:220px" />
+          <select class="field" id="zBranch" onchange="renderZones()"></select>
+        </div>
+      </div>
+      <div class="stats" id="zonesStats"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>المنطقة</th><th>الفرع المسؤول</th><th class="num">سعر التوصيل</th><th>الفرع المصدر</th></tr></thead>
+        <tbody id="zonesBody"></tbody></table></div>
+
+      <div class="sec-header" style="margin-top:26px">
+        <div><div class="sec-title" style="font-size:.95rem">📩 مناطق طلبتها من الإدارة</div>
+          <div class="sec-sub">مناطق سجّلت فيها أوردرات وهي غير معرّفة — الإدارة لازم تضيفها</div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>المنطقة</th><th>الفرع المختار</th><th class="num">السعر المستخدم</th>
+          <th class="num">عدد المرات</th><th>آخر مرة</th><th>الحالة</th></tr></thead>
+        <tbody id="zoneReqBody"></tbody></table></div>
+    </div>
+
+    <!-- ═══════════ أدائي ═══════════ -->
+    <div class="page" id="page-perf">
+      <div class="sec-header">
+        <div><div class="sec-title">📈 أدائي</div><div class="sec-sub" id="perfSub">—</div></div>
+        <div class="toolbar">
+          <input type="date" class="field" id="pFrom" onchange="renderPerf()" />
+          <input type="date" class="field" id="pTo" onchange="renderPerf()" />
+          <select class="field" id="pAgent" onchange="renderPerf()"></select>
+        </div>
+      </div>
+      <div class="stats" id="perfStats"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+        <div>
+          <div class="sec-header"><div class="sec-title" style="font-size:.95rem">👥 أداء فريق الكول سنتر</div></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>الموظف</th><th class="num">أوردرات</th><th class="num">تم التسليم</th>
+              <th class="num">ملغاة</th><th class="num">قيمة التوصيل</th></tr></thead>
+            <tbody id="perfAgentsBody"></tbody></table></div>
+        </div>
+        <div>
+          <div class="sec-header"><div class="sec-title" style="font-size:.95rem">🗺️ أكثر المناطق طلبًا</div></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>المنطقة</th><th>الفرع</th><th class="num">عدد الطرود</th><th class="num">القيمة</th></tr></thead>
+            <tbody id="perfZonesBody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ الإعدادات ═══════════ -->
+    <div class="page" id="page-settings">
+      <div class="sec-header">
+        <div><div class="sec-title">⚙️ إعدادات الكول سنتر</div>
+          <div class="sec-sub">تفضيلات الشاشة وسلوك النموذج</div></div>
+        <div class="toolbar"><button class="add-btn" onclick="saveSettings()">💾 حفظ</button></div>
+      </div>
+      <div class="call-card">
+        <div class="fgrid">
+          <div class="fg full">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="setKeepSender" style="width:auto" />
+              الاحتفاظ ببيانات جهة الاستلام بعد حفظ الأوردر
+            </label>
+            <div style="font-size:.75rem;color:var(--muted);line-height:1.6">
+              مفيد لما محل واحد يبعت كذا أوردر ورا بعض — مش هتحتاج تكتب بياناته كل مرة.
+            </div>
+          </div>
+          <div class="fg full">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="setAllowManualBranch" style="width:auto" />
+              السماح باختيار الفرع والسعر يدويًا لو المنطقة غير موجودة
+            </label>
+            <div style="font-size:.75rem;color:var(--muted);line-height:1.6">
+              لو قفلته، مش هينفع تسجّل أوردر لمنطقة غير معرّفة في جدول المناطق.
+            </div>
+          </div>
+          <div class="fg">
+            <label>تنبيه على الأوردر المتأخر بعد (دقيقة)</label>
+            <input type="number" id="setStaleMinutes" min="5" max="480" dir="ltr" style="text-align:left" />
+          </div>
+          <div class="fg">
+            <label>عدد الأوردرات المعروضة في الجدول</label>
+            <select id="setPageSize">
+              <option value="100">100</option><option value="200">200</option>
+              <option value="400">400</option><option value="1000">1000</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="info-box" id="settingsInfo">—</div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+<div class="modal" id="modal-view"><div class="modal-box wide">
+  <div class="modal-head"><span class="modal-title" id="viewTitle">—</span>
+    <button class="modal-close" onclick="closeModal('view')">✕</button></div>
+  <div class="modal-body" id="viewBody"></div>
+  <div class="modal-foot" id="viewFoot"></div>
+</div></div>
+
+<div class="modal" id="modal-generic"><div class="modal-box">
+  <div class="modal-head"><span class="modal-title" id="genTitle">—</span>
+    <button class="modal-close" onclick="closeModal('generic')">✕</button></div>
+  <div class="modal-body"><div id="genBody"></div>
+    <div id="genError" style="color:var(--red);font-size:.82rem;min-height:18px"></div></div>
+  <div class="modal-foot">
+    <button class="add-btn" id="genSaveBtn" onclick="genSave()">💾 حفظ</button>
+    <button class="btn-ghost" onclick="closeModal('generic')">إلغاء</button>
+  </div>
+</div></div>
+
+<div id="toast"></div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════════════
+   الكول سنتر — الدهشان
+   ──────────────────────────────────────────────────────────────────────
+   الفكرة الأساسية: عكس تدفق إنشاء الأوردر.
+   لوحة الإدارة بتخلّيك تختار الفرع الأول ثم تفلتر المناطق عليه، وده
+   بيخلّي موظف الكول سنتر يخمّن الفرع — علشان كده فيه في النظام شاشة
+   "نقل الطلب لفرع آخر (تصحيح خطأ الكول سنتر)".
+   هنا بنعمل العكس: يكتب المنطقة، والنظام يستنتج الفرع المسؤول والسعر
+   من جدول zones — فالخطأ ميحصلش من الأساس.
+
+   بيكتب في: orders (source: "callcenter") · senders · receivers · counters
+             cc/complaints · cc/zoneRequests · cc/settings
+   بيقرأ من:  zones · branches · orders · pilots · users
+   ══════════════════════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, set, get, update, remove, onValue, runTransaction }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, onAuthStateChanged, signOut, signInAnonymously }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8",
+  measurementId: "G-F9R1E5P5GS"
+};
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+const CC   = "cc";
+
+/* ══════════════════════ STATE ══════════════════════ */
+const S = {
+  user: null,
+  orders: [], zones: [], branches: [], senders: [], receivers: [], pilots: [], users: [],
+  complaints: [], zoneRequests: [], settings: {},
+  ready: false
+};
+window._S = S;
+
+/* ══════════════════════ HELPERS ══════════════════════ */
+const $ = id => document.getElementById(id);
+const fmt  = n => (Number(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0 = n => (Number(n)||0).toLocaleString("en-US");
+const money = n => fmt(n) + " ج.م";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const round2 = n => Math.round((Number(n)||0)*100)/100;
+const todayStr = () => new Date().toISOString().slice(0,10);
+const listMap = v => v ? Object.entries(v).map(([id,x]) => ({id, ...(x||{})})) : [];
+
+function toDateStr(v) {
+  if (!v) return "";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function timeOf(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+/** "منذ كم" — للتنبيه على الأوردرات المتأخرة */
+function agoLabel(iso) {
+  if (!iso) return "—";
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (isNaN(mins) || mins < 0) return "—";
+  if (mins < 60) return `${mins} د`;
+  const h = Math.floor(mins/60);
+  if (h < 24) return `${h} س ${mins%60} د`;
+  return `${Math.floor(h/24)} يوم`;
+}
+function agoMinutes(iso) {
+  if (!iso) return 0;
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  return isNaN(m) || m < 0 ? 0 : m;
+}
+/** تطبيع رقم الهاتف للمقارنة — الأرقام فقط */
+const digits = s => String(s||"").replace(/\D/g,"");
+/** تطبيع النص العربي للبحث: يوحّد الألف والهاء والياء ويشيل التشكيل */
+function norm(s) {
+  return String(s||"").toLowerCase().trim()
+    .replace(/[ً-ْـ]/g,"")
+    .replace(/[أإآٱ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه")
+    .replace(/\s+/g," ");
+}
+
+window.showToast = function(msg, type = "") {
+  const t = $("toast"); if (!t) return;
+  t.textContent = msg; t.className = "show " + type;
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => { t.className = ""; }, 3600);
+};
+const showToast = window.showToast;
+window.openModal  = t => { $("modal-"+t)?.classList.add("open"); document.body.style.overflow = "hidden"; };
+window.closeModal = t => { $("modal-"+t)?.classList.remove("open"); document.body.style.overflow = ""; };
+window.openOtherApp = function(file) {
+  const w = window.open(file, "_blank");
+  if (!w) window.location.href = file;
+};
+
+window.toggleTheme = function() {
+  const light = document.documentElement.classList.toggle("light");
+  localStorage.setItem("tiar-cc-theme", light ? "light" : "dark");
+  $("themeIcon").textContent  = light ? "🌙" : "☀️";
+  $("themeLabel").textContent = light ? "الوضع الليلي" : "الوضع النهاري";
+};
+(function(){ if (localStorage.getItem("tiar-cc-theme") === "light") {
+  document.documentElement.classList.add("light");
+  document.addEventListener("DOMContentLoaded", () => {
+    $("themeIcon").textContent = "🌙"; $("themeLabel").textContent = "الوضع الليلي"; });
+}})();
+
+/* ══════════════════════ CONSTANTS ══════════════════════ */
+const ST = {
+  PENDING:   "قيد التنفيذ",
+  DELIVERING:"جاري التوصيل",
+  DONE:      "تم التسليم",
+  FAILED:    "لم يتم التوصيل",
+  CANCELLED: "ملغي"
+};
+const ST_BADGE = {
+  [ST.PENDING]:    '<span class="badge bg-orange">قيد التنفيذ</span>',
+  [ST.DELIVERING]: '<span class="badge bg-blue">جاري التوصيل</span>',
+  [ST.DONE]:       '<span class="badge bg-green">تم التسليم</span>',
+  [ST.FAILED]:     '<span class="badge bg-red">لم يتم التوصيل</span>',
+  [ST.CANCELLED]:  '<span class="badge bg-muted">ملغي</span>'
+};
+const SOURCE_LABEL = { callcenter:"كول سنتر", admin:"الإدارة", branch:"فرع", store:"محل", pilot:"طيار" };
+
+const DEFAULT_SETTINGS = {
+  keepSender: true,
+  allowManualBranch: true,
+  staleMinutes: 45,
+  pageSize: 200
+};
+
+/* ══════════════════════ AUTH ══════════════════════ */
+const SESSION_KEY = "tiar-cc-session";
+const CC_ROLES    = ["كول سنتر", "كول سنتر", "call center", "callcenter", "خدمة عملاء"];
+const ADMIN_ROLES = ["مدير", "مدير عام", "admin", "مشرف"];
+
+async function isAdminEmail(email) {
+  if (!email) return false;
+  const snap = await get(ref(db, "adminEmails"));
+  if (!snap.exists()) return false;
+  const val = snap.val();
+  const list = Array.isArray(val) ? val : Object.values(val);
+  return list.filter(Boolean).map(e => String(e).trim().toLowerCase())
+             .includes(String(email).trim().toLowerCase());
+}
+
+onAuthStateChanged(auth, async (user) => {
+  try {
+    if (!user) { signInAnonymously(auth).catch(e => console.warn("anon:", e?.code||e)); return; }
+    if (S.user) return;
+    const email = (user.email || "").toLowerCase();
+    if (!email) return;
+    if (!await isAdminEmail(email)) return;
+    const d = { username: email, displayName: user.displayName || email,
+                role: "مدير عام", isAdmin: true, branchId: "", via: "google" };
+    saveSession(d); applySession(d);
+  } catch (e) { console.error("google login:", e); }
+});
+
+function saveSession(d) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(d)); } catch {} }
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+function applySession(d) {
+  S.user = d;
+  $("login-screen").style.display = "none";
+  $("app").classList.add("visible");
+  $("sidebar-username").textContent = d.displayName || d.username;
+  $("sidebar-role").textContent = d.role || "";
+  $("userAvatar").textContent = (d.displayName || d.username || "؟").trim().charAt(0);
+  startListeners();
+  navigateTo("neworder");
+}
+
+window.doLogin = async function() {
+  const username = $("loginUser").value.trim(), password = $("loginPass").value;
+  const err = $("loginError"), btn = $("loginBtn");
+  err.textContent = "";
+  if (!username || !password) { err.textContent = "يرجى إدخال بيانات الدخول"; return; }
+  btn.disabled = true; btn.textContent = "جاري التحقق…";
+  try {
+    const snap = await get(ref(db, "users/" + username));
+    if (!snap.exists()) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+    const u = snap.val();
+    if (u.password !== password) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; $("loginPass").value = ""; return; }
+    const role = String(u.role || "").trim();
+    const isCC = CC_ROLES.some(r => norm(r) === norm(role));
+    const isAdmin = ADMIN_ROLES.includes(role);
+    if (!isCC && !isAdmin) { err.textContent = "هذا البرنامج مخصّص لموظفي الكول سنتر والإدارة"; return; }
+    const d = { username, displayName: u.displayName || u.name || username,
+                role: role || "كول سنتر", isAdmin, branchId: u.branchId || "", via: "password" };
+    saveSession(d); applySession(d);
+  } catch (e) { err.textContent = "خطأ في الاتصال: " + e.message; }
+  finally { btn.disabled = false; btn.textContent = "دخول"; }
+};
+
+window.doLogout = function() {
+  S.user = null; clearSession(); signOut(auth).catch(()=>{});
+  $("app").classList.remove("visible");
+  $("login-screen").style.display = "flex";
+  $("loginUser").value = ""; $("loginPass").value = ""; $("loginError").textContent = "";
+};
+
+setTimeout(() => {
+  let d = null;
+  try { const raw = localStorage.getItem(SESSION_KEY); d = raw ? JSON.parse(raw) : null; }
+  catch { clearSession(); return; }
+  if (!d?.username) return;
+  try { applySession(d); } catch (e) { console.error("session restore:", e); }
+}, 0);
+
+/* ══════════════════════ NAVIGATION ══════════════════════ */
+const RENDERERS = {
+  neworder:   () => renderNewOrder(),
+  dashboard:  () => renderDashboard(),
+  orders:     () => renderOrders(),
+  search:     () => renderQuickSearch(),
+  complaints: () => renderComplaints(),
+  zones:      () => renderZones(),
+  perf:       () => renderPerf(),
+  settings:   () => renderSettings()
+};
+
+window.navigateTo = function(page) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $("page-" + page)?.classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+  [...document.querySelectorAll(".nav-item")]
+    .find(b => (b.getAttribute("onclick")||"").includes(`navigateTo('${page}')`))?.classList.add("active");
+  window.scrollTo(0,0);
+  try { RENDERERS[page]?.(); } catch(e) { console.error("render "+page, e); }
+  if (page === "neworder") setTimeout(() => $("senderSearch")?.focus(), 60);
+  if (page === "search")   setTimeout(() => $("qSearch")?.focus(), 60);
+};
+
+/* ══════════════════════ LISTENERS ══════════════════════ */
+function startListeners() {
+  onValue(ref(db, "orders"), s => {
+    S.orders = listMap(s.val());
+    S.ready = true; refresh(); updateBadges();
+  });
+  onValue(ref(db, "zones"),     s => { S.zones = listMap(s.val()); fillSelects(); refresh(); });
+  onValue(ref(db, "branches"),  s => { S.branches = listMap(s.val()); fillSelects(); refresh(); });
+  onValue(ref(db, "senders"),   s => { S.senders = listMap(s.val()); });
+  onValue(ref(db, "receivers"), s => { S.receivers = listMap(s.val()); });
+  onValue(ref(db, "pilots"),    s => { S.pilots = listMap(s.val()); refresh(); });
+  onValue(ref(db, "users"),     s => {
+    S.users = s.val() ? Object.entries(s.val()).map(([k,v]) => ({ username:k, ...(v||{}) })) : [];
+    fillSelects();
+  });
+  onValue(ref(db, `${CC}/complaints`),   s => { S.complaints = listMap(s.val()); updateBadges(); refresh(); });
+  onValue(ref(db, `${CC}/zoneRequests`), s => { S.zoneRequests = listMap(s.val()); refresh(); });
+  onValue(ref(db, `${CC}/settings`),     s => { S.settings = { ...DEFAULT_SETTINGS, ...(s.val()||{}) }; refresh(); });
+}
+
+function refresh() {
+  const active = document.querySelector(".page.active");
+  if (!active) return;
+  const key = active.id.replace("page-", "");
+  // شاشة الأوردر الجديد ما بتتحدّثش تلقائيًا — الموظف بيكتب فيها أثناء المكالمة
+  if (key === "neworder") { updateSummary(); return; }
+  clearTimeout(window._refreshT);
+  window._refreshT = setTimeout(() => {
+    try { RENDERERS[key]?.(); } catch(e) { console.error("refresh "+key, e); }
+  }, 200);
+}
+window.refresh = refresh;
+
+function updateBadges() {
+  const setBadge = (id, n, color) => {
+    const el = $(id); if (!el) return;
+    el.querySelector(".nav-badge")?.remove();
+    if (n > 0) el.insertAdjacentHTML("beforeend",
+      `<span class="nav-badge"${color ? ` style="background:${color}"` : ""}>${n > 99 ? "99+" : n}</span>`);
+  };
+  const stale = Number(S.settings?.staleMinutes) || DEFAULT_SETTINGS.staleMinutes;
+  setBadge("navOrders", S.orders.filter(o => o.status === ST.PENDING && agoMinutes(o.statusSince || o.createdAt) >= stale).length);
+  setBadge("navComplaints", S.complaints.filter(c => c.status !== "resolved").length, "var(--red)");
+}
+
+/* ══════════════════════ LOOKUPS ══════════════════════ */
+const branchOf   = id => S.branches.find(b => b.id === id) || null;
+const branchName = id => branchOf(id)?.name || "—";
+const pilotName  = id => S.pilots.find(p => p.id === id)?.name || "";
+
+function fillSelects() {
+  const bOpts = `<option value="">— كل الفروع —</option>` +
+    S.branches.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
+  ["oBranch","zBranch"].forEach(id => {
+    const el = $(id); if (!el) return;
+    const v = el.value; el.innerHTML = bOpts; el.value = v;
+  });
+  const ag = $("pAgent");
+  if (ag) {
+    const v = ag.value;
+    const agents = [...new Set(S.orders.filter(o => o.source === "callcenter").map(o => o.addedBy).filter(Boolean))];
+    ag.innerHTML = `<option value="">— كل الموظفين —</option>` +
+      agents.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    ag.value = v;
+  }
+}
+window.fillSelects = fillSelects;
+
+/* ══════════════════════════════════════════════════════════════
+   محرك المناطق — قلب البرنامج
+   بيبحث في zones ويرجّع الفرع المسؤول والسعر لكل منطقة مطابقة.
+   zones/{id} = { areaName, price, deliveryBranchId, sourceBranchId }
+   الفرع المسؤول = deliveryBranchId (وبعض السجلات القديمة فيها branchId)
+══════════════════════════════════════════════════════════════ */
+function zoneBranchId(z) { return z.deliveryBranchId || z.branchId || ""; }
+window.zoneBranchId = zoneBranchId;
+
+/**
+ * يبحث عن مناطق مطابقة لنص، مرتّبة بالأولوية:
+ * تطابق كامل ← يبدأ بالنص ← يحتوي النص.
+ * @param {string} q      نص البحث
+ * @param {string} lockBranchId لو محدد، بيرجّع مناطق الفرع ده فقط
+ */
+function searchZones(q, lockBranchId = "") {
+  const n = norm(q);
+  if (!n) return [];
+  const scored = [];
+  for (const z of S.zones) {
+    const name = z.areaName || z.name || "";
+    const nn = norm(name);
+    if (!nn) continue;
+    if (lockBranchId && zoneBranchId(z) !== lockBranchId) continue;
+    let score = -1;
+    if (nn === n) score = 0;
+    else if (nn.startsWith(n)) score = 1;
+    else if (nn.includes(n)) score = 2;
+    if (score < 0) continue;
+    scored.push({ zone: z, name, score, branchId: zoneBranchId(z), price: Number(z.price) || 0 });
+  }
+  return scored
+    .sort((a,b) => a.score - b.score || a.name.localeCompare(b.name, "ar"))
+    .slice(0, 12);
+}
+window.searchZones = searchZones;
+
+/** بحث عن عميل (senders أو receivers) بالاسم أو التليفون */
+function searchCustomers(q, which = "senders") {
+  const list = which === "senders" ? S.senders : S.receivers;
+  const n = norm(q), d = digits(q);
+  if (!n && !d) return [];
+  const out = [];
+  for (const c of list) {
+    const nm = norm(c.name);
+    const p1 = digits(c.phone1), p2 = digits(c.phone2);
+    let score = -1;
+    if (d.length >= 4 && (p1.includes(d) || p2.includes(d))) score = 0;
+    else if (nm === n) score = 1;
+    else if (nm.startsWith(n)) score = 2;
+    else if (n.length >= 2 && nm.includes(n)) score = 3;
+    if (score < 0) continue;
+    out.push({ c, score });
+  }
+  return out.sort((a,b) => a.score - b.score).slice(0, 10).map(x => x.c);
+}
+window.searchCustomers = searchCustomers;
+
+/* ══════════════════════════════════════════════════════════════
+   توليد رقم الأوردر — نفس منطق لوحة الإدارة بالحرف
+   counters/{branchId}/{YYYYMMDD} عداد يومي لكل فرع
+══════════════════════════════════════════════════════════════ */
+async function generateOrderNumber(branchId, branchCode) {
+  const today = todayStr().replace(/-/g, "");
+  const counterRef = ref(db, `counters/${branchId}/${today}`);
+  let newCount = 1;
+  await runTransaction(counterRef, cur => { newCount = (cur || 0) + 1; return newCount; });
+  return `${branchCode || "ORD"}-${String(newCount).padStart(3, "0")}`;
+}
+window.generateOrderNumber = generateOrderNumber;
+
+/* تعريض الأدوات للسكربتات العادية */
+Object.assign(window, {
+  db, ref, push, set, get, update, remove, onValue, runTransaction, CC, S, $,
+  fmt, fmt0, money, esc, round2, todayStr, listMap, toDateStr, timeOf,
+  agoLabel, agoMinutes, digits, norm,
+  ST, ST_BADGE, SOURCE_LABEL, DEFAULT_SETTINGS,
+  branchOf, branchName, pilotName
+});
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   شاشة الأوردر الجديد — التدفق المعكوس
+   الموظف يكتب المنطقة، والنظام يستنتج الفرع المسؤول والسعر.
+   أول منطقة تُختار تقفل الفرع، وباقي الطرود تتقيّد بنفس الفرع لأن
+   الأوردر له فرع واحد في بنية البيانات (orders.branchId).
+   ══════════════════════════════════════════════════════════════════════ */
+
+/** حالة النموذج */
+let F = { senderId: null, parcels: [], lockBranch: "", seq: 0 };
+
+/** يجيب الطرد برقمه — بيقبل رقم أو نص عشان مصادر النداء المختلفة */
+function P(n) { return F.parcels.find(x => x.n === Number(n)) || null; }
+
+window.renderNewOrder = function() {
+  if (!F.parcels.length) addParcel();
+  else { renderParcels(); updateSummary(); }
+  renderBranchLock();
+};
+
+window.resetNewOrder = function(ask) {
+  if (ask && !confirm("إفراغ النموذج وبدء أوردر جديد؟")) return;
+  const keep = S.settings?.keepSender !== false;
+  const s = keep ? {
+    q: $("senderSearch").value, id: F.senderId,
+    p1: $("senderPhone").value, p2: $("senderPhone2").value, a: $("senderAddress").value
+  } : null;
+  F = { senderId: null, parcels: [], lockBranch: "", seq: 0 };
+  ["senderSearch","senderPhone","senderPhone2","senderAddress","storePrepaid","storePrepaidNote","orderNotes"]
+    .forEach(id => { const el = $(id); if (el) el.value = ""; });
+  if (s) {
+    $("senderSearch").value = s.q; F.senderId = s.id;
+    $("senderPhone").value = s.p1; $("senderPhone2").value = s.p2; $("senderAddress").value = s.a;
+  }
+  $("senderResults").classList.remove("open");
+  addParcel();
+  renderSenderState();
+  renderBranchLock();
+  setTimeout(() => (keep ? $(`pArea${F.parcels[0].n}`) : $("senderSearch"))?.focus(), 60);
+};
+
+/* ══════════ جهة الاستلام ══════════ */
+window.onSenderSearch = function() {
+  const q = $("senderSearch").value.trim();
+  const box = $("senderResults");
+  F.senderId = null;
+  renderSenderState();
+  if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; updateSummary(); return; }
+  const hits = searchCustomers(q, "senders");
+  box.innerHTML = hits.map((c,i) => `
+    <div class="smart-item${i===0?" sel":""}" onclick="pickSender('${esc(c.id)}')">
+      <div class="si-main">${hl(c.name, q)}</div>
+      <div class="si-sub" dir="ltr" style="text-align:right">${esc(c.phone1||"")}${c.phone2 ? " · "+esc(c.phone2) : ""}
+        ${c.address ? ` <span style="direction:rtl;display:inline-block">— ${esc(c.address)}</span>` : ""}</div>
+    </div>`).join("") +
+    `<div class="smart-new" onclick="useNewSender()">➕ عميل جديد باسم «${esc(q)}» — أدخل الهاتف والعنوان</div>`;
+  box.classList.add("open");
+  updateSummary();
+};
+
+window.pickSender = function(id) {
+  const c = S.senders.find(x => x.id === id);
+  if (!c) return;
+  F.senderId = id;
+  $("senderSearch").value  = c.name || "";
+  $("senderPhone").value   = c.phone1 || "";
+  $("senderPhone2").value  = c.phone2 || "";
+  $("senderAddress").value = c.address || "";
+  $("senderResults").classList.remove("open");
+  renderSenderState();
+  updateSummary();
+  setTimeout(() => $(`pArea${F.parcels[0]?.n}`)?.focus(), 50);
+};
+
+window.useNewSender = function() {
+  F.senderId = null;
+  $("senderResults").classList.remove("open");
+  renderSenderState();
+  $("senderPhone").focus();
+};
+
+function renderSenderState() {
+  const el = $("senderState");
+  if (!el) return;
+  const q = $("senderSearch")?.value.trim();
+  if (!q) { el.innerHTML = ""; return; }
+  if (F.senderId) {
+    const c = S.senders.find(x => x.id === F.senderId);
+    const cnt = S.orders.filter(o => o.senderId === F.senderId).length;
+    el.innerHTML = `<div class="ok-box" style="margin:10px 0 0">
+      ✅ عميل مسجّل: <b>${esc(c?.name||"")}</b>${cnt ? ` — عنده <b>${fmt0(cnt)}</b> أوردر سابق` : ""}</div>`;
+  } else {
+    el.innerHTML = `<div class="warn-box" style="margin:10px 0 0">
+      🆕 عميل جديد — هيتحفظ في قائمة العملاء تلقائيًا مع أول أوردر. الهاتف والعنوان مطلوبين.</div>`;
+  }
+}
+
+/** تلوين نص البحث داخل النتيجة */
+function hl(text, q) {
+  const t = String(text||""), nq = norm(q), nt = norm(t);
+  const i = nt.indexOf(nq);
+  if (i === -1 || !nq) return esc(t);
+  return esc(t.slice(0,i)) + "<mark>" + esc(t.slice(i, i+nq.length)) + "</mark>" + esc(t.slice(i+nq.length));
+}
+window.hl = hl;
+
+/** تنقّل بالكيبورد في نتائج البحث */
+window.onSmartKey = function(ev, kind, n) {
+  const box = kind === "sender" ? $("senderResults")
+            : kind === "area"   ? $(`pAreaResults${n}`)
+            : $(`pRecvResults${n}`);
+  if (!box || !box.classList.contains("open")) return;
+  const items = [...box.querySelectorAll(".smart-item, .smart-new")];
+  if (!items.length) return;
+  let idx = items.findIndex(x => x.classList.contains("sel"));
+  if (ev.key === "ArrowDown") { ev.preventDefault(); idx = Math.min(items.length-1, idx+1); }
+  else if (ev.key === "ArrowUp") { ev.preventDefault(); idx = Math.max(0, idx-1); }
+  else if (ev.key === "Enter") { ev.preventDefault(); items[idx < 0 ? 0 : idx]?.click(); return; }
+  else if (ev.key === "Escape") { box.classList.remove("open"); return; }
+  else return;
+  items.forEach(x => x.classList.remove("sel"));
+  items[idx]?.classList.add("sel");
+  items[idx]?.scrollIntoView({ block:"nearest" });
+};
+
+/* ══════════ قفل الفرع ══════════ */
+function renderBranchLock() {
+  const el = $("branchLock");
+  if (!el) return;
+  if (!F.lockBranch) {
+    el.innerHTML = `<div class="info-box" style="margin-bottom:14px">
+      💡 اكتب اسم المنطقة في أول وجهة، والنظام هيقولك <b>الفرع المسؤول</b> و<b>سعر التوصيل</b> تلقائيًا.</div>`;
+    return;
+  }
+  const b = branchOf(F.lockBranch);
+  el.innerHTML = `<div class="ok-box" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>🏢 الأوردر ده على <b style="color:var(--green);font-size:1rem">${esc(b?.name||"")}</b>
+      — باقي الوجهات لازم تكون في مناطق نفس الفرع.</span>
+    <button class="btn-ghost btn-xs" style="margin-inline-start:auto" onclick="unlockBranch()">🔓 تغيير الفرع</button></div>`;
+}
+
+window.unlockBranch = function() {
+  if (!confirm("تغيير الفرع هيمسح المناطق المختارة في كل الوجهات. متابعة؟")) return;
+  F.lockBranch = "";
+  F.parcels.forEach(p => { p.zoneId = ""; p.zoneName = ""; p.price = 0; p.branchId = ""; p.manual = false; });
+  renderParcels(); renderBranchLock(); updateSummary();
+};
+
+/* ══════════ الطرود ══════════ */
+window.addParcel = function() {
+  F.parcels.push({ n: ++F.seq, receiverId:null, zoneId:"", zoneName:"", price:0, branchId:"", manual:false });
+  renderParcels(); updateSummary();
+  setTimeout(() => $(`pRecv${F.parcels[F.parcels.length-1].n}`)?.focus(), 50);
+};
+
+window.removeParcel = function(n) {
+  if (F.parcels.length <= 1) { showToast("لازم وجهة واحدة على الأقل", "error"); return; }
+  F.parcels = F.parcels.filter(p => p.n !== Number(n));
+  // لو مفيش أي منطقة مختارة، نفتح قفل الفرع
+  if (!F.parcels.some(p => p.zoneId || p.manual)) F.lockBranch = "";
+  renderParcels(); renderBranchLock(); updateSummary();
+};
+
+function renderParcels() {
+  const box = $("parcels");
+  if (!box) return;
+  // نحفظ القيم المكتوبة قبل إعادة الرسم
+  const saved = F.parcels.map(p => ({
+    n: p.n,
+    recv:  $(`pRecv${p.n}`)?.value  ?? p._recv  ?? "",
+    ph:    $(`pPhone${p.n}`)?.value ?? p._ph    ?? "",
+    ph2:   $(`pPhone2${p.n}`)?.value?? p._ph2   ?? "",
+    area:  $(`pArea${p.n}`)?.value  ?? p._area  ?? "",
+    addr:  $(`pAddr${p.n}`)?.value  ?? p._addr  ?? "",
+    note:  $(`pNote${p.n}`)?.value  ?? p._note  ?? ""
+  }));
+
+  box.innerHTML = F.parcels.map((p, i) => {
+    const v = saved.find(s => s.n === p.n) || {};
+    return `<div class="parcel">
+      <div class="parcel-head">
+        <span class="parcel-num">📦 وجهة ${i+1}${F.parcels.length > 1 ? ` من ${F.parcels.length}` : ""}</span>
+        ${F.parcels.length > 1 ? `<button class="parcel-del" onclick="removeParcel(${p.n})" title="حذف الوجهة">✕</button>` : ""}
+      </div>
+      <div class="fgrid">
+        <div class="fg full smart">
+          <label>اسم المستلِم <span class="req">*</span></label>
+          <input id="pRecv${p.n}" value="${esc(v.recv)}" placeholder="اسم العميل المستلم…" autocomplete="off"
+                 oninput="onRecvSearch(${p.n})" onkeydown="onSmartKey(event,'recv',${p.n})" />
+          <div class="smart-results" id="pRecvResults${p.n}"></div>
+        </div>
+        <div class="fg"><label>هاتف المستلِم <span class="req">*</span></label>
+          <input id="pPhone${p.n}" value="${esc(v.ph)}" dir="ltr" style="text-align:left" oninput="updateSummary()" /></div>
+        <div class="fg"><label>هاتف احتياطي</label>
+          <input id="pPhone2${p.n}" value="${esc(v.ph2)}" dir="ltr" style="text-align:left" /></div>
+
+        <div class="fg full smart">
+          <label>المنطقة <span class="req">*</span>
+            <span style="font-weight:500;font-size:.72rem">— اكتب المنطقة والنظام يحدد الفرع</span></label>
+          <input class="big" id="pArea${p.n}" value="${esc(v.area)}" placeholder="مثال: المنصورة الجديدة…" autocomplete="off"
+                 oninput="onAreaSearch(${p.n})" onkeydown="onSmartKey(event,'area',${p.n})" />
+          <div class="smart-results" id="pAreaResults${p.n}"></div>
+        </div>
+        <div class="fg full" id="pHit${p.n}"></div>
+
+        <div class="fg full"><label>عنوان التسليم بالتفصيل <span class="req">*</span></label>
+          <input id="pAddr${p.n}" value="${esc(v.addr)}" placeholder="الشارع، رقم العمارة، علامة مميزة…" oninput="updateSummary()" /></div>
+        <div class="fg full"><label>ملاحظة على الطرد</label>
+          <input id="pNote${p.n}" value="${esc(v.note)}" placeholder="اختياري" /></div>
+      </div>
+    </div>`;
+  }).join("");
+
+  F.parcels.forEach(p => renderParcelHit(p.n));
+}
+
+window.onRecvSearch = function(n) {
+  const p = P(n);
+  if (!p) return;
+  const q = $(`pRecv${n}`).value.trim();
+  const box = $(`pRecvResults${n}`);
+  p.receiverId = null;
+  if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; updateSummary(); return; }
+  const hits = searchCustomers(q, "receivers");
+  if (!hits.length) { box.classList.remove("open"); box.innerHTML = ""; updateSummary(); return; }
+  box.innerHTML = hits.map((c,i) => `
+    <div class="smart-item${i===0?" sel":""}" onclick="pickRecv(${n},'${esc(c.id)}')">
+      <div class="si-main">${hl(c.name, q)}</div>
+      <div class="si-sub" dir="ltr" style="text-align:right">${esc(c.phone1||"")}
+        ${c.address ? ` <span style="direction:rtl;display:inline-block">— ${esc(c.address)}</span>` : ""}</div>
+    </div>`).join("");
+  box.classList.add("open");
+  updateSummary();
+};
+
+window.pickRecv = function(n, id) {
+  const p = P(n);
+  const c = S.receivers.find(x => x.id === id);
+  if (!p || !c) return;
+  p.receiverId = id;
+  $(`pRecv${n}`).value   = c.name || "";
+  $(`pPhone${n}`).value  = c.phone1 || "";
+  $(`pPhone2${n}`).value = c.phone2 || "";
+  if (c.address && !$(`pAddr${n}`).value) $(`pAddr${n}`).value = c.address;
+  $(`pRecvResults${n}`).classList.remove("open");
+  updateSummary();
+  setTimeout(() => $(`pArea${n}`)?.focus(), 50);
+};
+
+/* ══════════ بحث المنطقة — استنتاج الفرع ══════════ */
+window.onAreaSearch = function(n) {
+  const p = P(n);
+  if (!p) return;
+  const q = $(`pArea${n}`).value.trim();
+  const box = $(`pAreaResults${n}`);
+  // أي تعديل يلغي الاختيار السابق
+  p.zoneId = ""; p.zoneName = ""; p.price = 0; p.branchId = ""; p.manual = false;
+
+  if (q.length < 2) {
+    box.classList.remove("open"); box.innerHTML = "";
+    renderParcelHit(n); syncBranchLock(); updateSummary(); return;
+  }
+
+  const hits = searchZones(q, F.lockBranch);
+  const allHits = F.lockBranch ? searchZones(q) : hits;
+
+  let html = hits.map((h,i) => {
+    const b = branchOf(h.branchId);
+    return `<div class="smart-item${i===0?" sel":""}" onclick="pickZone(${n},'${esc(h.zone.id)}')">
+      <div class="si-main">${hl(h.name, q)}
+        <span class="badge bg-teal" style="margin-inline-start:6px">${fmt(h.price)} ج.م</span></div>
+      <div class="si-sub">🏢 ${esc(b?.name || "فرع غير معروف")}</div>
+    </div>`;
+  }).join("");
+
+  // مناطق مطابقة لكن في فرع تاني — نوضّحها بدل ما نخفيها
+  if (F.lockBranch) {
+    const other = allHits.filter(h => h.branchId !== F.lockBranch);
+    if (other.length) {
+      html += other.slice(0,4).map(h => {
+        const b = branchOf(h.branchId);
+        return `<div class="smart-item" style="opacity:.55;cursor:not-allowed"
+                     title="منطقة تابعة لفرع آخر — الأوردر مربوط بفرع واحد">
+          <div class="si-main">${hl(h.name, q)} <span class="badge bg-muted">فرع آخر</span></div>
+          <div class="si-sub">🏢 ${esc(b?.name||"")} — اضغط «تغيير الفرع» أو اعمل أوردر منفصل</div>
+        </div>`;
+      }).join("");
+    }
+  }
+
+  if (!hits.length && S.settings?.allowManualBranch !== false) {
+    html += `<div class="smart-new" onclick="useManualZone(${n})">
+      ➕ منطقة «${esc(q)}» غير موجودة — اختر الفرع والسعر يدويًا</div>`;
+  } else if (!hits.length) {
+    html += `<div class="smart-new" style="color:var(--red);background:rgba(232,25,44,.07);cursor:default">
+      ⚠️ منطقة «${esc(q)}» غير معرّفة — الإدارة لازم تضيفها الأول</div>`;
+  }
+
+  box.innerHTML = html;
+  box.classList.add("open");
+  renderParcelHit(n); updateSummary();
+};
+
+window.pickZone = function(n, zoneId) {
+  const p = P(n);
+  const z = S.zones.find(x => x.id === zoneId);
+  if (!p || !z) return;
+  const bId = zoneBranchId(z);
+  if (F.lockBranch && bId !== F.lockBranch) {
+    showToast("المنطقة دي تابعة لفرع تاني — اضغط «تغيير الفرع» أو اعمل أوردر منفصل", "error");
+    return;
+  }
+  p.zoneId   = zoneId;
+  p.zoneName = z.areaName || z.name || "";
+  p.price    = Number(z.price) || 0;
+  p.branchId = bId;
+  p.manual   = false;
+  $(`pArea${n}`).value = p.zoneName;
+  $(`pAreaResults${n}`).classList.remove("open");
+  syncBranchLock();
+  renderParcelHit(n); renderBranchLock(); updateSummary();
+  setTimeout(() => $(`pAddr${n}`)?.focus(), 50);
+};
+
+/** منطقة غير معرّفة — اختيار الفرع والسعر يدويًا */
+window.useManualZone = function(n) {
+  const p = P(n);
+  if (!p) return;
+  p.manual = true; p.zoneId = ""; p.zoneName = $(`pArea${n}`).value.trim();
+  p.branchId = F.lockBranch || ""; p.price = 0;
+  $(`pAreaResults${n}`).classList.remove("open");
+  renderParcelHit(n); updateSummary();
+  setTimeout(() => $(`pmBranch${n}`)?.focus(), 50);
+};
+
+window.onManualBranch = function(n) {
+  const p = P(n);
+  if (!p) return;
+  p.branchId = $(`pmBranch${n}`).value;
+  syncBranchLock(); renderBranchLock(); updateSummary();
+};
+window.onManualPrice = function(n) {
+  const p = P(n);
+  if (!p) return;
+  p.price = Number($(`pmPrice${n}`).value) || 0;
+  updateSummary();
+};
+
+/** يضبط قفل الفرع من أول طرد له فرع */
+function syncBranchLock() {
+  const first = F.parcels.find(p => p.branchId);
+  F.lockBranch = first ? first.branchId : "";
+}
+
+/** يرسم نتيجة استنتاج الفرع تحت حقل المنطقة */
+function renderParcelHit(n) {
+  const p = P(n);
+  const el = $(`pHit${n}`);
+  if (!p || !el) return;
+
+  if (p.zoneId) {
+    const b = branchOf(p.branchId);
+    el.innerHTML = `<div class="branch-hit">
+      <span class="bh-icon">✅</span>
+      <div><div style="font-size:.73rem;color:var(--muted)">الفرع المسؤول</div>
+        <div class="bh-branch">${esc(b?.name || "—")}</div></div>
+      <div class="bh-price">${fmt(p.price)} ج.م</div></div>`;
+    return;
+  }
+
+  if (p.manual) {
+    el.innerHTML = `<div class="branch-hit warn" style="flex-direction:column;align-items:stretch;gap:11px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="bh-icon">⚠️</span>
+        <div><div class="bh-branch" style="font-size:.92rem">منطقة «${esc(p.zoneName)}» غير معرّفة</div>
+          <div style="font-size:.75rem;color:var(--muted)">اختر الفرع والسعر — وهيتم إعلام الإدارة لإضافتها</div></div>
+      </div>
+      <div class="fgrid" style="gap:10px">
+        <div class="fg"><label>الفرع المسؤول <span class="req">*</span></label>
+          <select id="pmBranch${n}" onchange="onManualBranch(${n})">
+            <option value="">— اختر الفرع —</option>
+            ${S.branches.map(b => `<option value="${esc(b.id)}"${b.id===p.branchId?" selected":""}>${esc(b.name)}</option>`).join("")}
+          </select></div>
+        <div class="fg"><label>سعر التوصيل <span class="req">*</span></label>
+          <input type="number" id="pmPrice${n}" min="0" step="0.5" dir="ltr" style="text-align:left"
+                 value="${p.price||""}" oninput="onManualPrice(${n})" /></div>
+      </div></div>`;
+    return;
+  }
+
+  const q = $(`pArea${n}`)?.value.trim() || "";
+  el.innerHTML = q.length >= 2
+    ? `<div class="branch-hit err"><span class="bh-icon">❓</span>
+        <div><div class="bh-branch" style="font-size:.9rem">لم يتم تحديد المنطقة</div>
+          <div style="font-size:.75rem;color:var(--muted)">اختر من القائمة المنسدلة</div></div></div>`
+    : "";
+}
+
+/* ══════════ ملخص الأوردر ══════════ */
+window.updateSummary = function() {
+  const body = $("summaryBody");
+  if (!body) return;
+
+  const senderName = $("senderSearch")?.value.trim() || "";
+  const prepaid = Number($("storePrepaid")?.value) || 0;
+  let total = 0;
+  const rows = F.parcels.map((p,i) => {
+    total += p.price || 0;
+    const recv = $(`pRecv${p.n}`)?.value.trim() || "—";
+    const b = branchOf(p.branchId);
+    return `<div class="sum-line">
+      <span>📦 ${i+1}. ${esc(recv)}<div style="font-size:.72rem">${esc(p.zoneName||"بدون منطقة")}${b?` · ${esc(b.name)}`:""}</div></span>
+      <b>${p.price ? fmt(p.price) : "—"}</b></div>`;
+  }).join("");
+
+  const b = branchOf(F.lockBranch);
+  body.innerHTML = `
+    <div class="sum-line"><span>جهة الاستلام</span><b>${esc(senderName || "—")}</b></div>
+    <div class="sum-line"><span>الفرع المسؤول</span>
+      <b style="color:${b?"var(--green)":"var(--muted)"}">${esc(b?.name || "لم يُحدَّد")}</b></div>
+    <div class="sum-line"><span>عدد الطرود</span><b>${F.parcels.length}</b></div>
+    ${rows}
+    ${prepaid ? `<div class="sum-line"><span>عهدة للمحل</span><b style="color:var(--orange)">${fmt(prepaid)}</b></div>` : ""}
+    <div class="sum-total"><span>إجمالي التوصيل</span>
+      <span style="color:var(--teal)">${fmt(total)} ج.م</span></div>`;
+
+  // شروط الحفظ
+  const problems = validateOrder(true);
+  const btn = $("saveOrderBtn"), hint = $("saveHint");
+  if (btn) btn.disabled = problems.length > 0;
+  if (hint) hint.innerHTML = problems.length
+    ? `<span style="color:var(--orange)">⚠️ ${esc(problems[0])}</span>` +
+      (problems.length > 1 ? `<div style="opacity:.7">و${problems.length-1} حاجة تانية</div>` : "")
+    : `<span style="color:var(--green)">✅ جاهز للحفظ</span>`;
+};
+
+/** يرجّع قائمة المشاكل — فاضية تعني الأوردر سليم */
+function validateOrder(quiet) {
+  const out = [];
+  const senderName = $("senderSearch")?.value.trim();
+  if (!senderName) out.push("اكتب جهة الاستلام");
+  if (!F.senderId) {
+    if (!$("senderPhone")?.value.trim())   out.push("هاتف جهة الاستلام مطلوب");
+    if (!$("senderAddress")?.value.trim()) out.push("عنوان جهة الاستلام مطلوب");
+  }
+  if (!F.lockBranch) out.push("لم يتم تحديد الفرع — اختر المنطقة");
+  F.parcels.forEach((p,i) => {
+    const label = F.parcels.length > 1 ? `وجهة ${i+1}: ` : "";
+    if (!$(`pRecv${p.n}`)?.value.trim())  out.push(`${label}اسم المستلِم مطلوب`);
+    if (!$(`pPhone${p.n}`)?.value.trim()) out.push(`${label}هاتف المستلِم مطلوب`);
+    if (!$(`pAddr${p.n}`)?.value.trim())  out.push(`${label}العنوان مطلوب`);
+    if (!p.zoneId && !p.manual)           out.push(`${label}اختر المنطقة`);
+    if (p.manual && !p.branchId)          out.push(`${label}اختر الفرع`);
+    if (p.manual && !p.price)             out.push(`${label}أدخل سعر التوصيل`);
+    if (p.branchId && F.lockBranch && p.branchId !== F.lockBranch)
+      out.push(`${label}المنطقة تابعة لفرع مختلف`);
+  });
+  return out;
+}
+window.validateOrder = validateOrder;
+
+/* ══════════ حفظ الأوردر ══════════ */
+let _saving = false;
+window.saveOrder = async function() {
+  if (_saving) return;
+  const problems = validateOrder();
+  if (problems.length) {
+    showToast(problems[0], "error");
+    return;
+  }
+  const branch = branchOf(F.lockBranch);
+  if (!branch) { showToast("الفرع غير موجود", "error"); return; }
+
+  _saving = true;
+  const btn = $("saveOrderBtn");
+  btn.disabled = true; btn.textContent = "⏳ جاري الحفظ…";
+  try {
+    /* ١) حفظ جهة الاستلام لو جديدة */
+    let senderId = F.senderId, senderName = $("senderSearch").value.trim();
+    const sPhone = $("senderPhone").value.trim(), sPhone2 = $("senderPhone2").value.trim();
+    const sAddr  = $("senderAddress").value.trim();
+    if (!senderId) {
+      const r = await push(ref(db, "senders"));
+      await set(r, { name: senderName, phone1: sPhone, phone2: sPhone2 || "",
+                     address: sAddr, createdAt: new Date().toISOString(),
+                     createdBy: S.user?.username || "", source: "callcenter" });
+      senderId = r.key;
+    }
+
+    /* ٢) حفظ المستلمين الجدد + بناء الطرود */
+    const deliveries = [];
+    for (const p of F.parcels) {
+      const name = $(`pRecv${p.n}`).value.trim();
+      const ph   = $(`pPhone${p.n}`).value.trim();
+      const ph2  = $(`pPhone2${p.n}`).value.trim();
+      const addr = $(`pAddr${p.n}`).value.trim();
+      const note = $(`pNote${p.n}`).value.trim();
+      let recvId = p.receiverId;
+      if (!recvId) {
+        const r = await push(ref(db, "receivers"));
+        await set(r, { name, phone1: ph, phone2: ph2 || "", address: addr,
+                       createdAt: new Date().toISOString(),
+                       createdBy: S.user?.username || "", source: "callcenter" });
+        recvId = r.key;
+      }
+      deliveries.push({
+        receiverId: recvId, receiverName: name,
+        receiverPhone: ph, receiverPhone2: ph2 || "",
+        zoneId: p.zoneId || null, zoneName: p.zoneName, zonePrice: Number(p.price) || 0,
+        address: addr, note: note || "", status: ST.PENDING
+      });
+    }
+
+    /* ٣) رقم الأوردر ثم الحفظ — نفس بنية لوحة الإدارة بالحرف */
+    const orderNum = await generateOrderNumber(branch.id, branch.code);
+    const total = round2(deliveries.reduce((s,d) => s + (d.zonePrice||0), 0));
+    const now = new Date().toISOString();
+    const rec = {
+      orderNum,
+      senderId, senderName, senderPhone: sPhone, senderPhone2: sPhone2 || "", senderAddress: sAddr,
+      branchId: branch.id, branchName: branch.name,
+      notes: $("orderNotes").value.trim(),
+      deliveries, totalDeliveryPrice: total,
+      storePrepaid: Number($("storePrepaid").value) || 0,
+      storePrepaidNote: $("storePrepaidNote").value.trim(),
+      status: ST.PENDING, statusSince: now, createdAt: now,
+      addedBy: S.user?.username || "", addedByRole: S.user?.role || "كول سنتر",
+      source: "callcenter"
+    };
+    const orderRef = await push(ref(db, "orders"), rec);
+
+    /* ٤) تسجيل طلب منطقة جديدة للإدارة */
+    for (const p of F.parcels.filter(x => x.manual && x.zoneName)) {
+      await logZoneRequest(p, orderNum, orderRef.key);
+    }
+
+    showToast(`تم حفظ الأوردر ${orderNum} وإرساله لـ${branch.name} ✓`, "success");
+    resetNewOrder(false);
+  } catch (e) {
+    console.error("saveOrder", e);
+    showToast("خطأ أثناء الحفظ: " + e.message, "error");
+  } finally {
+    _saving = false;
+    btn.textContent = "💾 حفظ وإرسال للفرع";
+    updateSummary();
+  }
+};
+
+/**
+ * يسجّل منطقة غير معرّفة كطلب للإدارة.
+ * لو المنطقة اتطلبت قبل كده بنزوّد العداد بدل ما نعمل سجل جديد.
+ */
+async function logZoneRequest(parcel, orderNum, orderId) {
+  const key = norm(parcel.zoneName) + "|" + parcel.branchId;
+  const existing = S.zoneRequests.find(r => r.key === key && r.status !== "added");
+  const now = new Date().toISOString();
+  if (existing) {
+    await update(ref(db, `${CC}/zoneRequests/${existing.id}`), {
+      count: (Number(existing.count)||1) + 1, lastAt: now,
+      lastOrderNum: orderNum, lastPrice: parcel.price,
+      lastBy: S.user?.username || ""
+    });
+  } else {
+    await push(ref(db, `${CC}/zoneRequests`), {
+      key, areaName: parcel.zoneName, branchId: parcel.branchId,
+      branchName: branchName(parcel.branchId), lastPrice: parcel.price,
+      count: 1, status: "pending", firstAt: now, lastAt: now,
+      lastOrderNum: orderNum, firstOrderId: orderId,
+      requestedBy: S.user?.username || "", lastBy: S.user?.username || ""
+    });
+  }
+}
+
+/* إغلاق نتائج البحث عند الضغط خارجها */
+document.addEventListener("click", ev => {
+  if (!ev.target.closest(".smart")) {
+    document.querySelectorAll(".smart-results.open").forEach(x => x.classList.remove("open"));
+  }
+});
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشاشات: لوحة اليوم + الأوردرات + البحث السريع + تفاصيل الأوردر
+   ══════════════════════════════════════════════════════════════════════ */
+function initDate(id, v) { const el = $(id); if (el && !el.value) el.value = v; }
+function statCard(label, value, color, sub, onclick) {
+  return `<div class="stat-card${onclick?" clickable":""}"${onclick?` onclick="${onclick}"`:""}>
+    <span class="stat-label">${esc(label)}</span>
+    <span class="stat-value" style="color:${color}">${esc(value)}</span>
+    ${sub ? `<span class="stat-sub">${esc(sub)}</span>` : ""}</div>`;
+}
+window.statCard = statCard;
+
+const isToday = o => toDateStr(o.createdAt) === todayStr();
+const orderTotal = o => Number(o.totalDeliveryPrice) || 0;
+const parcelsOf = o => (o.deliveries || []).length || 1;
+/** أول منطقة في الأوردر — للعرض المختصر */
+const firstZone = o => (o.deliveries || [])[0]?.zoneName || "";
+const firstRecv = o => (o.deliveries || [])[0]?.receiverName || "";
+
+/* ══════════ لوحة اليوم ══════════ */
+window.renderDashboard = function() {
+  const t = todayStr();
+  $("dashDate").textContent = `${t} — ${S.orders.filter(isToday).length} أوردر النهاردة`;
+  const today = S.orders.filter(isToday);
+  const mine  = today.filter(o => o.addedBy === S.user?.username);
+  const cc    = today.filter(o => o.source === "callcenter");
+  const byStatus = s => today.filter(o => o.status === s).length;
+  const stale = Number(S.settings?.staleMinutes) || DEFAULT_SETTINGS.staleMinutes;
+  const staleOrders = S.orders.filter(o =>
+    o.status === ST.PENDING && agoMinutes(o.statusSince || o.createdAt) >= stale);
+
+  $("dashStats").innerHTML =
+    statCard("أوردرات اليوم", fmt0(today.length), "var(--sky)", `${fmt0(cc.length)} من الكول سنتر`, "navigateTo('orders')") +
+    statCard("أوردراتي أنا", fmt0(mine.length), "var(--purple)", "", "navigateTo('orders')") +
+    statCard("قيد التنفيذ", fmt0(byStatus(ST.PENDING)), "var(--orange)") +
+    statCard("جاري التوصيل", fmt0(byStatus(ST.DELIVERING)), "var(--blue)") +
+    statCard("تم التسليم", fmt0(byStatus(ST.DONE)), "var(--green)") +
+    statCard("متأخرة", fmt0(staleOrders.length), staleOrders.length ? "var(--red)" : "var(--muted)",
+             `أكتر من ${stale} دقيقة`) +
+    statCard("إجمالي التوصيل", money(today.reduce((s,o) => s + orderTotal(o), 0)), "var(--teal)");
+
+  const rows = S.branches.map(b => {
+    const list = today.filter(o => o.branchId === b.id);
+    return { name: b.name, total: list.length,
+      pending: list.filter(o => o.status === ST.PENDING).length,
+      done: list.filter(o => o.status === ST.DONE).length,
+      value: list.reduce((s,o) => s + orderTotal(o), 0) };
+  }).filter(r => r.total).sort((a,b) => b.total - a.total);
+
+  $("dashBranchBody").innerHTML = rows.length ? rows.map(r => `<tr>
+      <td><b>${esc(r.name)}</b></td>
+      <td class="num">${fmt0(r.total)}</td>
+      <td class="num" style="color:var(--orange)">${fmt0(r.pending)}</td>
+      <td class="num" style="color:var(--green)">${fmt0(r.done)}</td>
+      <td class="num">${fmt(r.value)}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="empty-row">مفيش أوردرات النهاردة</td></tr>`;
+
+  const staleSorted = [...staleOrders]
+    .sort((a,b) => agoMinutes(b.statusSince||b.createdAt) - agoMinutes(a.statusSince||a.createdAt))
+    .slice(0, 12);
+  $("dashStaleBody").innerHTML = staleSorted.length ? staleSorted.map(o => `<tr onclick="viewOrder('${o.id}')" style="cursor:pointer">
+      <td><b>${esc(o.orderNum || "—")}</b><div style="font-size:.72rem;color:var(--muted)">${esc(firstRecv(o))}</div></td>
+      <td style="font-size:.82rem">${esc(o.branchName || branchName(o.branchId))}</td>
+      <td>${ST_BADGE[o.status] || ""}</td>
+      <td class="num" style="color:var(--red);font-weight:700">${agoLabel(o.statusSince || o.createdAt)}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="4" class="empty-row">مفيش أوردرات متأخرة ✓</td></tr>`;
+};
+
+/* ══════════ قائمة الأوردرات ══════════ */
+function filteredOrders() {
+  const q  = ($("oSearch")?.value || "").trim();
+  const st = $("oStatus")?.value || "";
+  const br = $("oBranch")?.value || "";
+  const sr = $("oSource")?.value || "";
+  const rg = $("oRange")?.value ?? "today";
+  const nq = norm(q), dq = digits(q);
+
+  let list = S.orders.filter(o => {
+    if (st && o.status !== st) return false;
+    if (br && o.branchId !== br) return false;
+    if (sr === "mine") { if (o.addedBy !== S.user?.username) return false; }
+    else if (sr && o.source !== sr) return false;
+    if (rg === "today") { if (!isToday(o)) return false; }
+    else if (rg) {
+      const days = Number(rg);
+      if (agoMinutes(o.createdAt) > days * 1440) return false;
+    }
+    if (q) {
+      const hay = norm(`${o.orderNum} ${o.senderName} ${(o.deliveries||[]).map(d => `${d.receiverName} ${d.zoneName} ${d.address}`).join(" ")}`);
+      const phones = digits(`${o.senderPhone}${o.senderPhone2}${(o.deliveries||[]).map(d => `${d.receiverPhone}${d.receiverPhone2}`).join("")}`);
+      if (!(hay.includes(nq) || (dq.length >= 4 && phones.includes(dq)))) return false;
+    }
+    return true;
+  });
+  return list.sort((a,b) => String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+}
+window.filteredOrders = filteredOrders;
+
+window.renderOrders = function() {
+  const rows = filteredOrders();
+  const limit = Number(S.settings?.pageSize) || DEFAULT_SETTINGS.pageSize;
+  const shown = rows.slice(0, limit);
+  const by = s => rows.filter(o => o.status === s).length;
+
+  $("ordersSub").textContent = `${fmt0(rows.length)} أوردر` + (rows.length > limit ? ` — معروض ${limit}` : "");
+  $("ordersStats").innerHTML =
+    statCard("النتائج", fmt0(rows.length), "var(--sky)") +
+    statCard("قيد التنفيذ", fmt0(by(ST.PENDING)), "var(--orange)") +
+    statCard("جاري التوصيل", fmt0(by(ST.DELIVERING)), "var(--blue)") +
+    statCard("تم التسليم", fmt0(by(ST.DONE)), "var(--green)") +
+    statCard("لم يتم التوصيل", fmt0(by(ST.FAILED)), by(ST.FAILED) ? "var(--red)" : "var(--muted)") +
+    statCard("قيمة التوصيل", money(rows.reduce((s,o) => s + orderTotal(o), 0)), "var(--teal)");
+
+  const stale = Number(S.settings?.staleMinutes) || DEFAULT_SETTINGS.staleMinutes;
+  $("ordersBody").innerHTML = shown.length ? shown.map((o,i) => {
+    const late = o.status === ST.PENDING && agoMinutes(o.statusSince||o.createdAt) >= stale;
+    const zones = [...new Set((o.deliveries||[]).map(d => d.zoneName).filter(Boolean))];
+    return `<tr>
+      <td class="idx">${i+1}</td>
+      <td><b style="color:var(--sky)">${esc(o.orderNum || "—")}</b>
+        ${parcelsOf(o) > 1 ? `<div style="font-size:.7rem;color:var(--muted)">${parcelsOf(o)} طرود</div>` : ""}</td>
+      <td><b style="font-size:.84rem">${esc(o.senderName || "—")}</b>
+        <div style="font-size:.71rem;color:var(--muted)" dir="ltr">${esc(o.senderPhone||"")}</div></td>
+      <td style="font-size:.83rem">${esc(firstRecv(o) || "—")}
+        <div style="font-size:.71rem;color:var(--muted)">${esc(zones.join(" · ") || "—")}</div></td>
+      <td style="font-size:.82rem">${esc(o.branchName || branchName(o.branchId))}</td>
+      <td class="num" style="font-weight:700">${fmt(orderTotal(o))}</td>
+      <td>${ST_BADGE[o.status] || esc(o.status||"")}</td>
+      <td style="font-size:.8rem">${esc(o.pilotName || pilotName(o.pilotId) || "—")}</td>
+      <td><span class="badge ${o.source === "callcenter" ? "bg-purple" : "bg-muted"}" style="font-size:.68rem">
+        ${esc(SOURCE_LABEL[o.source] || o.source || "—")}</span>
+        ${o.addedBy ? `<div style="font-size:.66rem;color:var(--muted)">${esc(o.addedBy)}</div>` : ""}</td>
+      <td class="num" style="${late ? "color:var(--red);font-weight:700" : "color:var(--muted)"}">
+        ${esc(timeOf(o.createdAt))}<div style="font-size:.68rem">${agoLabel(o.statusSince||o.createdAt)}</div></td>
+      <td><button class="btn-ghost btn-xs" onclick="viewOrder('${o.id}')">👁️ عرض</button></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="11" class="empty-row">مفيش أوردرات مطابقة</td></tr>`;
+};
+
+/* ══════════ البحث السريع ══════════ */
+window.renderQuickSearch = function() {
+  const q = ($("qSearch")?.value || "").trim();
+  const box = $("qResults");
+  if (!box) return;
+  if (q.length < 3) {
+    box.innerHTML = `<div class="info-box">
+      اكتب <b>3 حروف/أرقام على الأقل</b>. البحث بيشمل رقم الأوردر، أرقام تليفونات المُرسِل والمستلِم،
+      الأسماء، والعناوين — في <b>كل أوردرات النظام</b> مش النهاردة بس.</div>`;
+    return;
+  }
+  const nq = norm(q), dq = digits(q);
+  const hits = S.orders.filter(o => {
+    const hay = norm(`${o.orderNum} ${o.senderName} ${(o.deliveries||[]).map(d => `${d.receiverName} ${d.address} ${d.zoneName}`).join(" ")}`);
+    const phones = digits(`${o.senderPhone}${o.senderPhone2}${(o.deliveries||[]).map(d => `${d.receiverPhone}${d.receiverPhone2}`).join("")}`);
+    return hay.includes(nq) || (dq.length >= 4 && phones.includes(dq));
+  }).sort((a,b) => String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0, 25);
+
+  if (!hits.length) {
+    box.innerHTML = `<div class="warn-box">مفيش نتائج لـ «${esc(q)}» — جرّب رقم تليفون أو جزء من الاسم.</div>`;
+    return;
+  }
+  box.innerHTML = `<div class="sec-sub" style="margin-bottom:12px">${fmt0(hits.length)} نتيجة</div>` +
+    hits.map(o => trackCard(o)).join("");
+};
+
+/** بطاقة تتبع مع خط زمني — للبحث السريع والعرض */
+function trackCard(o) {
+  const steps = [
+    { k:ST.PENDING,    icon:"📝", label:"تم التسجيل" },
+    { k:ST.DELIVERING, icon:"🛵", label:"جاري التوصيل" },
+    { k:ST.DONE,       icon:"✅", label:"تم التسليم" }
+  ];
+  const order = [ST.PENDING, ST.DELIVERING, ST.DONE];
+  const curIdx = order.indexOf(o.status);
+  const failed = o.status === ST.FAILED || o.status === ST.CANCELLED;
+
+  const tl = steps.map((s,i) => {
+    let cls = "";
+    if (failed && i === 0) cls = "done";
+    else if (curIdx >= 0 && i < curIdx) cls = "done";
+    else if (curIdx >= 0 && i === curIdx) cls = "cur";
+    return `<div class="tl-step ${cls}">
+      <div class="tl-dot">${cls === "done" ? "✓" : s.icon}</div>
+      <div class="tl-label">${s.label}</div></div>`;
+  }).join("") + (failed ? `<div class="tl-step fail">
+      <div class="tl-dot">✕</div>
+      <div class="tl-label">${o.status === ST.CANCELLED ? "ملغي" : "لم يتم التوصيل"}</div></div>` : "");
+
+  return `<div class="track-card">
+    <div class="track-head">
+      <div><div class="track-num">${esc(o.orderNum || "—")}</div>
+        <div style="font-size:.78rem;color:var(--muted)">
+          ${esc(o.branchName || branchName(o.branchId))} · ${esc(toDateStr(o.createdAt))} ${esc(timeOf(o.createdAt))}
+          ${o.addedBy ? ` · سجّله ${esc(o.addedBy)}` : ""}</div></div>
+      <div style="text-align:left">${ST_BADGE[o.status] || esc(o.status||"")}
+        <div style="font-size:1.1rem;font-weight:800;color:var(--teal);margin-top:4px">${fmt(orderTotal(o))} ج.م</div></div>
+    </div>
+    <div class="timeline">${tl}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;font-size:.84rem">
+      <div><div style="font-size:.72rem;color:var(--muted)">📤 الاستلام من</div>
+        <b>${esc(o.senderName||"—")}</b>
+        <div style="font-size:.76rem;color:var(--muted)" dir="ltr">${esc(o.senderPhone||"")}</div>
+        <div style="font-size:.76rem;color:var(--muted)">${esc(o.senderAddress||"")}</div></div>
+      ${(o.deliveries||[]).map(d => `
+        <div><div style="font-size:.72rem;color:var(--muted)">📥 التسليم إلى</div>
+          <b>${esc(d.receiverName||"—")}</b>
+          <div style="font-size:.76rem;color:var(--muted)" dir="ltr">${esc(d.receiverPhone||"")}</div>
+          <div style="font-size:.76rem;color:var(--muted)">${esc(d.zoneName||"")} — ${esc(d.address||"")}</div>
+          <div style="font-size:.76rem;color:var(--teal);font-weight:700">${fmt(d.zonePrice||0)} ج.م</div></div>`).join("")}
+      ${o.pilotId || o.pilotName ? `<div><div style="font-size:.72rem;color:var(--muted)">🛵 الطيار</div>
+        <b>${esc(o.pilotName || pilotName(o.pilotId) || "—")}</b></div>` : ""}
+    </div>
+    ${o.notes ? `<div style="margin-top:11px;font-size:.8rem;color:var(--muted)">📝 ${esc(o.notes)}</div>` : ""}
+    <div style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-ghost btn-xs" onclick="viewOrder('${o.id}')">👁️ التفاصيل</button>
+      <button class="btn-orange btn-xs" onclick="openComplaintModal('${o.id}')">⚠️ تسجيل شكوى</button>
+    </div>
+  </div>`;
+}
+window.trackCard = trackCard;
+
+/* ══════════ تفاصيل الأوردر + تعديل وإلغاء ══════════ */
+window.viewOrder = function(id) {
+  const o = S.orders.find(x => x.id === id);
+  if (!o) { showToast("الأوردر غير موجود", "error"); return; }
+  const editable = o.status === ST.PENDING;
+  const myComplaints = S.complaints.filter(c => c.orderId === id);
+
+  $("viewTitle").textContent = `📦 الأوردر ${o.orderNum || ""}`;
+  $("viewBody").innerHTML = trackCard(o) +
+    (editable ? "" : `<div class="warn-box" style="margin-top:14px">
+      🔒 الأوردر خرج من مرحلة «قيد التنفيذ» — التعديل والإلغاء بقوا من صلاحية الفرع أو الإدارة.</div>`) +
+    (myComplaints.length ? `<div style="margin-top:16px">
+      <div style="font-weight:800;font-size:.9rem;margin-bottom:8px">⚠️ شكاوى مسجّلة (${myComplaints.length})</div>
+      ${myComplaints.map(c => `<div style="background:var(--card);border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <b style="font-size:.85rem">${esc(COMPLAINT_TYPES[c.type] || c.type)}</b>
+          ${c.status === "resolved" ? '<span class="badge bg-green">محلولة</span>' : '<span class="badge bg-orange">مفتوحة</span>'}</div>
+        <div style="font-size:.82rem;color:var(--muted);margin-top:5px">${esc(c.details||"")}</div>
+        <div style="font-size:.71rem;color:var(--muted);margin-top:4px">${esc(toDateStr(c.createdAt))} — ${esc(c.createdBy||"")}</div>
+      </div>`).join("")}</div>` : "");
+
+  $("viewFoot").innerHTML = `
+    <button class="btn-ghost" onclick="closeModal('view')">إغلاق</button>
+    ${editable ? `
+      <button class="btn-ghost" onclick="editOrderNotes('${id}')">✏️ تعديل الملاحظات</button>
+      <button class="btn-ghost" onclick="editOrderContact('${id}')">📱 تعديل بيانات التواصل</button>
+      <button class="btn-red" style="margin-inline-start:auto" onclick="cancelOrder('${id}')">✕ إلغاء الأوردر</button>` : ""}`;
+  openModal("view");
+};
+
+/** تعديل الملاحظات — متاح دائمًا قبل التحميل على طيار */
+window.editOrderNotes = function(id) {
+  const o = S.orders.find(x => x.id === id);
+  if (!o) return;
+  openGeneric({
+    title: `✏️ ملاحظات الأوردر ${o.orderNum||""}`,
+    data: { notes: o.notes || "" },
+    fields: [{ key:"notes", label:"ملاحظات للفرع والطيار", type:"textarea", full:true }],
+    onSave: async d => {
+      await update(ref(db, `orders/${id}`), { notes: d.notes,
+        editedBy: S.user?.username || "", editedAt: new Date().toISOString() });
+      closeModal("view");
+    }
+  });
+};
+
+/** تعديل تليفون/عنوان المستلِم — أكتر حاجة العميل بيتصل يغيّرها */
+window.editOrderContact = function(id) {
+  const o = S.orders.find(x => x.id === id);
+  if (!o) return;
+  const d0 = (o.deliveries || [])[0] || {};
+  openGeneric({
+    title: `📱 بيانات التواصل — ${o.orderNum||""}`,
+    data: { rPhone: d0.receiverPhone || "", rPhone2: d0.receiverPhone2 || "",
+            rAddr: d0.address || "", sPhone: o.senderPhone || "" },
+    fields: [
+      { key:"rPhone",  label:"هاتف المستلِم", attrs:'dir="ltr" style="text-align:left"' },
+      { key:"rPhone2", label:"هاتف احتياطي للمستلِم", attrs:'dir="ltr" style="text-align:left"' },
+      { key:"rAddr",   label:"عنوان التسليم", full:true },
+      { key:"sPhone",  label:"هاتف جهة الاستلام", attrs:'dir="ltr" style="text-align:left"' }
+    ],
+    extraHtml: (o.deliveries||[]).length > 1
+      ? `<div class="warn-box" style="margin:0">⚠️ الأوردر فيه ${o.deliveries.length} وجهات — التعديل هيتم على <b>الوجهة الأولى</b> فقط.</div>`
+      : "",
+    onSave: async d => {
+      const deliveries = [...(o.deliveries || [])];
+      if (deliveries[0]) {
+        deliveries[0] = { ...deliveries[0], receiverPhone: d.rPhone,
+                          receiverPhone2: d.rPhone2, address: d.rAddr };
+      }
+      await update(ref(db, `orders/${id}`), { deliveries, senderPhone: d.sPhone,
+        editedBy: S.user?.username || "", editedAt: new Date().toISOString() });
+      closeModal("view");
+    }
+  });
+};
+
+window.cancelOrder = async function(id) {
+  const o = S.orders.find(x => x.id === id);
+  if (!o) return;
+  if (o.status !== ST.PENDING) { showToast("الأوردر خرج من مرحلة قيد التنفيذ — الإلغاء من الفرع", "error"); return; }
+  const reason = prompt(`إلغاء الأوردر ${o.orderNum}؟\n\nاكتب سبب الإلغاء:`);
+  if (reason === null) return;
+  if (!reason.trim()) { showToast("لازم تكتب سبب الإلغاء", "error"); return; }
+  try {
+    await update(ref(db, `orders/${id}`), {
+      status: ST.CANCELLED, statusSince: new Date().toISOString(),
+      cancelReason: reason.trim(), cancelledBy: S.user?.username || "",
+      cancelledAt: new Date().toISOString()
+    });
+    showToast(`تم إلغاء الأوردر ${o.orderNum}`, "success");
+    closeModal("view");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ══════════ مودال عام ══════════ */
+let _gen = null;
+window.openGeneric = function(cfg) {
+  _gen = cfg;
+  $("genTitle").textContent = cfg.title;
+  $("genError").textContent = "";
+  $("genBody").innerHTML = `<div class="fgrid">` + cfg.fields.map(f => {
+    const v = cfg.data?.[f.key];
+    let input;
+    if (f.type === "select") {
+      input = `<select id="g_${f.key}" ${f.attrs||""}>${(f.options||[]).map(o =>
+        `<option value="${esc(o.value)}"${String(o.value)===String(v??"")?" selected":""}>${esc(o.label)}</option>`).join("")}</select>`;
+    } else if (f.type === "textarea") {
+      input = `<textarea id="g_${f.key}" rows="3" ${f.attrs||""}>${esc(v||"")}</textarea>`;
+    } else {
+      input = `<input type="${f.type||"text"}" id="g_${f.key}" value="${esc(v??"")}" ${f.attrs||""} />`;
+    }
+    return `<div class="fg${f.full?" full":""}"><label>${esc(f.label)}${f.required?' <span class="req">*</span>':""}</label>
+      ${input}${f.hint?`<div style="font-size:.74rem;color:var(--muted);line-height:1.6">${f.hint}</div>`:""}</div>`;
+  }).join("") + `</div>` + (cfg.extraHtml || "");
+  openModal("generic");
+};
+
+window.genSave = async function() {
+  const err = $("genError"); err.textContent = "";
+  const data = {};
+  for (const f of _gen.fields) {
+    const el = $("g_" + f.key);
+    if (!el) continue;
+    data[f.key] = f.type === "number" ? (Number(el.value)||0) : el.value.trim();
+    if (f.required && !data[f.key]) { err.textContent = `${f.label} مطلوب`; return; }
+  }
+  if (_gen.validate) { const m = _gen.validate(data); if (m) { err.textContent = m; return; } }
+  const btn = $("genSaveBtn"); btn.disabled = true; btn.textContent = "جاري الحفظ…";
+  try {
+    await _gen.onSave(data);
+    showToast("تم الحفظ ✓", "success");
+    closeModal("generic");
+  } catch (e) { err.textContent = "خطأ: " + e.message; }
+  finally { btn.disabled = false; btn.textContent = "💾 حفظ"; }
+};
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   الشكاوى + دليل المناطق + الأداء + الإعدادات
+   ══════════════════════════════════════════════════════════════════════ */
+
+const COMPLAINT_TYPES = {
+  late:      "تأخير في التوصيل",
+  damaged:   "طرد تالف أو ناقص",
+  wrongAddr: "عنوان أو بيانات غلط",
+  behavior:  "شكوى على تعامل الطيار",
+  price:     "خلاف على سعر التوصيل",
+  notReceived:"العميل لم يستلم",
+  other:     "أخرى"
+};
+window.COMPLAINT_TYPES = COMPLAINT_TYPES;
+
+window.renderComplaints = function() {
+  const st = $("cStatus")?.value ?? "open";
+  const rows = S.complaints.filter(c => {
+    if (st === "open") return c.status !== "resolved";
+    if (st === "resolved") return c.status === "resolved";
+    return true;
+  }).sort((a,b) => String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+
+  const open = S.complaints.filter(c => c.status !== "resolved").length;
+  const todayC = S.complaints.filter(c => toDateStr(c.createdAt) === todayStr()).length;
+
+  $("compStats").innerHTML =
+    statCard("شكاوى مفتوحة", fmt0(open), open ? "var(--red)" : "var(--green)") +
+    statCard("شكاوى اليوم", fmt0(todayC), "var(--orange)") +
+    statCard("إجمالي الشكاوى", fmt0(S.complaints.length), "var(--sky)") +
+    statCard("محلولة", fmt0(S.complaints.filter(c => c.status === "resolved").length), "var(--green)");
+
+  $("compBody").innerHTML = rows.length ? rows.map((c,i) => {
+    const o = S.orders.find(x => x.id === c.orderId);
+    return `<tr>
+      <td class="idx">${i+1}</td>
+      <td class="num" style="font-size:.8rem">${esc(toDateStr(c.createdAt))}<div style="font-size:.7rem;color:var(--muted)">${esc(timeOf(c.createdAt))}</div></td>
+      <td>${o ? `<b style="color:var(--sky);cursor:pointer" onclick="viewOrder('${o.id}')">${esc(o.orderNum||"")}</b>
+             <div style="font-size:.7rem;color:var(--muted)">${esc(o.branchName||"")}</div>`
+            : `<span style="color:var(--muted)">${esc(c.orderNum||"—")}</span>`}</td>
+      <td style="font-size:.83rem">${esc(c.customer || (o ? o.senderName : "") || "—")}
+        ${c.phone ? `<div style="font-size:.71rem;color:var(--muted)" dir="ltr">${esc(c.phone)}</div>` : ""}</td>
+      <td><span class="badge bg-orange" style="font-size:.7rem">${esc(COMPLAINT_TYPES[c.type] || c.type || "")}</span></td>
+      <td style="font-size:.82rem;max-width:250px">${esc(c.details||"—")}
+        ${c.resolution ? `<div style="font-size:.73rem;color:var(--green);margin-top:3px">✓ ${esc(c.resolution)}</div>` : ""}</td>
+      <td>${c.status === "resolved" ? '<span class="badge bg-green">محلولة</span>' : '<span class="badge bg-orange">مفتوحة</span>'}</td>
+      <td style="font-size:.76rem;color:var(--muted)">${esc(c.createdBy||"—")}</td>
+      <td style="white-space:nowrap">
+        ${c.status !== "resolved" ? `<button class="btn-green btn-xs" onclick="resolveComplaint('${c.id}')">✓ حل</button>` : ""}
+        <button class="btn-ghost btn-xs" onclick="openComplaintModal(null,'${c.id}')">✏️</button>
+      </td></tr>`;
+  }).join("") : `<tr><td colspan="9" class="empty-row">مفيش شكاوى${st==="open"?" مفتوحة":""} ✓</td></tr>`;
+};
+
+window.openComplaintModal = function(orderId, complaintId) {
+  const c = complaintId ? S.complaints.find(x => x.id === complaintId) : null;
+  const o = S.orders.find(x => x.id === (c?.orderId || orderId));
+  openGeneric({
+    title: c ? "✏️ تعديل شكوى" : "⚠️ تسجيل شكوى",
+    data: c || { orderId: orderId || "", type: "late",
+                 customer: o?.senderName || "", phone: o?.senderPhone || "" },
+    fields: [
+      { key:"orderNum", label:"رقم الأوردر", full:true,
+        attrs: `value="${esc(o?.orderNum || c?.orderNum || "")}" ${o ? "readonly style='opacity:.7'" : 'placeholder="اكتب رقم الأوردر لو معروف"'}` },
+      { key:"customer", label:"اسم العميل", required:true },
+      { key:"phone", label:"هاتف العميل", attrs:'dir="ltr" style="text-align:left"' },
+      { key:"type", label:"نوع الشكوى", type:"select",
+        options: Object.entries(COMPLAINT_TYPES).map(([v,l]) => ({ value:v, label:l })) },
+      { key:"details", label:"تفاصيل الشكوى", type:"textarea", full:true, required:true }
+    ],
+    extraHtml: o ? `<div class="info-box" style="margin:0">
+      مرتبطة بالأوردر <b>${esc(o.orderNum)}</b> — ${esc(o.branchName||"")} — ${ST_BADGE[o.status]||""}</div>` : "",
+    onSave: async d => {
+      // لو مفيش أوردر مربوط، نحاول نلاقيه برقم الأوردر المكتوب
+      let oid = c?.orderId || orderId || "";
+      if (!oid && d.orderNum) {
+        oid = S.orders.find(x => norm(x.orderNum) === norm(d.orderNum))?.id || "";
+      }
+      const rec = { ...d, orderId: oid, status: c?.status || "open",
+                    updatedAt: new Date().toISOString(), updatedBy: S.user?.username || "" };
+      if (c) await update(ref(db, `${CC}/complaints/${c.id}`), rec);
+      else await push(ref(db, `${CC}/complaints`), {
+        ...rec, createdAt: new Date().toISOString(), createdBy: S.user?.username || "" });
+      if (orderId) closeModal("view");
+    }
+  });
+};
+
+window.resolveComplaint = async function(id) {
+  const c = S.complaints.find(x => x.id === id);
+  if (!c) return;
+  const res = prompt("إزاي اتحلّت الشكوى؟ (الإجراء اللي اتعمل)");
+  if (res === null) return;
+  if (!res.trim()) { showToast("اكتب الإجراء اللي اتعمل", "error"); return; }
+  try {
+    await update(ref(db, `${CC}/complaints/${id}`), {
+      status: "resolved", resolution: res.trim(),
+      resolvedBy: S.user?.username || "", resolvedAt: new Date().toISOString() });
+    showToast("تم إغلاق الشكوى ✓", "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* ══════════ دليل المناطق ══════════ */
+window.renderZones = function() {
+  const q  = ($("zSearch")?.value || "").trim();
+  const br = $("zBranch")?.value || "";
+  let rows = S.zones.map(z => ({
+    z, name: z.areaName || z.name || "", branchId: zoneBranchId(z), price: Number(z.price)||0
+  }));
+  if (br) rows = rows.filter(r => r.branchId === br);
+  if (q) { const n = norm(q); rows = rows.filter(r => norm(r.name).includes(n)); }
+  rows.sort((a,b) => a.name.localeCompare(b.name, "ar"));
+
+  const prices = rows.map(r => r.price).filter(p => p > 0);
+  $("zonesStats").innerHTML =
+    statCard("عدد المناطق", fmt0(rows.length), "var(--sky)", `إجمالي ${fmt0(S.zones.length)}`) +
+    statCard("عدد الفروع", fmt0(new Set(rows.map(r => r.branchId).filter(Boolean)).size), "var(--purple)") +
+    statCard("أقل سعر", prices.length ? money(Math.min(...prices)) : "—", "var(--green)") +
+    statCard("أعلى سعر", prices.length ? money(Math.max(...prices)) : "—", "var(--orange)") +
+    statCard("مناطق مطلوبة", fmt0(S.zoneRequests.filter(r => r.status !== "added").length),
+             S.zoneRequests.filter(r => r.status !== "added").length ? "var(--red)" : "var(--muted)");
+
+  $("zonesBody").innerHTML = rows.length ? rows.map((r,i) => `<tr>
+      <td class="idx">${i+1}</td>
+      <td><b>${esc(r.name)}</b></td>
+      <td>${esc(branchName(r.branchId))}</td>
+      <td class="num" style="font-weight:700;color:var(--teal)">${fmt(r.price)}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(r.z.sourceBranchName || "—")}</td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty-row">مفيش مناطق مطابقة</td></tr>`;
+
+  const reqs = [...S.zoneRequests].sort((a,b) => (Number(b.count)||0) - (Number(a.count)||0));
+  $("zoneReqBody").innerHTML = reqs.length ? reqs.map((r,i) => `<tr>
+      <td class="idx">${i+1}</td>
+      <td><b>${esc(r.areaName)}</b></td>
+      <td style="font-size:.83rem">${esc(r.branchName || branchName(r.branchId))}</td>
+      <td class="num">${fmt(r.lastPrice)}</td>
+      <td class="num" style="font-weight:700;color:${(Number(r.count)||0) > 2 ? "var(--red)" : "var(--orange)"}">${fmt0(r.count)}</td>
+      <td class="num" style="font-size:.8rem">${esc(toDateStr(r.lastAt))}</td>
+      <td>${zoneExists(r) ? '<span class="badge bg-green">تمت إضافتها ✓</span>'
+                          : '<span class="badge bg-orange">بانتظار الإدارة</span>'}</td>
+    </tr>`).join("") : `<tr><td colspan="7" class="empty-row">مفيش مناطق مطلوبة ✓</td></tr>`;
+};
+
+/** هل المنطقة المطلوبة اتضافت فعلًا في جدول المناطق؟ */
+function zoneExists(req) {
+  const n = norm(req.areaName);
+  return S.zones.some(z => norm(z.areaName || z.name) === n && zoneBranchId(z) === req.branchId);
+}
+
+/* ══════════ الأداء ══════════ */
+window.renderPerf = function() {
+  initDate("pFrom", todayStr().slice(0,8) + "01");
+  initDate("pTo", todayStr());
+  const from = $("pFrom").value, to = $("pTo").value;
+  const agent = $("pAgent")?.value || "";
+
+  const inRange = S.orders.filter(o => {
+    const d = toDateStr(o.createdAt);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+  const cc = inRange.filter(o => o.source === "callcenter");
+  const mine = agent ? cc.filter(o => o.addedBy === agent) : cc.filter(o => o.addedBy === S.user?.username);
+  const scope = agent || S.user?.username || "";
+
+  $("perfSub").textContent = `من ${from} إلى ${to}` + (agent ? ` — ${agent}` : " — أوردراتي");
+
+  const done = mine.filter(o => o.status === ST.DONE).length;
+  const cancelled = mine.filter(o => o.status === ST.CANCELLED).length;
+  const value = mine.reduce((s,o) => s + orderTotal(o), 0);
+  const manualZones = mine.filter(o => (o.deliveries||[]).some(d => !d.zoneId)).length;
+
+  $("perfStats").innerHTML =
+    statCard("أوردراتي", fmt0(mine.length), "var(--sky)", `من ${fmt0(cc.length)} للكول سنتر`) +
+    statCard("تم تسليمها", fmt0(done), "var(--green)", mine.length ? `${Math.round(done/mine.length*100)}%` : "") +
+    statCard("ملغاة", fmt0(cancelled), cancelled ? "var(--red)" : "var(--muted)",
+             mine.length ? `${Math.round(cancelled/mine.length*100)}%` : "") +
+    statCard("قيمة التوصيل", money(value), "var(--teal)") +
+    statCard("مناطق غير معرّفة", fmt0(manualZones), manualZones ? "var(--orange)" : "var(--green)",
+             "أوردرات بمنطقة يدوية");
+
+  // أداء الفريق
+  const agents = new Map();
+  for (const o of cc) {
+    const k = o.addedBy || "—";
+    if (!agents.has(k)) agents.set(k, { n:0, done:0, cancelled:0, value:0 });
+    const a = agents.get(k);
+    a.n++; a.value += orderTotal(o);
+    if (o.status === ST.DONE) a.done++;
+    if (o.status === ST.CANCELLED) a.cancelled++;
+  }
+  const agentRows = [...agents.entries()].sort((a,b) => b[1].n - a[1].n);
+  $("perfAgentsBody").innerHTML = agentRows.length ? agentRows.map(([k,a]) => `<tr${k===scope?' style="background:rgba(232,25,44,.06)"':''}>
+      <td><b>${esc(k)}</b>${k===scope?' <span class="badge bg-purple" style="font-size:.63rem">أنا</span>':''}</td>
+      <td class="num" style="font-weight:700">${fmt0(a.n)}</td>
+      <td class="num" style="color:var(--green)">${fmt0(a.done)}</td>
+      <td class="num" style="color:${a.cancelled?"var(--red)":"var(--muted)"}">${fmt0(a.cancelled)}</td>
+      <td class="num">${fmt(a.value)}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="empty-row">مفيش بيانات في المدى</td></tr>`;
+
+  // أكثر المناطق طلبًا
+  const zmap = new Map();
+  for (const o of cc) {
+    for (const d of (o.deliveries||[])) {
+      const k = (d.zoneName || "بدون منطقة") + "|" + o.branchId;
+      if (!zmap.has(k)) zmap.set(k, { name:d.zoneName||"بدون منطقة", branchId:o.branchId, n:0, value:0 });
+      const z = zmap.get(k); z.n++; z.value += Number(d.zonePrice)||0;
+    }
+  }
+  const zRows = [...zmap.values()].sort((a,b) => b.n - a.n).slice(0, 15);
+  $("perfZonesBody").innerHTML = zRows.length ? zRows.map(z => `<tr>
+      <td><b>${esc(z.name)}</b></td>
+      <td style="font-size:.82rem">${esc(branchName(z.branchId))}</td>
+      <td class="num" style="font-weight:700">${fmt0(z.n)}</td>
+      <td class="num">${fmt(z.value)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="empty-row">مفيش بيانات</td></tr>`;
+};
+
+/* ══════════ الإعدادات ══════════ */
+window.renderSettings = function() {
+  const s = S.settings || DEFAULT_SETTINGS;
+  $("setKeepSender").checked = s.keepSender !== false;
+  $("setAllowManualBranch").checked = s.allowManualBranch !== false;
+  $("setStaleMinutes").value = s.staleMinutes ?? DEFAULT_SETTINGS.staleMinutes;
+  $("setPageSize").value = String(s.pageSize ?? DEFAULT_SETTINGS.pageSize);
+
+  const noZoneBranches = S.branches.filter(b => !S.zones.some(z => zoneBranchId(z) === b.id));
+  $("settingsInfo").innerHTML = `
+    <b>حالة النظام:</b><br>
+    🗺️ <b>${fmt0(S.zones.length)}</b> منطقة معرّفة على <b>${fmt0(new Set(S.zones.map(zoneBranchId).filter(Boolean)).size)}</b> فرع<br>
+    🏢 <b>${fmt0(S.branches.length)}</b> فرع في النظام
+    ${noZoneBranches.length ? `<br>⚠️ <span style="color:var(--orange)">فروع بدون مناطق: <b>${esc(noZoneBranches.map(b=>b.name).join("، "))}</b>
+      — مش هتقدر توجّه ليها أوردرات إلا يدويًا</span>` : ""}
+    <br>👥 <b>${fmt0(S.senders.length)}</b> جهة استلام و<b>${fmt0(S.receivers.length)}</b> مستلِم محفوظين
+    <br>📞 <b>${fmt0(S.orders.filter(o => o.source === "callcenter").length)}</b> أوردر سجّله الكول سنتر`;
+};
+
+window.saveSettings = async function() {
+  try {
+    await update(ref(db, `${CC}/settings`), {
+      keepSender: $("setKeepSender").checked,
+      allowManualBranch: $("setAllowManualBranch").checked,
+      staleMinutes: Number($("setStaleMinutes").value) || DEFAULT_SETTINGS.staleMinutes,
+      pageSize: Number($("setPageSize").value) || DEFAULT_SETTINGS.pageSize,
+      updatedAt: new Date().toISOString(), updatedBy: S.user?.username || ""
+    });
+    showToast("تم حفظ الإعدادات ✓", "success");
+  } catch (e) { showToast("خطأ: " + e.message, "error"); }
+};
+
+/* تحديث دوري لعدّادات "منذ" والتنبيهات */
+setInterval(() => {
+  if (!S.user) return;
+  const active = document.querySelector(".page.active")?.id.replace("page-","");
+  if (active === "orders" || active === "dashboard") {
+    try { RENDERERS_TICK(active); } catch(e) {}
+  }
+}, 60000);
+function RENDERERS_TICK(page) {
+  if (page === "orders") renderOrders();
+  else if (page === "dashboard") renderDashboard();
+}
+</script>
+
+</body>
+</html>

@@ -771,6 +771,19 @@
           <div class="app-name">النظام المحاسبي</div>
         </div>
 
+        <!-- Call Center -->
+        <div class="app-card blue" id="card-callcenter" onclick="openApp('callcenter')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 6h5l2.5 6-3 2a15 15 0 0 0 8.5 8.5l2-3 6 2.5v5c0 1.1-.9 2-2 2C15.6 29 7 20.4 7 8c0-1.1.9-2 2-2z"
+                    fill="#e8192c" opacity=".9"/>
+              <path d="M22 5a9 9 0 0 1 9 9" stroke="#e8192c" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".6"/>
+              <path d="M22 10a4 4 0 0 1 4 4" stroke="#e8192c" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".6"/>
+            </svg>
+          </div>
+          <div class="app-name">الكول سنتر</div>
+        </div>
+
         <!-- HR (النسخة القديمة) — مؤقتة لحد التأكد من الجديد -->
         <div class="app-card legacy" id="card-hrOld" onclick="openApp('hrOld')">
           <div class="app-icon">
@@ -919,7 +932,8 @@
         store:  document.getElementById("card-store"),
         hr:     document.getElementById("card-hr"),
         hrOld:  document.getElementById("card-hrOld"),
-        accounts: document.getElementById("card-accounts")
+        accounts: document.getElementById("card-accounts"),
+        callcenter: document.getElementById("card-callcenter")
       };
       for (const [appKey, card] of Object.entries(cards)) {
         if (!card) continue;
@@ -950,7 +964,8 @@
         store:  "tiar_store.html",
         hr:     "tiar_hr.html",
         hrOld:  "tiar-hr.html",
-        accounts: "tiar_accounts.html"
+        accounts: "tiar_accounts.html",
+        callcenter: "tiar_callcenter.html"
       };
       if (!urls[appKey]) return;
 
@@ -971,9 +986,10 @@
       }
       // وإلا احسبها من الدور
       const role = (userData.role || "").trim();
-      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts"];
+      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter"];
       if (["محاسب", "مدير حسابات", "accountant"].includes(role))    return ["accounts"];
       if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(role)) return ["hr", "hrOld"];
+      if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(role))  return ["callcenter"];
       if (["مشرف فرع", "مشرف", "branch"].includes(role))           return ["branch"];
       if (["صاحب محل", "تاجر", "محل", "store"].includes(role))     return ["store"];
       // أي دور غير معروف → إدارة فقط (الأكثر أماناً للمستخدمين القدامى)
@@ -990,7 +1006,7 @@
         username:    (user.email || "").toLowerCase(),
         displayName: user.displayName || user.email || "الإدارة",
         role:        "مدير عام",
-        allowedApps: ["admin", "branch", "store", "hr", "hrOld", "accounts"],
+        allowedApps: ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter"],
         via:         "google"
       };
     }
