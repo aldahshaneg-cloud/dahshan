@@ -144,6 +144,50 @@
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--sky); }
 
   /* ── TOAST ── */
+  /* ══════════ زر المساعدة ولوحة الشرح ══════════ */
+  #helpBtn { position: fixed; top: 18px; left: 20px; z-index: 8000;
+    width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+    background: var(--sky); color: #fff; border: none;
+    font-size: 1.15rem; font-weight: 800; font-family: Georgia, serif; font-style: italic;
+    box-shadow: 0 4px 16px rgba(232,25,44,.4); display: flex; align-items: center; justify-content: center; }
+  #helpBtn:hover { background: var(--sky-d); transform: scale(1.08); }
+  #helpBtn:active { transform: scale(.96); }
+
+  #helpOverlay { position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(5px);
+    z-index: 9500; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #helpOverlay.open { display: flex; }
+  #helpPanel { background: var(--night); border: 1px solid var(--border); border-radius: 16px;
+    width: 100%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #helpHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  #helpTitle { font-size: 1.18rem; font-weight: 800; color: var(--sky); }
+  #helpSub { font-size: .78rem; color: var(--muted); margin-top: 3px; }
+  #helpBody { padding: 20px 24px; overflow-y: auto; line-height: 1.95; font-size: .89rem; }
+  #helpFoot { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+
+  .help-what { background: rgba(59,130,246,.08); border-inline-start: 3px solid var(--blue);
+    border-radius: 8px; padding: 13px 16px; margin-bottom: 18px; font-size: .9rem; }
+  .help-sec { font-size: .82rem; font-weight: 800; color: var(--sky); margin: 20px 0 9px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .help-sec:first-of-type { margin-top: 0; }
+  #helpBody ul { margin: 0; padding-inline-start: 22px; }
+  #helpBody li { margin-bottom: 7px; }
+  #helpBody b { color: var(--text); }
+  #helpBody code { background: var(--card); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-size: .84em; direction: ltr; display: inline-block; }
+  .help-tip { background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.25);
+    border-radius: 9px; padding: 11px 14px; margin-top: 14px; font-size: .85rem; }
+  .help-warn { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.28);
+    border-radius: 9px; padding: 11px 14px; margin-top: 14px; font-size: .85rem; }
+  .help-steps { counter-reset: hs; list-style: none; padding: 0; margin: 0; }
+  .help-steps li { counter-increment: hs; position: relative; padding-inline-start: 34px; margin-bottom: 11px; }
+  .help-steps li::before { content: counter(hs); position: absolute; inset-inline-start: 0; top: 1px;
+    width: 23px; height: 23px; border-radius: 50%; background: var(--sky); color: #fff;
+    font-size: .75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  @media print { #helpBtn, #helpOverlay { display: none !important; } }
+  @media (max-width: 900px) { #helpBtn { top: 12px; left: 12px; width: 34px; height: 34px; font-size: 1rem; } }
+
   #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(120px); background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 13px 26px; border-radius: 10px; font-weight: 700; font-size: .88rem; z-index: 99999; transition: transform .3s; box-shadow: 0 8px 30px rgba(0,0,0,.45); max-width: 90vw; text-align: center; }
   #toast.show { transform: translateX(-50%) translateY(0); }
   #toast.success { border-color: var(--green); color: var(--green); }
@@ -840,6 +884,25 @@
       <button class="btn-ghost" onclick="previewYearEnd()">🔍 معاينة</button>
       <button class="btn-red" onclick="runYearEnd()">🔒 تنفيذ الإقفال</button>
       <button class="btn-ghost" onclick="closeModal('yearend')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ زر المساعدة — شرح الشاشة الحالية ═══════════ -->
+<button id="helpBtn" onclick="openHelp()" title="إيه الصفحة دي؟ (F1)">i</button>
+<div id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div id="helpPanel">
+    <div id="helpHead">
+      <div>
+        <div id="helpTitle">—</div>
+        <div id="helpSub">دليل استخدام الشاشة</div>
+      </div>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div id="helpBody"></div>
+    <div id="helpFoot">
+      <button class="btn-ghost" onclick="closeHelp()">تمام، فهمت</button>
+      <span style="font-size:.74rem;color:var(--muted);margin-inline-start:auto">اضغط <b>F1</b> في أي وقت</span>
     </div>
   </div>
 </div>
@@ -3634,5 +3697,241 @@ setInterval(() => {
 </script>
 
 
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   دليل الاستخدام — شرح كل شاشة داخل البرنامج
+   المحتوى مكتوب لكل صفحة على حدة، ومربوط بالصفحة النشطة وقت الضغط.
+   ══════════════════════════════════════════════════════════════════════ */
+const HELP = {
+  dashboard: {
+    title: "📊 اللوحة المالية",
+    what: "نظرة سريعة على وضع الشركة المالي في فترة تختارها — إيرادات ومصروفات وأرباح وأرصدة.",
+    body: `
+      <div class="help-sec">إيه اللي بتشوفه هنا؟</div>
+      <ul>
+        <li><b>الإيرادات والمصروفات وصافي الربح</b> — للفترة المختارة من القائمة فوق.</li>
+        <li><b>النقدية والبنوك</b> — رصيد <u>دفتري</u>، يعني محسوب من القيود مش من الخزنة الفعلية.</li>
+        <li><b>مستحق لدى الطيارين والمحلات</b> — فلوس اتحصّلت ولسه ما اتورّدتش للخزنة.</li>
+        <li><b>عُهَد الطيارين</b> — مبالغ في ذمة الطيارين.</li>
+        <li><b>الأداء حسب الفرع</b> — كل فرع مركز تكلفة مستقل، فتقدر تعرف مين بيكسب ومين بيخسر.</li>
+      </ul>
+      <div class="help-tip">💡 اضغط على أي بطاقة رقم عشان تنقلك للتفاصيل.</div>`
+  },
+  coa: {
+    title: "🗂️ شجرة الحسابات",
+    what: "الدليل المحاسبي — كل الحسابات اللي بتتسجّل عليها القيود، مرتبة في شجرة هرمية.",
+    body: `
+      <div class="help-sec">إزاي الشجرة متبنية؟</div>
+      <ul>
+        <li><b>1 الأصول</b> · <b>2 الخصوم</b> · <b>3 حقوق الملكية</b> · <b>4 الإيرادات</b> · <b>5 المصروفات</b></li>
+        <li>الكود بيقول مكان الحساب: <code>5</code> مصروفات ← <code>51</code> تشغيل ← <code>511</code> عمولات الطيارين.</li>
+        <li>الحساب اللي جنبه ⚙️ <b>أساسي</b> — مايتحذفش لأن النظام بيعتمد عليه.</li>
+        <li>الحساب المكتوب عليه <b>تلقائي</b> — النظام أنشأه لوحده (زي حساب لكل خزنة).</li>
+      </ul>
+      <div class="help-sec">حاجات مهمة</div>
+      <ul>
+        <li><b>الحساب التجميعي</b> (زي «الأصول المتداولة») مابيقبلش قيود مباشرة — بيجمّع أبناءه بس.</li>
+        <li>اضغط على أي حساب فيه أبناء عشان تفتحه أو تقفله، وعلى حساب عادي عشان تعدّله.</li>
+      </ul>
+      <div class="help-warn">⚠️ مينفعش تحذف حساب عليه قيود — أوقفه بدل الحذف عشان التاريخ يفضل سليم.</div>`
+  },
+  journal: {
+    title: "📝 دفتر اليومية",
+    what: "كل القيود المحاسبية في مكان واحد — اللي النظام ولّدها تلقائيًا واللي إنت كتبتها بإيدك.",
+    body: `
+      <div class="help-sec">القاعدة الأساسية</div>
+      <p>أي قيد لازم يكون <b>متوازن</b>: مجموع المدين = مجموع الدائن. البرنامج مش هيقبل غير كده.</p>
+      <div class="help-sec">إزاي تكتب قيد جديد؟</div>
+      <ol class="help-steps">
+        <li>اضغط <b>➕ قيد جديد</b>.</li>
+        <li>حدد التاريخ واكتب البيان (وصف واضح للعملية).</li>
+        <li>في كل سطر: اختر الحساب، وحط المبلغ في <b>مدين</b> أو <b>دائن</b> — مش الاتنين.</li>
+        <li>اربط السطر بفرع لو العملية تخص فرع معيّن (مركز تكلفة).</li>
+        <li>لما تشوف <b>✓ متوازن</b> اضغط <b>حفظ وترحيل</b>.</li>
+      </ol>
+      <div class="help-sec">أعمدة المصدر</div>
+      <ul>
+        <li><b>يدوي</b> — إنت كتبته. <b>أوردر / خزينة / مصروف / راتب</b> — النظام ولّده تلقائيًا.</li>
+      </ul>
+      <div class="help-warn">⚠️ القيد المُرحَّل مايتعدلش. لو فيه غلط اضغط <b>✖</b> عشان تلغيه (بيفضل في السجل بحالة «ملغي») واكتب واحد صح.</div>`
+  },
+  ledger: {
+    title: "📖 دفتر الأستاذ",
+    what: "كشف حركة تفصيلي لحساب واحد — كل عملية دخلت وخرجت منه، والرصيد بعد كل حركة.",
+    body: `
+      <div class="help-sec">إزاي تستخدمه؟</div>
+      <ol class="help-steps">
+        <li>اختر الحساب من القائمة فوق.</li>
+        <li>حدد المدى الزمني (من — إلى).</li>
+        <li>لو عايز فرع معيّن بس، اختره من فلتر الفرع.</li>
+      </ol>
+      <div class="help-sec">قراءة الكشف</div>
+      <ul>
+        <li>أول سطر = <b>رصيد ما قبل الفترة</b> (اللي كان موجود قبل تاريخ البداية).</li>
+        <li>عمود <b>الرصيد</b> بيتحدّث بعد كل حركة — فتقدر تشوف الرصيد في أي يوم.</li>
+      </ul>
+      <div class="help-tip">💡 أكتر استخدام: تشوف حركة خزنة معيّنة، أو تراجع حساب مصروف عشان تعرف اتصرف فين.</div>`
+  },
+  trial: {
+    title: "⚖️ ميزان المراجعة",
+    what: "التقرير اللي بيثبت إن دفاترك سليمة — بيعرض كل الحسابات وأرصدتها ويتأكد إن المدين = الدائن.",
+    body: `
+      <div class="help-sec">الأعمدة</div>
+      <ul>
+        <li><b>رصيد أول المدة</b> — قبل تاريخ البداية.</li>
+        <li><b>حركة مدين / دائن</b> — اللي حصل خلال الفترة.</li>
+        <li><b>رصيد مدين / دائن</b> — الناتج النهائي.</li>
+      </ul>
+      <div class="help-sec">الشريط الأخضر والبرتقالي</div>
+      <ul>
+        <li>🟢 <b>متوازن</b> — كل حاجة تمام.</li>
+        <li>🟠 <b>غير متوازن</b> — فيه مشكلة، راجع القيود من دفتر اليومية.</li>
+      </ul>
+      <div class="help-warn">⚠️ لو فلترت بفرع معيّن، الميزان ممكن يبان غير متوازن — ده طبيعي لأن فيه سطور مش مربوطة بفرع. شيل الفلتر عشان تتأكد.</div>`
+  },
+  income: {
+    title: "📈 قائمة الدخل",
+    what: "بتجاوب على سؤال واحد: كسبت ولا خسرت في الفترة دي؟ وليه؟",
+    body: `
+      <div class="help-sec">المعادلة</div>
+      <p><b>الإيرادات − المصروفات = صافي الربح</b></p>
+      <div class="help-sec">إيه اللي تركّز عليه؟</div>
+      <ul>
+        <li><b>هامش الربح</b> — نسبة الربح من الإيراد. كل ما زاد كل ما كان أحسن.</li>
+        <li>البنود مقسّمة لمجموعات فتقدر تعرف <b>أكبر بند بيستهلك فلوسك</b>.</li>
+        <li>فلتر الفرع بيقولك الفرع ده مربح ولا لأ لوحده.</li>
+      </ul>
+      <div class="help-tip">💡 قارن شهر بشهر: غيّر المدى وشوف المصروفات زادت في أي بند بالظبط.</div>`
+  },
+  balance: {
+    title: "🏛️ الميزانية العمومية",
+    what: "صورة لحظية لوضع الشركة في تاريخ معيّن — إيه اللي تملكه وإيه اللي عليك.",
+    body: `
+      <div class="help-sec">المعادلة المحاسبية</div>
+      <p><b>الأصول = الخصوم + حقوق الملكية</b> — لازم الطرفين يتساووا دايمًا.</p>
+      <div class="help-sec">الأصول (اللي تملكه)</div>
+      <ul>
+        <li>نقدية وخزن · مستحق لك عند الطيارين والمحلات · عهد · أصول ثابتة.</li>
+      </ul>
+      <div class="help-sec">الخصوم (اللي عليك)</div>
+      <ul>
+        <li>مستحقات للطيارين والمحلات والموردين · رواتب مستحقة · مصروفات مستحقة.</li>
+      </ul>
+      <div class="help-tip">💡 <b>أرباح الفترة الحالية</b> بتتضاف لحقوق الملكية تلقائيًا من غير ما تعمل حاجة.</div>`
+  },
+  cashflow: {
+    title: "💧 التدفقات النقدية",
+    what: "فلوسك النقدية جت منين وراحت فين — على مستوى الكاش الفعلي.",
+    body: `
+      <div class="help-sec">الفرق بينها وبين قائمة الدخل</div>
+      <p>قائمة الدخل بتقولك <b>كسبت كام</b>، ودي بتقولك <b>دخل ومشي كام كاش فعلًا</b>. ممكن تكون رابح وفلوسك قليلة لأن الفلوس لسه عند الطيارين.</p>
+      <div class="help-sec">قراءة الجدول</div>
+      <ul>
+        <li>كل سطر = الحساب اللي الفلوس جت منه أو راحت له.</li>
+        <li><b>وارد</b> فلوس دخلت الخزن · <b>صادر</b> فلوس خرجت.</li>
+      </ul>`
+  },
+  parties: {
+    title: "👥 حسابات الأطراف",
+    what: "كشف حساب لكل طيار ومحل وموظف ومورد — مين مدين لك ومين إنت مدين له.",
+    body: `
+      <div class="help-sec">قراءة الرصيد</div>
+      <ul>
+        <li>🟢 <b>مدين</b> — الطرف ده <b>عليه فلوس ليك</b> (زي طيار حصّل ولسه ما ورّدش).</li>
+        <li>🟠 <b>دائن</b> — إنت <b>مدين له</b> (زي عمولة طيار لسه ما اتصرفتش).</li>
+        <li><b>مُسوّى</b> — الحساب مقفول ومفيش مستحقات.</li>
+      </ul>
+      <div class="help-sec">كشف الحساب</div>
+      <p>اضغط <b>📄 كشف حساب</b> لأي طرف عشان تشوف كل حركة عليه بالتاريخ والرصيد الجاري — ينفع تطبعه وتوريه له.</p>
+      <div class="help-tip">💡 الحسابات دي حسابات <b>مراقبة</b>: الرصيد الإجمالي في الدفاتر، والتفصيل لكل شخص هنا.</div>`
+  },
+  treasury: {
+    title: "🏦 الخزن والبنوك",
+    what: "مقارنة بين رصيد الخزنة في الدفاتر ورصيدها الفعلي في نظام التشغيل.",
+    body: `
+      <div class="help-sec">أهم عمود: الفرق</div>
+      <ul>
+        <li><b>الرصيد الدفتري</b> — محسوب من القيود المُرحَّلة.</li>
+        <li><b>الرصيد الفعلي</b> — اللي في نظام الفروع دلوقتي.</li>
+        <li><b>الفرق = صفر</b> ✅ يبقى كل حاجة مترحّلة وسليمة.</li>
+      </ul>
+      <div class="help-warn">⚠️ لو فيه فرق، غالبًا فيه حركات خزينة لسه ما اترحّلتش. روح لـ<b>🔄 الترحيل التلقائي</b> واضغط «ترحيل الآن».</div>
+      <div class="help-sec">التحويل بين الخزن</div>
+      <p>زر <b>🔁 تحويل بين خزن</b> بيعمل قيد تحويل نقدية من خزنة لخزنة بضغطة واحدة.</p>`
+  },
+  autopost: {
+    title: "🔄 الترحيل التلقائي",
+    what: "المحرك اللي بيحوّل عمليات الشغل اليومية (أوردرات، خزينة، مصروفات، رواتب) لقيود محاسبية أوتوماتيك.",
+    body: `
+      <div class="help-sec">الاستخدام</div>
+      <ol class="help-steps">
+        <li>اضغط <b>🔍 فحص غير المُرحَّل</b> عشان تشوف إيه اللي مستني.</li>
+        <li>راجع الأعداد والقيم في الجدول.</li>
+        <li>اضغط <b>▶️ ترحيل الآن</b>.</li>
+      </ol>
+      <div class="help-sec">إيه اللي بيترحّل؟</div>
+      <ul>
+        <li><b>أوردر مُسلَّم</b> ← إيراد التوصيل + عمولة الطيار + رسوم التطوير في قيد واحد.</li>
+        <li><b>حركات الخزينة</b> ← تحصيلات وعُهَد ومصروفات مدفوعة.</li>
+        <li><b>المصروفات والرواتب</b>.</li>
+      </ul>
+      <div class="help-tip">💡 <b>مستحيل يترحّل مستند مرتين</b> — كل مستند له بصمة محفوظة.</div>
+      <div class="help-warn">⚠️ أول مرة بس: اعمل <b>القيد الافتتاحي</b> من الصندوق البرتقالي فوق قبل أي ترحيل — بياخد أرصدة خزنك وعُهدك الحالية كنقطة بداية.</div>`
+  },
+  periods: {
+    title: "📅 الفترات والإقفال",
+    what: "قفل الشهور المنتهية عشان محدش يعدّل فيها، والإقفال السنوي لترحيل الأرباح.",
+    body: `
+      <div class="help-sec">الإقفال الشهري</div>
+      <ul>
+        <li>بعد ما تراجع الشهر وتتأكد إنه سليم، اضغط <b>🔒 إقفال</b>.</li>
+        <li>الفترة المقفولة <b>مش هتقبل أي قيد جديد ولا تعديل</b> — لا يدوي ولا تلقائي.</li>
+        <li>تقدر تفتحها تاني بزر <b>🔓 فتح</b> لو احتجت.</li>
+      </ul>
+      <div class="help-sec">الإقفال السنوي</div>
+      <p>بيصفّر كل حسابات الإيرادات والمصروفات ويحوّل صافي النتيجة لـ<b>الأرباح المُرحَّلة</b> — استعدادًا لسنة جديدة.</p>
+      <div class="help-warn">⚠️ اضغط <b>🔍 معاينة</b> الأول عشان تشوف الأرقام قبل ما تنفّذ. الإقفال السنوي مالوش تراجع إلا بإلغاء القيد يدويًا.</div>`
+  },
+  settings: {
+    title: "⚙️ الإعدادات",
+    what: "ضبط سلوك النظام وربط الحسابات اللي المحرك التلقائي بيستخدمها.",
+    body: `
+      <div class="help-sec">🧭 عام</div>
+      <ul>
+        <li><b>تاريخ بداية النظام</b> — المستندات الأقدم منه مش بتترحّل.</li>
+        <li><b>رسوم التطوير لكل أوردر</b> — بتتخصم من إيراد كل فرع.</li>
+        <li><b>عهدة المحل (storePrepaid)</b> — مبلغ عابر مش بيمس الأرباح، تتبعه اختياري.</li>
+      </ul>
+      <div class="help-sec">🔗 ربط الحسابات</div>
+      <p>بتقول للمحرك: لما تترحّل عمولة طيار استخدم أنهي حساب؟ الافتراضيات مظبوطة، غيّرها بس لو غيّرت الدليل.</p>
+      <div class="help-sec">🛠️ أدوات وصيانة</div>
+      <ul>
+        <li><b>إصلاح الدليل</b> — يضيف الحسابات الأساسية الناقصة.</li>
+        <li><b>ترحيل كل التاريخ</b> — يرجّع البداية لأقدم عملية.</li>
+        <li><b>فحص سلامة القيود</b> — يكشف أي قيد غير متوازن أو رصيد تحت التسوية.</li>
+      </ul>
+      <div class="help-warn">⚠️ <b>حذف كل القيود</b> مالوش رجعة — استخدمه بس لو عايز تبدأ من الصفر.</div>`
+  }
+};
+
+window.openHelp = function() {
+  const page = document.querySelector(".page.active")?.id.replace("page-", "") || "dashboard";
+  const h = HELP[page] || { title: "دليل الاستخدام", what: "مفيش شرح متاح للشاشة دي.", body: "" };
+  document.getElementById("helpTitle").textContent = h.title;
+  document.getElementById("helpSub").textContent   = "دليل استخدام الشاشة";
+  document.getElementById("helpBody").innerHTML =
+    `<div class="help-what">${h.what}</div>` + (h.body || "");
+  document.getElementById("helpOverlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+};
+window.closeHelp = function() {
+  document.getElementById("helpOverlay").classList.remove("open");
+  document.body.style.overflow = "";
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "F1") { e.preventDefault(); openHelp(); }
+  else if (e.key === "Escape" && document.getElementById("helpOverlay")?.classList.contains("open")) closeHelp();
+});
+</script>
 </body>
 </html>

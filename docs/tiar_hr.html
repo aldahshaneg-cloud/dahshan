@@ -161,6 +161,46 @@
   .form-section-title { font-size:.82rem; font-weight:800; color:var(--sky); margin:18px 0 10px; padding-bottom:7px; border-bottom:1px solid var(--border); grid-column:1/-1; }
 
   /* ── TOAST ── */
+  /* ══════════ زر المساعدة ولوحة الشرح ══════════ */
+  #helpBtn { position:fixed; top:18px; left:20px; z-index:8000; width:38px; height:38px; border-radius:50%;
+    cursor:pointer; background:var(--sky); color:#fff; border:none; font-size:1.15rem; font-weight:800;
+    font-family:Georgia, serif; font-style:italic; box-shadow:0 4px 16px rgba(232,25,44,.4);
+    display:flex; align-items:center; justify-content:center; }
+  #helpBtn:hover { background:var(--sky-d); transform:scale(1.08); }
+  #helpBtn:active { transform:scale(.96); }
+  #helpOverlay { position:fixed; inset:0; background:rgba(0,0,0,.72); backdrop-filter:blur(5px);
+    z-index:9500; display:none; align-items:center; justify-content:center; padding:20px; }
+  #helpOverlay.open { display:flex; }
+  #helpPanel { background:var(--night); border:1px solid var(--border); border-radius:16px; width:100%;
+    max-width:720px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  #helpHead { display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+    padding:20px 24px; border-bottom:1px solid var(--border); }
+  #helpTitle { font-size:1.18rem; font-weight:800; color:var(--sky); }
+  #helpSub { font-size:.78rem; color:var(--muted); margin-top:3px; }
+  #helpBody { padding:20px 24px; overflow-y:auto; line-height:1.95; font-size:.89rem; }
+  #helpFoot { padding:14px 24px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .help-what { background:rgba(59,130,246,.08); border-inline-start:3px solid var(--blue);
+    border-radius:8px; padding:13px 16px; margin-bottom:18px; font-size:.9rem; }
+  .help-sec { font-size:.82rem; font-weight:800; color:var(--sky); margin:20px 0 9px;
+    padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .help-sec:first-of-type { margin-top:0; }
+  #helpBody ul { margin:0; padding-inline-start:22px; }
+  #helpBody li { margin-bottom:7px; }
+  #helpBody b { color:var(--text); }
+  #helpBody code { background:var(--card); border:1px solid var(--border); border-radius:5px;
+    padding:1px 6px; font-size:.84em; direction:ltr; display:inline-block; }
+  .help-tip { background:rgba(34,197,94,.07); border:1px solid rgba(34,197,94,.25);
+    border-radius:9px; padding:11px 14px; margin-top:14px; font-size:.85rem; }
+  .help-warn { background:rgba(249,115,22,.07); border:1px solid rgba(249,115,22,.28);
+    border-radius:9px; padding:11px 14px; margin-top:14px; font-size:.85rem; }
+  .help-steps { counter-reset:hs; list-style:none; padding:0; margin:0; }
+  .help-steps li { counter-increment:hs; position:relative; padding-inline-start:34px; margin-bottom:11px; }
+  .help-steps li::before { content:counter(hs); position:absolute; inset-inline-start:0; top:1px;
+    width:23px; height:23px; border-radius:50%; background:var(--sky); color:#fff; font-size:.75rem;
+    font-weight:800; display:flex; align-items:center; justify-content:center; }
+  @media print { #helpBtn, #helpOverlay { display:none !important; } }
+  @media (max-width:900px) { #helpBtn { top:12px; left:12px; width:34px; height:34px; font-size:1rem; } }
+
   #toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(120px); background:var(--panel);
     border:1px solid var(--border); color:var(--text); padding:13px 26px; border-radius:10px; font-weight:700; font-size:.88rem;
     z-index:99999; transition:transform .3s; box-shadow:0 8px 30px rgba(0,0,0,.45); max-width:90vw; text-align:center; }
@@ -751,6 +791,25 @@
     <button class="btn-red" id="genDeleteBtn" style="margin-inline-start:auto;display:none" onclick="genDelete()">🗑️ حذف</button>
   </div>
 </div></div>
+
+<!-- ═══════════ زر المساعدة — شرح الشاشة الحالية ═══════════ -->
+<button id="helpBtn" onclick="openHelp()" title="إيه الصفحة دي؟ (F1)">i</button>
+<div id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div id="helpPanel">
+    <div id="helpHead">
+      <div>
+        <div id="helpTitle">—</div>
+        <div id="helpSub">دليل استخدام الشاشة</div>
+      </div>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div id="helpBody"></div>
+    <div id="helpFoot">
+      <button class="btn-ghost" onclick="closeHelp()">تمام، فهمت</button>
+      <span style="font-size:.74rem;color:var(--muted);margin-inline-start:auto">اضغط <b>F1</b> في أي وقت</span>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -3582,5 +3641,226 @@ window.exportReportExcel = function() {
 };
 </script>
 
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   دليل الاستخدام — شرح كل شاشة داخل البرنامج
+   ══════════════════════════════════════════════════════════════════════ */
+const HELP = {
+  dashboard: {
+    title: "📊 لوحة الموارد البشرية",
+    what: "نظرة سريعة على الفريق النهاردة — مين حاضر ومين غايب ومين في إجازة وإيه اللي محتاج انتباهك.",
+    body: `
+      <div class="help-sec">البطاقات</div>
+      <ul>
+        <li><b>حاضر / متأخر / غائب اليوم</b> — محسوبة من سجل الحضور وشيفت كل موظف.</li>
+        <li><b>طلبات إجازة معلّقة</b> — مستنية قرارك بالموافقة أو الرفض.</li>
+        <li><b>تكلفة الرواتب الشهرية</b> — إجمالي الأساسي + البدلات لكل الفريق النشط.</li>
+      </ul>
+      <div class="help-tip">💡 كل بطاقة قابلة للضغط وبتنقلك للشاشة المناسبة.</div>
+      <div class="help-sec">يحتاج انتباهك</div>
+      <p>بيعرض العقود وفترات التجربة والمستندات اللي قربت تنتهي — مرتبة بالأقرب.</p>`
+  },
+  employees: {
+    title: "👥 الموظفون",
+    what: "السجل الموحّد لكل الموظفين — بيجمع مستخدمي النظام والطيارين والموظفين خارج النظام في مكان واحد.",
+    body: `
+      <div class="help-sec">أهم زر: 🔄 مزامنة المصادر</div>
+      <p>الموظفين عندك موزعين على تلات أماكن. الزر ده بيستوردهم كلهم للسجل الموحّد.
+         <b>مابيلمسش البيانات الأصلية</b> وبيضيف الجديد بس، فتقدر تضغطه في أي وقت.</p>
+      <div class="help-sec">إضافة موظف</div>
+      <ol class="help-steps">
+        <li><b>بيانات أساسية</b> — الاسم والهاتف إجباريين.</li>
+        <li><b>بيانات الوظيفة</b> — الفرع والقسم و<b>شيفت العمل</b> (مهم جدًا).</li>
+        <li><b>الراتب</b> — الأساسي والبدلات، والنظام بيحسبلك قيمة اليوم والساعة.</li>
+        <li><b>مستندات</b> — تواريخ انتهاء الرخصة والشهادة الصحية عشان تيجي في التنبيهات.</li>
+      </ol>
+      <div class="help-warn">⚠️ الموظف <b>بدون شيفت</b> مش بيتحسب عليه تأخير ولا غياب ولا إضافي — راتبه بيطلع كامل دايمًا.</div>
+      <div class="help-tip">💡 زر 📂 بيفتح <b>ملف الموظف الكامل</b>: حضوره وإجازاته وجزاءاته وتقييماته في صفحة واحدة.</div>`
+  },
+  org: {
+    title: "🏛️ الهيكل التنظيمي",
+    what: "الأقسام والمسميات الوظيفية وشجرة من بيتبع مين.",
+    body: `
+      <div class="help-sec">الأقسام</div>
+      <p>قسّم شركتك (توصيل، محاسبة، إدارة…). التقارير بتحسب <b>تكلفة العمالة لكل قسم</b>.</p>
+      <div class="help-sec">المسميات الوظيفية</div>
+      <p>حدد المسميات و<b>الراتب الأساسي المقترح</b> لكل واحد — بيتستخدم كقيمة مبدئية عند إضافة موظف.</p>
+      <div class="help-sec">شجرة التنظيم</div>
+      <p>بتترسم تلقائيًا من حقل <b>المدير المباشر</b> في ملف كل موظف.</p>`
+  },
+  alerts: {
+    title: "🔔 التنبيهات",
+    what: "كل حاجة قربت تنتهي وتحتاج تصرف منك.",
+    body: `
+      <div class="help-sec">أنواع التنبيهات</div>
+      <ul>
+        <li>📄 <b>انتهاء العقد</b> — جدّد أو حدّث التاريخ.</li>
+        <li>⏳ <b>انتهاء فترة التجربة</b> — قرّر التثبيت أو إنهاء الخدمة.</li>
+        <li>🪪 <b>الرخصة</b> و 🏥 <b>الشهادة الصحية</b>.</li>
+        <li>🎂 <b>أعياد الميلاد</b>.</li>
+      </ul>
+      <div class="help-tip">💡 غيّر عدد الأيام فوق (30 افتراضيًا) عشان تشوف أبعد أو أقرب.</div>
+      <div class="help-warn">⚠️ التنبيهات دي بتظهر بس لو التواريخ متسجّلة في ملف الموظف.</div>`
+  },
+  attendance: {
+    title: "⏱️ الحضور اليومي",
+    what: "تسجيل حضور وانصراف الفريق ليوم واحد — والنظام بيحسب التأخير والإضافي تلقائيًا.",
+    body: `
+      <div class="help-sec">٣ طرق للتسجيل</div>
+      <ul>
+        <li><b>▶ / ⏹</b> — بيسجّل الوقت الحالي بضغطة واحدة.</li>
+        <li>اكتب الوقت في الخانة واضغط <b>💾</b>.</li>
+        <li><b>✅ تسجيل حضور الكل</b> — لكل اللي لسه ما اتسجلوش دفعة واحدة.</li>
+      </ul>
+      <div class="help-sec">📥 استيراد من الدخول</div>
+      <p>بيجيب حضور مستخدمي النظام من سجل تسجيل الدخول القديم. <b>السجل اليدوي له الأولوية</b> ومابيتكتبش عليه.</p>
+      <div class="help-sec">الحالات</div>
+      <ul>
+        <li><b>حاضر</b> · <b>متأخر</b> (بعد وقت الشيفت + السماح) · <b>غائب</b> (يوم عمل فات بلا سجل)</li>
+        <li><b>إجازة</b> · <b>عطلة</b> · <b>راحة</b> (يوم مش في أيام عمل الشيفت)</li>
+      </ul>`
+  },
+  month: {
+    title: "📅 حضور الشهر",
+    what: "جدول شامل لكل الموظفين × كل أيام الشهر في شاشة واحدة.",
+    body: `
+      <div class="help-sec">الرموز</div>
+      <ul>
+        <li><b style="color:var(--green)">P</b> حاضر · <b style="color:var(--orange)">T</b> متأخر ·
+            <b style="color:var(--red)">A</b> غائب</li>
+        <li><b style="color:var(--blue)">L</b> إجازة · <b style="color:var(--muted)">H</b> عطلة ·
+            <b style="color:var(--muted)">·</b> راحة أسبوعية</li>
+      </ul>
+      <div class="help-tip">💡 حط الماوس على أي مربع عشان تشوف وقت الحضور والانصراف بالظبط.</div>
+      <div class="help-sec">آخر أربع أعمدة</div>
+      <p>ملخص كل موظف: عدد أيام الحضور والغياب ومرات التأخير والإجازات.</p>`
+  },
+  workshifts: {
+    title: "🕐 مواعيد العمل (الشيفتات)",
+    what: "أهم شاشة في النظام — من غيرها مفيش حساب تأخير ولا غياب ولا إضافي.",
+    body: `
+      <div class="help-warn">⚠️ اعمل الشيفتات <b>الأول</b> قبل أي حاجة، وبعدين اربطها بالموظفين من ملف كل واحد.</div>
+      <div class="help-sec">حقول الشيفت</div>
+      <ul>
+        <li><b>بداية ونهاية العمل</b> — لو الشيفت بيعدّي منتصف الليل حدد النهاية عادي (22:00 إلى 06:00).</li>
+        <li><b>دقائق السماح</b> — الموظف اللي يتأخر أقل منها مايتحسبش متأخر.</li>
+        <li><b>دقائق الراحة</b> — بتتخصم من ساعات العمل <u>ومن</u> مطلوب الشيفت.</li>
+        <li><b>أيام العمل</b> — الأيام غير المختارة بتتحسب راحة أسبوعية مش غياب.</li>
+      </ul>
+      <div class="help-tip">💡 من <b>الإعدادات ← أدوات</b> تقدر تربط كل الموظفين اللي بدون شيفت بضغطة واحدة.</div>`
+  },
+  leaves: {
+    title: "🌴 الإجازات",
+    what: "أنواع الإجازات وأرصدة كل موظف وطلبات الموافقة.",
+    body: `
+      <div class="help-warn">⚠️ ابدأ من تبويب <b>🏷️ أنواع الإجازات</b> — من غير أنواع معرّفة النظام معطّل.</div>
+      <div class="help-sec">أنواع الإجازات</div>
+      <ul>
+        <li><b>الرصيد السنوي</b> — عدد الأيام المستحقة لكل موظف في السنة.</li>
+        <li><b>مدفوعة</b> ← مابتتخصمش من الراتب. <b>غير مدفوعة</b> ← بيتخصم قيمة اليوم في المسير.</li>
+      </ul>
+      <div class="help-sec">تسجيل إجازة</div>
+      <p>النظام بيمنع <b>التعارض</b> مع إجازة معتمدة تانية، وبيحذّرك لو الرصيد مش كافي (وتقدر توافق استثناءً).</p>
+      <div class="help-sec">📊 أرصدة الموظفين</div>
+      <p>جدول كل موظف × كل نوع إجازة: <b>المتبقي / الاستحقاق</b>. أحمر يعني الرصيد خلص.</p>`
+  },
+  penalties: {
+    title: "⚖️ الجزاءات",
+    what: "تسجيل الإنذارات والخصومات — والخصم بينتقل تلقائيًا لمسير رواتب نفس الشهر.",
+    body: `
+      <div class="help-sec">أنواع الجزاء</div>
+      <ul>
+        <li>إنذار شفهي · إنذار كتابي · إنذار نهائي · وقف عن العمل · خصم.</li>
+      </ul>
+      <div class="help-sec">مبلغ الخصم</div>
+      <p>لو حطيت مبلغ، بيتخصم <b>تلقائيًا</b> في مسير رواتب الشهر اللي فيه تاريخ الجزاء.
+         سيبه <b>صفر</b> لو الجزاء إنذار بدون خصم.</p>
+      <div class="help-tip">💡 الجزاءات بتظهر في ملف الموظف، فتقدر تشوف تاريخه الانضباطي كامل.</div>`
+  },
+  reviews: {
+    title: "⭐ تقييم الأداء",
+    what: "تقييم دوري لكل موظف على معايير إنت بتحددها.",
+    body: `
+      <div class="help-sec">المعايير</div>
+      <p>بتتحدد من <b>الإعدادات ← عام ← معايير تقييم الأداء</b> (مفصولة بفاصلة). كل معيار من <b>10</b>،
+         والدرجة النهائية نسبة مئوية.</p>
+      <div class="help-sec">التقديرات</div>
+      <ul>
+        <li>90%+ ممتاز · 75%+ جيد جدًا · 60%+ جيد · 50%+ مقبول · أقل من 50% ضعيف</li>
+      </ul>
+      <div class="help-tip">💡 اكتب <b>نقاط القوة</b> و<b>خطة التطوير</b> — بتظهر في ملف الموظف وبتفيد في المراجعة الجاية.</div>`
+  },
+  payroll: {
+    title: "💵 مسير الرواتب",
+    what: "حساب رواتب الشهر لكل الفريق — بيجمع الحضور والتأخير والإجازات والجزاءات في رقم واحد.",
+    body: `
+      <div class="help-sec">الخطوات</div>
+      <ol class="help-steps">
+        <li>اختر الشهر.</li>
+        <li>اضغط <b>🧮 حساب المسير</b>.</li>
+        <li>زوّد البنود اليدوية (مكافأة / خصم / سلفة) بزر <b>✏️</b> لكل موظف.</li>
+        <li>راجع الأرقام واضغط <b>✅ اعتماد</b>.</li>
+      </ol>
+      <div class="help-sec">المعادلة</div>
+      <p><b>(الأساسي + البدلات) + إضافي + مكافآت − خصم غياب − خصم تأخير − إجازة غير مدفوعة − جزاءات − خصومات − سلف</b></p>
+      <div class="help-sec">📒 الترحيل للمحاسبة</div>
+      <p>عند الاعتماد بيتولد <b>قيد رواتب</b> تلقائيًا في النظام المحاسبي. لو قفلت الخيار ده من الإعدادات تقدر ترحّل يدويًا بالزر.</p>
+      <div class="help-tip">💡 زر <b>🧾</b> بيفتح <b>قسيمة الراتب</b> — تطبعها أو تبعتها واتساب للموظف.</div>
+      <div class="help-warn">⚠️ أي تعديل بعد الاعتماد بيرجّع المسير <b>مسودة</b>. ولو كان اترحّل للمحاسبة، لازم تلغي القيد من دفتر اليومية وترحّل تاني.</div>`
+  },
+  reports: {
+    title: "📈 التقارير",
+    what: "أربع تقارير جاهزة قابلة للتصدير والطباعة.",
+    body: `
+      <div class="help-sec">التقارير</div>
+      <ul>
+        <li><b>⏱️ التزام الحضور</b> — نسبة الالتزام لكل موظف مرتبة من الأعلى.</li>
+        <li><b>🌴 استهلاك الإجازات</b> — كل موظف × كل نوع إجازة.</li>
+        <li><b>💰 تكلفة العمالة</b> — مجمّعة حسب القسم مع نسبة كل قسم.</li>
+        <li><b>🔄 دوران العمالة</b> — التعيينات وحالات انتهاء الخدمة ومعدل الدوران.</li>
+      </ul>
+      <div class="help-tip">💡 حدد المدى والفرع فوق، وكل تقرير بيتحدّث لحظيًا.</div>`
+  },
+  settings: {
+    title: "⚙️ الإعدادات",
+    what: "سياسات العمل والخصم اللي بتتطبّق تلقائيًا وقت حساب الرواتب.",
+    body: `
+      <div class="help-sec">🧭 عام</div>
+      <ul>
+        <li><b>أيام العمل في الشهر</b> — أساس حساب قيمة اليوم (30 أو 26 أو أيام الشهر الفعلية).</li>
+        <li><b>فترة التجربة</b> — بتتحسب تلقائيًا من تاريخ التعيين.</li>
+        <li><b>ترحيل الرواتب للمحاسبة</b> — تشغيل أو إيقاف القيد التلقائي.</li>
+      </ul>
+      <div class="help-sec">📋 سياسة الخصم</div>
+      <ul>
+        <li><b>الغياب</b> — مضاعف قيمة اليوم، وأيام مسموحة بدون خصم.</li>
+        <li><b>التأخير</b> — بدون خصم / بالتناسب مع قيمة الساعة / مبلغ ثابت. مع مرات سماح شهرية.</li>
+        <li><b>الإضافي</b> — بقيمة الساعة × مضاعف، أو مبلغ ثابت للساعة.</li>
+      </ul>
+      <div class="help-tip">💡 حط <b>صفر</b> في أي بند عشان تعطّله تمامًا.</div>
+      <div class="help-sec">🛠️ أدوات</div>
+      <p><b>🩺 فحص</b> بيقولك إيه الناقص بالظبط: موظفين بدون شيفت أو راتب، أكواد مكرّرة، طلبات معلّقة.</p>`
+  }
+};
+
+window.openHelp = function() {
+  const page = document.querySelector(".page.active")?.id.replace("page-", "") || "dashboard";
+  const h = HELP[page] || { title: "دليل الاستخدام", what: "مفيش شرح متاح للشاشة دي.", body: "" };
+  document.getElementById("helpTitle").textContent = h.title;
+  document.getElementById("helpSub").textContent   = "دليل استخدام الشاشة";
+  document.getElementById("helpBody").innerHTML =
+    `<div class="help-what">${h.what}</div>` + (h.body || "");
+  document.getElementById("helpOverlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+};
+window.closeHelp = function() {
+  document.getElementById("helpOverlay").classList.remove("open");
+  document.body.style.overflow = "";
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "F1") { e.preventDefault(); openHelp(); }
+  else if (e.key === "Escape" && document.getElementById("helpOverlay")?.classList.contains("open")) closeHelp();
+});
+</script>
 </body>
 </html>
