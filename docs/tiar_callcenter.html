@@ -61,7 +61,7 @@
         saveSession(name, "مدير عام");
         applySession(name, "مدير عام");
         try { await recordCheckIn(name, "مدير عام"); } catch(e) {}
-        try { navigateTo("neworder"); } catch(e) {}
+        try { navigateTo("orders"); } catch(e) {}
       } catch(e) { console.error("google admin auto-login:", e); }
     });
 
@@ -673,7 +673,7 @@
           saveSession(pt.username, userData.role || "");
           applySession(pt.username, userData.role || "");
           await recordCheckIn(pt.username, userData.role || "");
-          navigateTo("neworder");
+          navigateTo("orders");
         }
       } catch(e) { console.error("passthrough error", e); }
     })();
@@ -803,7 +803,7 @@
           applySession(user, snap.val().role || "");
           err.textContent = "";
           await recordCheckIn(user, snap.val().role || "");
-          navigateTo("neworder");
+          navigateTo("orders");
         } else {
           err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة";
           document.getElementById("loginPass").value = "";
@@ -7884,7 +7884,6 @@
     <div class="sidebar-brand" style="flex-direction:column;gap:6px;justify-content:center"><img src="assets/logo.png" alt="الدهشان" style="height:40px;width:auto;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 0 8px rgba(232,25,44,.45))" /><span style="font-size:.72rem;color:var(--muted);font-weight:600">📞 الكول سنتر</span></div>
     <nav class="sidebar-nav">
       <span class="sidebar-section-label">استقبال الطلبات</span>
-      <button class="nav-item nav-primary-cc" onclick="navigateTo('neworder')">➕ أوردر جديد (المنطقة تحدد الفرع)</button>
       <button class="nav-item" onclick="navigateTo('ccsearch')">🔎 بحث سريع</button>
 
       <span class="sidebar-section-label">الطلبات</span>
@@ -7902,21 +7901,13 @@
         🔄 نقل الطيارين
         <span id="transfersBadge" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);background:var(--orange);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px;min-width:18px;text-align:center">0</span>
       </button>
+      <button class="nav-item" onclick="navigateTo('pilotmap')">🗺️ خريطة الطيارين</button>
       <button class="nav-item" onclick="navigateTo('clients')">👥 العملاء</button>
 
       <span class="sidebar-section-label">المتابعة</span>
       <button class="nav-item" onclick="navigateTo('ccomplaints')" id="navComplaints" style="position:relative">⚠️ الشكاوى</button>
       <button class="nav-item" onclick="navigateTo('cczones')">🗺️ دليل المناطق</button>
       <button class="nav-item" onclick="navigateTo('ccperf')">📈 أدائي</button>
-
-      <!-- روابط للتطبيقات الأخرى — تفتح في تاب جديد حتى لا تُفقد الشاشة الحالية -->
-      <span class="sidebar-section-label">التطبيقات الأخرى</span>
-      <button class="nav-item nav-external" onclick="openOtherApp('tiar_branch.html')">
-        🏢 تطبيق الفروع <span class="ext-icon">↗</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('tiar_store.html')">
-        🏪 بوابة المحلات <span class="ext-icon">↗</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('index.html')">
-        🏠 البوابة الرئيسية <span class="ext-icon">↗</span></button>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user"><div class="user-avatar">A</div><div><span id="sidebar-username">—</span><br><span id="sidebar-role" style="font-size:.74rem">—</span></div></div>
