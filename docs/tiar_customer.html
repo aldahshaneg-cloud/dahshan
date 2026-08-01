@@ -487,19 +487,46 @@ a{color:var(--red);text-decoration:none}
             display:grid;place-items:center;font-size:12px;font-weight:800">2</span>
           <b style="font-size:15px">بيانات المستلم</b>
         </div>
-        <div class="fld" style="margin-bottom:10px"><div class="fi">👤</div><div class="fb">
-          <b>الاسم</b><input id="rcvName" placeholder="اسم المستلم" /></div></div>
-        <div class="fld" style="margin-bottom:10px"><div class="fi">📞</div><div class="fb">
-          <b>رقم الهاتف</b><input id="rcvPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
-        <div class="fld" style="margin-bottom:10px"><div class="fi">📱</div><div class="fb">
-          <b>رقم إضافي (اختياري)</b><input id="rcvPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
-        <span class="lbl">عنوان التسليم</span>
-        <div id="rcvAddrW"></div>
-        <span class="lbl" style="margin-top:12px">منطقة التسليم</span>
+
+        <!-- وضع "الريسيت": العميل معندوش بيانات المستلم، والعنوان مكتوب
+             على صورة الإيصال. المنطقة تفضل إجبارية لأنها بتحدد السعر. -->
+        <label class="card" style="display:flex;align-items:center;gap:11px;margin-bottom:12px;
+               background:var(--card2);cursor:pointer;padding:12px">
+          <input type="checkbox" id="rcvNoData" style="width:20px;height:20px;flex:none;accent-color:var(--red)" />
+          <span style="flex:1">
+            <b style="font-size:13.5px;display:block">مش معايا بيانات المستلم</b>
+            <span style="font-size:11.5px;color:var(--muted);line-height:1.6">
+              هرفع صورة الريسيت والعنوان مكتوب عليها</span>
+          </span>
+          <span style="font-size:19px">🧾</span>
+        </label>
+
+        <div id="rcvFields">
+          <div class="fld" style="margin-bottom:10px"><div class="fi">👤</div><div class="fb">
+            <b>الاسم</b><input id="rcvName" placeholder="اسم المستلم" /></div></div>
+          <div class="fld" style="margin-bottom:10px"><div class="fi">📞</div><div class="fb">
+            <b>رقم الهاتف</b><input id="rcvPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+          <div class="fld" style="margin-bottom:10px"><div class="fi">📱</div><div class="fb">
+            <b>رقم إضافي (اختياري)</b><input id="rcvPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+          <span class="lbl">عنوان التسليم</span>
+          <div id="rcvAddrW"></div>
+        </div>
+
+        <div id="rcvReceiptNote" style="display:none;background:rgba(245,158,11,.1);
+             border:1px solid rgba(245,158,11,.35);border-radius:12px;padding:12px;
+             font-size:12.5px;line-height:1.8;margin-bottom:12px">
+          🧾 <b>مطلوب صورة الريسيت</b><br />
+          <span style="color:var(--muted)">هنسيب بيانات المستلم فاضية ونعتمد على الصورة —
+          لازم ترفع صورة واضحة في خطوة المرفقات، والمنطقة تحت إجبارية عشان نحسب سعر التوصيل.</span>
+        </div>
+
+        <span class="lbl">منطقة التسليم</span>
         <select id="rcvZone"></select>
         <div id="rcvPrice" style="margin-top:9px;font-size:13px;display:none"></div>
-        <div class="map" id="rcvMap" style="height:130px;margin-top:12px"></div>
-        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv')">📍 تحديد الموقع على الخريطة</button>
+        <div id="rcvGeo">
+          <div class="map" id="rcvMap" style="height:130px;margin-top:12px"></div>
+          <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv')">📍 تحديد الموقع على الخريطة</button>
+        </div>
         <div id="rcvSaved" style="margin-top:10px"></div>
       </div>
       <div style="display:flex;gap:10px;margin-top:14px">
@@ -547,7 +574,7 @@ a{color:var(--red);text-decoration:none}
             display:grid;place-items:center;font-size:12px;font-weight:800">4</span>
           <b style="font-size:15px">المرفقات</b>
         </div>
-        <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
+        <div id="attachHint" style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
           أضف صور للطلب أو الإيصال (اختياري)</div>
         <div class="up-grid">
           <div class="up-box" onclick="document.getElementById('fileCam').click()"><i>📷</i><span>تصوير بالكاميرا</span></div>
@@ -1491,7 +1518,7 @@ function renderOrders() {
       <div class="ob">
         <div class="r1"><span class="num">#${esc(o.orderNum || "—")}</span>
           <span class="badge ${m.c}">${m.t}</span></div>
-        <div class="nm">${esc(d.receiverName || "—")}</div>
+        <div class="nm">${d.receiverFromReceipt ? "🧾 مستلم من الريسيت" : esc(d.receiverName || "—")}</div>
         <div class="r3"><span>${fmtMoney(d.orderPrice)} ج.م</span>
           <span>${isToday ? "اليوم" : dt.toLocaleDateString("ar-EG")} ${dt.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})}</span></div>
       </div></div>`;
@@ -1543,11 +1570,16 @@ function renderDetail() {
 
     <div class="card">
       <span class="lbl">المستلم</span>
-      <b style="font-size:15px">${esc(d.receiverName || "—")}</b>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;direction:ltr">
-        <a href="tel:${esc(d.receiverPhone || "")}" style="color:var(--txt)">${esc(d.receiverPhone || "—")}</a>
-        <span style="color:var(--red)">📞</span></div>
-      <div style="font-size:12.5px;color:var(--muted);margin-top:7px">📍 ${esc(d.address || "—")}</div>
+      ${d.receiverFromReceipt ? `
+        <b style="font-size:15px">🧾 البيانات على صورة الريسيت</b>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:7px">
+          منطقة التسليم: <b style="color:#d0d0d6">${esc(d.zoneName || "—")}</b></div>`
+      : `
+        <b style="font-size:15px">${esc(d.receiverName || "—")}</b>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;direction:ltr">
+          <a href="tel:${esc(d.receiverPhone || "")}" style="color:var(--txt)">${esc(d.receiverPhone || "—")}</a>
+          <span style="color:var(--red)">📞</span></div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:7px">📍 ${esc(d.address || "—")}</div>`}
     </div>
 
     <div class="card">
@@ -1940,6 +1972,9 @@ function startNewOrder() {
   ["rcvName","rcvPhone","rcvPhone2"].forEach(k => $(k).value = "");
   renderAddr("rcvAddrW");
   $("rcvZone").onchange = onReceiverZone;
+  $("rcvNoData").checked = false;
+  $("rcvNoData").onchange = onReceiverMode;
+  onReceiverMode();
 
   $("odCod").value = 0; $("odValue").value = 0; $("odNote").value = "";
   $("odPieces").textContent = 1;
@@ -1960,6 +1995,30 @@ function onSenderZone() {
   // مناطق التسليم المتاحة = مناطق نفس الفرع (زي بوابة المحل بالظبط)
   fillZoneSelect($("rcvZone"), { branchId: zoneBranchId(z), selected: $("rcvZone").value });
 }
+/* وضع "مش معايا بيانات المستلم" — بنخفي حقول المستلم ونعتمد على صورة
+   الريسيت، والمنطقة تفضل إجبارية لأن سعر التوصيل بيتحسب منها. */
+function onReceiverMode() {
+  const on = $("rcvNoData").checked;
+  S.draft.receiptMode = on;
+  $("rcvFields").style.display      = on ? "none"  : "block";
+  $("rcvGeo").style.display         = on ? "none"  : "block";
+  $("rcvReceiptNote").style.display = on ? "block" : "none";
+  $("rcvSaved").style.display       = on ? "none"  : "block";
+  updateAttachHint();
+}
+window.onReceiverMode = onReceiverMode;
+
+function updateAttachHint() {
+  const el = $("attachHint"); if (!el) return;
+  if (S.draft?.receiptMode) {
+    el.innerHTML = `<span style="color:var(--orange);font-weight:700">
+      🧾 صورة الريسيت إجبارية</span> — العنوان وبيانات المستلم هيتقروا منها`;
+  } else {
+    el.style.color = "var(--muted)";
+    el.textContent = "أضف صور للطلب أو الإيصال (اختياري)";
+  }
+}
+
 function onReceiverZone() {
   const z = findZone($("rcvZone").value);
   S.draft.receiverZone = z;
@@ -2034,10 +2093,13 @@ function wizNext(step) {
       if (!$("sndZone").value)                   return toast("اختر منطقة الاستلام", "err");
     }
     if (S.wizStep === 2) {
-      if (!$("rcvName").value.trim())            return toast("اكتب اسم المستلم", "err");
-      if (!validPhone($("rcvPhone").value))      return toast("رقم هاتف المستلم غير صحيح", "err");
-      if (!getAddr("rcvAddrW").trim())           return toast("اكتب عنوان التسليم", "err");
+      // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
       if (!$("rcvZone").value)                   return toast("اختر منطقة التسليم", "err");
+      if (!S.draft.receiptMode) {
+        if (!$("rcvName").value.trim())          return toast("اكتب اسم المستلم", "err");
+        if (!validPhone($("rcvPhone").value))    return toast("رقم هاتف المستلم غير صحيح", "err");
+        if (!getAddr("rcvAddrW").trim())         return toast("اكتب عنوان التسليم", "err");
+      }
     }
   }
   S.wizStep = step;
@@ -2045,7 +2107,7 @@ function wizNext(step) {
   drawStepper("wizStepper", WIZ_CAPS, step);
   if (step === 1) setTimeout(() => showMiniMap("sndMap", S.draft.sndLat, S.draft.sndLng), 60);
   if (step === 2) setTimeout(() => showMiniMap("rcvMap", S.draft.rcvLat, S.draft.rcvLng), 60);
-  if (step === 4) renderSummary();
+  if (step === 4) { updateAttachHint(); renderSummary(); }
   $("s-new").querySelector(".scroll").scrollTop = 0;
 }
 window.wizNext = wizNext;
@@ -2054,7 +2116,7 @@ window.wizBack = () => { if (S.wizStep > 1) wizNext(S.wizStep - 1); else go("hom
 function renderSummary() {
   const z = S.draft.receiverZone;
   $("summaryCard").innerHTML = `<span class="lbl">ملخّص الطلب</span>
-    ${row("المستلم", $("rcvName").value)}
+    ${row("المستلم", S.draft.receiptMode ? "🧾 من صورة الريسيت" : $("rcvName").value)}
     ${row("المنطقة", z ? zoneLabel(z) : "—")}
     ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
     ${row("النوع", S.draft.kind + " × " + S.draft.pieces)}
@@ -2109,6 +2171,9 @@ async function submitOrder() {
   const sz = S.draft.senderZone, rz = S.draft.receiverZone;
   if (!sz) { wizNext(1); return toast("اختر منطقة الاستلام", "err"); }
   if (!rz) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
+  // من غير بيانات مستلم، الصورة هي المصدر الوحيد للعنوان — فإجبارية
+  if (S.draft.receiptMode && !S.images.some(i => i.url))
+    return toast("لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
 
   const branchId   = zoneBranchId(sz);
   const branchName = zoneBranchName(sz);
@@ -2125,17 +2190,23 @@ async function submitOrder() {
     const now = new Date().toISOString();
     const cod = parseFloat($("odCod").value) || 0;
 
+    const receipt = !!S.draft.receiptMode;
     const delivery = {
       receiverId: null,
-      receiverName : $("rcvName").value.trim(),
-      receiverPhone: $("rcvPhone").value.trim(),
-      receiverPhone2: $("rcvPhone2").value.trim(),
+      // في وضع الريسيت بنسيب نص واضح بدل الفاضي، عشان جداول الفرع
+      // والإدارة وتطبيق الطيار تبقى مفهومة وما تبانش خانة فاضية
+      receiverName : receipt ? "🧾 البيانات على صورة الريسيت" : $("rcvName").value.trim(),
+      receiverPhone: receipt ? "" : $("rcvPhone").value.trim(),
+      receiverPhone2: receipt ? "" : $("rcvPhone2").value.trim(),
       zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
       orderPrice: cod,
-      address: getAddr("rcvAddrW"),
-      lat: S.draft.rcvLat ?? null, lng: S.draft.rcvLng ?? null,
+      address: receipt ? `${zoneLabel(rz)} — العنوان على صورة الريسيت المرفقة`
+                       : getAddr("rcvAddrW"),
+      lat: receipt ? null : (S.draft.rcvLat ?? null),
+      lng: receipt ? null : (S.draft.rcvLng ?? null),
       note: $("odNote").value.trim(),
       status: "قيد التنفيذ",
+      receiverFromReceipt: receipt,
       images: S.images.map(i => i.url).filter(Boolean)
     };
 
@@ -2169,13 +2240,14 @@ async function submitOrder() {
       piecesCount: S.draft.pieces,
       goodsValue: parseFloat($("odValue").value) || 0,
       qrCode: orderNum,
+      receiverFromReceipt: receipt,
       timeline: { created: now }
     };
 
     await push(ref(db, "orders"), order);
 
-    // نحفظ المستلم للاقتراح في المرات الجاية
-    push(ref(db, `customers/${S.uid}/savedReceivers`), {
+    // نحفظ المستلم للاقتراح في المرات الجاية (مش في وضع الريسيت — مفيش بيانات نحفظها)
+    if (!receipt) push(ref(db, `customers/${S.uid}/savedReceivers`), {
       name: delivery.receiverName, phone: delivery.receiverPhone,
       phone2: delivery.receiverPhone2, address: delivery.address,
       zoneId: rz.id, lat: delivery.lat, lng: delivery.lng,

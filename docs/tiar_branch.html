@@ -813,6 +813,7 @@
               <div style="font-size:.75rem;color:var(--sky);direction:ltr;margin-top:1px">${d.receiverPhone || ""}</div>
               ${d.receiverPhone2 ? `<div style="font-size:.75rem;color:rgba(14,165,233,.8);direction:ltr;margin-top:1px">📱 ${d.receiverPhone2}</div>` : ""}
               <div style="font-size:.75rem;color:var(--muted);margin-top:1px">📍 ${d.zoneName || ""}${d.address ? " — " + d.address : ""}</div>
+              ${d.receiverFromReceipt ? `<div style="margin-top:3px;background:rgba(249,115,22,.15);color:var(--orange);font-weight:700;padding:2px 7px;border-radius:6px;font-size:.7rem;display:inline-block">🧾 العنوان على صورة الريسيت — افتح المرفقات</div>` : ""}
               <div style="font-size:.75rem;color:var(--green);font-weight:700;margin-top:1px">${d.zonePrice || 0} ج.م</div>
             </div>`).join("");
           return `<tr id="row-${o.id}">
@@ -865,6 +866,7 @@
               <div style="font-size:.75rem;color:var(--sky);direction:ltr;margin-top:1px">${d.receiverPhone || ""}</div>
               ${d.receiverPhone2 ? `<div style="font-size:.75rem;color:rgba(14,165,233,.8);direction:ltr;margin-top:1px">📱 ${d.receiverPhone2}</div>` : ""}
               <div style="font-size:.75rem;color:var(--muted);margin-top:1px">📍 ${d.zoneName || ""}${d.address ? " — " + d.address : ""}</div>
+              ${d.receiverFromReceipt ? `<div style="margin-top:3px;background:rgba(249,115,22,.15);color:var(--orange);font-weight:700;padding:2px 7px;border-radius:6px;font-size:.7rem;display:inline-block">🧾 العنوان على صورة الريسيت — افتح المرفقات</div>` : ""}
               <div style="font-size:.75rem;color:var(--green);font-weight:700;margin-top:1px">${d.zonePrice || 0} ج.م</div>
             </div>`).join("");
           return `<tr>
