@@ -615,26 +615,8 @@
        يُحدّث الـ geoSender و deliveries[].geo في Firebase بهدوء
     ──────────────────────────────────────────────────────────────────── */
     async function geocodeOrderInBackground(orderId, order) {
-      try {
-        const updates = {};
-        // geocode عنوان المرسل
-        if (order.senderAddress) {
-          const geo = await geocodeAddress(order.senderAddress);
-          if (geo) updates["geoSender"] = geo;
-        }
-        // geocode عناوين التسليم
-        const deliveries = order.deliveries || [];
-        for (let i = 0; i < deliveries.length; i++) {
-          if (deliveries[i].address) {
-            const geo = await geocodeAddress(deliveries[i].address);
-            if (geo) updates[`deliveries/${i}/geo`] = geo;
-          }
-          await new Promise(r => setTimeout(r, 1100)); // احترام rate limit Nominatim
-        }
-        if (Object.keys(updates).length > 0) {
-          await update(ref(db, "orders/" + orderId), updates);
-        }
-      } catch(e) { console.warn("geocodeOrderInBackground error:", e); }
+      /* اتوقف: الموقع بيتاخد من تطبيق العميل/التاجر مش من تخمين العنوان */
+      return;
     }
 
 
@@ -7905,7 +7887,7 @@
       <div class="sec-header">
         <span class="sec-title">🗺️ خريطة الطيارين والأوردرات</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <button onclick="_geocodeAllActiveOrders()" id="geocodeAllBtn" style="background:var(--sky,#0ea5e9);color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:600">🌍 تحديد مواقع الأوردرات</button>
+          
           <button onclick="_toggleOrdersPanel()" id="ordersPanelBtn" style="background:#f97316;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:600">📋 قائمة الأوردرات</button>
         </div>
       </div>
@@ -10155,7 +10137,7 @@
       <div style="padding:3px 0;border-top:1px solid #e2e8f0;margin-top:3px">
         <span style="font-weight:600;font-size:.8rem">${d.receiverName||"—"}</span>
         <span style="color:#64748b;font-size:.75rem;margin-right:4px">${d.zoneName||""}</span>
-        ${d.geo ? `<a href="#" onclick="event.preventDefault();_pilotMap.flyTo([${d.geo.lat},${d.geo.lng}],17,{animate:true})" style="font-size:.72rem;color:#3b82f6;margin-right:4px">📍 عرض</a>` : `<span style="font-size:.7rem;color:#ef4444">⚠️ بدون موقع</span>`}
+        ${_appGeoOfDeliv(d) ? `<a href="#" onclick="event.preventDefault();_pilotMap.flyTo([${_appGeoOfDeliv(d).lat},${_appGeoOfDeliv(d).lng}],17,{animate:true})" style="font-size:.72rem;color:#3b82f6;margin-right:4px">📍 عرض</a>` : `<span style="font-size:.7rem;color:#ef4444">⚠️ بدون موقع</span>`}
       </div>`).join("");
     return `<div style="text-align:right;direction:rtl;min-width:210px">
       <div style="font-weight:700;color:#3b82f6;font-size:1rem;margin-bottom:4px">📦 ${o.orderNum||"—"}</div>
@@ -10228,9 +10210,10 @@
       panelItems.push(o);
 
       // pin المرسل
-      if (o.geoSender?.lat) {
+      const _g = _appGeoOf(o);
+      if (_g) {
         seenS.add(id);
-        const lat=o.geoSender.lat, lng=o.geoSender.lng;
+        const lat=_g.lat, lng=_g.lng;
         if (_orderMarkers[id]) {
           _orderMarkers[id].setLatLng([lat,lng]);
           _orderMarkers[id].setIcon(_mkOrderSenderIcon(o.status,o.orderNum));
@@ -10246,13 +10229,14 @@
       // pins التسليم
       (o.deliveries||[]).forEach((d,i) => {
         const dk = id+"_"+i;
-        if (d.geo?.lat) {
+        const _dg = _appGeoOfDeliv(d);
+        if (_dg) {
           seenD.add(dk);
           if (_orderDelivMarkers[dk]) {
-            _orderDelivMarkers[dk].setLatLng([d.geo.lat,d.geo.lng]);
+            _orderDelivMarkers[dk].setLatLng([_dg.lat,_dg.lng]);
             _orderDelivMarkers[dk].getPopup()?.setContent(_delivPopupHtml(o,d,i));
           } else {
-            _orderDelivMarkers[dk] = L.marker([d.geo.lat,d.geo.lng], {icon:_mkOrderDelivIcon(d.status), zIndexOffset:400})
+            _orderDelivMarkers[dk] = L.marker([_dg.lat,_dg.lng], {icon:_mkOrderDelivIcon(d.status), zIndexOffset:400})
               .addTo(_layerOrders).bindPopup(_delivPopupHtml(o,d,i));
           }
         } else {
@@ -10278,9 +10262,9 @@
       return;
     }
     body.innerHTML = orders.map(o => {
-      const hasGeo = !!o.geoSender;
+      const hasGeo = !!_appGeoOf(o);
       const pilot  = o.pilotId ? (window._pilotsData||[]).find(p=>p.id===o.pilotId) : null;
-      const noGeoDeliv = (o.deliveries||[]).filter(d=>d.address&&!d.geo).length;
+      const noGeoDeliv = (o.deliveries||[]).filter(d=>d.address && !_appGeoOfDeliv(d)).length;
       const sColor = o.status==="جاري التوصيل" ? "#c2410c" : "#1d4ed8";
       const sBg    = o.status==="جاري التوصيل" ? "#fff7ed" : "#eff6ff";
       return `<div style="background:var(--panel,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:10px 12px;margin-bottom:8px">
@@ -10307,20 +10291,35 @@
     const snap = _lastOrdersSnap || {};
     const o = Object.entries(snap).map(([id,v])=>({id,...v})).find(x=>x.id===orderId);
     if (o?.geoSender?.lat) {
-      _pilotMap.flyTo([o.geoSender.lat, o.geoSender.lng], 16, {animate:true, duration:1});
+      _pilotMap.flyTo([_g.lat,_g.lng], 16, {animate:true, duration:1});
       setTimeout(()=>{ if (_orderMarkers[orderId]) _orderMarkers[orderId].openPopup(); }, 800);
     }
   };
 
   /* ── geocode helper ──────────────────────────────────────────────── */
+
+  /* ══════════════════════════════════════════════════════════════
+     مصدر الموقع على الخريطة = إحداثيات جاية من تطبيق العميل/التاجر فقط.
+     قبل كده كنا بنبعت نص العنوان لـ Nominatim عشان يخمّن مكانه، وده كان
+     بيحطّ الدبوس في مكان تقريبي غلط. الأوردر اللي مالوش إحداثيات
+     حقيقية بيتعرض كـ "بدون موقع" بدل ما نخمّنه.
+  ══════════════════════════════════════════════════════════════ */
+  function _appGeoOf(o) {
+    if (o && o.geoSender && o.geoSender.lat) return o.geoSender;
+    if (o && o.senderLat && o.senderLng) return { lat: o.senderLat, lng: o.senderLng, src: "app" };
+    return null;
+  }
+  function _appGeoOfDeliv(d) {
+    if (d && d.geo && d.geo.lat) return d.geo;
+    if (d && d.lat && d.lng) return { lat: d.lat, lng: d.lng, src: "app" };
+    return null;
+  }
+  window._appGeoOf = _appGeoOf; window._appGeoOfDeliv = _appGeoOfDeliv;
+
   async function _geocodeAddr(address) {
-    if (!address || address.trim().length < 3) return null;
-    // محاولة 1: مع "مصر"
-    let g = await _nominatim(address + " مصر");
-    if (g) return g;
-    // محاولة 2: بدون إضافة
-    await new Promise(r=>setTimeout(r,1100));
-    return await _nominatim(address);
+    /* التخمين اتوقف بقرار: العناوين بقت جاية من تطبيق العملاء/التجار
+       ومعاها إحداثيات حقيقية، والتقريب كان بيضلّل الفرع والطيار. */
+    return null;
   }
 
   async function _nominatim(q) {
@@ -10344,84 +10343,16 @@
   }
 
   /* ── geocode أوردر واحد يدوياً ──────────────────────────────────── */
-  window._geocodeSingleOrder = async function(orderId) {
-    _showMsg("⏳ جاري تحديد موقع الأوردر…");
-    const snap = _lastOrdersSnap || {};
-    const entry = Object.entries(snap).find(([id])=>id===orderId);
-    if (!entry) return;
-    const o = {id:orderId, ...entry[1]};
-    const fbFn = window._fbFunctions || {};
-    const updates = {};
-    if (o.senderAddress && !o.geoSender) {
-      const g = await _geocodeAddr(o.senderAddress);
-      if (g) updates["geoSender"] = g;
-    }
-    const deliveries = o.deliveries || [];
-    for (let i=0; i<deliveries.length; i++) {
-      if (deliveries[i].address && !deliveries[i].geo) {
-        const g = await _geocodeAddr(deliveries[i].address);
-        if (g) updates[`deliveries/${i}/geo`] = g;
-        await new Promise(r=>setTimeout(r,1100));
-      }
-    }
-    if (Object.keys(updates).length && window._db && fbFn.ref) {
-      try {
-        await window._update(fbFn.ref(window._db,"orders/"+orderId), updates);
-        _showMsg(`✅ تم تحديد موقع الأوردر ${o.orderNum||""}`, 3000);
-      } catch(e) { _showMsg(`❌ خطأ: ${e.message}`, 4000); }
-    } else {
-      _showMsg("⚠️ لم يتم العثور على إحداثيات — حاول تحديث العنوان ليكون أوضح (مثال: شارع التحرير، المنصورة)", 6000);
-    }
+  window._geocodeSingleOrder = async function() {
+    /* اتوقف: مفيش تخمين للعناوين — الموقع مصدره التطبيق */
+    _showMsg("ℹ️ الموقع بييجي من تطبيق العميل/التاجر — الأوردر ده مالوش إحداثيات لأنه اتكتب يدويًا", 6000);
   };
 
   /* ── geocode كل الأوردرات النشطة دفعة واحدة ────────────────────── */
   window._geocodeAllActiveOrders = async function() {
-    if (_geocodingActive) return;
-    _geocodingActive = true;
-    const btn = document.getElementById("geocodeAllBtn");
-    if (btn) { btn.disabled=true; btn.style.opacity=".6"; }
-
-    const snap = _lastOrdersSnap || {};
-    const active = new Set(["قيد التنفيذ","جاري التوصيل"]);
-    const orders = Object.entries(snap)
-      .map(([id,v])=>({id,...v}))
-      .filter(o => active.has(o.status) && (!o.geoSender || (o.deliveries||[]).some(d=>d.address&&!d.geo)));
-
-    if (!orders.length) {
-      _showMsg("✅ كل الأوردرات النشطة لديها مواقع محددة بالفعل", 3000);
-      _geocodingActive = false;
-      if (btn) { btn.disabled=false; btn.style.opacity="1"; }
-      return;
-    }
-
-    _showMsg(`⏳ جاري تحديد مواقع ${orders.length} أوردر… (كل أوردر يأخذ بضع ثوانٍ)`);
-    const fbFn = window._fbFunctions || {};
-    let done = 0;
-
-    for (const o of orders) {
-      const updates = {};
-      if (o.senderAddress && !o.geoSender) {
-        const g = await _geocodeAddr(o.senderAddress);
-        if (g) updates["geoSender"] = g;
-        await new Promise(r=>setTimeout(r,1100));
-      }
-      for (let i=0; i<(o.deliveries||[]).length; i++) {
-        if (o.deliveries[i].address && !o.deliveries[i].geo) {
-          const g = await _geocodeAddr(o.deliveries[i].address);
-          if (g) updates[`deliveries/${i}/geo`] = g;
-          await new Promise(r=>setTimeout(r,1100));
-        }
-      }
-      if (Object.keys(updates).length && window._db && fbFn.ref) {
-        try { await window._update(fbFn.ref(window._db,"orders/"+o.id), updates); } catch(e){}
-      }
-      done++;
-      _showMsg(`⏳ تم معالجة ${done} / ${orders.length} أوردر…`);
-    }
-
-    _showMsg(`✅ تم تحديد مواقع ${done} أوردر على الخريطة`, 4000);
-    _geocodingActive = false;
-    if (btn) { btn.disabled=false; btn.style.opacity="1"; }
+    /* اتوقف: مفيش تخمين للعناوين. الأوردرات اللي بدون موقع هي اللي
+       اتكتبت يدويًا من اللوحة من غير ما حد يحدد نقطة على الخريطة. */
+    _showMsg("ℹ️ الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات", 6000);
   };
 
   /* ── toggle panel ────────────────────────────────────────────────── */
@@ -10455,7 +10386,7 @@
       const snap = _lastOrdersSnap || {};
       const active = new Set(["قيد التنفيذ","جاري التوصيل"]);
       const activeOrders = Object.values(snap).filter(o=>active.has(o.status));
-      const noGeo = activeOrders.filter(o=>!o.geoSender).length;
+      const noGeo = activeOrders.filter(o => !_appGeoOf(o)).length;
       const allPilots = window._pilotsData || [];
       const waitingCount = allPilots.filter(p=>p.pilotStatus==="waiting").length;
       const deliveringCount = allPilots.filter(p=>p.pilotStatus==="delivering").length;
@@ -10464,7 +10395,7 @@
         <span style="background:#f0fdf4;color:#15803d;padding:3px 10px;border-radius:20px;font-size:.8rem">🟢 ${waitingCount} متاح</span>
         <span style="background:#eff6ff;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">🛵 ${deliveringCount} في أوردر</span>
         <span style="background:#fef2f2;color:#b91c1c;padding:3px 10px;border-radius:20px;font-size:.8rem">🖐️ ${onLeaveCount} في إذن</span>
-        ${noGeo ? `<span onclick="_geocodeAllActiveOrders()" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${noGeo} أوردر بدون موقع — اضغط للتحديد</span>` : ""}
+        ${noGeo ? `<span title="الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${noGeo} أوردر بدون موقع</span>` : ""}
         <span style="background:#f8fafc;color:#64748b;padding:3px 10px;border-radius:20px;font-size:.8rem">🔄 ${new Date().toLocaleTimeString("ar-EG")}</span>
         <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">⚡ تتبع فوري</span>
         <span style="margin-right:auto;display:flex;gap:5px">

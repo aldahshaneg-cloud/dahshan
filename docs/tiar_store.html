@@ -6,6 +6,8 @@
   <title>طيّار | بوابة المحلات</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -420,6 +422,9 @@
       $("delivContainer").innerHTML = "";
       window._rowImages = {};
       window._delivCount = 0;
+      // دبابيس التسليم بتخصّ الطرود اللي اتمسحت — نقطة الاستلام بتفضل
+      // لأنها غالبًا نفس المحل في كل الطلبات
+      Object.keys(window._geoPins || {}).forEach(k => { if (k !== "pickup") delete window._geoPins[k]; });
       const btn = $("saveBtn");
       if (btn) { btn.disabled = false; btn.textContent = "📤 إرسال الطلب"; }
       const tot = $("orderTotal");
@@ -427,6 +432,9 @@
       // عنوان الاستلام: يتجدّد مع كل طلب، ومعبّى تلقائياً من بيانات المحل المحفوظة
       const u = window._currentUser || {};
       window.renderAddressWidget("pickupAddrWidget", { required: true, value: u.shopAddress || "" });
+      // موقع المحل المحفوظ (لو المدير حفظه من لوحة الإدارة) يبقى نقطة البداية
+      if (u.shopLat && u.shopLng) window._geoPins.pickup = { lat: u.shopLat, lng: u.shopLng };
+      window.renderGeoPicker("pickupGeoBox", "pickup", "نقطة الاستلام");
       addRow();
     }
 
@@ -808,6 +816,78 @@
           ]
     };
 
+    /* ══════════════════════════════════════════════════════════════
+       تحديد الموقع على الخريطة
+       الخرايط في لوحات الإدارة والفرع والكول سنتر بقت تعرض الأوردر من
+       الإحداثيات اللي بتتبعت من هنا فقط — من غير أي تخمين لمكان العنوان
+       (التخمين كان بيحطّ الدبوس في مكان تقريبي غلط). فالمحل لازم يحدّد
+       نقطة الاستلام، وكل طرد ياخد نقطة تسليم لو متاحة.
+    ══════════════════════════════════════════════════════════════ */
+    window._geoPins = {};      // { key: {lat, lng} }
+    let _pinMap = null, _pinMarker = null, _pinKey = null, _pinTmp = null;
+
+    window.renderGeoPicker = function(boxId, key, label) {
+      const el = document.getElementById(boxId); if (!el) return;
+      const p = window._geoPins[key];
+      el.innerHTML = `
+        <button type="button" class="geo-btn" onclick="openPinMap('${key}')"
+          style="width:100%;padding:9px;border-radius:9px;cursor:pointer;font-weight:700;font-size:.84rem;
+          border:1px solid ${p ? "rgba(34,197,94,.5)" : "var(--border,#334155)"};
+          background:${p ? "rgba(34,197,94,.12)" : "transparent"};color:inherit">
+          ${p ? "✅ " + label + " محدّدة على الخريطة" : "📍 حدّد " + label + " على الخريطة"}
+        </button>
+        ${p ? `<div style="font-size:.7rem;opacity:.65;text-align:center;margin-top:4px;direction:ltr">
+                ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>` : ""}`;
+    };
+
+    window.openPinMap = function(key) {
+      _pinKey = key;
+      const cur = window._geoPins[key];
+      _pinTmp = cur ? { ...cur } : null;
+      const ov = document.getElementById("pinMapOverlay");
+      ov.style.display = "flex";
+      setTimeout(() => {
+        const host = document.getElementById("pinMapHost");
+        host.innerHTML = ""; host._leaflet_id = null;
+        if (_pinMap) { try { _pinMap.remove(); } catch (_) {} }
+        const start = cur ? [cur.lat, cur.lng] : [30.0444, 31.2357];
+        _pinMap = L.map(host, { attributionControl: false }).setView(start, cur ? 16 : 11);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(_pinMap);
+        const icon = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 30],
+          html: `<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))">📍</div>` });
+        _pinMarker = L.marker(start, { draggable: true, icon }).addTo(_pinMap);
+        const set = ll => { _pinTmp = { lat: ll.lat, lng: ll.lng };
+          document.getElementById("pinMapCoords").textContent = `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`; };
+        if (cur) set({ lat: cur.lat, lng: cur.lng });
+        else document.getElementById("pinMapCoords").textContent = "اضغط على الخريطة لتحديد المكان";
+        _pinMarker.on("dragend", () => set(_pinMarker.getLatLng()));
+        _pinMap.on("click", e => { _pinMarker.setLatLng(e.latlng); set(e.latlng); });
+        _pinMap.invalidateSize();
+      }, 120);
+    };
+
+    window.pinMapLocate = function() {
+      if (!navigator.geolocation) { toast("المتصفح مش بيدعم تحديد الموقع", "err"); return; }
+      navigator.geolocation.getCurrentPosition(p => {
+        const ll = { lat: p.coords.latitude, lng: p.coords.longitude };
+        const acc = Math.round(p.coords.accuracy || 0);
+        _pinTmp = ll; _pinMarker.setLatLng(ll); _pinMap.setView(ll, acc > 300 ? 14 : 17);
+        document.getElementById("pinMapCoords").textContent =
+          `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+        // الأجهزة المكتبية بتحدد الموقع من الإنترنت مش من GPS، فبتبعد كتير
+        if (acc > 300) toast(`الموقع تقريبي (±${acc} م) — اسحب الدبوس على المكان بالظبط`, "err");
+      }, () => toast("تعذّر تحديد الموقع", "err"), { enableHighAccuracy: true, timeout: 9000 });
+    };
+
+    window.savePinMap = function() {
+      if (!_pinTmp) { toast("حدّد المكان على الخريطة الأول", "err"); return; }
+      window._geoPins[_pinKey] = { ..._pinTmp };
+      if (_pinKey === "pickup") window.renderGeoPicker("pickupGeoBox", "pickup", "نقطة الاستلام");
+      else { const n = _pinKey.replace("r", ""); window.renderGeoPicker(`rGeoBox-${n}`, _pinKey, "نقطة التسليم"); }
+      closePinMap(); toast("تم حفظ الموقع ✓", "ok");
+    };
+    window.closePinMap = function() { document.getElementById("pinMapOverlay").style.display = "none"; };
+
     window.renderAddressWidget = function(containerId, opts = {}) {
       const el = document.getElementById(containerId);
       if (!el) return;
@@ -959,6 +1039,7 @@
         <div class="fg">
           <label>عنوان التوصيل</label>
           <div id="rAddrWidget-${n}"></div>
+          <div id="rGeoBox-${n}" style="margin-top:8px"></div>
         </div>
         <div class="fg">
           <label>سعر التوصيل</label>
@@ -983,6 +1064,7 @@
         </div>`;
       $("delivContainer").appendChild(div);
       window.renderAddressWidget(`rAddrWidget-${n}`, { required: false });
+      window.renderGeoPicker(`rGeoBox-${n}`, `r${n}`, "نقطة التسليم");
       // نبدأ من محافظة/مدينة المحل — أغلب التوصيلات في نفس المنطقة، فالمحل
       // ما يضطرش يختارهم مع كل طرد. التفاصيل تفضل فاضية عشان عنوان العميل.
       const _u = window._currentUser || {};
@@ -1167,11 +1249,15 @@
           return;
         }
 
+        // إحداثيات التسليم — الخرايط في اللوحات بتقرا منها مباشرة
+        const _rgeo = window._geoPins[`r${n}`] || null;
         deliveries.push({
           receiverId: null, receiverName: name,
           receiverPhone: phone, receiverPhone2: phone2,
           zoneId, zoneName, zonePrice: price,
           orderPrice, address: addr, note, status: "قيد التنفيذ",
+          ...(_rgeo ? { lat: _rgeo.lat, lng: _rgeo.lng,
+                        geo: { lat: _rgeo.lat, lng: _rgeo.lng, src: "store-pin" } } : {}),
           // الروابط بس — أي صورة لسه بترفع بتتستبعد
           images: (window._rowImages[n] || []).filter(x => typeof x === "string")
         });
@@ -1188,6 +1274,15 @@
         : { name: u.shopName, phone: u.shopPhone, phone2: u.shopPhone2 || "" };
       if (_elsewhere && !_snd.name)  { toast("يرجى إدخال اسم المُرسِل", "err"); await _storeDiag({ step: "no-sender-name" }); return; }
       if (_elsewhere && !_snd.phone) { toast("يرجى إدخال هاتف المُرسِل", "err"); await _storeDiag({ step: "no-sender-phone" }); return; }
+
+      // من غير نقطة استلام على الخريطة، الأوردر مش هيظهر على خريطة الفرع
+      // والطيار هيدوّر على العنوان بنفسه — فبقت إجبارية
+      if (!window._geoPins.pickup) {
+        toast("حدّد نقطة الاستلام على الخريطة — الطيار بيروح عليها", "err");
+        document.getElementById("pickupGeoBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        await _storeDiag({ step: "no-pickup-pin" });
+        return;
+      }
 
       await _storeDiag({ step: "validated", branchId: u.branchId, parcels: deliveries.length });
 
@@ -1211,6 +1306,11 @@
           senderPhone : _snd.phone,
           senderPhone2: _snd.phone2,
           senderAddress: pickupAddress || u.shopAddress || "",
+          ...(window._geoPins.pickup ? {
+            senderLat: window._geoPins.pickup.lat,
+            senderLng: window._geoPins.pickup.lng,
+            geoSender: { ...window._geoPins.pickup, src: "store-pin" }
+          } : {}),
           branchId    : u.branchId,
           branchName  : u.branchName,
           notes, deliveries,
@@ -2205,6 +2305,7 @@
         <div class="fg" style="margin:10px 0 0">
           <label>📍 عنوان الاستلام</label>
           <div id="pickupAddrWidget"></div>
+          <div id="pickupGeoBox" style="margin-top:8px"></div>
         </div>
       </div>
     </div>
@@ -2300,6 +2401,30 @@
 </div><!-- /#app -->
 
 <div id="toast"></div>
+
+<!-- مودال تحديد الموقع على الخريطة -->
+<div id="pinMapOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+     z-index:9000;align-items:center;justify-content:center;padding:12px">
+  <div style="background:var(--card,#0f172a);border:1px solid var(--border,#334155);border-radius:16px;
+       width:100%;max-width:760px;height:86vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border,#334155)">
+      <b style="flex:1;font-size:.95rem">📍 حدّد المكان بدقة على الخريطة</b>
+      <button type="button" onclick="closePinMap()" style="background:none;border:none;color:inherit;
+              font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <div style="flex:1;position:relative">
+      <div id="pinMapHost" style="position:absolute;inset:0"></div>
+      <button type="button" onclick="pinMapLocate()" style="position:absolute;bottom:14px;left:14px;z-index:500;
+              width:44px;height:44px;border-radius:12px;border:none;background:#fff;color:#111;
+              font-size:1.1rem;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.4)">🎯</button>
+    </div>
+    <div style="padding:12px 14px;border-top:1px solid var(--border,#334155)">
+      <div id="pinMapCoords" style="text-align:center;font-size:.78rem;opacity:.7;margin-bottom:9px;direction:ltr">—</div>
+      <button type="button" onclick="savePinMap()" style="width:100%;padding:12px;border-radius:11px;border:none;
+              background:#e8192c;color:#fff;font-weight:800;font-size:.95rem;cursor:pointer">حفظ الموقع</button>
+    </div>
+  </div>
+</div>
 
 
 

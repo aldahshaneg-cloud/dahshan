@@ -5708,16 +5708,8 @@
       return null;
     }
     async function geocodeOrderInBackground(orderId, order) {
-      try {
-        const ups = {};
-        if (order.senderAddress) { const g = await geocodeAddress(order.senderAddress); if (g) ups["geoSender"] = g; }
-        const deliveries = order.deliveries || [];
-        for (let i = 0; i < deliveries.length; i++) {
-          if (deliveries[i].address) { const g = await geocodeAddress(deliveries[i].address); if (g) ups[`deliveries/${i}/geo`] = g; }
-          await new Promise(r => setTimeout(r, 1100));
-        }
-        if (Object.keys(ups).length > 0) await update(ref(db, "orders/" + orderId), ups);
-      } catch(e) { console.warn("geocodeOrder:", e); }
+      /* اتوقف: الموقع بيتاخد من تطبيق العميل/التاجر مش من تخمين العنوان */
+      return;
     }
 
     window.closeModal = function(type) {
@@ -6873,7 +6865,7 @@
       <div class="sec-header">
         <span class="sec-title">🗺️ خريطة الطيارين والأوردرات</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <button onclick="_geocodeAllActiveOrders()" id="geocodeAllBtn" style="background:var(--sky,#0ea5e9);color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:600">🌍 تحديد مواقع الأوردرات</button>
+          
           <button onclick="_toggleOrdersPanel()" id="ordersPanelBtn" style="background:#f97316;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:600">📋 قائمة الأوردرات</button>
         </div>
       </div>
@@ -8254,7 +8246,7 @@ window.clearBrDeliveredFilters = function() {
 
   function _orderSenderPopupHtml(o) {
     const pilot=o.pilotId?(window._pilotsData||[]).find(p=>p.id===o.pilotId):null;
-    const dList=(o.deliveries||[]).map((d,i)=>`<div style="padding:3px 0;border-top:1px solid #e2e8f0;margin-top:3px"><span style="font-weight:600;font-size:.8rem">${d.receiverName||"—"}</span> <span style="color:#64748b;font-size:.75rem">${d.zoneName||""}</span>${d.geo?` <a href="#" onclick="event.preventDefault();_pilotMap.flyTo([${d.geo.lat},${d.geo.lng}],17,{animate:true})" style="font-size:.72rem;color:#3b82f6">📍 عرض</a>`:`<span style="font-size:.7rem;color:#ef4444"> ⚠️ بدون موقع</span>`}</div>`).join("");
+    const dList=(o.deliveries||[]).map((d,i)=>`<div style="padding:3px 0;border-top:1px solid #e2e8f0;margin-top:3px"><span style="font-weight:600;font-size:.8rem">${d.receiverName||"—"}</span> <span style="color:#64748b;font-size:.75rem">${d.zoneName||""}</span>${_appGeoOfDeliv(d)?` <a href="#" onclick="event.preventDefault();_pilotMap.flyTo([${_appGeoOfDeliv(d).lat},${_appGeoOfDeliv(d).lng}],17,{animate:true})" style="font-size:.72rem;color:#3b82f6">📍 عرض</a>`:`<span style="font-size:.7rem;color:#ef4444"> ⚠️ بدون موقع</span>`}</div>`).join("");
     return `<div style="text-align:right;direction:rtl;min-width:210px">
       <div style="font-weight:700;color:#3b82f6;font-size:1rem;margin-bottom:4px">📦 ${o.orderNum||"—"}</div>
       <div style="font-size:.85rem;font-weight:600">${o.senderName||"—"}</div>
@@ -8313,17 +8305,19 @@ window.clearBrDeliveredFilters = function() {
         return;
       }
       panelItems.push(o);
-      if (o.geoSender?.lat) {
+      const _g = _appGeoOf(o);
+      if (_g) {
         seenS.add(id);
-        if (_orderMarkers[id]) { _orderMarkers[id].setLatLng([o.geoSender.lat,o.geoSender.lng]); _orderMarkers[id].setIcon(_mkOrderSenderIcon(o.status,o.orderNum)); _orderMarkers[id].getPopup()?.setContent(_orderSenderPopupHtml(o)); }
-        else { _orderMarkers[id]=L.marker([o.geoSender.lat,o.geoSender.lng],{icon:_mkOrderSenderIcon(o.status,o.orderNum),zIndexOffset:500}).addTo(_layerOrders).bindPopup(_orderSenderPopupHtml(o)); }
+        if (_orderMarkers[id]) { _orderMarkers[id].setLatLng([_g.lat,_g.lng]); _orderMarkers[id].setIcon(_mkOrderSenderIcon(o.status,o.orderNum)); _orderMarkers[id].getPopup()?.setContent(_orderSenderPopupHtml(o)); }
+        else { _orderMarkers[id]=L.marker([_g.lat,_g.lng],{icon:_mkOrderSenderIcon(o.status,o.orderNum),zIndexOffset:500}).addTo(_layerOrders).bindPopup(_orderSenderPopupHtml(o)); }
       } else { if (_orderMarkers[id]) { _layerOrders.removeLayer(_orderMarkers[id]); delete _orderMarkers[id]; } }
       (o.deliveries||[]).forEach((d,i)=>{
         const dk=id+"_"+i;
-        if (d.geo?.lat) {
+        const _dg = _appGeoOfDeliv(d);
+        if (_dg) {
           seenD.add(dk);
-          if (_orderDelivMarkers[dk]) { _orderDelivMarkers[dk].setLatLng([d.geo.lat,d.geo.lng]); _orderDelivMarkers[dk].getPopup()?.setContent(_delivPopupHtml(o,d,i)); }
-          else { _orderDelivMarkers[dk]=L.marker([d.geo.lat,d.geo.lng],{icon:_mkOrderDelivIcon(d.status),zIndexOffset:400}).addTo(_layerOrders).bindPopup(_delivPopupHtml(o,d,i)); }
+          if (_orderDelivMarkers[dk]) { _orderDelivMarkers[dk].setLatLng([_dg.lat,_dg.lng]); _orderDelivMarkers[dk].getPopup()?.setContent(_delivPopupHtml(o,d,i)); }
+          else { _orderDelivMarkers[dk]=L.marker([_dg.lat,_dg.lng],{icon:_mkOrderDelivIcon(d.status),zIndexOffset:400}).addTo(_layerOrders).bindPopup(_delivPopupHtml(o,d,i)); }
         } else { if (_orderDelivMarkers[dk]) { _layerOrders.removeLayer(_orderDelivMarkers[dk]); delete _orderDelivMarkers[dk]; } }
       });
     });
@@ -8338,8 +8332,8 @@ window.clearBrDeliveredFilters = function() {
     if (cnt) cnt.textContent=orders.length;
     if (!orders.length) { body.innerHTML=`<div style="text-align:center;color:#94a3b8;padding:30px 10px;font-size:.85rem">لا توجد أوردرات نشطة</div>`; return; }
     body.innerHTML=orders.map(o=>{
-      const hasGeo=!!o.geoSender, pilot=o.pilotId?(window._pilotsData||[]).find(p=>p.id===o.pilotId):null;
-      const noGeoDeliv=(o.deliveries||[]).filter(d=>d.address&&!d.geo).length;
+      const hasGeo = !!_appGeoOf(o), pilot=o.pilotId?(window._pilotsData||[]).find(p=>p.id===o.pilotId):null;
+      const noGeoDeliv=(o.deliveries||[]).filter(d=>d.address && !_appGeoOfDeliv(d)).length;
       const sColor=o.status==="جاري التوصيل"?"#c2410c":"#1d4ed8", sBg=o.status==="جاري التوصيل"?"#fff7ed":"#eff6ff";
       return `<div style="background:var(--panel,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:10px 12px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
@@ -8360,14 +8354,32 @@ window.clearBrDeliveredFilters = function() {
 
   window._flyToOrder = function(orderId) {
     const o=Object.entries(_lastOrdersSnap||{}).map(([id,v])=>({id,...v})).find(x=>x.id===orderId);
-    if (o?.geoSender?.lat) { _pilotMap.flyTo([o.geoSender.lat,o.geoSender.lng],16,{animate:true,duration:1}); setTimeout(()=>{ if(_orderMarkers[orderId])_orderMarkers[orderId].openPopup(); },800); }
+    if (o?.geoSender?.lat) { _pilotMap.flyTo([_g.lat,_g.lng],16,{animate:true,duration:1}); setTimeout(()=>{ if(_orderMarkers[orderId])_orderMarkers[orderId].openPopup(); },800); }
   };
 
+
+  /* ══════════════════════════════════════════════════════════════
+     مصدر الموقع على الخريطة = إحداثيات جاية من تطبيق العميل/التاجر فقط.
+     قبل كده كنا بنبعت نص العنوان لـ Nominatim عشان يخمّن مكانه، وده كان
+     بيحطّ الدبوس في مكان تقريبي غلط. الأوردر اللي مالوش إحداثيات
+     حقيقية بيتعرض كـ "بدون موقع" بدل ما نخمّنه.
+  ══════════════════════════════════════════════════════════════ */
+  function _appGeoOf(o) {
+    if (o && o.geoSender && o.geoSender.lat) return o.geoSender;
+    if (o && o.senderLat && o.senderLng) return { lat: o.senderLat, lng: o.senderLng, src: "app" };
+    return null;
+  }
+  function _appGeoOfDeliv(d) {
+    if (d && d.geo && d.geo.lat) return d.geo;
+    if (d && d.lat && d.lng) return { lat: d.lat, lng: d.lng, src: "app" };
+    return null;
+  }
+  window._appGeoOf = _appGeoOf; window._appGeoOfDeliv = _appGeoOfDeliv;
+
   async function _geocodeAddr(address) {
-    if (!address||address.trim().length<3) return null;
-    let g=await _nominatim(address+" مصر"); if (g) return g;
-    await new Promise(r=>setTimeout(r,1100));
-    return await _nominatim(address);
+    /* التخمين اتوقف بقرار: العناوين بقت جاية من تطبيق العملاء/التجار
+       ومعاها إحداثيات حقيقية، والتقريب كان بيضلّل الفرع والطيار. */
+    return null;
   }
   async function _nominatim(q) {
     try {
@@ -8379,44 +8391,15 @@ window.clearBrDeliveredFilters = function() {
   }
   function _showMsg(text,dur=0) { const el=document.getElementById("map-geocode-msg"); if(!el)return; el.style.display="block"; el.textContent=text; if(dur)setTimeout(()=>{el.style.display="none";},dur); }
 
-  window._geocodeSingleOrder = async function(orderId) {
-    _showMsg("⏳ جاري تحديد موقع الأوردر…");
-    const entry=Object.entries(_lastOrdersSnap||{}).find(([id])=>id===orderId);
-    if (!entry) return;
-    const o={id:orderId,...entry[1]}, fbFn=window._fbFunctions||{}, updates={};
-    if (o.senderAddress&&!o.geoSender) { const g=await _geocodeAddr(o.senderAddress); if(g)updates["geoSender"]=g; }
-    for (let i=0;i<(o.deliveries||[]).length;i++) {
-      if (o.deliveries[i].address&&!o.deliveries[i].geo) { const g=await _geocodeAddr(o.deliveries[i].address); if(g)updates[`deliveries/${i}/geo`]=g; await new Promise(r=>setTimeout(r,1100)); }
-    }
-    if (Object.keys(updates).length&&window._db&&fbFn.ref) {
-      try { await window._update(fbFn.ref(window._db,"orders/"+orderId),updates); _showMsg(`✅ تم تحديد موقع الأوردر ${o.orderNum||""}`,3000); }
-      catch(e) { _showMsg(`❌ خطأ: ${e.message}`,4000); }
-    } else { _showMsg("⚠️ لم يتم العثور على إحداثيات — حاول تحديث العنوان (مثال: شارع التحرير، المنصورة)",6000); }
+  window._geocodeSingleOrder = async function() {
+    /* اتوقف: مفيش تخمين للعناوين — الموقع مصدره التطبيق */
+    _showMsg("ℹ️ الموقع بييجي من تطبيق العميل/التاجر — الأوردر ده مالوش إحداثيات لأنه اتكتب يدويًا", 6000);
   };
 
   window._geocodeAllActiveOrders = async function() {
-    if (_geocodingActive) return;
-    _geocodingActive=true;
-    const btn=document.getElementById("geocodeAllBtn");
-    if(btn){btn.disabled=true;btn.style.opacity=".6";}
-    const branchId=window._currentUser?.branchId;
-    const active=new Set(["قيد التنفيذ","جاري التوصيل"]);
-    const orders=Object.entries(_lastOrdersSnap||{}).map(([id,v])=>({id,...v}))
-      .filter(o=>(!branchId||o.branchId===branchId)&&active.has(o.status)&&(!o.geoSender||(o.deliveries||[]).some(d=>d.address&&!d.geo)));
-    if (!orders.length) { _showMsg("✅ كل أوردرات الفرع النشطة لديها مواقع بالفعل",3000); _geocodingActive=false; if(btn){btn.disabled=false;btn.style.opacity="1";} return; }
-    _showMsg(`⏳ جاري تحديد مواقع ${orders.length} أوردر…`);
-    const fbFn=window._fbFunctions||{}; let done=0;
-    for (const o of orders) {
-      const updates={};
-      if (o.senderAddress&&!o.geoSender) { const g=await _geocodeAddr(o.senderAddress); if(g)updates["geoSender"]=g; await new Promise(r=>setTimeout(r,1100)); }
-      for (let i=0;i<(o.deliveries||[]).length;i++) {
-        if (o.deliveries[i].address&&!o.deliveries[i].geo) { const g=await _geocodeAddr(o.deliveries[i].address); if(g)updates[`deliveries/${i}/geo`]=g; await new Promise(r=>setTimeout(r,1100)); }
-      }
-      if (Object.keys(updates).length&&window._db&&fbFn.ref) { try{await window._update(fbFn.ref(window._db,"orders/"+o.id),updates);}catch(e){} }
-      done++; _showMsg(`⏳ تم معالجة ${done} / ${orders.length} أوردر…`);
-    }
-    _showMsg(`✅ تم تحديد مواقع ${done} أوردر على الخريطة`,4000);
-    _geocodingActive=false; if(btn){btn.disabled=false;btn.style.opacity="1";}
+    /* اتوقف: مفيش تخمين للعناوين. الأوردرات اللي بدون موقع هي اللي
+       اتكتبت يدويًا من اللوحة من غير ما حد يحدد نقطة على الخريطة. */
+    _showMsg("ℹ️ الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات", 6000);
   };
 
   window._toggleOrdersPanel = function() {
@@ -8440,7 +8423,7 @@ window.clearBrDeliveredFilters = function() {
       const branchId=window._currentUser?.branchId;
       const active=new Set(["قيد التنفيذ","جاري التوصيل"]);
       const activeOrders=Object.values(_lastOrdersSnap||{}).filter(o=>(!branchId||o.branchId===branchId)&&active.has(o.status));
-      const noGeo=activeOrders.filter(o=>!o.geoSender).length;
+      const noGeo=activeOrders.filter(o => !_appGeoOf(o)).length;
       const allPilots=window._pilotsData||[];
       const waitingCount=allPilots.filter(p=>p.pilotStatus==="waiting").length;
       const deliveringCount=allPilots.filter(p=>p.pilotStatus==="delivering").length;
@@ -8449,7 +8432,7 @@ window.clearBrDeliveredFilters = function() {
         <span style="background:#f0fdf4;color:#15803d;padding:3px 10px;border-radius:20px;font-size:.8rem">🟢 ${waitingCount} متاح</span>
         <span style="background:#eff6ff;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">🛵 ${deliveringCount} في أوردر</span>
         <span style="background:#fef2f2;color:#b91c1c;padding:3px 10px;border-radius:20px;font-size:.8rem">🖐️ ${onLeaveCount} في إذن</span>
-        ${noGeo?`<span onclick="_geocodeAllActiveOrders()" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${noGeo} أوردر بدون موقع</span>`:""}
+        ${noGeo?`<span title="الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${noGeo} أوردر بدون موقع</span>`:""}
         <span style="background:#f8fafc;color:#64748b;padding:3px 10px;border-radius:20px;font-size:.8rem">🔄 ${new Date().toLocaleTimeString("ar-EG")}</span>
         <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">⚡ تتبع فوري</span>
         <span style="margin-right:auto;display:flex;gap:5px">
@@ -8484,7 +8467,6 @@ window.clearBrDeliveredFilters = function() {
       _poll(); const iv=setInterval(_poll,1000); _mapFbUnsub=()=>clearInterval(iv);
     }
     _startMapTick();
-    setTimeout(()=>{ if(!_geocodingActive)_geocodeAllActiveOrders(); },2000);
   };
 
   document.addEventListener("visibilitychange",()=>{
