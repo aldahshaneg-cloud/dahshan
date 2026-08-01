@@ -1,0 +1,2373 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <title>الدهشان | تطبيق العملاء</title>
+
+  <link rel="manifest" href="customer-manifest.json" />
+  <link rel="icon" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="الدهشان" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   الدهشان — تطبيق العميل
+   صفحة واحدة موبايل-first على نفس قاعدة بيانات النظام (aldahshaneg).
+   الألوان مأخوذة من الموك-أب: أسود عميق + أحمر الدهشان.
+══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#0a0a0b; --bg2:#000; --card:#141416; --card2:#1b1b1f; --line:#232328;
+  --red:#e8192c; --red2:#ff2d42; --txt:#fff; --muted:#8b8b93;
+  --green:#22c55e; --orange:#f59e0b; --blue:#3b82f6;
+  --r:16px; --r2:22px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg2);color:var(--txt);
+  font-family:'Tajawal',system-ui,sans-serif;overscroll-behavior-y:none}
+body{max-width:520px;margin:0 auto;min-height:100vh;position:relative;overflow-x:hidden}
+button,input,select,textarea{font-family:inherit;color:inherit}
+input,select,textarea{background:var(--card2);border:1px solid var(--line);
+  border-radius:12px;padding:12px 14px;width:100%;font-size:15px;outline:none}
+input:focus,select,textarea:focus{border-color:#3a3a42}
+input::placeholder,textarea::placeholder{color:#5a5a63}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238b8b93' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:left 14px center;padding-left:34px}
+a{color:var(--red);text-decoration:none}
+
+/* ── الشاشات ─────────────────────────────────────────────── */
+.screen{display:none;min-height:100vh;flex-direction:column}
+.screen.on{display:flex}
+.pad{padding:16px}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(96px + var(--safe-b))}
+
+/* ── هيدر ────────────────────────────────────────────────── */
+.hd{display:flex;align-items:center;gap:12px;padding:16px 16px 10px;position:sticky;top:0;
+  background:linear-gradient(180deg,var(--bg2) 70%,transparent);z-index:20}
+.hd h2{margin:0;font-size:19px;font-weight:800;flex:1}
+.hd .sub{font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+.ico-btn{width:38px;height:38px;border-radius:12px;background:var(--card);border:1px solid var(--line);
+  display:grid;place-items:center;cursor:pointer;flex:none;font-size:17px}
+
+/* ── أزرار ──────────────────────────────────────────────── */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:15px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;
+  background:var(--red);color:#fff;box-shadow:0 6px 20px rgba(232,25,44,.28)}
+.btn:active{transform:scale(.985)}
+.btn[disabled]{opacity:.55;box-shadow:none}
+.btn.ghost{background:var(--card);color:var(--txt);border:1px solid var(--line);box-shadow:none}
+.btn.wht{background:#fff;color:#111;box-shadow:0 6px 22px rgba(255,255,255,.12)}
+.btn.sm{padding:11px;font-size:14px;border-radius:12px}
+
+/* ── كروت ───────────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.card+.card{margin-top:12px}
+.lbl{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px;display:block}
+
+/* ── حقل بأيقونة (زي الموك-أب) ──────────────────────────── */
+.fld{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+.fld .fi{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:rgba(232,25,44,.12);color:var(--red);font-size:17px}
+.fld .fb{flex:1;min-width:0}
+.fld .fb b{display:block;font-size:13px;font-weight:700;margin-bottom:2px}
+.fld input,.fld textarea,.fld select{background:transparent;border:none;padding:0;font-size:15px;border-radius:0}
+.fld input:disabled{color:var(--muted)}
+
+/* ── شاشة البداية ───────────────────────────────────────── */
+#s-splash{background:#000;position:relative;justify-content:flex-end}
+.sp-slide{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;opacity:0;transition:opacity .45s;pointer-events:none}
+.sp-slide.on{opacity:1}
+.sp-logo{width:74%;max-width:330px;margin-top:14vh;filter:drop-shadow(0 0 26px rgba(232,25,44,.45))}
+.sp-tag{font-size:19px;font-weight:700;margin-top:16px;text-align:center}
+.sp-hero{position:absolute;bottom:0;left:0;right:0;width:100%;object-fit:cover;
+  mask-image:linear-gradient(180deg,transparent,#000 22%);-webkit-mask-image:linear-gradient(180deg,transparent,#000 22%)}
+.sp-foot{position:relative;z-index:3;padding:0 22px calc(26px + var(--safe-b))}
+.dots{display:flex;gap:7px;justify-content:center;margin-top:16px}
+.dots i{width:7px;height:7px;border-radius:50%;background:#3a3a42;transition:.25s}
+.dots i.on{background:var(--red);width:20px;border-radius:4px}
+
+/* ── تسجيل الدخول ───────────────────────────────────────── */
+.why{display:flex;gap:10px;margin-top:18px}
+.why div{flex:1;text-align:center}
+.why .wi{width:44px;height:44px;margin:0 auto 8px;border-radius:14px;display:grid;place-items:center;
+  border:1.5px solid rgba(232,25,44,.45);color:var(--red);font-size:19px}
+.why b{font-size:12.5px;display:block}
+.why span{font-size:11px;color:var(--muted);line-height:1.5;display:block;margin-top:3px}
+.sep{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:20px 0 4px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ── ستيبر ──────────────────────────────────────────────── */
+.stepper{display:flex;align-items:center;margin:6px 0 18px}
+.stepper .st{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+.stepper .bub{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:var(--card2);border:1.5px solid var(--line);color:var(--muted);font-size:13px;font-weight:800}
+.stepper .st.on .bub{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 0 4px rgba(232,25,44,.16)}
+.stepper .st.dn .bub{background:rgba(232,25,44,.18);border-color:var(--red);color:var(--red)}
+.stepper .cap{font-size:10.5px;color:var(--muted);white-space:nowrap}
+.stepper .st.on .cap{color:var(--red);font-weight:700}
+.stepper .bar{flex:1;height:2px;background:var(--line);margin:0 4px;margin-bottom:20px}
+.stepper .bar.on{background:var(--red)}
+
+/* ── الرئيسية ───────────────────────────────────────────── */
+.hello{font-size:21px;font-weight:800}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;
+  display:flex;align-items:center;justify-content:space-between}
+.stat b{font-size:24px;font-weight:900;display:block;line-height:1}
+.stat span{font-size:12px;color:var(--muted)}
+.stat .si{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px}
+.menu-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:15px;margin-top:10px;cursor:pointer}
+.menu-row .mi{width:34px;height:34px;border-radius:10px;background:var(--card2);
+  display:grid;place-items:center;font-size:16px;flex:none}
+.menu-row b{flex:1;font-size:15px;font-weight:700}
+.menu-row .ch{color:#4a4a52;font-size:15px}
+
+/* ── تبويبات ────────────────────────────────────────────── */
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 16px 12px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:8px 16px;border-radius:999px;background:var(--card);border:1px solid var(--line);
+  font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ── عنصر طلب ───────────────────────────────────────────── */
+.o-item{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:13px;margin-bottom:10px;cursor:pointer}
+.o-item .oi{width:44px;height:44px;border-radius:12px;background:var(--card2);
+  display:grid;place-items:center;font-size:20px;flex:none}
+.o-item .ob{flex:1;min-width:0}
+.o-item .r1{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.o-item .num{font-size:14px;font-weight:800;direction:ltr}
+.o-item .nm{font-size:13px;color:#d0d0d6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-item .r3{display:flex;gap:10px;font-size:11.5px;color:var(--muted);margin-top:3px}
+.badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.b-new{background:rgba(232,25,44,.16);color:#ff6070}
+.b-way{background:rgba(245,158,11,.16);color:var(--orange)}
+.b-done{background:rgba(34,197,94,.16);color:var(--green)}
+.b-cancel{background:rgba(139,139,147,.16);color:var(--muted)}
+
+/* ── تايم لاين ──────────────────────────────────────────── */
+.tl{padding:4px 0}
+.tl-row{display:flex;gap:12px;position:relative;padding-bottom:18px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row .dot{width:13px;height:13px;border-radius:50%;background:#2a2a31;flex:none;margin-top:3px;z-index:2}
+.tl-row.dn .dot{background:var(--red);box-shadow:0 0 0 4px rgba(232,25,44,.15)}
+.tl-row::before{content:"";position:absolute;right:6px;top:16px;bottom:0;width:1.5px;background:#2a2a31}
+.tl-row:last-child::before{display:none}
+.tl-row.dn::before{background:var(--red)}
+.tl-row b{font-size:13.5px;font-weight:700;display:block}
+.tl-row.pend b{color:var(--muted);font-weight:500}
+.tl-row span{font-size:11.5px;color:var(--muted)}
+
+/* ── الخريطة ────────────────────────────────────────────── */
+.map{height:190px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:#1a1a1d}
+.map.tall{height:100%;border-radius:0;border:none}
+.leaflet-container{background:#1a1a1d;font-family:'Tajawal',sans-serif}
+.mini-map{height:120px;border-radius:12px;overflow:hidden;border:1px solid var(--line);
+  background:#1a1a1d;display:grid;place-items:center;color:var(--muted);font-size:12px;position:relative}
+.mini-map .pin{font-size:26px}
+.mini-map .txt{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.72);
+  padding:6px 9px;font-size:11px;color:#d0d0d6;text-align:right}
+
+/* ── شرائح الاختيار ─────────────────────────────────────── */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:9px 15px;border-radius:11px;background:var(--card2);border:1px solid var(--line);
+  font-size:13.5px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--red);border-color:var(--red);color:#fff;font-weight:700}
+.kinds{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kind{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 4px;
+  text-align:center;cursor:pointer}
+.kind.on{background:rgba(232,25,44,.14);border-color:var(--red)}
+.kind i{font-size:20px;font-style:normal;display:block;margin-bottom:4px}
+.kind span{font-size:11px;font-weight:600}
+
+/* ── العداد ─────────────────────────────────────────────── */
+.counter{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);
+  border-radius:12px;padding:6px}
+.counter button{width:34px;height:34px;border-radius:9px;background:var(--card);border:1px solid var(--line);
+  font-size:18px;font-weight:800;cursor:pointer;display:grid;place-items:center}
+.counter b{flex:1;text-align:center;font-size:16px;font-weight:800}
+
+/* ── المرفقات ───────────────────────────────────────────── */
+.up-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.up-box{background:var(--card2);border:1.5px dashed var(--line);border-radius:14px;padding:20px 8px;
+  text-align:center;cursor:pointer}
+.up-box i{font-size:24px;font-style:normal;display:block;margin-bottom:7px;color:var(--red)}
+.up-box span{font-size:12.5px;font-weight:600}
+.thumbs{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.thumb{width:74px;height:74px;border-radius:12px;overflow:hidden;position:relative;
+  border:1px solid var(--line);background:var(--card2)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb .x{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;
+  background:var(--red);color:#fff;font-size:12px;display:grid;place-items:center;cursor:pointer}
+.thumb .ld{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;font-size:11px}
+
+/* ── نجاح ───────────────────────────────────────────────── */
+.ok-circle{width:88px;height:88px;border-radius:50%;background:var(--red);display:grid;place-items:center;
+  font-size:44px;margin:0 auto 20px;box-shadow:0 0 0 12px rgba(232,25,44,.1)}
+.qr-box{background:#fff;padding:14px;border-radius:16px;display:inline-block;margin:18px 0}
+.qr-box img,.qr-box canvas{display:block}
+
+/* ── الإشعارات ──────────────────────────────────────────── */
+.nt{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:13px;margin-bottom:10px;cursor:pointer}
+.nt.unread{border-color:rgba(232,25,44,.4);background:linear-gradient(90deg,rgba(232,25,44,.06),var(--card))}
+.nt .ni{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;flex:none}
+.nt b{font-size:13.5px;display:block;margin-bottom:3px}
+.nt span{font-size:11.5px;color:var(--muted)}
+
+/* ── الحساب ─────────────────────────────────────────────── */
+.avatar{width:66px;height:66px;border-radius:50%;object-fit:cover;background:var(--card2);
+  border:2px solid var(--line)}
+.acc-head{display:flex;align-items:center;gap:14px;padding:6px 0 18px}
+
+/* ── البار السفلي ───────────────────────────────────────── */
+.nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;z-index:60;
+  background:rgba(12,12,14,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+  display:flex;align-items:center;padding:8px 6px calc(8px + var(--safe-b))}
+.nav .nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
+  color:#5c5c65;font-size:10.5px;font-weight:600;padding:4px 0;position:relative}
+.nav .nb i{font-size:19px;font-style:normal}
+.nav .nb.on{color:var(--red)}
+.nav .fab{width:52px;height:52px;border-radius:50%;background:var(--red);color:#fff;font-size:26px;
+  display:grid;place-items:center;flex:none;margin:0 4px;box-shadow:0 6px 20px rgba(232,25,44,.45);
+  cursor:pointer;margin-top:-22px;border:4px solid var(--bg2)}
+.nav .dotb{position:absolute;top:2px;left:calc(50% - 16px);min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;background:var(--red);color:#fff;font-size:9.5px;font-weight:800;
+  display:grid;place-items:center}
+
+/* ── مودال ──────────────────────────────────────────────── */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;
+  align-items:flex-end;justify-content:center}
+.modal.on{display:flex}
+.sheet{background:var(--bg);width:100%;max-width:520px;border-radius:22px 22px 0 0;
+  border-top:1px solid var(--line);max-height:92vh;display:flex;flex-direction:column;
+  padding-bottom:var(--safe-b)}
+.sheet-hd{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--line)}
+.sheet-hd b{flex:1;font-size:16px}
+.sheet-bd{padding:16px;overflow-y:auto;flex:1}
+
+/* ── توست ───────────────────────────────────────────────── */
+#toast{position:fixed;bottom:calc(96px + var(--safe-b));right:50%;transform:translateX(50%) translateY(20px);
+  background:#1e1e23;border:1px solid var(--line);padding:12px 18px;border-radius:13px;font-size:13.5px;
+  font-weight:600;z-index:500;opacity:0;transition:.28s;pointer-events:none;max-width:88%;text-align:center}
+#toast.on{opacity:1;transform:translateX(50%) translateY(0)}
+#toast.err{border-color:rgba(232,25,44,.55);background:#2a1416}
+#toast.ok{border-color:rgba(34,197,94,.5);background:#0f2318}
+
+/* ── تحميل ──────────────────────────────────────────────── */
+#boot{position:fixed;inset:0;background:var(--bg2);z-index:900;display:grid;place-items:center}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--red);
+  border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+.empty b{display:block;font-size:15px;color:#d0d0d6;margin-bottom:5px}
+.empty span{font-size:12.5px}
+
+/* ── كونفيتي ────────────────────────────────────────────── */
+.cf{position:absolute;width:8px;height:13px;top:-20px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(620deg);opacity:.1}}
+</style>
+</head>
+<body>
+
+<div id="boot"><div class="spin"></div></div>
+<div id="toast"></div>
+
+<!-- ═══ 1. شاشة البداية ═══════════════════════════════════ -->
+<section id="s-splash" class="screen">
+  <img class="sp-hero" src="assets/hero.png" alt="" onerror="this.style.display='none'" />
+  <div class="sp-slide on" data-i="0">
+    <img class="sp-logo" src="assets/logo.png" alt="الدهشان" />
+    <div class="sp-tag">توصيل أسرع.. لكل مكان</div>
+  </div>
+  <div class="sp-slide" data-i="1">
+    <img class="sp-logo" src="assets/logo.png" alt="الدهشان" />
+    <div class="sp-tag">اطلب من أي مكان<br /><span style="font-size:14px;color:var(--muted);font-weight:500">حدّد المُرسِل والمستلم والباقي علينا</span></div>
+  </div>
+  <div class="sp-slide" data-i="2">
+    <img class="sp-logo" src="assets/logo.png" alt="الدهشان" />
+    <div class="sp-tag">تابع طلبك لحظة بلحظة<br /><span style="font-size:14px;color:var(--muted);font-weight:500">من الاستلام لحد باب المستلم</span></div>
+  </div>
+  <div class="sp-foot">
+    <button class="btn" id="splashBtn">ابدأ الآن</button>
+    <div class="dots" id="spDots"><i class="on"></i><i></i><i></i></div>
+  </div>
+</section>
+
+<!-- ═══ 2. تسجيل الدخول ═══════════════════════════════════ -->
+<section id="s-login" class="screen" style="background:#000">
+  <div class="scroll" style="padding-bottom:24px">
+    <div style="position:relative;text-align:center;padding-top:6vh">
+      <img src="assets/logo.png" style="width:62%;max-width:280px;filter:drop-shadow(0 0 22px rgba(232,25,44,.4))" alt="الدهشان" />
+      <div style="font-size:15px;font-weight:700;margin-top:10px">توصيل أسرع.. لكل مكان</div>
+      <img src="assets/hero.png" style="width:100%;margin-top:6px;
+        mask-image:linear-gradient(180deg,#000 60%,transparent);-webkit-mask-image:linear-gradient(180deg,#000 60%,transparent)"
+        alt="" onerror="this.style.display='none'" />
+    </div>
+    <div class="pad" style="margin-top:-14px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:26px;font-weight:900">مرحباً بك</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:4px">سجّل الدخول للمتابعة</div>
+      </div>
+      <button class="btn wht" id="googleBtn">
+        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        تسجيل الدخول بواسطة Google
+      </button>
+      <div class="sep">لماذا Google؟</div>
+      <div class="why">
+        <div><div class="wi">🛡️</div><b>آمن وسريع</b><span>حسابك محمي بأعلى معايير الأمان</span></div>
+        <div><div class="wi">👤</div><b>خطوة واحدة فقط</b><span>دخول سريع بدون كلمة مرور</span></div>
+        <div><div class="wi">🔄</div><b>متزامن مع حسابك</b><span>بياناتك محفوظة دائماً</span></div>
+      </div>
+      <div style="text-align:center;margin-top:26px;font-size:12px;color:var(--muted);line-height:1.9">
+        🔒<br />بالمتابعة أنت توافق على<br />
+        <a href="#" onclick="return false">الشروط والأحكام</a> و <a href="#" onclick="return false">سياسة الخصوصية</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 3. استكمال البيانات ═══════════════════════════════ -->
+<section id="s-setup" class="screen">
+  <div class="hd">
+    <div style="flex:1">
+      <h2>استكمال البيانات الشخصية</h2>
+      <div class="sub">لنقدم لك تجربة أفضل وأسرع</div>
+    </div>
+  </div>
+  <div class="scroll pad" style="padding-top:0">
+    <div class="stepper" id="setupStepper"></div>
+
+    <!-- خطوة 1 -->
+    <div id="sut-1">
+      <div style="text-align:center;margin-bottom:16px">
+        <label style="position:relative;display:inline-block;cursor:pointer">
+          <input type="file" id="sutPhotoFile" accept="image/*" hidden />
+          <img id="sutPhoto" class="avatar" style="width:82px;height:82px"
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect fill='%231b1b1f' width='80' height='80'/%3E%3Ccircle cx='40' cy='31' r='14' fill='%234a4a52'/%3E%3Cellipse cx='40' cy='68' rx='23' ry='16' fill='%234a4a52'/%3E%3C/svg%3E" alt="" />
+          <span style="position:absolute;bottom:0;left:0;width:26px;height:26px;border-radius:50%;
+            background:var(--red);display:grid;place-items:center;font-size:12px;border:2px solid var(--bg2)">📷</span>
+        </label>
+      </div>
+      <div class="fld"><div class="fi">👤</div><div class="fb">
+        <b>الاسم بالكامل</b><input id="sutName" placeholder="أدخل اسمك الكامل بالعربي" /></div></div>
+      <div class="fld"><div class="fi">📞</div><div class="fb">
+        <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+      <div class="fld"><div class="fi">📱</div><div class="fb">
+        <b>رقم إضافي (اختياري)</b><input id="sutPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+      <div class="fld"><div class="fi">✉️</div><div class="fb">
+        <b>البريد الإلكتروني</b><input id="sutEmail" disabled /></div></div>
+      <div class="card" style="background:rgba(232,25,44,.06);border-color:rgba(232,25,44,.25);display:flex;gap:12px">
+        <div class="fi" style="width:34px;height:34px;border-radius:10px;background:rgba(232,25,44,.14);
+          color:var(--red);display:grid;place-items:center;flex:none">🔐</div>
+        <div><b style="font-size:13.5px">نحن نهتم بخصوصيتك</b>
+          <div style="font-size:11.5px;color:var(--muted);line-height:1.7;margin-top:3px">
+            لن يتم مشاركة بياناتك الشخصية مع أي جهة خارجية. جميع بياناتك محمية وآمنة.</div></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;margin:16px 0;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="sutAgree" style="width:20px;height:20px;flex:none;accent-color:var(--red)" />
+        <span>أوافق على <a href="#" onclick="return false">الشروط والأحكام</a> و<a href="#" onclick="return false">سياسة الخصوصية</a></span>
+      </label>
+      <button class="btn" onclick="setupNext(2)">التالي</button>
+    </div>
+
+    <!-- خطوة 2 -->
+    <div id="sut-2" style="display:none">
+      <span class="lbl">العنوان بالتفصيل</span>
+      <div id="sutAddrW"></div>
+      <div style="margin-top:12px">
+        <div class="map" id="sutMap"></div>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('sut')">📍 تحديد الموقع على الخريطة</button>
+        <div id="sutCoords" style="font-size:11.5px;color:var(--muted);text-align:center;margin-top:7px;direction:ltr"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" onclick="setupNext(1)">السابق</button>
+        <button class="btn" onclick="setupNext(3)">التالي</button>
+      </div>
+    </div>
+
+    <!-- خطوة 3 -->
+    <div id="sut-3" style="display:none">
+      <div class="card" style="margin-bottom:14px">
+        <b style="font-size:14px">منطقة الاستلام</b>
+        <div style="font-size:11.5px;color:var(--muted);line-height:1.7;margin:5px 0 12px">
+          اختر المنطقة اللي هنستلم منها شحناتك — الفرع المسؤول عن خدمتك بيتحدد منها تلقائيًا.
+        </div>
+        <span class="lbl">المنطقة</span>
+        <select id="sutZone"></select>
+        <div id="sutBranch" style="margin-top:12px;font-size:13px;display:none"></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn ghost" onclick="setupNext(2)">السابق</button>
+        <button class="btn" id="sutSaveBtn" onclick="saveProfile()">حفظ البيانات</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 4. الرئيسية ═══════════════════════════════════════ -->
+<section id="s-home" class="screen">
+  <div class="hd">
+    <div style="flex:1">
+      <div class="hello">مرحبًا <span id="homeName">—</span> 👋</div>
+      <div class="sub">أهلاً بك</div>
+    </div>
+    <div class="ico-btn" onclick="go('notifs')" style="position:relative">🔔
+      <span id="homeBell" class="dotb" style="display:none;position:absolute;top:-5px;left:-5px"></span></div>
+  </div>
+  <div class="scroll pad" style="padding-top:4px">
+    <span class="lbl">اليوم لديك</span>
+    <div class="stats">
+      <div class="stat"><div><b id="stTotal">0</b><span>طلب</span></div>
+        <div class="si" style="background:rgba(232,25,44,.14);color:var(--red)">🧾</div></div>
+      <div class="stat"><div><b id="stWay">0</b><span>قيد التوصيل</span></div>
+        <div class="si" style="background:rgba(245,158,11,.14);color:var(--orange)">🛵</div></div>
+      <div class="stat"><div><b id="stDone">0</b><span>تم التسليم</span></div>
+        <div class="si" style="background:rgba(34,197,94,.14);color:var(--green)">✅</div></div>
+      <div class="stat"><div><b id="stCancel">0</b><span>ملغي</span></div>
+        <div class="si" style="background:rgba(139,139,147,.14);color:var(--muted)">✖️</div></div>
+    </div>
+    <button class="btn" style="margin-top:16px" onclick="startNewOrder()">＋ طلب جديد</button>
+    <div class="menu-row" onclick="go('orders')"><div class="mi">📦</div><b>طلباتي</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('addresses')"><div class="mi">📍</div><b>العناوين المحفوظة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('account')"><div class="mi">👤</div><b>الحساب</b><span class="ch">‹</span></div>
+  </div>
+</section>
+
+<!-- ═══ 5-8. إنشاء طلب جديد ═══════════════════════════════ -->
+<section id="s-new" class="screen">
+  <div class="hd">
+    <div class="ico-btn" onclick="wizBack()">›</div>
+    <h2>إنشاء طلب جديد</h2>
+  </div>
+  <div class="scroll pad" style="padding-top:0">
+    <div class="stepper" id="wizStepper"></div>
+
+    <!-- خطوة 1: المُرسِل -->
+    <div id="wz-1">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span class="bub" style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">1</span>
+          <b style="font-size:15px">بيانات المُرسِل</b>
+        </div>
+        <div class="fld" style="margin-bottom:10px"><div class="fi">👤</div><div class="fb">
+          <b>الاسم</b><input id="sndName" placeholder="اسم المُرسِل" /></div></div>
+        <div class="fld" style="margin-bottom:10px"><div class="fi">📞</div><div class="fb">
+          <b>رقم الهاتف</b><input id="sndPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+        <span class="lbl">عنوان الاستلام</span>
+        <div id="sndAddrW"></div>
+        <span class="lbl" style="margin-top:12px">منطقة الاستلام (تحدد الفرع)</span>
+        <select id="sndZone"></select>
+        <div id="sndBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
+        <div class="map" id="sndMap" style="height:130px;margin-top:12px"></div>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')">📍 تحديد الموقع على الخريطة</button>
+        <div id="sndSaved" style="margin-top:10px"></div>
+      </div>
+      <button class="btn" style="margin-top:14px" onclick="wizNext(2)">التالي</button>
+    </div>
+
+    <!-- خطوة 2: المستلم -->
+    <div id="wz-2" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">2</span>
+          <b style="font-size:15px">بيانات المستلم</b>
+        </div>
+        <div class="fld" style="margin-bottom:10px"><div class="fi">👤</div><div class="fb">
+          <b>الاسم</b><input id="rcvName" placeholder="اسم المستلم" /></div></div>
+        <div class="fld" style="margin-bottom:10px"><div class="fi">📞</div><div class="fb">
+          <b>رقم الهاتف</b><input id="rcvPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+        <div class="fld" style="margin-bottom:10px"><div class="fi">📱</div><div class="fb">
+          <b>رقم إضافي (اختياري)</b><input id="rcvPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+        <span class="lbl">عنوان التسليم</span>
+        <div id="rcvAddrW"></div>
+        <span class="lbl" style="margin-top:12px">منطقة التسليم</span>
+        <select id="rcvZone"></select>
+        <div id="rcvPrice" style="margin-top:9px;font-size:13px;display:none"></div>
+        <div class="map" id="rcvMap" style="height:130px;margin-top:12px"></div>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv')">📍 تحديد الموقع على الخريطة</button>
+        <div id="rcvSaved" style="margin-top:10px"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn ghost" onclick="wizNext(1)">السابق</button>
+        <button class="btn" onclick="wizNext(3)">التالي</button>
+      </div>
+    </div>
+
+    <!-- خطوة 3: بيانات الطلب -->
+    <div id="wz-3" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">3</span>
+          <b style="font-size:15px">بيانات الطلب</b>
+        </div>
+        <span class="lbl">نوع الطلب</span>
+        <div class="kinds" id="kindBox"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+          <div><span class="lbl">مبلغ التحصيل من المستلم (ج.م)</span>
+            <input id="odCod" type="number" inputmode="decimal" min="0" value="0" /></div>
+          <div><span class="lbl">قيمة البضاعة (ج.م)</span>
+            <input id="odValue" type="number" inputmode="decimal" min="0" value="0" /></div>
+        </div>
+        <span class="lbl" style="margin-top:14px">طريقة الدفع</span>
+        <div class="chips" id="payBox"></div>
+        <span class="lbl" style="margin-top:14px">عدد القطع</span>
+        <div class="counter">
+          <button onclick="bumpPieces(1)">＋</button><b id="odPieces">1</b><button onclick="bumpPieces(-1)">－</button>
+        </div>
+        <span class="lbl" style="margin-top:14px">ملاحظات (اختياري)</span>
+        <textarea id="odNote" rows="3" placeholder="اكتب ملاحظتك هنا"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn ghost" onclick="wizNext(2)">السابق</button>
+        <button class="btn" onclick="wizNext(4)">التالي</button>
+      </div>
+    </div>
+
+    <!-- خطوة 4: المرفقات -->
+    <div id="wz-4" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+          <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">4</span>
+          <b style="font-size:15px">المرفقات</b>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
+          أضف صور للطلب أو الإيصال (اختياري)</div>
+        <div class="up-grid">
+          <div class="up-box" onclick="document.getElementById('fileCam').click()"><i>📷</i><span>تصوير بالكاميرا</span></div>
+          <div class="up-box" onclick="document.getElementById('fileGal').click()"><i>🖼️</i><span>اختيار صورة</span></div>
+        </div>
+        <input type="file" id="fileCam" accept="image/*" capture="environment" multiple hidden />
+        <input type="file" id="fileGal" accept="image/*" multiple hidden />
+        <div id="thumbsWrap" style="display:none">
+          <span class="lbl" style="margin-top:14px">الصور المضافة</span>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+      </div>
+      <div class="card" id="summaryCard"></div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn ghost" onclick="wizNext(3)">السابق</button>
+        <button class="btn" id="submitBtn" onclick="submitOrder()">إرسال الطلب</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 9. تم إنشاء الطلب ═════════════════════════════════ -->
+<section id="s-done" class="screen" style="overflow:hidden;position:relative">
+  <div class="scroll pad" style="display:flex;flex-direction:column;justify-content:center;text-align:center">
+    <div class="ok-circle">✓</div>
+    <div style="font-size:21px;font-weight:900">تم إنشاء الطلب بنجاح</div>
+    <div style="color:var(--muted);font-size:13px;margin-top:8px">رقم الطلب</div>
+    <div id="doneNum" style="font-size:28px;font-weight:900;direction:ltr;margin-top:4px">—</div>
+    <div><div class="qr-box" id="doneQr"></div></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:22px">يمكنك مشاركة هذا الكود مع المستلم</div>
+    <button class="btn" onclick="go('orders')">الانتقال إلى الطلبات</button>
+    <button class="btn ghost" style="margin-top:10px" onclick="startNewOrder()">إنشاء طلب آخر</button>
+  </div>
+</section>
+
+<!-- ═══ 10. طلباتي ════════════════════════════════════════ -->
+<section id="s-orders" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>طلباتي</h2></div>
+  <div class="tabs" id="orderTabs"></div>
+  <div class="scroll pad" style="padding-top:0"><div id="ordersList"></div></div>
+</section>
+
+<!-- ═══ 11. تفاصيل الطلب ══════════════════════════════════ -->
+<section id="s-detail" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('orders')">›</div><h2>تفاصيل الطلب</h2></div>
+  <div class="scroll pad" style="padding-top:0"><div id="detailBody"></div></div>
+</section>
+
+<!-- ═══ العناوين المحفوظة ═════════════════════════════════ -->
+<section id="s-addresses" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('account')">›</div><h2>العناوين المحفوظة</h2></div>
+  <div class="scroll pad" style="padding-top:0">
+    <button class="btn" onclick="openAddrSheet()">＋ إضافة عنوان جديد</button>
+    <div id="addrList" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ═══ 12. الإشعارات ═════════════════════════════════════ -->
+<section id="s-notifs" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>الإشعارات</h2></div>
+  <div class="scroll pad" style="padding-top:0"><div id="notifList"></div></div>
+</section>
+
+<!-- ═══ الحساب ════════════════════════════════════════════ -->
+<section id="s-account" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>حسابي</h2></div>
+  <div class="scroll pad" style="padding-top:0">
+    <div class="acc-head">
+      <img class="avatar" id="accPhoto" alt=""
+        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect fill='%231b1b1f' width='80' height='80'/%3E%3Ccircle cx='40' cy='31' r='14' fill='%234a4a52'/%3E%3Cellipse cx='40' cy='68' rx='23' ry='16' fill='%234a4a52'/%3E%3C/svg%3E" />
+      <div style="flex:1;min-width:0">
+        <b id="accName" style="font-size:17px">—</b>
+        <div id="accPhone" style="font-size:12.5px;color:var(--muted);margin-top:3px;direction:ltr"></div>
+        <div id="accEmail" style="font-size:12.5px;color:var(--muted);direction:ltr"></div>
+      </div>
+      <div class="ico-btn" onclick="openEditProfile()">✏️</div>
+    </div>
+    <div class="menu-row" onclick="openEditProfile()"><div class="mi">👤</div><b>المعلومات الشخصية</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('addresses')"><div class="mi">📍</div><b>العناوين المحفوظة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('notifs')"><div class="mi">🔔</div><b>الإشعارات</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="window.open('https://myaccount.google.com/','_blank')">
+      <div class="mi">🔐</div><b>إدارة حساب Google</b><span class="ch">‹</span></div>
+    <div class="menu-row" id="installRow" onclick="installApp()">
+      <div class="mi">⬇️</div><b>تثبيت التطبيق على الموبايل</b><span class="ch">‹</span></div>
+    <div class="menu-row" id="pushRow" onclick="enablePush()">
+      <div class="mi">📢</div><b>تفعيل الإشعارات الفورية</b><span class="ch" id="pushState">‹</span></div>
+    <div class="menu-row" onclick="openSupport()"><div class="mi">💬</div><b>الدعم والمساعدة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="openAbout()"><div class="mi">ℹ️</div><b>عن التطبيق</b><span class="ch">‹</span></div>
+    <button class="btn" style="margin-top:20px" onclick="doLogout()">⏻ تسجيل الخروج</button>
+  </div>
+</section>
+
+<!-- ═══ البار السفلي ══════════════════════════════════════ -->
+<nav class="nav" id="bottomNav" style="display:none">
+  <div class="nb" data-p="home"      onclick="go('home')"><i>🏠</i>الرئيسية</div>
+  <div class="nb" data-p="orders"    onclick="go('orders')"><i>🧾</i>الطلبات</div>
+  <div class="fab" onclick="startNewOrder()">＋</div>
+  <div class="nb" data-p="notifs"    onclick="go('notifs')"><i>🔔</i>الإشعارات
+    <span id="navBadge" class="dotb" style="display:none"></span></div>
+  <div class="nb" data-p="account"   onclick="go('account')"><i>👤</i>الحساب</div>
+</nav>
+
+<!-- ═══ مودال عام ═════════════════════════════════════════ -->
+<div class="modal" id="modal">
+  <div class="sheet">
+    <div class="sheet-hd"><b id="modalTitle"></b><div class="ico-btn" onclick="closeModal()">✕</div></div>
+    <div class="sheet-bd" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ═══ مودال الخريطة ═════════════════════════════════════ -->
+<div class="modal" id="mapModal">
+  <div class="sheet" style="height:88vh">
+    <div class="sheet-hd"><b>تحديد الموقع على الخريطة</b><div class="ico-btn" onclick="closeMapModal()">✕</div></div>
+    <div style="flex:1;position:relative"><div id="pickMap" class="map tall"></div>
+      <button class="ico-btn" onclick="locateMe()" style="position:absolute;bottom:14px;left:14px;z-index:500;
+        width:44px;height:44px;background:#fff;color:#111;border:none">🎯</button>
+    </div>
+    <div class="pad" style="border-top:1px solid var(--line)">
+      <div id="pickCoords" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px;direction:ltr">—</div>
+      <button class="btn" onclick="confirmMapPick()">حفظ الموقع</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════
+   الاتصال — نفس مشروع Firebase المستخدم في باقي النظام
+   (aldahshaneg) عشان الطلبات تظهر فورًا في لوحة الإدارة والفرع
+   وتطبيق الطيار من غير أي طبقة وسيطة.
+══════════════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, set, get, update, remove, onValue, runTransaction }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider,
+         signInWithPopup, signInWithRedirect, getRedirectResult }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8",
+  measurementId: "G-F9R1E5P5GS"
+};
+
+/* رفع صور المرفقات — نفس طريقة بوابة المحل (unsigned preset، بدون سيرفر) */
+const CLOUDINARY = { cloudName: "uinllmfk", uploadPreset: "aldahshaneg-cloud" };
+
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+
+/* ── حالة التطبيق ─────────────────────────────────────────── */
+const S = {
+  uid: null, user: null, profile: null,
+  zones: [], branches: {}, orders: [], addresses: [], savedReceivers: [],
+  page: "splash", orderFilter: "all", currentOrderId: null,
+  wizStep: 1, setupStep: 1,
+  draft: null, images: [], mapTarget: null, pickLatLng: null,
+  unsub: []
+};
+window.S = S;
+
+const $  = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+function toast(msg, kind) {
+  const t = $("toast");
+  t.textContent = msg; t.className = "on " + (kind || "");
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => { t.className = ""; }, 3200);
+}
+window.toast = toast;
+
+/* ── بيانات المحافظات/المدن (منسوخة من بوابة المحل عشان
+      العناوين تفضل بنفس الصيغة في كل النظام) ──────────────── */
+const EG_GOVERNORATES = ["القاهرة","الجيزة","الإسكندرية","الدقهلية","البحيرة","الفيوم","الغربية","الإسماعيلية","المنوفية","المنيا","القليوبية","الوادي الجديد","السويس","أسوان","أسيوط","بني سويف","بورسعيد","دمياط","الشرقية","جنوب سيناء","شمال سيناء","الأقصر","قنا","كفر الشيخ","مطروح","سوهاج","البحر الأحمر"];
+
+    // مدن/مراكز كل محافظة — تظهر تلقائيًا عند اختيار المحافظة
+    const EG_CITIES = {
+          "القاهرة": [
+                "مدينة نصر",
+                "مصر الجديدة",
+                "المعادي",
+                "المقطم",
+                "حلوان",
+                "الزمالك",
+                "وسط البلد",
+                "شبرا",
+                "عين شمس",
+                "المطرية",
+                "حدائق القبة",
+                "الزيتون",
+                "السيدة زينب",
+                "مصر القديمة",
+                "الخليفة",
+                "الوايلي",
+                "الساحل",
+                "روض الفرج",
+                "بولاق",
+                "التجمع الخامس",
+                "الرحاب",
+                "مدينتي",
+                "العبور",
+                "الشروق",
+                "بدر",
+                "15 مايو",
+                "المرج",
+                "السلام",
+                "النزهة",
+                "الأميرية"
+          ],
+          "الجيزة": [
+                "الدقي",
+                "المهندسين",
+                "العجوزة",
+                "إمبابة",
+                "بولاق الدكرور",
+                "الهرم",
+                "فيصل",
+                "6 أكتوبر",
+                "الشيخ زايد",
+                "حدائق الأهرام",
+                "المنيب",
+                "الوراق",
+                "أوسيم",
+                "كرداسة",
+                "البدرشين",
+                "الصف",
+                "أطفيح",
+                "العياط",
+                "الحوامدية",
+                "منشأة القناطر",
+                "أبو النمرس",
+                "الباويطي"
+          ],
+          "الإسكندرية": [
+                "المنتزه",
+                "شرق",
+                "وسط",
+                "غرب",
+                "الجمرك",
+                "العامرية",
+                "برج العرب",
+                "سيدي جابر",
+                "سموحة",
+                "العصافرة",
+                "المندرة",
+                "ميامي",
+                "لوران",
+                "كامب شيزار",
+                "محرم بك",
+                "كرموز",
+                "الدخيلة",
+                "العجمي",
+                "أبو قير",
+                "المعمورة"
+          ],
+          "الدقهلية": [
+                "المنصورة",
+                "طلخا",
+                "ميت غمر",
+                "دكرنس",
+                "أجا",
+                "منية النصر",
+                "السنبلاوين",
+                "الكردي",
+                "بني عبيد",
+                "المنزلة",
+                "تمي الأمديد",
+                "الجمالية",
+                "شربين",
+                "المطرية",
+                "بلقاس",
+                "ميت سلسيل",
+                "جمصة",
+                "محلة دمنة",
+                "نبروه"
+          ],
+          "البحيرة": [
+                "دمنهور",
+                "كفر الدوار",
+                "رشيد",
+                "إدكو",
+                "أبو المطامير",
+                "أبو حمص",
+                "الدلنجات",
+                "المحمودية",
+                "الرحمانية",
+                "إيتاي البارود",
+                "حوش عيسى",
+                "شبراخيت",
+                "كوم حمادة",
+                "بدر",
+                "وادي النطرون",
+                "النوبارية الجديدة"
+          ],
+          "الفيوم": [
+                "الفيوم",
+                "طامية",
+                "سنورس",
+                "إطسا",
+                "إبشواي",
+                "يوسف الصديق",
+                "الفيوم الجديدة"
+          ],
+          "الغربية": [
+                "طنطا",
+                "المحلة الكبرى",
+                "كفر الزيات",
+                "زفتى",
+                "السنطة",
+                "قطور",
+                "بسيون",
+                "سمنود"
+          ],
+          "الإسماعيلية": [
+                "الإسماعيلية",
+                "فايد",
+                "القنطرة شرق",
+                "القنطرة غرب",
+                "التل الكبير",
+                "أبو صوير",
+                "القصاصين الجديدة",
+                "نفيشة"
+          ],
+          "المنوفية": [
+                "شبين الكوم",
+                "منوف",
+                "سرس الليان",
+                "أشمون",
+                "الباجور",
+                "قويسنا",
+                "بركة السبع",
+                "تلا",
+                "الشهداء",
+                "السادات"
+          ],
+          "المنيا": [
+                "المنيا",
+                "العدوة",
+                "مغاغة",
+                "بني مزار",
+                "مطاي",
+                "سمالوط",
+                "المنيا الجديدة",
+                "أبو قرقاص",
+                "ملوي",
+                "دير مواس"
+          ],
+          "القليوبية": [
+                "بنها",
+                "قليوب",
+                "شبرا الخيمة",
+                "القناطر الخيرية",
+                "الخانكة",
+                "كفر شكر",
+                "طوخ",
+                "قها",
+                "العبور",
+                "الخصوص",
+                "شبين القناطر"
+          ],
+          "الوادي الجديد": [
+                "الخارجة",
+                "الداخلة",
+                "الفرافرة",
+                "باريس",
+                "بلاط"
+          ],
+          "السويس": [
+                "السويس",
+                "الأربعين",
+                "عتاقة",
+                "الجناين",
+                "فيصل"
+          ],
+          "أسوان": [
+                "أسوان",
+                "أسوان الجديدة",
+                "دراو",
+                "كوم أمبو",
+                "نصر النوبة",
+                "كلابشة",
+                "إدفو",
+                "الرديسية",
+                "البصيلية",
+                "السباعية",
+                "أبو سمبل"
+          ],
+          "أسيوط": [
+                "أسيوط",
+                "أسيوط الجديدة",
+                "ديروط",
+                "منفلوط",
+                "القوصية",
+                "أبنوب",
+                "أبو تيج",
+                "الغنايم",
+                "ساحل سليم",
+                "البداري",
+                "صدفا"
+          ],
+          "بني سويف": [
+                "بني سويف",
+                "بني سويف الجديدة",
+                "الواسطى",
+                "ناصر",
+                "إهناسيا",
+                "ببا",
+                "سمسطا",
+                "الفشن"
+          ],
+          "بورسعيد": [
+                "بورسعيد",
+                "بورفؤاد",
+                "العرب",
+                "حي الزهور",
+                "حي الضواحي",
+                "حي المناخ",
+                "حي الشرق",
+                "حي الجنوب"
+          ],
+          "دمياط": [
+                "دمياط",
+                "دمياط الجديدة",
+                "رأس البر",
+                "فارسكور",
+                "الزرقا",
+                "السرو",
+                "الروضة",
+                "كفر البطيخ",
+                "عزبة البرج",
+                "كفر سعد"
+          ],
+          "الشرقية": [
+                "الزقازيق",
+                "العاشر من رمضان",
+                "منيا القمح",
+                "بلبيس",
+                "مشتول السوق",
+                "القنايات",
+                "أبو حماد",
+                "القرين",
+                "ههيا",
+                "أبو كبير",
+                "فاقوس",
+                "الصالحية الجديدة",
+                "الإبراهيمية",
+                "ديرب نجم",
+                "كفر صقر",
+                "أولاد صقر",
+                "الحسينية",
+                "صان الحجر",
+                "منشأة أبو عمر"
+          ],
+          "جنوب سيناء": [
+                "الطور",
+                "شرم الشيخ",
+                "دهب",
+                "نويبع",
+                "طابا",
+                "سانت كاترين",
+                "أبو رديس",
+                "أبو زنيمة",
+                "رأس سدر"
+          ],
+          "شمال سيناء": [
+                "العريش",
+                "الشيخ زويد",
+                "رفح",
+                "بئر العبد",
+                "الحسنة",
+                "نخل"
+          ],
+          "الأقصر": [
+                "الأقصر",
+                "الأقصر الجديدة",
+                "إسنا",
+                "أرمنت",
+                "الطود",
+                "الزينية",
+                "البياضية",
+                "القرنة"
+          ],
+          "قنا": [
+                "قنا",
+                "قنا الجديدة",
+                "أبو تشت",
+                "نجع حمادي",
+                "دشنا",
+                "الوقف",
+                "قفط",
+                "نقادة",
+                "فرشوط",
+                "قوص"
+          ],
+          "كفر الشيخ": [
+                "كفر الشيخ",
+                "دسوق",
+                "فوه",
+                "مطوبس",
+                "برج البرلس",
+                "بلطيم",
+                "مصيف بلطيم",
+                "الحامول",
+                "بيلا",
+                "الرياض",
+                "سيدي سالم",
+                "قلين",
+                "سيدي غازي"
+          ],
+          "مطروح": [
+                "مرسى مطروح",
+                "الحمام",
+                "العلمين",
+                "الضبعة",
+                "النجيلة",
+                "سيدي براني",
+                "السلوم",
+                "سيوة"
+          ],
+          "سوهاج": [
+                "سوهاج",
+                "سوهاج الجديدة",
+                "أخميم",
+                "أخميم الجديدة",
+                "البلينا",
+                "المراغة",
+                "المنشأة",
+                "دار السلام",
+                "جرجا",
+                "جهينة الجديدة",
+                "ساقلته",
+                "طما",
+                "طهطا",
+                "الكوثر"
+          ],
+          "البحر الأحمر": [
+                "الغردقة",
+                "رأس غارب",
+                "سفاجا",
+                "القصير",
+                "مرسى علم",
+                "الشلاتين",
+                "حلايب",
+                "الجونة",
+                "سهل حشيش"
+          ]
+    };
+
+/* ══════════════════════════════════════════════════════════════
+   ودجت العنوان — محافظة + مدينة + تفاصيل، بنفس صيغة النص
+   المخزّنة حاليًا ("التفاصيل، المدينة، المحافظة")
+══════════════════════════════════════════════════════════════ */
+function renderAddr(containerId, opts = {}) {
+  const el = $(containerId); if (!el) return;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+      <div><span class="lbl">المحافظة</span>
+        <select id="${containerId}-gov"><option value="">— اختر —</option>
+        ${EG_GOVERNORATES.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div>
+      <div><span class="lbl">المدينة / الحي</span>
+        <select id="${containerId}-area"><option value="">— اختر المحافظة —</option></select></div>
+    </div>
+    <div style="margin-top:9px"><span class="lbl">العنوان بالتفصيل</span>
+      <input id="${containerId}-detail" placeholder="الشارع، رقم العمارة، الدور، الشقة…" /></div>`;
+  $(`${containerId}-gov`).addEventListener("change", () => fillCities(containerId));
+  fillCities(containerId);
+  if (opts.value) setAddr(containerId, opts.value);
+}
+function fillCities(containerId, keep) {
+  const g = $(`${containerId}-gov`), c = $(`${containerId}-area`);
+  if (!g || !c) return;
+  const cities = EG_CITIES[g.value] || [];
+  const want = keep !== undefined ? keep : c.value;
+  c.innerHTML = g.value
+    ? `<option value="">— اختر المدينة —</option>` + cities.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join("")
+    : `<option value="">— اختر المحافظة —</option>`;
+  if (want) {
+    if (!cities.includes(want)) {
+      const o = document.createElement("option"); o.value = want; o.textContent = want; c.appendChild(o);
+    }
+    c.value = want;
+  }
+}
+function getAddr(containerId) {
+  const g = ($(`${containerId}-gov`)?.value || "").trim();
+  const a = ($(`${containerId}-area`)?.value || "").trim();
+  const d = ($(`${containerId}-detail`)?.value || "").trim();
+  return [d, a, g].filter(Boolean).join("، ");
+}
+function setAddr(containerId, text) {
+  if (!text) return;
+  const g = $(`${containerId}-gov`), a = $(`${containerId}-area`), d = $(`${containerId}-detail`);
+  if (!g) return;
+  let rest = text, gov = "";
+  for (const x of EG_GOVERNORATES) {
+    if (text.includes(x)) { gov = x; rest = text.replace(x, "").replace(/،\s*$/, "").replace(/^،\s*/, "").trim(); break; }
+  }
+  g.value = gov; fillCities(containerId, "");
+  const parts = rest.split("،").map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 2) { d.value = parts[0]; fillCities(containerId, parts.slice(1).join("، ")); }
+  else if (parts.length === 1) { d.value = parts[0]; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   المناطق والفروع
+   zones/{id} = { areaName, price, deliveryBranchId, deliveryBranchName }
+   الفرع المسؤول عن العميل بيتحدد من zone الاستلام (المُرسِل).
+══════════════════════════════════════════════════════════════ */
+const zoneBranchId   = z => z.deliveryBranchId || z.branchId || "";
+const zoneBranchName = z => z.deliveryBranchName || S.branches[zoneBranchId(z)]?.name || "";
+const zoneLabel      = z => z.areaName || z.name || "—";
+
+function fillZoneSelect(sel, { branchId, selected } = {}) {
+  if (!sel) return;
+  let list = S.zones.slice();
+  if (branchId) list = list.filter(z => zoneBranchId(z) === branchId);
+  list.sort((a, b) => zoneLabel(a).localeCompare(zoneLabel(b), "ar"));
+  sel.innerHTML = `<option value="">— اختر المنطقة —</option>` + list.map(z =>
+    `<option value="${esc(z.id)}">${esc(zoneLabel(z))}${z.price ? ` — ${z.price} ج.م` : ""}</option>`).join("");
+  if (selected) sel.value = selected;
+}
+const findZone = id => S.zones.find(z => z.id === id) || null;
+
+/* ══════════════════════════════════════════════════════════════
+   التنقّل بين الشاشات
+══════════════════════════════════════════════════════════════ */
+const NAV_PAGES = ["home", "orders", "notifs", "account"];
+function go(page) {
+  S.page = page;
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
+  $("s-" + page)?.classList.add("on");
+  const showNav = ["home", "orders", "notifs", "account", "addresses", "detail"].includes(page);
+  $("bottomNav").style.display = showNav ? "flex" : "none";
+  document.querySelectorAll(".nav .nb").forEach(b => b.classList.toggle("on", b.dataset.p === page));
+  document.querySelectorAll(".scroll").forEach(s => { if (s.closest(".screen")?.classList.contains("on")) s.scrollTop = 0; });
+  if (page === "home")      renderHome();
+  if (page === "orders")    renderOrders();
+  if (page === "notifs")    renderNotifs();
+  if (page === "account")   renderAccount();
+  if (page === "addresses") renderAddresses();
+  if (page === "detail")    renderDetail();
+}
+window.go = go;
+
+/* ══════════════════════════════════════════════════════════════
+   الدخول بجوجل
+══════════════════════════════════════════════════════════════ */
+let splashIdx = 0;
+setInterval(() => {
+  if (S.page !== "splash") return;
+  splashIdx = (splashIdx + 1) % 3;
+  document.querySelectorAll(".sp-slide").forEach(s => s.classList.toggle("on", +s.dataset.i === splashIdx));
+  document.querySelectorAll("#spDots i").forEach((d, i) => d.classList.toggle("on", i === splashIdx));
+}, 3400);
+
+$("splashBtn").onclick = () => go("login");
+
+$("googleBtn").onclick = async () => {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  try { await signInWithPopup(auth, provider); }
+  catch (e) {
+    // المتصفحات على الموبايل بتمنع الـ popup كتير — نرجع لـ redirect
+    if (String(e.code || "").match(/popup|cancelled|blocked/i)) {
+      try { await signInWithRedirect(auth, provider); return; } catch (_) {}
+    }
+    toast("تعذّر تسجيل الدخول: " + (e.message || e), "err");
+  }
+};
+
+getRedirectResult(auth).catch(() => {});
+
+onAuthStateChanged(auth, async user => {
+  detachAll();
+  if (!user) {
+    S.uid = null; S.user = null; S.profile = null;
+    $("boot").style.display = "none";
+    go("splash");
+    return;
+  }
+  S.uid = user.uid; S.user = user;
+  const snap = await get(ref(db, "customers/" + user.uid));
+  S.profile = snap.exists() ? snap.val() : null;
+
+  if (!S.profile) {
+    await set(ref(db, "customers/" + user.uid), {
+      uid: user.uid, email: user.email || "", photoURL: user.photoURL || "",
+      displayNameAr: "", phone1: "", phone2: "",
+      profileCompleted: false, createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    });
+    S.profile = (await get(ref(db, "customers/" + user.uid))).val();
+  } else {
+    update(ref(db, "customers/" + user.uid), { lastLoginAt: new Date().toISOString() }).catch(() => {});
+  }
+
+  await loadRefData();
+  attachListeners();
+  $("boot").style.display = "none";
+
+  if (S.profile.profileCompleted) go("home");
+  else { openSetup(); }
+});
+
+async function loadRefData() {
+  const [zs, bs] = await Promise.all([get(ref(db, "zones")), get(ref(db, "branches"))]);
+  S.zones = Object.entries(zs.val() || {}).map(([id, v]) => ({ id, ...v }));
+  S.branches = bs.val() || {};
+}
+
+function attachListeners() {
+  // طلبات هذا العميل — الفلترة على العميل بتتم هنا لأن الطلبات
+  // مشتركة مع المحلات والفروع في نفس العقدة.
+  S.unsub.push(onValue(ref(db, "orders"), snap => {
+    const all = snap.val() || {};
+    S.orders = Object.entries(all)
+      .map(([id, v]) => ({ id, ...v }))
+      .filter(o => o.customerId === S.uid || (o.source === "customer" && o.addedBy === S.uid))
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    refreshBadge();
+    if (S.page === "home")   renderHome();
+    if (S.page === "orders") renderOrders();
+    if (S.page === "notifs") renderNotifs();
+    if (S.page === "detail") renderDetail();
+  }));
+
+  S.unsub.push(onValue(ref(db, `customers/${S.uid}/addresses`), snap => {
+    S.addresses = Object.entries(snap.val() || {}).map(([id, v]) => ({ id, ...v }));
+    if (S.page === "addresses") renderAddresses();
+  }));
+
+  S.unsub.push(onValue(ref(db, `customers/${S.uid}/savedReceivers`), snap => {
+    S.savedReceivers = Object.entries(snap.val() || {}).map(([id, v]) => ({ id, ...v }));
+  }));
+
+  S.unsub.push(onValue(ref(db, "customers/" + S.uid), snap => {
+    if (snap.exists()) { const v = snap.val(); delete v.addresses; delete v.savedReceivers; S.profile = { ...S.profile, ...v }; }
+  }));
+}
+function detachAll() { S.unsub.forEach(f => { try { f(); } catch (_) {} }); S.unsub = []; }
+
+async function doLogout() {
+  if (!confirm("تسجيل الخروج من التطبيق؟")) return;
+  detachAll(); await signOut(auth);
+}
+window.doLogout = doLogout;
+
+/* ══════════════════════════════════════════════════════════════
+   استكمال البيانات (3 خطوات)
+══════════════════════════════════════════════════════════════ */
+const SETUP_CAPS = ["البيانات الشخصية", "الموقع على الخريطة", "تمكين الحساب"];
+function drawStepper(elId, caps, cur) {
+  $(elId).innerHTML = caps.map((c, i) => {
+    const n = i + 1;
+    const cls = n === cur ? "on" : (n < cur ? "dn" : "");
+    return `${i ? `<div class="bar ${n <= cur ? "on" : ""}"></div>` : ""}
+      <div class="st ${cls}"><div class="bub">${n < cur ? "✓" : n}</div><div class="cap">${esc(c)}</div></div>`;
+  }).join("");
+}
+
+function openSetup() {
+  S.setupStep = 1;
+  $("sutEmail").value = S.user.email || "";
+  $("sutName").value  = S.profile?.displayNameAr || "";
+  $("sutPhone").value = S.profile?.phone1 || "";
+  $("sutPhone2").value= S.profile?.phone2 || "";
+  if (S.user.photoURL) $("sutPhoto").src = S.user.photoURL;
+  renderAddr("sutAddrW", { value: S.profile?.address || "" });
+  fillZoneSelect($("sutZone"), { selected: S.profile?.defaultZoneId });
+  $("sutZone").onchange = () => {
+    const z = findZone($("sutZone").value);
+    const el = $("sutBranch");
+    if (!z) { el.style.display = "none"; return; }
+    el.style.display = "block";
+    el.innerHTML = `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);
+      border-radius:12px;padding:11px;font-size:13px">🏢 الفرع المسؤول عن خدمتك:
+      <b>${esc(zoneBranchName(z) || "—")}</b></div>`;
+  };
+  setupNext(1);
+  go("setup");
+}
+
+/* الصورة الشخصية — بترفع على Cloudinary وبتتخزن كرابط في البروفايل */
+$("sutPhotoFile").addEventListener("change", async e => {
+  const f = e.target.files?.[0]; e.target.value = "";
+  if (!f) return;
+  $("sutPhoto").src = URL.createObjectURL(f);
+  toast("جاري رفع الصورة…");
+  try {
+    S.photoUrl = await uploadImage(f);
+    $("sutPhoto").src = S.photoUrl;
+    toast("تم رفع الصورة ✅", "ok");
+  } catch (err) {
+    S.photoUrl = null;
+    $("sutPhoto").src = S.user?.photoURL || $("sutPhoto").src;
+    toast(err.message, "err");
+  }
+});
+
+function setupNext(step) {
+  if (step > S.setupStep) {
+    if (S.setupStep === 1) {
+      if (!$("sutName").value.trim())  return toast("اكتب اسمك بالكامل", "err");
+      if (!validPhone($("sutPhone").value)) return toast("رقم هاتف غير صحيح", "err");
+      if (!$("sutAgree").checked)      return toast("لازم توافق على الشروط والأحكام", "err");
+    }
+    if (S.setupStep === 2) {
+      if (!getAddr("sutAddrW").trim()) return toast("اكتب عنوانك", "err");
+    }
+  }
+  S.setupStep = step;
+  [1, 2, 3].forEach(n => $("sut-" + n).style.display = n === step ? "block" : "none");
+  drawStepper("setupStepper", SETUP_CAPS, step);
+  if (step === 2) setTimeout(() => showMiniMap("sutMap", S.draftLat, S.draftLng), 60);
+}
+window.setupNext = setupNext;
+
+function validPhone(p) { return /^0?1[0-9]{9}$/.test(String(p || "").replace(/\s|-/g, "")); }
+
+async function saveProfile() {
+  const zoneId = $("sutZone").value;
+  if (!zoneId) return toast("اختر منطقة الاستلام", "err");
+  const z = findZone(zoneId);
+  const bId = zoneBranchId(z);
+  const btn = $("sutSaveBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الحفظ…";
+  try {
+    const payload = {
+      uid: S.uid, email: S.user.email || "",
+      photoURL: S.photoUrl || S.user.photoURL || "",
+      displayNameAr: $("sutName").value.trim(),
+      phone1: $("sutPhone").value.trim(),
+      phone2: $("sutPhone2").value.trim(),
+      address: getAddr("sutAddrW"),
+      lat: S.draftLat ?? null, lng: S.draftLng ?? null,
+      defaultZoneId: zoneId,
+      defaultZoneName: zoneLabel(z),
+      defaultBranchId: bId,
+      defaultBranchName: zoneBranchName(z),
+      profileCompleted: true,
+      updatedAt: new Date().toISOString()
+    };
+    await update(ref(db, "customers/" + S.uid), payload);
+    S.profile = { ...S.profile, ...payload };
+
+    // نحفظ العنوان ده كعنوان افتراضي في دفتر العناوين
+    if (!S.addresses.length) {
+      await push(ref(db, `customers/${S.uid}/addresses`), {
+        label: "المنزل", fullAddress: payload.address,
+        lat: payload.lat, lng: payload.lng,
+        zoneId, zoneName: zoneLabel(z), branchId: bId, branchName: zoneBranchName(z),
+        isDefault: true, createdAt: new Date().toISOString()
+      });
+    }
+    toast("تم حفظ بياناتك ✅", "ok");
+    go("home");
+  } catch (e) { toast("خطأ في الحفظ: " + e.message, "err"); }
+  finally { btn.disabled = false; btn.textContent = "حفظ البيانات"; }
+}
+window.saveProfile = saveProfile;
+
+/* ══════════════════════════════════════════════════════════════
+   الرئيسية
+══════════════════════════════════════════════════════════════ */
+const todayKey = () => new Date().toDateString();
+function renderHome() {
+  $("homeName").textContent = (S.profile?.displayNameAr || "").split(" ")[0] || "بك";
+  const today = S.orders.filter(o => new Date(o.createdAt || 0).toDateString() === todayKey());
+  const st = s => today.filter(o => orderState(o) === s).length;
+  $("stTotal").textContent  = today.length;
+  $("stWay").textContent    = st("way");
+  $("stDone").textContent   = st("done");
+  $("stCancel").textContent = st("cancel");
+  const un = unreadCount();
+  $("homeBell").style.display = un ? "grid" : "none";
+  $("homeBell").textContent = un;
+}
+
+/* حالة الطلب من منظور العميل — مبنية على نفس قيم status
+   المستخدمة في تطبيق الطيار ولوحة الإدارة بدون تغييرها. */
+function orderState(o) {
+  const d = (o.deliveries && o.deliveries[0]) || {};
+  const s = o.status || d.status || "";
+  if (s === "ملغي") return "cancel";
+  if (s === "تم التسليم" || d.status === "تم التسليم") return "done";
+  if (s === "لم يتم التوصيل" || d.status === "لم يتم التوصيل") return "failed";
+  if (s === "جاري التوصيل" || o.pilotId) return "way";
+  return "new";
+}
+const STATE_META = {
+  new:    { t: "جديد",          c: "b-new" },
+  way:    { t: "قيد التوصيل",   c: "b-way" },
+  done:   { t: "تم التسليم",    c: "b-done" },
+  failed: { t: "لم يتم التوصيل", c: "b-way" },
+  cancel: { t: "ملغي",          c: "b-cancel" }
+};
+const KIND_ICON = { "وثيقة":"📄", "طرد":"📦", "شنطة":"👜", "كرتونة":"🗃️", "أخرى":"🧰" };
+
+/* ══════════════════════════════════════════════════════════════
+   طلباتي
+══════════════════════════════════════════════════════════════ */
+const FILTERS = [["all","الكل"],["new","جديد"],["way","قيد التوصيل"],["done","تم التسليم"],["cancel","ملغي"]];
+function renderOrders() {
+  $("orderTabs").innerHTML = FILTERS.map(([k, t]) =>
+    `<div class="tab ${S.orderFilter === k ? "on" : ""}" data-f="${k}">${t}</div>`).join("");
+  $("orderTabs").querySelectorAll(".tab").forEach(t =>
+    t.onclick = () => { S.orderFilter = t.dataset.f; renderOrders(); });
+
+  const list = S.orders.filter(o => S.orderFilter === "all" || orderState(o) === S.orderFilter);
+  if (!list.length) {
+    $("ordersList").innerHTML = `<div class="empty"><i>📦</i><b>لا توجد طلبات</b>
+      <span>ابدأ بإنشاء طلبك الأول من زر "طلب جديد"</span></div>`;
+    return;
+  }
+  $("ordersList").innerHTML = list.map(o => {
+    const d  = (o.deliveries && o.deliveries[0]) || {};
+    const m  = STATE_META[orderState(o)];
+    const dt = new Date(o.createdAt || 0);
+    const isToday = dt.toDateString() === todayKey();
+    return `<div class="o-item" data-id="${esc(o.id)}">
+      <div class="oi">${KIND_ICON[o.orderKind] || "📦"}</div>
+      <div class="ob">
+        <div class="r1"><span class="num">#${esc(o.orderNum || "—")}</span>
+          <span class="badge ${m.c}">${m.t}</span></div>
+        <div class="nm">${esc(d.receiverName || "—")}</div>
+        <div class="r3"><span>${fmtMoney(d.orderPrice)} ج.م</span>
+          <span>${isToday ? "اليوم" : dt.toLocaleDateString("ar-EG")} ${dt.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})}</span></div>
+      </div></div>`;
+  }).join("");
+  $("ordersList").querySelectorAll(".o-item").forEach(el =>
+    el.onclick = () => { S.currentOrderId = el.dataset.id; go("detail"); });
+}
+const fmtMoney = v => (Number(v) || 0).toLocaleString("ar-EG");
+
+/* ══════════════════════════════════════════════════════════════
+   تفاصيل الطلب + التتبّع
+   ملاحظة: التايم-لاين مشتق من الحقول الموجودة أصلًا
+   (createdAt / pilotId / statusSince / status) عشان ما نحتاجش
+   تعديل في تطبيق الطيار أو لوحة الإدارة.
+══════════════════════════════════════════════════════════════ */
+function orderTimeline(o) {
+  const st = o._state || orderState(o);
+  // التوقيتات دي بيكتبها تطبيق الطيار فعليًا (receiveOrder / startTrip /
+  // markDelivered)، فالتايم-لاين هنا حقيقي مش مُستنتج.
+  const rows = [
+    { k: "created",  t: "تم إنشاء الطلب",         at: o.createdAt,                    done: true },
+    { k: "assigned", t: "تم إسناد الطلب لطيار",   at: o.pilotId ? (o.assignedAt || o.statusSince) : null,
+      done: !!o.pilotId },
+    { k: "received", t: "استلم الطيار الشحنة",    at: o.receivedAt,                   done: !!o.receivedAt },
+    { k: "out",      t: "خرج للتوصيل",            at: o.tripStartedAt,                done: !!o.tripStartedAt }
+  ];
+  if (st === "failed")
+    rows.push({ k: "failed", t: "لم يتم التوصيل" + (o.undeliveredReason ? ` — ${o.undeliveredReason}` : ""),
+                at: o.undeliveredAt, done: true });
+  else if (st === "cancel")
+    rows.push({ k: "cancel", t: "تم إلغاء الطلب", at: o.cancelledAt || o.statusSince, done: true });
+  else
+    rows.push({ k: "delivered", t: "تم التسليم", at: o.deliveredAt, done: st === "done" });
+  return rows;
+}
+
+function renderDetail() {
+  const o = S.orders.find(x => x.id === S.currentOrderId);
+  if (!o) { $("detailBody").innerHTML = `<div class="empty"><i>❓</i><b>الطلب غير موجود</b></div>`; return; }
+  const d = (o.deliveries && o.deliveries[0]) || {};
+  const m = STATE_META[orderState(o)];
+  const tl = orderTimeline(o);
+
+  $("detailBody").innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="font-size:20px;font-weight:900;direction:ltr">#${esc(o.orderNum || "—")}</div>
+      <span class="badge ${m.c}">${m.t}</span>
+    </div>
+
+    <div class="card">
+      <span class="lbl">المستلم</span>
+      <b style="font-size:15px">${esc(d.receiverName || "—")}</b>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;direction:ltr">
+        <a href="tel:${esc(d.receiverPhone || "")}" style="color:var(--txt)">${esc(d.receiverPhone || "—")}</a>
+        <span style="color:var(--red)">📞</span></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:7px">📍 ${esc(d.address || "—")}</div>
+    </div>
+
+    <div class="card">
+      <span class="lbl">تتبّع الطلب</span>
+      <div class="tl">${tl.map(x => `
+        <div class="tl-row ${x.done ? "dn" : "pend"}">
+          <div class="dot"></div>
+          <div><b>${x.t}</b><span>${x.at ? fmtTime(x.at) : "—"}</span></div>
+        </div>`).join("")}</div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="map" id="trackMap" style="border:none;border-radius:0"></div>
+    </div>
+
+    <div class="card">
+      <span class="lbl">بيانات الطلب</span>
+      ${row("النوع", (KIND_ICON[o.orderKind] || "📦") + " " + (o.orderKind || "—"))}
+      ${row("عدد القطع", o.piecesCount || 1)}
+      ${row("مبلغ التحصيل", fmtMoney(d.orderPrice) + " ج.م")}
+      ${o.goodsValue ? row("قيمة البضاعة", fmtMoney(o.goodsValue) + " ج.م") : ""}
+      ${row("سعر التوصيل", d.zonePrice ? fmtMoney(d.zonePrice) + " ج.م" : "يحدده الفرع")}
+      ${row("طريقة الدفع", o.paymentMethod || "—")}
+      ${row("الفرع", o.branchName || "—")}
+      ${o.pilotName ? row("الطيار", o.pilotName) : ""}
+      ${d.note ? row("ملاحظات", d.note) : ""}
+    </div>
+
+    ${(d.images && d.images.length) ? `<div class="card"><span class="lbl">المرفقات</span>
+      <div class="thumbs">${d.images.map(u =>
+        `<a class="thumb" href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt="" /></a>`).join("")}</div></div>` : ""}
+
+    ${ratingBlock(o)}
+
+    <div style="display:flex;gap:10px;margin-top:14px">
+      ${pilotPhoneOf(o)
+        ? `<a class="btn" href="tel:${esc(pilotPhoneOf(o))}">📞 اتصال بالطيار</a>
+           <a class="btn ghost" href="https://wa.me/${waNum(pilotPhoneOf(o))}" target="_blank">💬 محادثة</a>`
+        : `<button class="btn ghost" disabled>${o.pilotId ? "جاري تحميل رقم الطيار…" : "لم يتم تعيين طيار بعد"}</button>`}
+    </div>
+    ${orderState(o) === "new" ? `<button class="btn ghost" style="margin-top:10px;color:var(--red)"
+        onclick="cancelOrder('${esc(o.id)}')">إلغاء الطلب</button>` : ""}`;
+
+  setTimeout(() => drawTrackMap(o), 80);
+  ensurePilotContact(o);
+  bindStars();
+}
+const row = (k, v) => `<div style="display:flex;justify-content:space-between;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px">
+  <span style="color:var(--muted)">${esc(k)}</span><b>${esc(v)}</b></div>`;
+
+function fmtTime(iso) {
+  const d = new Date(iso); if (isNaN(d)) return "—";
+  const today = d.toDateString() === todayKey();
+  return (today ? "اليوم" : d.toLocaleDateString("ar-EG")) + " " +
+         d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+}
+
+/* خريطة التتبّع: نقطة الاستلام + نقطة التسليم + موقع الطيار اللحظي
+   من pilots/{pilotId}/location اللي بيكتبه تطبيق الطيار. */
+let trackMap, trackPilotUnsub = null;
+function drawTrackMap(o) {
+  const el = $("trackMap"); if (!el || !window.L) return;
+  if (trackPilotUnsub) { trackPilotUnsub(); trackPilotUnsub = null; }
+  el.innerHTML = ""; el._leaflet_id = null;
+  const d = (o.deliveries && o.deliveries[0]) || {};
+  const a = (o.senderLat && o.senderLng) ? [o.senderLat, o.senderLng] : null;
+  const b = (d.lat && d.lng) ? [d.lat, d.lng] : null;
+  const center = a || b || [30.0444, 31.2357];
+
+  trackMap = L.map(el, { attributionControl: false, zoomControl: false }).setView(center, 12);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(trackMap);
+  const pin = (color, txt) => L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 26],
+    html: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px #000)">${txt}</div>` });
+  if (a) L.marker(a, { icon: pin("g", "🟢") }).addTo(trackMap).bindPopup("الاستلام");
+  if (b) L.marker(b, { icon: pin("r", "📍") }).addTo(trackMap).bindPopup("التسليم");
+  if (a && b) {
+    L.polyline([a, b], { color: "#e8192c", weight: 3, dashArray: "6 6" }).addTo(trackMap);
+    trackMap.fitBounds(L.latLngBounds([a, b]).pad(0.35));
+  }
+  if (o.pilotId && ["way"].includes(orderState(o))) {
+    let pm = null;
+    trackPilotUnsub = onValue(ref(db, `pilots/${o.pilotId}/location`), snap => {
+      const loc = snap.val(); if (!loc?.lat) return;
+      const p = [loc.lat, loc.lng];
+      if (pm) pm.setLatLng(p);
+      else pm = L.marker(p, { icon: pin("r", "🛵") }).addTo(trackMap).bindPopup("الطيار");
+    });
+  }
+}
+
+/* رقم الطيار مش متخزّن على الأوردر — بنجيبه من pilots/{id} ونكاشه */
+const pilotPhoneOf = o => o.pilotId ? (S.pilotCache?.[o.pilotId]?.phone1 || "") : "";
+const waNum = p => "2" + String(p || "").replace(/\D/g, "").replace(/^0/, "");
+async function ensurePilotContact(o) {
+  if (!o.pilotId) return;
+  S.pilotCache = S.pilotCache || {};
+  if (S.pilotCache[o.pilotId]) return;
+  try {
+    const snap = await get(ref(db, "pilots/" + o.pilotId));
+    S.pilotCache[o.pilotId] = snap.val() || {};
+    if (S.page === "detail" && S.currentOrderId === o.id) renderDetail();
+  } catch (_) {}
+}
+
+/* تقييم الطلب بعد التسليم */
+function ratingBlock(o) {
+  if (orderState(o) !== "done") return "";
+  const r = o.rating;
+  if (r) return `<div class="card"><span class="lbl">تقييمك للطلب</span>
+    <div style="font-size:22px;letter-spacing:3px">${"★".repeat(r.stars)}<span style="color:#3a3a42">${"★".repeat(5 - r.stars)}</span></div>
+    ${r.comment ? `<div style="font-size:12.5px;color:var(--muted);margin-top:7px">${esc(r.comment)}</div>` : ""}</div>`;
+  return `<div class="card"><span class="lbl">قيّم تجربتك</span>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:9px">رأيك بيساعدنا نحسّن الخدمة</div>
+    <div id="starBox" style="font-size:30px;letter-spacing:6px;cursor:pointer">
+      ${[1,2,3,4,5].map(n => `<span data-n="${n}" style="color:#3a3a42">★</span>`).join("")}</div>
+    <textarea id="rateNote" rows="2" placeholder="ملاحظة (اختياري)" style="margin-top:10px"></textarea>
+    <button class="btn sm" style="margin-top:10px" onclick="sendRating('${esc(o.id)}')">إرسال التقييم</button></div>`;
+}
+function bindStars() {
+  const box = $("starBox"); if (!box) return;
+  box.querySelectorAll("span").forEach(s => s.onclick = () => {
+    S.rateStars = +s.dataset.n;
+    box.querySelectorAll("span").forEach(x =>
+      x.style.color = +x.dataset.n <= S.rateStars ? "#f59e0b" : "#3a3a42");
+  });
+}
+async function sendRating(id) {
+  if (!S.rateStars) return toast("اختر عدد النجوم", "err");
+  try {
+    await update(ref(db, "orders/" + id), {
+      rating: { stars: S.rateStars, comment: $("rateNote").value.trim(),
+                at: new Date().toISOString(), by: S.uid }
+    });
+    S.rateStars = 0; toast("شكرًا لتقييمك ⭐", "ok");
+  } catch (e) { toast("تعذّر إرسال التقييم: " + e.message, "err"); }
+}
+window.sendRating = sendRating;
+
+async function cancelOrder(id) {
+  if (!confirm("إلغاء الطلب؟ لن تتمكن من التراجع.")) return;
+  try {
+    await update(ref(db, "orders/" + id), {
+      status: "ملغي", statusSince: new Date().toISOString(),
+      cancelledBy: "عميل", cancelledAt: new Date().toISOString()
+    });
+    toast("تم إلغاء الطلب", "ok");
+  } catch (e) { toast("تعذّر الإلغاء: " + e.message, "err"); }
+}
+window.cancelOrder = cancelOrder;
+
+/* ══════════════════════════════════════════════════════════════
+   الإشعارات — مشتقّة من حالة الطلبات (بدون FCM في النسخة دي)
+══════════════════════════════════════════════════════════════ */
+const NOTIF_META = {
+  assigned : { t: "تم إسناد طلبك لطيار",   i: "🧑‍✈️", c: "var(--red)" },
+  received : { t: "الطيار استلم شحنتك",     i: "📦",   c: "var(--red)" },
+  out      : { t: "الطيار في الطريق إليك",  i: "🛵",   c: "var(--orange)" },
+  delivered: { t: "تم التسليم بنجاح",       i: "✅",   c: "var(--green)" },
+  failed   : { t: "لم يتم التوصيل",         i: "⚠️",   c: "var(--orange)" },
+  cancel   : { t: "تم إلغاء الطلب",         i: "✖️",   c: "var(--muted)" }
+};
+function buildNotifs() {
+  const out = [];
+  for (const o of S.orders) {
+    for (const x of orderTimeline(o)) {
+      if (!x.done || !x.at || x.k === "created") continue;
+      const m = NOTIF_META[x.k]; if (!m) continue;
+      out.push({ orderId: o.id, num: o.orderNum, at: x.at, key: x.k,
+                 title: m.t, icon: m.i, color: m.c });
+    }
+  }
+  return out.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)).slice(0, 60);
+}
+const seenAt = () => S.profile?.notifSeenAt || 0;
+const unreadCount = () => buildNotifs().filter(n => new Date(n.at) > new Date(seenAt())).length;
+
+function refreshBadge() {
+  const n = unreadCount();
+  const b = $("navBadge");
+  b.style.display = n ? "grid" : "none"; b.textContent = n > 99 ? "99+" : n;
+  if (S.page === "home") { $("homeBell").style.display = n ? "grid" : "none"; $("homeBell").textContent = n; }
+}
+
+function renderNotifs() {
+  const list = buildNotifs();
+  const last = seenAt();
+  if (!list.length) {
+    $("notifList").innerHTML = `<div class="empty"><i>🔔</i><b>لا توجد إشعارات</b>
+      <span>هنبلّغك بأي تحديث على طلباتك</span></div>`;
+  } else {
+    $("notifList").innerHTML = list.map(n => `
+      <div class="nt ${new Date(n.at) > new Date(last) ? "unread" : ""}" data-id="${esc(n.orderId)}">
+        <div class="ni" style="background:rgba(232,25,44,.12);color:${n.color}">${n.icon}</div>
+        <div style="flex:1"><b>${esc(n.title)}</b>
+          <span>#${esc(n.num || "")} · ${fmtTime(n.at)}</span></div></div>`).join("");
+    $("notifList").querySelectorAll(".nt").forEach(el =>
+      el.onclick = () => { S.currentOrderId = el.dataset.id; go("detail"); });
+  }
+  // نعلّم الكل كمقروء
+  const now = new Date().toISOString();
+  update(ref(db, "customers/" + S.uid), { notifSeenAt: now }).catch(() => {});
+  S.profile.notifSeenAt = now;
+  setTimeout(refreshBadge, 400);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   العناوين المحفوظة
+══════════════════════════════════════════════════════════════ */
+function renderAddresses() {
+  if (!S.addresses.length) {
+    $("addrList").innerHTML = `<div class="empty"><i>📍</i><b>لا توجد عناوين محفوظة</b>
+      <span>احفظ عناوينك عشان تختارها بسرعة وقت الطلب</span></div>`;
+    return;
+  }
+  const ICO = { "المنزل":"🏠", "العمل":"🏢", "الشغل":"🏢" };
+  $("addrList").innerHTML = S.addresses.map(a => `
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <div class="mi" style="width:36px;height:36px;border-radius:10px;background:var(--card2);
+        display:grid;place-items:center;font-size:17px;flex:none">${ICO[a.label] || "📍"}</div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:14px">${esc(a.label || "عنوان")}
+          ${a.isDefault ? `<span class="badge b-new" style="margin-right:6px">افتراضي</span>` : ""}</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(a.fullAddress || "")}</div>
+        <div style="font-size:11px;color:#5a5a63;margin-top:2px">${esc(a.zoneName || "")} · ${esc(a.branchName || "")}</div>
+      </div>
+      <div class="ico-btn" onclick="editAddr('${esc(a.id)}')">✏️</div>
+      <div class="ico-btn" onclick="delAddr('${esc(a.id)}')">🗑️</div>
+    </div>`).join("");
+}
+
+function openAddrSheet(id) {
+  const a = id ? S.addresses.find(x => x.id === id) : null;
+  S.editAddrId = id || null;
+  S.draftLat = a?.lat ?? null; S.draftLng = a?.lng ?? null;
+  openModal(a ? "تعديل العنوان" : "إضافة عنوان جديد", `
+    <span class="lbl">اسم العنوان</span>
+    <div class="chips" id="addrLabels" style="margin-bottom:12px">
+      ${["المنزل","العمل","أخرى"].map(l =>
+        `<div class="chip ${((a?.label || "المنزل") === l) ? "on" : ""}" data-v="${l}">${l}</div>`).join("")}
+    </div>
+    <input id="addrLabelCustom" placeholder="اسم مخصص (اختياري)" value="${esc(a && !["المنزل","العمل"].includes(a.label) ? a.label : "")}" />
+    <div style="margin-top:12px"><div id="addrW"></div></div>
+    <span class="lbl" style="margin-top:12px">المنطقة (تحدد الفرع)</span>
+    <select id="addrZone"></select>
+    <div id="addrBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
+    <div class="map" id="addrMap" style="height:140px;margin-top:12px"></div>
+    <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('addr')">📍 تحديد الموقع على الخريطة</button>
+    <label style="display:flex;align-items:center;gap:9px;margin:14px 0;font-size:13.5px">
+      <input type="checkbox" id="addrDefault" ${a?.isDefault ? "checked" : ""}
+        style="width:19px;height:19px;accent-color:var(--red)" /> اجعله العنوان الافتراضي</label>
+    <button class="btn" onclick="saveAddr()">حفظ العنوان</button>`);
+  renderAddr("addrW", { value: a?.fullAddress || "" });
+  fillZoneSelect($("addrZone"), { selected: a?.zoneId });
+  $("addrZone").onchange = () => {
+    const z = findZone($("addrZone").value);
+    $("addrBranch").textContent = z ? "🏢 الفرع: " + (zoneBranchName(z) || "—") : "";
+  };
+  $("addrZone").onchange();
+  document.querySelectorAll("#addrLabels .chip").forEach(c => c.onclick = () => {
+    document.querySelectorAll("#addrLabels .chip").forEach(x => x.classList.remove("on"));
+    c.classList.add("on");
+  });
+  setTimeout(() => showMiniMap("addrMap", S.draftLat, S.draftLng), 60);
+}
+window.openAddrSheet = openAddrSheet;
+window.editAddr = id => openAddrSheet(id);
+
+async function saveAddr() {
+  const zoneId = $("addrZone").value;
+  if (!zoneId) return toast("اختر المنطقة", "err");
+  const full = getAddr("addrW");
+  if (!full.trim()) return toast("اكتب العنوان", "err");
+  const z = findZone(zoneId);
+  const custom = $("addrLabelCustom").value.trim();
+  const label  = custom || document.querySelector("#addrLabels .chip.on")?.dataset.v || "عنوان";
+  const isDefault = $("addrDefault").checked;
+  const payload = {
+    label, fullAddress: full, lat: S.draftLat ?? null, lng: S.draftLng ?? null,
+    zoneId, zoneName: zoneLabel(z), branchId: zoneBranchId(z), branchName: zoneBranchName(z),
+    isDefault, updatedAt: new Date().toISOString()
+  };
+  try {
+    if (isDefault) {
+      for (const a of S.addresses)
+        if (a.isDefault && a.id !== S.editAddrId)
+          await update(ref(db, `customers/${S.uid}/addresses/${a.id}`), { isDefault: false });
+    }
+    if (S.editAddrId) await update(ref(db, `customers/${S.uid}/addresses/${S.editAddrId}`), payload);
+    else await push(ref(db, `customers/${S.uid}/addresses`), { ...payload, createdAt: new Date().toISOString() });
+    closeModal(); toast("تم حفظ العنوان ✅", "ok");
+  } catch (e) { toast("خطأ: " + e.message, "err"); }
+}
+window.saveAddr = saveAddr;
+
+async function delAddr(id) {
+  if (!confirm("حذف العنوان؟")) return;
+  await remove(ref(db, `customers/${S.uid}/addresses/${id}`));
+  toast("تم الحذف", "ok");
+}
+window.delAddr = delAddr;
+
+/* ══════════════════════════════════════════════════════════════
+   الحساب
+══════════════════════════════════════════════════════════════ */
+function renderAccount() {
+  $("accName").textContent  = S.profile?.displayNameAr || "—";
+  $("accPhone").textContent = S.profile?.phone1 || "";
+  $("accEmail").textContent = S.profile?.email || "";
+  if (S.profile?.photoURL) $("accPhoto").src = S.profile.photoURL;
+  const on = S.profile?.fcmToken && window.Notification?.permission === "granted";
+  $("pushState").textContent = on ? "مفعّلة ✓" : "‹";
+  $("pushState").style.color = on ? "var(--green)" : "";
+}
+
+function openEditProfile() {
+  openModal("المعلومات الشخصية", `
+    <div class="fld"><div class="fi">👤</div><div class="fb"><b>الاسم بالكامل</b>
+      <input id="epName" value="${esc(S.profile?.displayNameAr || "")}" /></div></div>
+    <div class="fld"><div class="fi">📞</div><div class="fb"><b>رقم الهاتف</b>
+      <input id="epPhone" type="tel" value="${esc(S.profile?.phone1 || "")}" /></div></div>
+    <div class="fld"><div class="fi">📱</div><div class="fb"><b>رقم إضافي</b>
+      <input id="epPhone2" type="tel" value="${esc(S.profile?.phone2 || "")}" /></div></div>
+    <div class="fld"><div class="fi">✉️</div><div class="fb"><b>البريد الإلكتروني</b>
+      <input value="${esc(S.profile?.email || "")}" disabled /></div></div>
+    <span class="lbl">العنوان</span><div id="epAddrW"></div>
+    <span class="lbl" style="margin-top:12px">منطقة الاستلام الافتراضية</span>
+    <select id="epZone"></select>
+    <button class="btn" style="margin-top:16px" onclick="saveEditProfile()">حفظ التعديلات</button>`);
+  renderAddr("epAddrW", { value: S.profile?.address || "" });
+  fillZoneSelect($("epZone"), { selected: S.profile?.defaultZoneId });
+}
+window.openEditProfile = openEditProfile;
+
+async function saveEditProfile() {
+  if (!$("epName").value.trim()) return toast("اكتب الاسم", "err");
+  if (!validPhone($("epPhone").value)) return toast("رقم هاتف غير صحيح", "err");
+  const z = findZone($("epZone").value);
+  const payload = {
+    displayNameAr: $("epName").value.trim(),
+    phone1: $("epPhone").value.trim(), phone2: $("epPhone2").value.trim(),
+    address: getAddr("epAddrW"), updatedAt: new Date().toISOString()
+  };
+  if (z) Object.assign(payload, {
+    defaultZoneId: z.id, defaultZoneName: zoneLabel(z),
+    defaultBranchId: zoneBranchId(z), defaultBranchName: zoneBranchName(z)
+  });
+  await update(ref(db, "customers/" + S.uid), payload);
+  S.profile = { ...S.profile, ...payload };
+  closeModal(); renderAccount(); toast("تم الحفظ ✅", "ok");
+}
+window.saveEditProfile = saveEditProfile;
+
+const openSupport = () => openModal("الدعم والمساعدة", `
+  <div class="card" style="text-align:center">
+    <div style="font-size:34px">🎧</div>
+    <b style="display:block;margin:8px 0 4px">فريق خدمة العملاء</b>
+    <div style="font-size:12.5px;color:var(--muted)">متاحين لمساعدتك في أي وقت</div>
+    <a class="btn" style="margin-top:14px" href="tel:${esc(S.profile?.defaultBranchPhone || "16000")}">📞 اتصل بنا</a>
+  </div>`);
+const openAbout = () => openModal("عن التطبيق", `
+  <div style="text-align:center;padding:10px 0">
+    <img src="assets/logo.png" style="width:170px" alt="" />
+    <div style="font-size:13px;color:var(--muted);margin-top:14px;line-height:1.9">
+      تطبيق عملاء الدهشان<br />توصيل أسرع.. لكل مكان<br />الإصدار 1.0.0</div>
+  </div>`);
+window.openSupport = openSupport; window.openAbout = openAbout;
+
+/* ══════════════════════════════════════════════════════════════
+   إنشاء طلب جديد — Wizard 4 خطوات
+══════════════════════════════════════════════════════════════ */
+const WIZ_CAPS = ["المُرسل", "المستلم", "الطلب", "المرفقات"];
+const KINDS = ["وثيقة", "طرد", "شنطة", "كرتونة", "أخرى"];
+const PAYS  = ["كاش", "فيزا", "مدفوع مسبقًا"];
+
+function startNewOrder() {
+  if (!S.profile?.profileCompleted) { toast("أكمل بياناتك أولاً", "err"); return openSetup(); }
+  S.wizStep = 1; S.images = [];
+  S.draft = { kind: "طرد", pay: "كاش", pieces: 1,
+              sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
+              rcvLat: null, rcvLng: null };
+
+  $("sndName").value  = S.profile.displayNameAr || "";
+  $("sndPhone").value = S.profile.phone1 || "";
+  renderAddr("sndAddrW", { value: S.profile.address || "" });
+  fillZoneSelect($("sndZone"), { selected: S.profile.defaultZoneId });
+  $("sndZone").onchange = onSenderZone;
+  onSenderZone();
+
+  ["rcvName","rcvPhone","rcvPhone2"].forEach(k => $(k).value = "");
+  renderAddr("rcvAddrW");
+  $("rcvZone").onchange = onReceiverZone;
+
+  $("odCod").value = 0; $("odValue").value = 0; $("odNote").value = "";
+  $("odPieces").textContent = 1;
+  drawKinds(); drawPays();
+  renderSavedPicks();
+  $("thumbs").innerHTML = ""; $("thumbsWrap").style.display = "none";
+  wizNext(1);
+  go("new");
+}
+window.startNewOrder = startNewOrder;
+
+function onSenderZone() {
+  const z = findZone($("sndZone").value);
+  S.draft.senderZone = z;
+  const b = $("sndBranch");
+  if (!z) { b.textContent = "اختر منطقة الاستلام عشان نحدد الفرع"; fillZoneSelect($("rcvZone")); return; }
+  b.innerHTML = `🏢 الفرع المسؤول: <b style="color:var(--txt)">${esc(zoneBranchName(z) || "—")}</b>`;
+  // مناطق التسليم المتاحة = مناطق نفس الفرع (زي بوابة المحل بالظبط)
+  fillZoneSelect($("rcvZone"), { branchId: zoneBranchId(z), selected: $("rcvZone").value });
+}
+function onReceiverZone() {
+  const z = findZone($("rcvZone").value);
+  S.draft.receiverZone = z;
+  const el = $("rcvPrice");
+  if (!z) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.innerHTML = z.price
+    ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;
+        padding:10px;font-size:13px">🚚 سعر التوصيل التقديري: <b>${fmtMoney(z.price)} ج.م</b></div>`
+    : `<div style="font-size:12px;color:var(--muted)">سعر التوصيل هيحدده الفرع</div>`;
+}
+
+function drawKinds() {
+  $("kindBox").innerHTML = KINDS.map(k =>
+    `<div class="kind ${S.draft.kind === k ? "on" : ""}" data-v="${k}">
+       <i>${KIND_ICON[k]}</i><span>${k}</span></div>`).join("");
+  $("kindBox").querySelectorAll(".kind").forEach(el => el.onclick = () => {
+    S.draft.kind = el.dataset.v; drawKinds();
+  });
+}
+function drawPays() {
+  $("payBox").innerHTML = PAYS.map(p =>
+    `<div class="chip ${S.draft.pay === p ? "on" : ""}" data-v="${p}">${p}</div>`).join("");
+  $("payBox").querySelectorAll(".chip").forEach(el => el.onclick = () => {
+    S.draft.pay = el.dataset.v; drawPays();
+  });
+}
+function bumpPieces(n) {
+  S.draft.pieces = Math.max(1, (S.draft.pieces || 1) + n);
+  $("odPieces").textContent = S.draft.pieces;
+}
+window.bumpPieces = bumpPieces;
+
+/* اختيار سريع من العناوين المحفوظة / المستلمين السابقين */
+function renderSavedPicks() {
+  if (S.addresses.length) {
+    $("sndSaved").innerHTML = `<span class="lbl">أو اختر من عناوينك</span>
+      <div class="chips">${S.addresses.map(a =>
+        `<div class="chip" data-id="${esc(a.id)}">${esc(a.label)}</div>`).join("")}</div>`;
+    $("sndSaved").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      const a = S.addresses.find(x => x.id === c.dataset.id); if (!a) return;
+      setAddr("sndAddrW", a.fullAddress);
+      $("sndZone").value = a.zoneId || ""; onSenderZone();
+      S.draft.sndLat = a.lat ?? null; S.draft.sndLng = a.lng ?? null;
+      showMiniMap("sndMap", a.lat, a.lng);
+      toast("تم اختيار " + a.label, "ok");
+    });
+  } else $("sndSaved").innerHTML = "";
+
+  if (S.savedReceivers.length) {
+    $("rcvSaved").innerHTML = `<span class="lbl">مستلمون سابقون</span>
+      <div class="chips">${S.savedReceivers.slice(0, 10).map(r =>
+        `<div class="chip" data-id="${esc(r.id)}">${esc(r.name)}</div>`).join("")}</div>`;
+    $("rcvSaved").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      const r = S.savedReceivers.find(x => x.id === c.dataset.id); if (!r) return;
+      $("rcvName").value = r.name || ""; $("rcvPhone").value = r.phone || "";
+      $("rcvPhone2").value = r.phone2 || "";
+      setAddr("rcvAddrW", r.address || "");
+      if (r.zoneId) { $("rcvZone").value = r.zoneId; onReceiverZone(); }
+      S.draft.rcvLat = r.lat ?? null; S.draft.rcvLng = r.lng ?? null;
+      showMiniMap("rcvMap", r.lat, r.lng);
+    });
+  } else $("rcvSaved").innerHTML = "";
+}
+
+function wizNext(step) {
+  if (step > S.wizStep) {
+    if (S.wizStep === 1) {
+      if (!$("sndName").value.trim())            return toast("اكتب اسم المُرسِل", "err");
+      if (!validPhone($("sndPhone").value))      return toast("رقم هاتف المُرسِل غير صحيح", "err");
+      if (!getAddr("sndAddrW").trim())           return toast("اكتب عنوان الاستلام", "err");
+      if (!$("sndZone").value)                   return toast("اختر منطقة الاستلام", "err");
+    }
+    if (S.wizStep === 2) {
+      if (!$("rcvName").value.trim())            return toast("اكتب اسم المستلم", "err");
+      if (!validPhone($("rcvPhone").value))      return toast("رقم هاتف المستلم غير صحيح", "err");
+      if (!getAddr("rcvAddrW").trim())           return toast("اكتب عنوان التسليم", "err");
+      if (!$("rcvZone").value)                   return toast("اختر منطقة التسليم", "err");
+    }
+  }
+  S.wizStep = step;
+  [1, 2, 3, 4].forEach(n => $("wz-" + n).style.display = n === step ? "block" : "none");
+  drawStepper("wizStepper", WIZ_CAPS, step);
+  if (step === 1) setTimeout(() => showMiniMap("sndMap", S.draft.sndLat, S.draft.sndLng), 60);
+  if (step === 2) setTimeout(() => showMiniMap("rcvMap", S.draft.rcvLat, S.draft.rcvLng), 60);
+  if (step === 4) renderSummary();
+  $("s-new").querySelector(".scroll").scrollTop = 0;
+}
+window.wizNext = wizNext;
+window.wizBack = () => { if (S.wizStep > 1) wizNext(S.wizStep - 1); else go("home"); };
+
+function renderSummary() {
+  const z = S.draft.receiverZone;
+  $("summaryCard").innerHTML = `<span class="lbl">ملخّص الطلب</span>
+    ${row("المستلم", $("rcvName").value)}
+    ${row("المنطقة", z ? zoneLabel(z) : "—")}
+    ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
+    ${row("النوع", S.draft.kind + " × " + S.draft.pieces)}
+    ${row("التحصيل", fmtMoney($("odCod").value) + " ج.م")}
+    ${row("سعر التوصيل", z?.price ? fmtMoney(z.price) + " ج.م" : "يحدده الفرع")}
+    ${row("الدفع", S.draft.pay)}`;
+}
+
+/* ── رفع الصور على Cloudinary (نفس بوابة المحل) ──────────── */
+async function uploadImage(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", CLOUDINARY.uploadPreset);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`,
+    { method: "POST", body: fd });
+  if (!res.ok) {
+    let msg = "فشل رفع الصورة";
+    try { msg = (await res.json())?.error?.message || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  return (await res.json()).secure_url;
+}
+
+["fileCam", "fileGal"].forEach(id => {
+  $(id).addEventListener("change", async e => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    for (const f of files) {
+      if (S.images.length >= 6) { toast("الحد الأقصى 6 صور", "err"); break; }
+      const item = { local: URL.createObjectURL(f), url: null, busy: true };
+      S.images.push(item); drawThumbs();
+      try { item.url = await uploadImage(f); }
+      catch (err) { toast(err.message, "err"); S.images = S.images.filter(x => x !== item); }
+      finally { item.busy = false; drawThumbs(); }
+    }
+  });
+});
+
+function drawThumbs() {
+  $("thumbsWrap").style.display = S.images.length ? "block" : "none";
+  $("thumbs").innerHTML = S.images.map((im, i) => `
+    <div class="thumb"><img src="${esc(im.url || im.local)}" alt="" />
+      ${im.busy ? `<div class="ld">⏳</div>` : `<div class="x" data-i="${i}">✕</div>`}</div>`).join("");
+  $("thumbs").querySelectorAll(".x").forEach(x => x.onclick = () => {
+    S.images.splice(+x.dataset.i, 1); drawThumbs();
+  });
+}
+
+/* ── الإرسال ─────────────────────────────────────────────── */
+async function submitOrder() {
+  if (S.images.some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
+  const sz = S.draft.senderZone, rz = S.draft.receiverZone;
+  if (!sz) { wizNext(1); return toast("اختر منطقة الاستلام", "err"); }
+  if (!rz) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
+
+  const branchId   = zoneBranchId(sz);
+  const branchName = zoneBranchName(sz);
+  if (!branchId) return toast("المنطقة دي مش مربوطة بفرع — كلّم خدمة العملاء", "err");
+
+  const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
+  try {
+    // رقم الطلب — نفس عدّاد النظام: counters/{branchId}/{yyyymmdd}
+    const bCode = S.branches[branchId]?.code || "CUS";
+    const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    let count = 1;
+    await runTransaction(ref(db, `counters/${branchId}/${dayKey}`), cur => { count = (cur || 0) + 1; return count; });
+    const orderNum = `${bCode}-${String(count).padStart(3, "0")}`;
+    const now = new Date().toISOString();
+    const cod = parseFloat($("odCod").value) || 0;
+
+    const delivery = {
+      receiverId: null,
+      receiverName : $("rcvName").value.trim(),
+      receiverPhone: $("rcvPhone").value.trim(),
+      receiverPhone2: $("rcvPhone2").value.trim(),
+      zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
+      orderPrice: cod,
+      address: getAddr("rcvAddrW"),
+      lat: S.draft.rcvLat ?? null, lng: S.draft.rcvLng ?? null,
+      note: $("odNote").value.trim(),
+      status: "قيد التنفيذ",
+      images: S.images.map(i => i.url).filter(Boolean)
+    };
+
+    const order = {
+      orderNum,
+      senderId: null,
+      senderName  : $("sndName").value.trim(),
+      senderPhone : $("sndPhone").value.trim(),
+      senderPhone2: S.profile.phone2 || "",
+      senderAddress: getAddr("sndAddrW"),
+      senderLat: S.draft.sndLat ?? null, senderLng: S.draft.sndLng ?? null,
+      senderZoneId: sz.id, senderZoneName: zoneLabel(sz),
+      branchId, branchName,
+      notes: $("odNote").value.trim(),
+      deliveries: [delivery],
+      totalDeliveryPrice: rz.price || 0,
+      storePrepaid: cod,
+      storePrepaidNote: "",
+      status: "قيد التنفيذ",
+      statusSince: now,
+      createdAt: now,
+      addedBy: S.uid,
+      addedByRole: "عميل",
+      source: "customer",
+      // حقول تطبيق العميل (إضافة آمنة — الشاشات القديمة بتتجاهلها)
+      customerId: S.uid,
+      customerName: S.profile.displayNameAr || "",
+      customerPhone: S.profile.phone1 || "",
+      orderKind: S.draft.kind,
+      paymentMethod: S.draft.pay,
+      piecesCount: S.draft.pieces,
+      goodsValue: parseFloat($("odValue").value) || 0,
+      qrCode: orderNum,
+      timeline: { created: now }
+    };
+
+    await push(ref(db, "orders"), order);
+
+    // نحفظ المستلم للاقتراح في المرات الجاية
+    push(ref(db, `customers/${S.uid}/savedReceivers`), {
+      name: delivery.receiverName, phone: delivery.receiverPhone,
+      phone2: delivery.receiverPhone2, address: delivery.address,
+      zoneId: rz.id, lat: delivery.lat, lng: delivery.lng,
+      createdAt: now
+    }).catch(() => {});
+
+    showDone(orderNum);
+  } catch (e) {
+    toast("تعذّر إرسال الطلب: " + (e.message || e), "err");
+  } finally {
+    btn.disabled = false; btn.textContent = "إرسال الطلب";
+  }
+}
+window.submitOrder = submitOrder;
+
+function showDone(num) {
+  $("doneNum").textContent = "#" + num;
+  const box = $("doneQr"); box.innerHTML = "";
+  try { new QRCode(box, { text: num, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
+  catch (_) { box.innerHTML = `<div style="color:#111;font-weight:800;padding:20px">${esc(num)}</div>`; }
+  go("done");
+  confetti();
+}
+function confetti() {
+  const host = $("s-done");
+  const colors = ["#e8192c", "#22c55e", "#f59e0b", "#3b82f6", "#fff"];
+  for (let i = 0; i < 46; i++) {
+    const c = document.createElement("div");
+    c.className = "cf";
+    c.style.right = Math.random() * 100 + "%";
+    c.style.background = colors[i % colors.length];
+    c.style.animationDuration = (2 + Math.random() * 1.6) + "s";
+    c.style.animationDelay = (Math.random() * .5) + "s";
+    host.appendChild(c);
+    setTimeout(() => c.remove(), 4200);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   الخرائط — Leaflet + OpenStreetMap (مجاني، بدون مفتاح API)
+══════════════════════════════════════════════════════════════ */
+const TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const miniMaps = {};
+function showMiniMap(elId, lat, lng) {
+  const el = $(elId); if (!el) return;
+  if (!lat || !lng || !window.L) {
+    el.innerHTML = `<div class="mini-map" style="height:100%"><span class="pin">📍</span></div>`;
+    return;
+  }
+  el.innerHTML = ""; el._leaflet_id = null;
+  if (miniMaps[elId]) { try { miniMaps[elId].remove(); } catch (_) {} }
+  const m = L.map(el, { attributionControl: false, zoomControl: false, dragging: false,
+                        scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false });
+  m.setView([lat, lng], 15);
+  L.tileLayer(TILES, { maxZoom: 19 }).addTo(m);
+  L.marker([lat, lng], { icon: L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 26],
+    html: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px #000)">📍</div>` }) }).addTo(m);
+  miniMaps[elId] = m;
+  setTimeout(() => m.invalidateSize(), 120);
+}
+
+let pickMap, pickMarker;
+function pickOnMap(target) {
+  S.mapTarget = target;
+  const cur = target === "snd" ? [S.draft?.sndLat, S.draft?.sndLng]
+            : target === "rcv" ? [S.draft?.rcvLat, S.draft?.rcvLng]
+            : [S.draftLat, S.draftLng];
+  const start = (cur[0] && cur[1]) ? cur : [30.0444, 31.2357];
+  $("mapModal").classList.add("on");
+  setTimeout(() => {
+    const el = $("pickMap");
+    el.innerHTML = ""; el._leaflet_id = null;
+    if (pickMap) { try { pickMap.remove(); } catch (_) {} }
+    pickMap = L.map(el, { attributionControl: false }).setView(start, (cur[0] ? 16 : 11));
+    L.tileLayer(TILES, { maxZoom: 19 }).addTo(pickMap);
+    pickMarker = L.marker(start, { draggable: true, icon: L.divIcon({ className: "",
+      iconSize: [30, 30], iconAnchor: [15, 30],
+      html: `<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 5px #000)">📍</div>` }) }).addTo(pickMap);
+    S.pickLatLng = { lat: start[0], lng: start[1] };
+    showCoords();
+    pickMarker.on("dragend", () => { const p = pickMarker.getLatLng(); S.pickLatLng = p; showCoords(); });
+    pickMap.on("click", e => { pickMarker.setLatLng(e.latlng); S.pickLatLng = e.latlng; showCoords(); });
+    pickMap.invalidateSize();
+  }, 120);
+}
+window.pickOnMap = pickOnMap;
+const showCoords = () => $("pickCoords").textContent =
+  S.pickLatLng ? `${S.pickLatLng.lat.toFixed(5)} , ${S.pickLatLng.lng.toFixed(5)}` : "—";
+
+function locateMe() {
+  if (!navigator.geolocation) return toast("المتصفح مش بيدعم تحديد الموقع", "err");
+  toast("جاري تحديد موقعك…");
+  navigator.geolocation.getCurrentPosition(p => {
+    const ll = { lat: p.coords.latitude, lng: p.coords.longitude };
+    S.pickLatLng = ll; pickMarker.setLatLng(ll); pickMap.setView(ll, 16); showCoords();
+  }, () => toast("تعذّر تحديد الموقع — فعّل صلاحية الموقع", "err"), { enableHighAccuracy: true, timeout: 9000 });
+}
+window.locateMe = locateMe;
+
+function confirmMapPick() {
+  if (!S.pickLatLng) return closeMapModal();
+  const { lat, lng } = S.pickLatLng;
+  if (S.mapTarget === "snd") { S.draft.sndLat = lat; S.draft.sndLng = lng; showMiniMap("sndMap", lat, lng); }
+  else if (S.mapTarget === "rcv") { S.draft.rcvLat = lat; S.draft.rcvLng = lng; showMiniMap("rcvMap", lat, lng); }
+  else if (S.mapTarget === "sut") { S.draftLat = lat; S.draftLng = lng; showMiniMap("sutMap", lat, lng);
+    $("sutCoords").textContent = `${lat.toFixed(5)} , ${lng.toFixed(5)}`; }
+  else if (S.mapTarget === "addr") { S.draftLat = lat; S.draftLng = lng; showMiniMap("addrMap", lat, lng); }
+  closeMapModal(); toast("تم حفظ الموقع ✅", "ok");
+}
+window.confirmMapPick = confirmMapPick;
+const closeMapModal = () => $("mapModal").classList.remove("on");
+window.closeMapModal = closeMapModal;
+
+/* ══════════════════════════════════════════════════════════════
+   مودال عام
+══════════════════════════════════════════════════════════════ */
+function openModal(title, html) {
+  $("modalTitle").textContent = title;
+  $("modalBody").innerHTML = html;
+  $("modal").classList.add("on");
+}
+const closeModal = () => $("modal").classList.remove("on");
+window.openModal = openModal; window.closeModal = closeModal;
+$("modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
+$("mapModal").onclick = e => { if (e.target.id === "mapModal") closeMapModal(); };
+
+/* زر الرجوع في المتصفح/الموبايل */
+window.addEventListener("popstate", () => {
+  if ($("modal").classList.contains("on")) return closeModal();
+  if ($("mapModal").classList.contains("on")) return closeMapModal();
+  if (S.page === "detail") return go("orders");
+  if (S.page === "new" && S.wizStep > 1) return wizNext(S.wizStep - 1);
+  if (!["home", "splash", "login"].includes(S.page)) return go("home");
+});
+
+/* ══════════════════════════════════════════════════════════════
+   PWA — تثبيت التطبيق على شاشة الموبايل + عمل offline
+══════════════════════════════════════════════════════════════ */
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("customer-sw.js").catch(() => {}));
+}
+
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; });
+// لو التطبيق متثبّت ومفتوح كتطبيق، مفيش داعي لبند التثبيت
+if (matchMedia("(display-mode: standalone)").matches || navigator.standalone)
+  document.addEventListener("DOMContentLoaded", () => { const r = $("installRow"); if (r) r.style.display = "none"; });
+async function installApp() {
+  if (!deferredPrompt) {
+    return openModal("تثبيت التطبيق", `<div style="font-size:13.5px;line-height:2">
+      لتثبيت التطبيق على شاشتك الرئيسية:<br />
+      <b>أندرويد / كروم:</b> افتح قائمة المتصفح ⋮ ثم "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية".<br />
+      <b>آيفون / سفاري:</b> اضغط زر المشاركة ⬆️ ثم "إضافة إلى الشاشة الرئيسية".</div>`);
+  }
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  $("installRow").style.display = "none";
+  if (outcome === "accepted") toast("تم تثبيت التطبيق ✅", "ok");
+}
+window.installApp = installApp;
+
+/* ══════════════════════════════════════════════════════════════
+   الإشعارات الفورية (FCM)
+   التوكن بيتخزن في customers/{uid}/fcmToken، والدالة السحابية
+   (functions/index.js) هي اللي بتبعت الإشعار عند تغيّر حالة الطلب.
+══════════════════════════════════════════════════════════════ */
+async function enablePush() {
+  if (!("Notification" in window)) return toast("المتصفح ده مش بيدعم الإشعارات", "err");
+  if (location.protocol === "file:") return toast("الإشعارات بتشتغل على الموقع المنشور بس", "err");
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return toast("لازم تسمح بالإشعارات من إعدادات المتصفح", "err");
+
+    const vapid = (await get(ref(db, "settings/fcmVapidKey"))).val();
+    if (!vapid) return toast("مفتاح الإشعارات (VAPID) مش متسجّل في settings/fcmVapidKey", "err");
+
+    const { getMessaging, getToken, onMessage } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js");
+    const messaging = getMessaging(app);
+    const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+    const token = await getToken(messaging, { vapidKey: vapid, serviceWorkerRegistration: reg });
+    if (!token) return toast("تعذّر توليد توكن الإشعارات", "err");
+
+    await update(ref(db, "customers/" + S.uid), {
+      fcmToken: token, fcmUpdatedAt: new Date().toISOString()
+    });
+    // إشعار والتطبيق مفتوح
+    onMessage(messaging, p => {
+      const d = p.data || {};
+      toast((d.title || "تحديث على طلبك") + (d.body ? " — " + d.body : ""), "ok");
+      refreshBadge();
+    });
+    $("pushState").textContent = "مفعّلة ✓";
+    toast("تم تفعيل الإشعارات ✅", "ok");
+  } catch (e) { toast("خطأ في تفعيل الإشعارات: " + (e.message || e), "err"); }
+}
+window.enablePush = enablePush;
+
+/* لو الاتصال اتأخر ما نسيبش شاشة التحميل معلّقة */
+setTimeout(() => { if ($("boot").style.display !== "none") { $("boot").style.display = "none"; go("splash"); } }, 6000);
+</script>
+</body>
+</html>

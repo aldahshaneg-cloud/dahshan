@@ -3330,7 +3330,14 @@
               storePrepaidNote : order.storePrepaidNote || "",
               status: "جاري التوصيل", statusSince: now,
               createdAt: order.createdAt,
-              pilotId, pilotName: pilot.name, splitFrom: orderId
+              pilotId, pilotName: pilot.name, splitFrom: orderId,
+              // بيانات مصدر الطلب لازم تتنقل مع الجزء المفصول، وإلا الطلب
+              // ده يختفي من تطبيق العميل (بيفلتر على customerId)
+              addedBy: order.addedBy || "", addedByRole: order.addedByRole || "",
+              source: order.source || "", customerId: order.customerId || null,
+              customerName: order.customerName || "", customerPhone: order.customerPhone || "",
+              orderKind: order.orderKind || "", paymentMethod: order.paymentMethod || "",
+              piecesCount: order.piecesCount || null
             });
           }
           if (pilot.pilotStatus === "waiting") {

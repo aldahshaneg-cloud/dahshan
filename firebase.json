@@ -1,5 +1,8 @@
 {
   "database": {
     "rules": "docs/database.rules.json"
+  },
+  "functions": {
+    "source": "functions"
   }
 }

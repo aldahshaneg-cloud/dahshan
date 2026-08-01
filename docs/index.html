@@ -660,6 +660,19 @@
           مباشرةً باسم المستخدم وكلمة المرور.
         </div>
 
+        <!-- مدخل العملاء — ده تطبيق عام مش محتاج صلاحية، فبيبان للكل قبل الدخول -->
+        <a href="tiar_customer.html" style="display:flex;align-items:center;gap:12px;margin-top:18px;
+           padding:14px 16px;border-radius:14px;text-decoration:none;
+           background:linear-gradient(90deg,rgba(232,25,44,.16),rgba(232,25,44,.05));
+           border:1px solid rgba(232,25,44,.35)">
+          <span style="font-size:1.5rem">🛵</span>
+          <span style="flex:1;text-align:right">
+            <b style="display:block;color:#fff;font-size:.92rem">عميل؟ اطلب توصيلك من هنا</b>
+            <span style="font-size:.74rem;color:#8b93a7">تطبيق العملاء — دخول بحساب جوجل</span>
+          </span>
+          <span style="color:#e8192c;font-size:1.2rem">‹</span>
+        </a>
+
         <div class="login-panel-footer">جميع الحقوق محفوظة © 2024 الدهشان</div>
       </div><!-- .login-card -->
     </div>
@@ -797,6 +810,21 @@
             </svg>
           </div>
           <div class="app-name">تقفيل روح دمشق</div>
+        </div>
+
+        <!-- تطبيق العملاء — التطبيق العام اللي العميل بيطلب منه -->
+        <div class="app-card green" id="card-customer" onclick="openApp('customer')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="10" y="3" width="16" height="30" rx="3.5" fill="#e8192c" opacity=".12" stroke="#e8192c" stroke-width="1.5"/>
+              <line x1="15" y1="7" x2="21" y2="7" stroke="#e8192c" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="18" cy="29" r="1.6" fill="#e8192c"/>
+              <path d="M13 13H23L21.8 22H14.2L13 13Z" fill="#e8192c" opacity=".6"/>
+              <path d="M15.5 13V11.5C15.5 10.1 16.6 9 18 9C19.4 9 20.5 10.1 20.5 11.5V13"
+                    stroke="#e8192c" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="app-name">تطبيق العملاء</div>
         </div>
 
         <!-- HR (النسخة القديمة) — مؤقتة لحد التأكد من الجديد -->
@@ -945,6 +973,12 @@
       if (allowedApps.includes("accounts") && !allowedApps.includes("damascus")) {
         allowedApps = [...allowedApps, "damascus"];
       }
+      // «تطبيق العملاء» تطبيق عام، بس بنفتحه للإدارة والكول سنتر من هنا
+      // عشان يقدروا يعاينوه ويتابعوا تجربة العميل
+      if ((allowedApps.includes("admin") || allowedApps.includes("callcenter"))
+          && !allowedApps.includes("customer")) {
+        allowedApps = [...allowedApps, "customer"];
+      }
       const cards = {
         admin:  document.getElementById("card-admin"),
         branch: document.getElementById("card-branch"),
@@ -953,7 +987,8 @@
         hrOld:  document.getElementById("card-hrOld"),
         accounts: document.getElementById("card-accounts"),
         callcenter: document.getElementById("card-callcenter"),
-        damascus: document.getElementById("card-damascus")
+        damascus: document.getElementById("card-damascus"),
+        customer: document.getElementById("card-customer")
       };
       for (const [appKey, card] of Object.entries(cards)) {
         if (!card) continue;
@@ -977,7 +1012,8 @@
       // hrOld تتبع صلاحية hr — نفس سبب الاستنتاج في renderAppCards
       const ok = allowed.includes(appKey)
         || (appKey === "hrOld"   && allowed.includes("hr"))
-        || (appKey === "damascus" && allowed.includes("accounts"));
+        || (appKey === "damascus" && allowed.includes("accounts"))
+        || (appKey === "customer" && (allowed.includes("admin") || allowed.includes("callcenter")));
       if (!ok) return;
 
       const urls = {
@@ -988,7 +1024,8 @@
         hrOld:  "tiar-hr.html",
         accounts: "tiar_accounts.html",
         callcenter: "tiar_callcenter.html",
-        damascus: "tiar_damascus.html"
+        damascus: "tiar_damascus.html",
+        customer: "tiar_customer.html"
       };
       if (!urls[appKey]) return;
 
@@ -1009,10 +1046,10 @@
       }
       // وإلا احسبها من الدور
       const role = (userData.role || "").trim();
-      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter", "damascus"];
+      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter", "damascus", "customer"];
       if (["محاسب", "مدير حسابات", "accountant"].includes(role))    return ["accounts", "damascus"];
       if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(role)) return ["hr", "hrOld"];
-      if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(role))  return ["callcenter"];
+      if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(role))  return ["callcenter", "customer"];
       if (["مشرف فرع", "مشرف", "branch"].includes(role))           return ["branch"];
       if (["صاحب محل", "تاجر", "محل", "store"].includes(role))     return ["store"];
       // أي دور غير معروف → إدارة فقط (الأكثر أماناً للمستخدمين القدامى)
