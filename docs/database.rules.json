@@ -133,6 +133,10 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "rd": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "accounting": {
       ".read": "auth != null",
       ".write": "auth != null",

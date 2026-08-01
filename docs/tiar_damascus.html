@@ -1,0 +1,3097 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الدهشان | تقفيل روح دمشق</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  /* ══════════════════════════════════════════════════════════════
+     DESIGN TOKENS — مطابقة لباقي برامج الدهشان
+  ══════════════════════════════════════════════════════════════ */
+  :root {
+    --sky: #e8192c; --sky-d: #b91c1c; --night: #0a0a0a; --panel: #111111;
+    --card: #1a1a1a; --border: #2a2a2a; --text: #f0f0f0; --muted: #888888;
+    --green: #22c55e; --red: #e8192c; --purple: #a855f7; --orange: #f97316;
+    --blue: #3b82f6; --teal: #14b8a6;
+    --sidebar-w: 236px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
+    /* عشان ساعة المتصفح ومنتقي التاريخ يطلعوا بلون الثيم */
+    color-scheme: dark; --pick-invert: 1;
+  }
+  :root.light {
+    --sky: #0284c7; --sky-d: #0369a1; --night: #f0f6ff; --panel: #ffffff;
+    --card: #f0f6ff; --border: #bfd8f0; --text: #0c1e35; --muted: #4d7a9e;
+    --green: #16a34a; --red: #dc2626; --purple: #7c3aed; --orange: #ea580c;
+    --blue: #2563eb; --teal: #0d9488;
+    color-scheme: light; --pick-invert: 0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--night); color: var(--text); transition: background-color .25s, color .2s; }
+  #sidebar, #login-screen, .login-box, .modal-box, .stat-card, .table-wrap, .nav-item, input, textarea, select { transition: background-color .25s, border-color .25s, color .2s; }
+  input, textarea, select, button { font-family: var(--font); }
+
+  /* ── LOGIN ── */
+  #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--night); position: fixed; inset: 0; z-index: 1000;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232,25,44,.07) 0%, transparent 60%); }
+  .login-box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 44px 38px; width: 100%; max-width: 420px; }
+  .login-brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1.55rem; font-weight: 800; color: var(--sky); margin-bottom: 6px; }
+  .login-sub { text-align: center; color: var(--muted); font-size: .84rem; margin-bottom: 26px; }
+  .login-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+  .login-field label { font-size: .8rem; color: var(--muted); font-weight: 600; }
+  .login-field input { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 12px 16px; outline: none; font-size: .92rem; }
+  .login-field input:focus { border-color: var(--sky); }
+  #loginError { font-size: .82rem; color: var(--red); margin-bottom: 12px; text-align: center; min-height: 18px; }
+  .login-btn { width: 100%; background: var(--sky); color: #fff; border: none; padding: 13px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: .95rem; }
+  .login-btn:hover { background: var(--sky-d); }
+  .login-btn:disabled { opacity: .6; cursor: not-allowed; }
+  .login-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: .76rem; color: var(--muted); line-height: 1.8; text-align: center; }
+
+  /* ── LAYOUT ── */
+  #app { display: none; min-height: 100vh; }
+  #app.visible { display: flex; }
+  #sidebar { width: var(--sidebar-w); min-height: 100vh; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+  .sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 20px 18px 16px; font-size: 1.16rem; font-weight: 800; color: var(--sky); border-bottom: 1px solid var(--border); }
+  .sidebar-nav { padding: 12px 9px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .sidebar-section-label { font-size: .66rem; color: var(--muted); letter-spacing: .1em; padding: 12px 12px 5px; opacity: .6; font-weight: 700; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border-radius: 9px; cursor: pointer; font-size: .87rem; color: var(--muted); border: none; background: none; width: 100%; text-align: right; }
+  .nav-item:hover { background: var(--card); color: var(--text); }
+  .nav-item.active { background: rgba(232,25,44,.12); color: var(--sky); font-weight: 700; }
+  .sidebar-footer { padding: 12px 9px; border-top: 1px solid var(--border); }
+  .theme-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 13px; border-radius: 8px; border: 1px solid var(--border); background: none; font-size: .82rem; color: var(--muted); cursor: pointer; width: 100%; margin-bottom: 8px; }
+  .theme-toggle:hover { background: var(--card); color: var(--text); }
+  .toggle-pill { width: 34px; height: 18px; background: var(--border); border-radius: 9px; position: relative; flex-shrink: 0; }
+  .toggle-pill::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .25s; }
+  :root.light .toggle-pill { background: var(--sky); }
+  :root.light .toggle-pill::after { transform: translateX(-16px); background: #fff; }
+  .sidebar-user { display: flex; align-items: center; gap: 10px; padding: 9px 11px; margin-bottom: 8px; }
+  .user-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(232,25,44,.18); color: var(--sky); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+  #sidebar-username { font-size: .85rem; font-weight: 700; color: var(--text); }
+  #sidebar-role { font-size: .72rem; color: var(--muted); }
+  .sidebar-logout { width: 100%; background: rgba(232,25,44,.08); color: var(--red); border: 1px solid rgba(232,25,44,.2); padding: 9px 13px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 600; }
+  .sidebar-logout:hover { background: rgba(232,25,44,.18); }
+  #main { flex: 1; min-width: 0; }
+  .page { display: none; padding: 26px 30px 60px; width: 100%; }
+  .page.active { display: block; }
+
+  /* ── SHARED UI ── */
+  .sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .sec-title { font-size: 1.08rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .sec-sub { font-size: .78rem; color: var(--muted); font-weight: 500; margin-top: 3px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .field { padding: 8px 11px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: .83rem; outline: none; }
+  .field:focus { border-color: var(--sky); }
+  .add-btn { background: var(--sky); color: #fff; border: none; padding: 9px 18px; border-radius: 8px; font-size: .85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .add-btn:hover { background: var(--sky-d); }
+  .add-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-ghost { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 600; cursor: pointer; }
+  .btn-ghost:hover { border-color: var(--sky); color: var(--sky); }
+  .btn-green { background: rgba(34,197,94,.14); color: var(--green); border: 1px solid rgba(34,197,94,.3); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 700; cursor: pointer; }
+  .btn-green:hover { background: var(--green); color: #fff; }
+  .btn-red { background: rgba(232,25,44,.12); color: var(--red); border: 1px solid rgba(232,25,44,.28); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 700; cursor: pointer; }
+  .btn-red:hover { background: var(--red); color: #fff; }
+  .btn-xs { padding: 4px 9px; font-size: .74rem; border-radius: 6px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .stat-label { font-size: .74rem; color: var(--muted); display: block; margin-bottom: 6px; font-weight: 600; }
+  .stat-value { font-size: 1.5rem; font-weight: 800; color: var(--sky); line-height: 1.15; display: block; font-variant-numeric: tabular-nums; }
+  .stat-sub { font-size: .72rem; color: var(--muted); margin-top: 4px; display: block; }
+
+  .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+  thead { background: var(--panel); position: sticky; top: 0; z-index: 2; }
+  th { padding: 11px 13px; text-align: right; font-weight: 700; font-size: .74rem; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 10px 13px; border-bottom: 1px solid var(--border); color: var(--text); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(232,25,44,.035); }
+  .num { font-variant-numeric: tabular-nums; text-align: left; direction: ltr; white-space: nowrap; }
+  .empty-row { text-align: center; color: var(--muted); padding: 38px; }
+  .idx { color: var(--muted); font-size: .77rem; }
+  tr.total-row td { font-weight: 800; background: var(--panel); border-top: 2px solid var(--border); }
+
+  .badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; }
+  .bg-green { background: rgba(34,197,94,.15); color: var(--green); }
+  .bg-red { background: rgba(232,25,44,.15); color: var(--red); }
+  .bg-orange { background: rgba(249,115,22,.15); color: var(--orange); }
+  .bg-blue { background: rgba(59,130,246,.15); color: var(--blue); }
+  .bg-muted { background: rgba(136,136,136,.13); color: var(--muted); }
+
+  .info-box { background: rgba(59,130,246,.07); border: 1px solid rgba(59,130,246,.22); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
+  .warn-box { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.25); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
+
+  /* ══════════ الجدول الشبيه بالإكسل ══════════ */
+  .sheet-title { background: var(--panel); border: 1px solid var(--border); border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0; padding: 12px 16px; text-align: center;
+    font-weight: 800; font-size: 1rem; color: var(--sky); letter-spacing: .3px; }
+  .sheet-wrap { border-radius: 0 0 var(--radius) var(--radius); }
+
+  /* ══════════ تثبيت رأس الصفحة عند التمرير ══════════
+     شريط الأدوات + عنوان الشيت + سطر أسماء الأعمدة يفضلوا ظاهرين.
+     الإزاحات (--stick1/--stick2) بيحسبها JS لأن ارتفاع الشريط
+     بيتغيّر لما الأزرار تلتف في شاشة صغيرة. */
+  .page > .sec-header.sticky-bar {
+    position: sticky; top: 0; z-index: 60;
+    background: var(--night); margin: -26px -30px 16px; padding: 18px 30px 12px;
+    border-bottom: 1px solid var(--border); }
+  .sheet-title.sticky-title { position: sticky; top: var(--stick1, 0px); z-index: 55; }
+  /* أي overflow على الحاوية (حتى overflow-x) بيعمل حاوية تمرير جديدة
+     وساعتها الـ thead بيلزق جوّاها بدل ما يلزق في الشاشة — فلازم visible */
+  .sheet-wrap { overflow: visible; }
+  .sheet-wrap thead { top: var(--stick2, 0px); box-shadow: 0 1px 0 var(--border); }
+  @media (max-width: 900px) {
+    .page > .sec-header.sticky-bar { margin: -18px -12px 14px; padding: 12px 12px 10px; }
+  }
+  .grid-table td { padding: 0; }
+  .grid-table td.lbl { padding: 7px 12px; }
+  .cell-in { width: 100%; background: transparent; border: none; outline: none; color: var(--text);
+    padding: 8px 11px; font-size: .87rem; font-weight: 600; text-align: center;
+    font-variant-numeric: tabular-nums; }
+  .cell-in.txt { text-align: right; font-weight: 500; font-size: .82rem; }
+  .cell-in:hover { background: rgba(232,25,44,.05); }
+  .cell-in:focus { background: rgba(232,25,44,.12); box-shadow: inset 0 0 0 2px var(--sky); border-radius: 4px; }
+  .cell-in::placeholder { color: transparent; }
+  /* الخانة المحسوبة تلقائيًا (صافي الخدمة) — الرقم باهت لحد ما تكتب فوقه */
+  .cell-in.auto::placeholder { color: var(--green); opacity: .65; }
+  .cell-in.auto:focus::placeholder { color: transparent; }
+  /* خانات الحضور والانصراف — ساعة المتصفح بتفتح من أيقونة الساعة */
+  .cell-in.time { direction: ltr; text-align: center; padding: 7px 4px; cursor: pointer; }
+  .cell-in.time::-webkit-calendar-picker-indicator {
+    cursor: pointer; opacity: .55; margin-inline-start: 2px;
+    filter: invert(var(--pick-invert, 1)); }
+  .cell-in.time:hover::-webkit-calendar-picker-indicator { opacity: 1; }
+  .cell-in.time:invalid, .cell-in.time:not(:valid) { color: var(--muted); }
+  .grid-table td + td { border-inline-start: 1px solid var(--border); }
+  .grid-table th + th { border-inline-start: 1px solid var(--border); }
+  .grid-table tbody tr.today-row { background: rgba(59,130,246,.07); }
+  .grid-table tbody tr.off-row .cell-in { opacity: .55; }
+  .saving-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--orange);
+    margin-inline-start: 6px; vertical-align: middle; opacity: 0; transition: opacity .2s; }
+  .saving-dot.on { opacity: 1; }
+
+  /* بلوك الملخص */
+  .sum-block { margin-top: 18px; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; }
+  .sum-head { background: var(--panel); padding: 11px 16px; font-weight: 800; font-size: .92rem;
+    color: var(--sky); border-bottom: 1px solid var(--border); text-align: center; }
+  .sum-row { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+  .sum-row:last-child { border-bottom: none; }
+  .sum-row .sl { flex: 1; font-size: .86rem; font-weight: 600; }
+  .sum-row .sh { font-size: .73rem; color: var(--muted); font-weight: 500; }
+  .sum-row .sv { font-size: .98rem; font-weight: 800; font-variant-numeric: tabular-nums;
+    direction: ltr; min-width: 130px; text-align: left; }
+  .sum-row input.sv { background: var(--night); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 11px; color: var(--text); outline: none; }
+  .sum-row input.sv:focus { border-color: var(--sky); background: rgba(232,25,44,.06); }
+  .sum-row.calc { background: rgba(59,130,246,.05); }
+  .sum-row.grand { background: rgba(232,25,44,.08); }
+  .sum-row.grand .sl, .sum-row.grand .sv { color: var(--sky); font-size: 1.05rem; }
+  .branch-nets { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding: 14px 16px; }
+  .bn-card { background: var(--night); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; text-align: center; }
+  .bn-name { font-size: .74rem; color: var(--muted); font-weight: 700; }
+  .bn-val { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 3px; }
+
+  /* ══════════ شاشة الصلاحيات ══════════ */
+  .perm-group { background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
+  .perm-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .perm-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 4px; padding: 12px 16px; }
+  .perm-check { display: flex; align-items: center; gap: 9px; cursor: pointer;
+    font-size: .86rem; font-weight: 600; padding: 6px 8px; border-radius: 8px; user-select: none; }
+  .perm-check:hover { background: rgba(232,25,44,.05); }
+  .perm-check input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--sky);
+    cursor: pointer; flex-shrink: 0; }
+  .perm-head .perm-check { font-weight: 800; font-size: .92rem; padding: 0; }
+  .perm-head .perm-check:hover { background: none; }
+
+  /* ── MODAL ── */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(5px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 18px; }
+  .modal.open { display: flex; }
+  .modal-box { background: var(--night); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 17px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--night); z-index: 3; border-radius: 16px 16px 0 0; }
+  .modal-title { font-size: 1rem; font-weight: 800; }
+  .modal-close { background: var(--card); border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem; }
+  .modal-close:hover { color: var(--red); border-color: var(--red); }
+  .modal-body { padding: 18px 20px; }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 9px; justify-content: flex-start; position: sticky; bottom: 0; background: var(--night); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-bottom: 13px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: .79rem; color: var(--muted); font-weight: 700; }
+  .form-group input, .form-group select, .form-group textarea { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 13px; outline: none; font-size: .88rem; width: 100%; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--sky); }
+
+  /* ══════════ زر المساعدة ولوحة الشرح ══════════ */
+  #helpBtn { position: fixed; top: 18px; left: 20px; z-index: 8000;
+    width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+    background: var(--sky); color: #fff; border: none;
+    font-size: 1.15rem; font-weight: 800; font-family: Georgia, serif; font-style: italic;
+    box-shadow: 0 4px 16px rgba(232,25,44,.4); display: flex; align-items: center; justify-content: center; }
+  #helpBtn:hover { background: var(--sky-d); transform: scale(1.08); }
+  #helpBtn:active { transform: scale(.96); }
+  #helpOverlay { position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(5px);
+    z-index: 9500; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #helpOverlay.open { display: flex; }
+  #helpPanel { background: var(--night); border: 1px solid var(--border); border-radius: 16px;
+    width: 100%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #helpHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  #helpTitle { font-size: 1.18rem; font-weight: 800; color: var(--sky); }
+  #helpSub { font-size: .78rem; color: var(--muted); margin-top: 3px; }
+  #helpBody { padding: 20px 24px; overflow-y: auto; line-height: 1.95; font-size: .89rem; }
+  #helpFoot { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .help-what { background: rgba(59,130,246,.08); border-inline-start: 3px solid var(--blue);
+    border-radius: 8px; padding: 13px 16px; margin-bottom: 18px; font-size: .9rem; }
+  .help-sec { font-size: .82rem; font-weight: 800; color: var(--sky); margin: 20px 0 9px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .help-sec:first-of-type { margin-top: 0; }
+  #helpBody ul { margin: 0; padding-inline-start: 22px; }
+  #helpBody li { margin-bottom: 7px; }
+  #helpBody b { color: var(--text); }
+  #helpBody code { background: var(--card); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-size: .84em; direction: ltr; display: inline-block; }
+  .help-tip { background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.25);
+    border-radius: 9px; padding: 11px 14px; margin-top: 14px; font-size: .85rem; }
+  .help-warn { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.28);
+    border-radius: 9px; padding: 11px 14px; margin-top: 14px; font-size: .85rem; }
+  .help-steps { counter-reset: hs; list-style: none; padding: 0; margin: 0; }
+  .help-steps li { counter-increment: hs; position: relative; padding-inline-start: 34px; margin-bottom: 11px; }
+  .help-steps li::before { content: counter(hs); position: absolute; inset-inline-start: 0; top: 1px;
+    width: 23px; height: 23px; border-radius: 50%; background: var(--sky); color: #fff;
+    font-size: .75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+
+  /* ── TOAST ── */
+  #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(120px); background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 13px 26px; border-radius: 10px; font-weight: 700; font-size: .88rem; z-index: 99999; transition: transform .3s; box-shadow: 0 8px 30px rgba(0,0,0,.45); max-width: 90vw; text-align: center; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+
+  /* ── PRINT ── */
+  @media print {
+    #sidebar, #helpBtn, #helpOverlay, #toast, .toolbar, .no-print { display: none !important; }
+    body { background: #fff; color: #000; }
+    .page { padding: 0; }
+    .table-wrap, .sum-block, .sheet-title { border-color: #999; background: #fff; }
+    th, td { color: #000 !important; border-color: #bbb !important; }
+    .cell-in { color: #000 !important; }
+  }
+  @media (max-width: 900px) {
+    #helpBtn { top: 12px; left: 12px; width: 34px; height: 34px; font-size: 1rem; }
+    #app.visible { flex-direction: column; }
+    #sidebar { width: 100%; height: auto; min-height: 0; position: static; border-left: none; border-bottom: 1px solid var(--border); }
+    .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
+    .page { padding: 18px 12px 50px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     LOGIN
+═══════════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-brand">🍽️ تقفيل روح دمشق</div>
+    <div class="login-sub">الدهشان — تقفيل يومي وشهري للفروع والطيارين</div>
+    <div class="login-field">
+      <label>اسم المستخدم</label>
+      <input type="text" id="loginUser" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <div class="login-field">
+      <label>كلمة المرور</label>
+      <input type="password" id="loginPass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <div id="loginError"></div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">دخول</button>
+    <div class="login-note">
+      الدخول متاح <b>للإدارة</b> (تلقائيًا بحساب جوجل من البوابة الرئيسية)<br>
+      و<b>للمحاسب</b> باسم المستخدم وكلمة المرور.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     APP
+═══════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="sidebar-brand">🍽️ <span>روح دمشق</span></div>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">التقفيل</div>
+      <button class="nav-item active" onclick="navigateTo('daily')">🗓️ التقفيل اليومي</button>
+      <button class="nav-item" onclick="navigateTo('pilot')">🧾 كشف الطيار</button>
+      <button class="nav-item" onclick="navigateTo('month')">📊 تقفيل الشهر</button>
+      <button class="nav-item" onclick="navigateTo('deferred')">🧮 السلف المؤجلة</button>
+
+      <div class="sidebar-section-label" id="navSectionSetup">الإعداد</div>
+      <button class="nav-item" onclick="navigateTo('setup')">👥 الفروع والطيارين</button>
+      <button class="nav-item" onclick="navigateTo('settings')">⚙️ الإعدادات</button>
+      <button class="nav-item" onclick="navigateTo('perms')">🔐 الصلاحيات</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <span style="display:flex;align-items:center;gap:8px"><span id="themeIcon">☀️</span><span id="themeLabel">الوضع النهاري</span></span>
+        <span class="toggle-pill"></span>
+      </button>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">؟</div>
+        <div style="min-width:0">
+          <div id="sidebar-username">—</div>
+          <div id="sidebar-role">—</div>
+        </div>
+      </div>
+      <button class="sidebar-logout" onclick="doLogout()">🚪 تسجيل خروج</button>
+    </div>
+  </aside>
+
+  <main id="main">
+
+    <!-- بيظهر بس لما المستخدم مالوش أي صلاحية — الشاشات بتفضل مكانها -->
+    <div id="noPerms" style="display:none;padding:26px 30px">
+      <div class="warn-box">لسه مالكش صلاحيات على أي شاشة — كلّم المدير.</div>
+    </div>
+
+    <!-- ═══ 1) التقفيل اليومي ═══ -->
+    <div class="page active" id="page-daily">
+      <div class="sec-header no-print sticky-bar">
+        <div>
+          <div class="sec-title">🗓️ التقفيل اليومي <span class="saving-dot" id="dailyDot"></span></div>
+          <div class="sec-sub">نفس شيت «تقفيل يومي» — اكتب في الخانة وهي بتتحفظ لوحدها</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="dailyBranch" onchange="onDailyBranchChange()"></select>
+          <button class="btn-ghost" onclick="shiftDay(-1)" title="اليوم السابق">▶</button>
+          <input type="date" class="field" id="dailyDate" onchange="renderDaily()" />
+          <button class="btn-ghost" onclick="shiftDay(1)" title="اليوم التالي">◀</button>
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-green" onclick="exportDaily()">📥 إكسل</button>
+        </div>
+      </div>
+      <div id="dailyBody"></div>
+    </div>
+
+    <!-- ═══ 2) كشف الطيار ═══ -->
+    <div class="page" id="page-pilot">
+      <div class="sec-header no-print sticky-bar">
+        <div>
+          <div class="sec-title">🧾 كشف الطيار <span class="saving-dot" id="pilotDot"></span></div>
+          <div class="sec-sub">نفس شيت الطيار — ٣١ يوم والإجمالي وصافي الراتب</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="pilotBranchFilter" onchange="fillPilotSelect()"></select>
+          <select class="field" id="pilotSelect" onchange="renderPilot()"></select>
+          <input type="month" class="field" id="pilotMonth" onchange="renderPilot()" />
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-green" onclick="exportPilot()">📥 إكسل</button>
+        </div>
+      </div>
+      <div id="pilotBody"></div>
+    </div>
+
+    <!-- ═══ 3) تقفيل الشهر ═══ -->
+    <div class="page" id="page-month">
+      <div class="sec-header no-print sticky-bar">
+        <div>
+          <div class="sec-title">📊 تقفيل الشهر</div>
+          <div class="sec-sub">كل الطيارين في شهر واحد — الأجر والسلف وصافي الراتب</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="monthBranch" onchange="renderMonth()"></select>
+          <input type="month" class="field" id="monthMonth" onchange="renderMonth()" />
+          <button class="btn-ghost" onclick="window.print()">🖨️ طباعة</button>
+          <button class="btn-green" onclick="exportMonth()">📥 إكسل</button>
+        </div>
+      </div>
+      <div id="monthBody"></div>
+    </div>
+
+    <!-- ═══ 3b) السلف المؤجلة ═══ -->
+    <div class="page" id="page-deferred">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🧮 السلف المؤجلة</div>
+          <div class="sec-sub">سلف كبيرة بتتقسّط على الشهور بدل ما تتخصم مرة واحدة</div>
+        </div>
+        <div class="toolbar">
+          <input type="month" class="field" id="defMonth" onchange="renderDeferred()" />
+          <button class="add-btn" onclick="openDefModal()">➕ سلفة مؤجلة</button>
+        </div>
+      </div>
+      <div id="deferredBody"></div>
+    </div>
+
+    <!-- ═══ 4) الفروع والطيارين ═══ -->
+    <div class="page" id="page-setup">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">👥 الفروع والطيارين</div>
+          <div class="sec-sub">فروع روح دمشق والطيارين اللي في كل فرع</div>
+        </div>
+        <div class="toolbar">
+          <button class="btn-ghost" onclick="openBranchModal()">🏢 إضافة فرع</button>
+          <button class="add-btn" onclick="openPilotModal()">➕ إضافة طيار</button>
+          <button class="btn-ghost" onclick="openBulkModal()">📋 إضافة قائمة أسماء</button>
+        </div>
+      </div>
+      <div id="setupBody"></div>
+    </div>
+
+    <!-- ═══ 6) الصلاحيات ═══ -->
+    <div class="page" id="page-perms">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🔐 الصلاحيات</div>
+          <div class="sec-sub">افتح للمشرف اللي تحبه وأقفل اللي مش عايزه يشوفه — من غير أي تعديل في البرنامج</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="permUser" onchange="renderPerms()"></select>
+          <button class="add-btn" onclick="openAccountModal()">➕ حساب مشرف</button>
+        </div>
+      </div>
+      <div id="permsBody"></div>
+    </div>
+
+    <!-- ═══ 5) الإعدادات ═══ -->
+    <div class="page" id="page-settings">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">⚙️ الإعدادات</div>
+          <div class="sec-sub">أسعار الحساب المستخدمة في كل الشاشات</div>
+        </div>
+      </div>
+      <div id="settingsBody"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════ المودالات ═══════════ -->
+<div class="modal" id="modal-branch">
+  <div class="modal-box" style="max-width:440px">
+    <div class="modal-head">
+      <div class="modal-title" id="branchModalTitle">إضافة فرع</div>
+      <button class="modal-close" onclick="closeModal('branch')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group full">
+        <label>اسم الفرع</label>
+        <input type="text" id="bmName" placeholder="مثال: المنصورة" onkeydown="if(event.key==='Enter')saveBranch()" />
+      </div>
+      <div id="bmError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="saveBranch()">حفظ</button>
+      <button class="btn-ghost" onclick="closeModal('branch')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-pilot">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-head">
+      <div class="modal-title" id="pilotModalTitle">إضافة طيار</div>
+      <button class="modal-close" onclick="closeModal('pilot')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>اسم الطيار</label>
+          <input type="text" id="pmName" onkeydown="if(event.key==='Enter')savePilot()" />
+        </div>
+        <div class="form-group">
+          <label>الفرع</label>
+          <select id="pmBranch"></select>
+        </div>
+        <div class="form-group">
+          <label>نوع الوظيفة</label>
+          <select id="pmJob">
+            <option value="طيار">طيار</option>
+            <option value="مشرف">مشرف</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>سعر الساعة</label>
+          <input type="text" inputmode="decimal" id="pmHourRate" />
+        </div>
+        <div class="form-group">
+          <label>سعر الأوردر (خدمة الطيار)</label>
+          <input type="text" inputmode="decimal" id="pmOrderRate" />
+        </div>
+        <div class="form-group">
+          <label>أيام الإجازة المدفوعة</label>
+          <input type="text" inputmode="numeric" id="pmLeaveDays" placeholder="مثال: 2" />
+        </div>
+        <div class="form-group">
+          <label>الحالة</label>
+          <select id="pmActive">
+            <option value="1">على رأس العمل</option>
+            <option value="0">موقوف / خرج</option>
+          </select>
+        </div>
+      </div>
+      <div class="info-box" style="margin-bottom:10px;font-size:.79rem">
+        <b>سعر الأوردر</b> ده عمولة الطيار — <b>خدمة الطيار</b> في التقفيل اليومي
+        بتتحسب لوحدها = عدد أوردراته × السعر ده.<br>
+        سيبه فاضي هو وسعر الساعة لو الطيار على الافتراضي (<b id="pmDefaultRates">—</b>).
+      </div>
+      <div id="pmError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="savePilot()">حفظ</button>
+      <button class="btn-red" id="pmDelete" onclick="deletePilot()" style="display:none">🗑️ حذف</button>
+      <button class="btn-ghost" onclick="closeModal('pilot')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-def">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-head">
+      <div class="modal-title" id="defModalTitle">سلفة مؤجلة</div>
+      <button class="modal-close" onclick="closeModal('def')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box" style="margin-bottom:15px">
+        السلفة المؤجلة <b>مش بتدخل</b> في تقفيلة اليوم ولا في مطابقة المشرف —
+        بتتخصم من راتب الطيار على أقساط شهرية لحد ما تتسدّد.
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>الطيار</label>
+          <select id="dfPilot"></select>
+        </div>
+        <div class="form-group">
+          <label>تاريخ السلفة</label>
+          <input type="date" id="dfDate" />
+        </div>
+        <div class="form-group">
+          <label>المبلغ الكامل</label>
+          <input type="text" inputmode="decimal" id="dfAmount" placeholder="مثال: 5000" />
+        </div>
+        <div class="form-group">
+          <label>القسط الشهري</label>
+          <input type="text" inputmode="decimal" id="dfMonthly" placeholder="مثال: 500"
+                 oninput="previewDefPlan()" />
+        </div>
+        <div class="form-group">
+          <label>يبدأ الخصم من شهر</label>
+          <input type="month" id="dfStart" onchange="previewDefPlan()" />
+        </div>
+        <div class="form-group full">
+          <label>ملاحظة (اختياري)</label>
+          <input type="text" id="dfNote" placeholder="سبب السلفة" />
+        </div>
+      </div>
+      <div id="dfPlan" style="font-size:.82rem;color:var(--muted);line-height:1.9;min-height:22px"></div>
+      <div id="dfError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="saveDeferred()">حفظ</button>
+      <button class="btn-red" id="dfDelete" onclick="deleteDeferred()" style="display:none">🗑️ حذف</button>
+      <button class="btn-ghost" onclick="closeModal('def')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-account">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-head">
+      <div class="modal-title" id="accModalTitle">حساب دخول لمشرف</div>
+      <button class="modal-close" onclick="closeModal('account')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box" style="margin-bottom:15px">
+        الحساب ده بيدخل بيه المشرف على البرنامج. بعد ما تعمله، ظبّط له
+        <b>الصلاحيات</b> من الشاشة اللي وراك.
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>الاسم — من الموجودين في البرنامج</label>
+          <select id="acPerson" onchange="onAccPersonChange()"></select>
+        </div>
+        <div class="form-group">
+          <label>اسم المستخدم (بالإنجليزي)</label>
+          <input type="text" id="acUser" placeholder="mansoura1" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="text" id="acPass" placeholder="على الأقل 4 حروف" autocomplete="off" />
+        </div>
+        <div class="form-group full">
+          <label>الدور</label>
+          <select id="acRole">
+            <option value="مشرف فرع">مشرف فرع</option>
+            <option value="مشرف">مشرف</option>
+          </select>
+        </div>
+      </div>
+      <label class="perm-check" style="margin-bottom:6px">
+        <input type="checkbox" id="acPreset" checked />
+        <span>افتحله صلاحيات «مشرف يسجّل بس» على فرعه على طول</span>
+      </label>
+      <div id="acError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="saveAccount()">إنشاء الحساب</button>
+      <button class="btn-red" id="acDelete" onclick="deleteAccount()" style="display:none">🗑️ حذف الحساب</button>
+      <button class="btn-ghost" onclick="closeModal('account')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-bulk">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-head">
+      <div class="modal-title">إضافة قائمة أسماء</div>
+      <button class="modal-close" onclick="closeModal('bulk')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group full" style="margin-bottom:13px">
+        <label>الفرع</label>
+        <select id="bkBranch"></select>
+      </div>
+      <div class="form-group full">
+        <label>الأسماء — كل اسم في سطر</label>
+        <textarea id="bkNames" rows="10" placeholder="علام&#10;سمكة&#10;عبد الرحمن&#10;إبراهيم"></textarea>
+      </div>
+      <div id="bkError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="saveBulk()">إضافة</button>
+      <button class="btn-ghost" onclick="closeModal('bulk')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ زر المساعدة ═══════════ -->
+<button id="helpBtn" onclick="openHelp()" title="إيه الصفحة دي؟ (F1)">i</button>
+<div id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div id="helpPanel">
+    <div id="helpHead">
+      <div>
+        <div id="helpTitle">—</div>
+        <div id="helpSub">دليل استخدام الشاشة</div>
+      </div>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div id="helpBody"></div>
+    <div id="helpFoot">
+      <button class="btn-ghost" onclick="closeHelp()">تمام، فهمت</button>
+      <span style="font-size:.74rem;color:var(--muted);margin-inline-start:auto">اضغط <b>F1</b> في أي وقت</span>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════════════
+   تقفيل روح دمشق — الدهشان
+   نسخة رقمية من شيت الإكسل اللي كان المدير بيقفّل عليه
+   ──────────────────────────────────────────────────────────────────────
+   البنية على Firebase:
+     rd/settings                          أسعار الساعة والأوردر
+     rd/branches/{id}                     فروع روح دمشق
+     rd/pilots/{id}                       الطيارين  { name, branchId, active }
+     rd/entries/{YYYY-MM}/{pilotId}/{d}   بيانات اليوم { h, o, net, adv, ded, note }
+     rd/summary/{YYYY-MM}/{branchId}/{d}  بلوك التقفيل اليومي { pct, ext, exp, cash }
+
+   ملاحظة مهمة: شيت «تقفيل يومي» وشيت كل طيار في الإكسل كانوا نفس البيانات
+   مكتوبة مرتين. هنا البيانات مخزّنة مرة واحدة في rd/entries، والشاشتين
+   بيقروا منها — فأي رقم تكتبه في التقفيل اليومي بيظهر فورًا في كشف الطيار.
+   ══════════════════════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, set, get, update, remove, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, onAuthStateChanged, signOut, signInAnonymously }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8",
+  measurementId: "G-F9R1E5P5GS"
+};
+
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+
+const ROOT = "rd";                       // روح دمشق
+const DEFAULT_BRANCHES = ["المنصورة", "طنطا", "دمياط", "العبور"];
+/* orderRate     = رسوم التطوير على كل أوردر (بتاعة الشركة — عامة)
+   pilotOrderRate = خدمة الطيار على كل أوردر (الافتراضي لو الطيار مالوش سعر خاص) */
+const DEFAULT_SETTINGS = {
+  hourRate: 30, orderRate: 2, pilotOrderRate: 0, restName: "روح دمشق", shiftHours: 10
+};
+
+/* ══════════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════════ */
+const S = {
+  user     : null,
+  settings : { ...DEFAULT_SETTINGS },
+  branches : [],
+  pilots   : [],
+  entries  : {},        // { "YYYY-MM": { pilotId: { day: {...} } } }
+  summary  : {},        // { "YYYY-MM": { branchId: { day: {...} } } }
+  deferred : [],        // السلف المؤجلة المقسّطة على شهور
+  users    : [],        // مستخدمي النظام (للصلاحيات)
+  perms    : {},        // { username: { branches:[], keys:{} } }
+  permsLoaded: false,   // وصلت من قاعدة البيانات؟
+  loadedMonths: new Set(),
+  seeded   : false
+};
+window._S = S;
+
+/* ══════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+
+function num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
+function fmt(n) {
+  const v = round2(num(n));
+  return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+function money(n) { return fmt(n) + " ج"; }
+function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function todayStr() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+function monthOf(dateStr) { return String(dateStr || "").slice(0, 7); }
+function dayOf(dateStr)   { return parseInt(String(dateStr || "").slice(8, 10), 10) || 1; }
+function daysInMonth(ym) {
+  const [y, m] = String(ym).split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+const AR_DAYS = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+function weekdayOf(ym, d) {
+  const [y, m] = String(ym).split("-").map(Number);
+  return AR_DAYS[new Date(y, m - 1, d).getDay()];
+}
+function monthLabel(ym) {
+  const [y, m] = String(ym).split("-").map(Number);
+  return `شهر ${m} / ${y}`;
+}
+
+window.showToast = function(msg, type = "") {
+  const t = $("toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.className = "show " + type;
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => { t.className = ""; }, 3200);
+};
+const showToast = window.showToast;
+
+window.openModal  = t => { $("modal-" + t)?.classList.add("open"); document.body.style.overflow = "hidden"; };
+window.closeModal = t => { $("modal-" + t)?.classList.remove("open"); document.body.style.overflow = ""; };
+
+window.toggleTheme = function() {
+  const light = document.documentElement.classList.toggle("light");
+  localStorage.setItem("tiar-rd-theme", light ? "light" : "dark");
+  $("themeIcon").textContent  = light ? "🌙" : "☀️";
+  $("themeLabel").textContent = light ? "الوضع الليلي" : "الوضع النهاري";
+};
+(function initTheme() {
+  if (localStorage.getItem("tiar-rd-theme") === "light") {
+    document.documentElement.classList.add("light");
+    document.addEventListener("DOMContentLoaded", () => {
+      $("themeIcon").textContent = "🌙"; $("themeLabel").textContent = "الوضع الليلي";
+    });
+  }
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   AUTH + SESSION — نفس نظام باقي البرامج
+══════════════════════════════════════════════════════════════ */
+const SESSION_KEY = "tiar-rd-session";
+const ADMIN_ROLES = ["مدير", "مدير عام", "admin", "محاسب", "مدير حسابات", "accountant"];
+/* أي دور تاني (مشرف فرع مثلًا) بيدخل بصلاحيات المدير اللي ظبّطها له
+   في شاشة «الصلاحيات» — لو مظبطش له حاجة مش هيشوف حاجة. */
+
+async function isAdminEmail(email) {
+  if (!email) return false;
+  const snap = await get(ref(db, "adminEmails"));
+  if (!snap.exists()) return false;
+  const val = snap.val();
+  const list = Array.isArray(val) ? val : Object.values(val);
+  return list.filter(Boolean).map(e => String(e).trim().toLowerCase())
+             .includes(String(email).trim().toLowerCase());
+}
+
+onAuthStateChanged(auth, async (user) => {
+  try {
+    if (!user) {
+      // القواعد بتطلب auth != null — بندخل مجهول عشان القراءة تشتغل
+      signInAnonymously(auth).catch(e => console.warn("anonymous auth:", e?.code || e));
+      return;
+    }
+    if (S.user) return;
+    const email = (user.email || "").toLowerCase();
+    if (!email) return;                       // جلسة مجهولة
+    if (!await isAdminEmail(email)) return;   // مش أدمن → تفضل شاشة الدخول
+    const data = {
+      username: email,
+      displayName: user.displayName || email,
+      role: "مدير عام",
+      isAdmin: true,
+      via: "google"
+    };
+    saveSession(data);
+    applySession(data);
+  } catch (e) { console.error("google admin auto-login:", e); }
+});
+
+function saveSession(d) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(d)); } catch {} }
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+/** المدير بيتعرف من دوره — مش من علامة محفوظة، عشان الجلسات القديمة
+    (اللي اتحفظت قبل ما نظام الصلاحيات يتضاف) ماتتقفلش في وشه. */
+function sessionIsAdmin(d) {
+  if (d?.isAdmin === true) return true;
+  if (d?.via === "google") return true;                 // دخول جوجل = إدارة
+  return ADMIN_ROLES.includes(String(d?.role || "").trim());
+}
+
+function applySession(d) {
+  d = { ...d, isAdmin: sessionIsAdmin(d) };
+  saveSession(d);                                        // نحدّث الجلسة القديمة
+  S.user = d;
+  /* نبدأ من صفحة بيضا: مانسيبش شاشة مفتوحة من مستخدم قبله — عشان
+     ما حدّش يقع على شاشة مالوش صلاحية عليها */
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+  if ($("noPerms")) $("noPerms").style.display = "none";
+  $("login-screen").style.display = "none";
+  $("app").classList.add("visible");
+  $("sidebar-username").textContent = d.displayName || d.username;
+  $("sidebar-role").textContent     = d.role || "";
+  $("userAvatar").textContent       = (d.displayName || d.username || "؟").trim().charAt(0);
+  if (isAdmin()) initDefaults();
+  startListeners();
+  applyNavPerms();
+  // المدير بيفتح على طول؛ غيره بيستنى صلاحياته توصل من قاعدة البيانات
+  if (isAdmin()) navigateTo("daily");
+  else ensureLanding();
+}
+
+/** يفتح أول شاشة مسموحة — بيتنادى كمان لما الصلاحيات توصل متأخرة */
+function ensureLanding() {
+  if (document.querySelector(".page.active")) return;
+  const first = firstAllowedPage();
+  if (first) { navigateTo(first); $("noPerms").style.display = "none"; return; }
+  // مانمسحش الشاشات — بنعرض رسالة جنبها بس
+  if (S.permsLoaded) $("noPerms").style.display = "";
+}
+
+window.doLogin = async function() {
+  const username = $("loginUser").value.trim();
+  const password = $("loginPass").value;
+  const err = $("loginError"), btn = $("loginBtn");
+  err.textContent = "";
+  if (!username || !password) { err.textContent = "يرجى إدخال بيانات الدخول"; return; }
+  btn.disabled = true; btn.textContent = "جاري التحقق…";
+  try {
+    const snap = await get(ref(db, "users/" + username));
+    if (!snap.exists()) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+    const u = snap.val();
+    if (u.password !== password) {
+      err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة";
+      $("loginPass").value = ""; return;
+    }
+    const role = String(u.role || "").trim();
+    const admin = ADMIN_ROLES.includes(role);
+    // غير المدير لازم يكون المدير ظبّط له صلاحيات الأول
+    if (!admin) {
+      const ps = await get(ref(db, `${ROOT}/perms/${username}`));
+      const keys = ps.exists() ? (ps.val().keys || {}) : {};
+      if (!Object.keys(keys).length) {
+        err.textContent = "لسه مالكش صلاحيات على البرنامج ده — كلّم المدير";
+        return;
+      }
+    }
+    const data = {
+      username,
+      displayName: u.displayName || u.name || username,
+      role: role || "مشرف",
+      isAdmin: admin,
+      via: "password"
+    };
+    saveSession(data);
+    applySession(data);
+  } catch (e) {
+    err.textContent = "خطأ في الاتصال: " + e.message;
+  } finally { btn.disabled = false; btn.textContent = "دخول"; }
+};
+
+window.doLogout = async function() {
+  /* بنعمل ريفريش كامل بعد الخروج بدل ما ننضّف بإيدينا.
+     لأن مجرد إخفاء الشاشة كان بيسيب:
+       • الصفحة اللي كانت مفتوحة شغّالة (فالمستخدم الجديد كان بيقع عليها
+         حتى لو مالوش صلاحية عليها)
+       • مستمعي Firebase بتوع المستخدم القديم شغّالين، وبيتكرروا كل دخول
+       • بيانات المستخدم القديم لسه في الذاكرة */
+  S.user = null;
+  clearSession();
+  try { await signOut(auth); } catch {}
+  location.reload();
+};
+
+// استعادة الجلسة المحفوظة
+setTimeout(() => {
+  let d = null;
+  try { const raw = localStorage.getItem(SESSION_KEY); d = raw ? JSON.parse(raw) : null; }
+  catch { clearSession(); return; }
+  if (!d?.username) return;
+  try { applySession(d); } catch (e) { console.error("تعذّر استعادة الجلسة:", e); }
+}, 0);
+
+/* ══════════════════════════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════════════════════════ */
+const PAGE_RENDERERS = {
+  daily   : () => renderDaily(),
+  pilot   : () => renderPilot(),
+  month   : () => renderMonth(),
+  deferred: () => renderDeferred(),
+  setup   : () => renderSetup(),
+  settings: () => renderSettings(),
+  perms   : () => renderPerms()
+};
+
+/** أول شاشة مسموحة للمستخدم */
+function firstAllowedPage() {
+  if (isAdmin()) return "daily";
+  for (const p of ["daily", "pilot", "month", "deferred", "setup", "settings"])
+    if (can("page." + p)) return p;
+  return "";
+}
+
+/** يخفي بنود القائمة الجانبية اللي المستخدم مش مسموح له بيها */
+function applyNavPerms() {
+  document.querySelectorAll(".nav-item").forEach(btn => {
+    const m = /navigateTo\('([^']+)'\)/.exec(btn.getAttribute("onclick") || "");
+    if (!m) return;
+    const page = m[1];
+    const ok = page === "perms" ? isAdmin() : can("page." + page);
+    btn.style.display = ok ? "" : "none";
+  });
+  // عنوان قسم «الإعداد» يختفي لو مفيش حاجة تحته
+  const setupVisible = ["setup", "settings"].some(p => can("page." + p)) || isAdmin();
+  const lbl = $("navSectionSetup");
+  if (lbl) lbl.style.display = setupVisible ? "" : "none";
+  // أزرار التصدير والطباعة
+  document.querySelectorAll("[onclick^='export']").forEach(b => {
+    b.style.display = can("act.export") ? "" : "none";
+  });
+  document.querySelectorAll("[onclick='window.print()']").forEach(b => {
+    b.style.display = can("act.print") ? "" : "none";
+  });
+  // أزرار الإضافة والتعديل
+  const gate = (sel, key) => document.querySelectorAll(sel)
+    .forEach(b => { b.style.display = can(key) ? "" : "none"; });
+  gate("#page-setup .toolbar button", "act.pilots");
+  gate("#page-deferred .toolbar button.add-btn", "act.deferred");
+
+  /* قفل التاريخ: من غير الصلاحية دي المستخدم بيشتغل على النهارده بس.
+     مانكتفيش بإخفاء الأسهم — بنقفل خانة التاريخ نفسها كمان. */
+  const freeDate = can("act.dateNav");
+  document.querySelectorAll("[onclick^='shiftDay']").forEach(b => {
+    b.style.display = freeDate ? "" : "none";
+  });
+  ["dailyDate", "pilotMonth", "monthMonth", "defMonth"].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.readOnly = !freeDate;
+    el.style.pointerEvents = freeDate ? "" : "none";
+    el.style.opacity = freeDate ? "" : ".75";
+    el.title = freeDate ? "" : "مالكش صلاحية تغيير التاريخ";
+  });
+  if (!freeDate) lockToToday();
+}
+
+/** يرجّع خانات التاريخ للنهارده — لأي مستخدم مالوش صلاحية التنقل */
+function lockToToday() {
+  const d = todayStr(), m = monthOf(d);
+  if ($("dailyDate")  && $("dailyDate").value  !== d) $("dailyDate").value  = d;
+  if ($("pilotMonth") && $("pilotMonth").value !== m) $("pilotMonth").value = m;
+  if ($("monthMonth") && $("monthMonth").value !== m) $("monthMonth").value = m;
+  if ($("defMonth")   && $("defMonth").value   !== m) $("defMonth").value   = m;
+}
+
+window.navigateTo = function(page) {
+  const ok = page === "perms" ? isAdmin() : can("page." + page);
+  if (!ok) { showToast("مالكش صلاحية على الشاشة دي", "error"); return; }
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $("page-" + page)?.classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+  const btn = [...document.querySelectorAll(".nav-item")]
+    .find(b => (b.getAttribute("onclick") || "").includes(`'${page}'`));
+  btn?.classList.add("active");
+  window.scrollTo(0, 0);
+  try { PAGE_RENDERERS[page]?.(); } catch (e) { console.error("render " + page, e); }
+  updateStickyOffsets();
+};
+
+function currentPage() {
+  return (document.querySelector(".page.active")?.id || "page-daily").replace("page-", "");
+}
+
+/** يحسب ارتفاع شريط الأدوات وعنوان الشيت عشان سطر الأعمدة يلزق تحتهم بالظبط.
+    بيتنادى بعد كل رسم وعند تغيير حجم الشاشة (الأزرار بتلتف فيتغيّر الارتفاع). */
+function updateStickyOffsets() {
+  const page = document.querySelector(".page.active");
+  if (!page) return;
+  const bar   = page.querySelector(".sec-header.sticky-bar");
+  const title = page.querySelector(".sheet-title.sticky-title");
+  const h1 = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+  const h2 = title ? Math.round(title.getBoundingClientRect().height) : 0;
+  page.style.setProperty("--stick1", h1 + "px");
+  page.style.setProperty("--stick2", (h1 + h2) + "px");
+}
+window.addEventListener("resize", updateStickyOffsets);
+function refreshCurrentPage() {
+  clearTimeout(window._refreshT);
+  window._refreshT = setTimeout(() => {
+    // مانعملش re-render والمستخدم بيكتب في خانة — عشان مايضيعش الفوكس
+    if (document.activeElement?.classList?.contains("cell-in")) { refreshCurrentPage(); return; }
+    try { PAGE_RENDERERS[currentPage()]?.(); } catch (e) { console.error("refresh", e); }
+    updateStickyOffsets();
+  }, 250);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIREBASE
+══════════════════════════════════════════════════════════════ */
+function listMap(v) {
+  return v ? Object.entries(v).map(([id, o]) => ({ id, ...(o || {}) })) : [];
+}
+
+/** أول تشغيل: ينشئ الفروع الأربعة والإعدادات الافتراضية */
+async function initDefaults() {
+  try {
+    const snap = await get(ref(db, `${ROOT}/branches`));
+    if (!snap.exists()) {
+      const obj = {};
+      DEFAULT_BRANCHES.forEach((name, i) => { obj["b" + (i + 1)] = { name, order: i }; });
+      await set(ref(db, `${ROOT}/branches`), obj);
+    }
+    const st = await get(ref(db, `${ROOT}/settings`));
+    if (!st.exists()) await set(ref(db, `${ROOT}/settings`), DEFAULT_SETTINGS);
+  } catch (e) { console.warn("initDefaults:", e); }
+}
+
+function startListeners() {
+  onValue(ref(db, `${ROOT}/settings`), s => {
+    S.settings = { ...DEFAULT_SETTINGS, ...(s.val() || {}) };
+    refreshCurrentPage();
+  });
+  onValue(ref(db, `${ROOT}/branches`), s => {
+    S.branches = listMap(s.val()).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+    fillBranchSelects();
+    refreshCurrentPage();
+  });
+  onValue(ref(db, `${ROOT}/pilots`), s => {
+    S.pilots = listMap(s.val()).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    fillPilotSelect();
+    refreshCurrentPage();
+  });
+  onValue(ref(db, `${ROOT}/deferred`), s => {
+    S.deferred = listMap(s.val()).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    refreshCurrentPage();
+  });
+  onValue(ref(db, `${ROOT}/perms`), s => {
+    S.perms = s.val() || {};
+    S.permsLoaded = true;
+    applyNavPerms();
+    fillBranchSelects();
+    ensureLanding();
+    refreshCurrentPage();
+  });
+  // المستخدمين — للمدير بس عشان يظبّط صلاحياتهم
+  if (isAdmin()) {
+    onValue(ref(db, "users"), s => {
+      S.users = s.val()
+        ? Object.entries(s.val()).map(([username, v]) => ({ username, ...(v || {}) })) : [];
+      refreshCurrentPage();
+    });
+  }
+  // شهر الشغل الحالي + أي شهر يتفتح بعدين
+  watchMonth(monthOf(todayStr()));
+}
+
+/** يشترك في بيانات شهر معيّن (مرة واحدة لكل شهر) */
+function watchMonth(ym) {
+  if (!ym || S.loadedMonths.has(ym)) return;
+  S.loadedMonths.add(ym);
+  onValue(ref(db, `${ROOT}/entries/${ym}`), s => {
+    S.entries[ym] = s.val() || {};
+    refreshCurrentPage();
+  });
+  onValue(ref(db, `${ROOT}/summary/${ym}`), s => {
+    S.summary[ym] = s.val() || {};
+    refreshCurrentPage();
+  });
+}
+
+/* ── قراءة/كتابة خانة ───────────────────────────────────────── */
+function entryOf(ym, pilotId, day) {
+  return (S.entries[ym]?.[pilotId]?.[day]) || {};
+}
+/** الأرقام اللي المشرف بيكتبها بإيده في تقفيل الفرع اليومي */
+function summaryOf(ym, branchId, day) {
+  return (S.summary[ym]?.[branchId]?.[day]) || {};
+}
+
+const FIELDS = ["in", "bout", "bin", "out", "h", "o", "svc", "psvc", "net", "adv", "ded", "note"];
+/** الحقول اللي بتتخزّن نص مش رقم */
+const TEXT_FIELDS = new Set(["note", "in", "out", "bout", "bin"]);
+
+/* أعمدة الجدول — تعريف واحد بيتبني منه الرأس والصفوف وسطر الإجمالي
+   في التقفيل اليومي وكشف الطيار، وبيتفلتر حسب صلاحيات المستخدم. */
+const GRID_COLS = [
+  { k: "in",   th: "ساعة الحضور",     w: 104, time: true },
+  { k: "bout", th: "خروج مؤقت",       w: 104, sub: "استئذان", time: true },
+  { k: "bin",  th: "رجوع",            w: 104, sub: "من الاستئذان", time: true },
+  { k: "out",  th: "ساعة الانصراف",   w: 104, time: true },
+  { k: "h",    th: "عدد ساعات العمل", w: 95,  sub: "ناقص الاستئذان", total: true,
+    auto: e => { const a = autoHours(e); return a === null ? "" : fmt(a); } },
+  { k: "o",    th: "عدد الأوردرات",   w: 100, total: true },
+  { k: "svc",  th: "إجمالي الخدمة",   w: 105, total: true },
+  { k: "psvc", th: "خدمة الطيار",     w: 105, sub: "أوردرات × سعره", total: true,
+    auto: (e, p) => fmt(num(e.o) * rateOf(p).o) },
+  { k: "net",  th: "صافي الخدمة",     w: 105, sub: "إجمالي − خدمة", total: true, green: true,
+    auto: (e, p) => fmt(svcNet(e, p)) },
+  { k: "adv",  th: "سلف",             w: 100, total: true },
+  { k: "ded",  th: "خصومات",          w: 100, sub: "سلف مؤجلة", total: true },
+  { k: "note", th: "ملاحظات",         w: 150, text: true }
+];
+function visibleCols() { return GRID_COLS.filter(c => can("col." + c.k)); }
+
+/** رأس الجدول من تعريف الأعمدة */
+function gridHead(cols) {
+  return cols.map(c => `<th style="width:${c.w}px">${c.th}${c.sub
+    ? `<div style="font-weight:600;font-size:.68rem;color:var(--muted);margin-top:2px">${c.sub}</div>` : ""}</th>`).join("");
+}
+/** خانات صف واحد */
+function gridRow(cols, pilotId, day, e, ym, dotId, pilot) {
+  return cols.map(c => cellHTML(pilotId, day, c.k, e[c.k], ym, dotId,
+    !!c.text, c.auto ? c.auto(e, pilot) : "", !!c.time)).join("");
+}
+/** خانات سطر الإجمالي */
+function gridFoot(cols, t) {
+  return cols.map(c => c.total
+    ? `<td class="num" style="padding:11px 13px${c.green ? ";color:var(--green)" : ""}">${fmt(t[c.k])}</td>`
+    : `<td></td>`).join("");
+}
+
+/* ── الحضور والانصراف ─────────────────────────────────────────
+   عدد الساعات بيتحسب من الوقتين، وبيتظبط لو الوردية عدّت نص الليل
+   (مثال: من 4 العصر لـ 2 بعد نص الليل = 10 ساعات).
+   ولو مش هيشتغل بالوقت، يكتب عدد الساعات بإيده وهو اللي يتحسب. */
+function parseTime(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? "").trim());
+  if (!m) return null;
+  const hh = +m[1], mm = +m[2];
+  if (hh > 23 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+/** بيقبل 1630 و 16.30 و 16:30 و 16 ويطلّعهم بصيغة 16:30 */
+function normalizeTime(raw) {
+  let v = String(raw ?? "").trim().replace(/[.\s]/g, ":");
+  if (!v) return "";
+  if (/^\d{1,2}$/.test(v)) v = v + ":00";
+  else if (/^\d{3}$/.test(v)) v = v[0] + ":" + v.slice(1);
+  else if (/^\d{4}$/.test(v)) v = v.slice(0, 2) + ":" + v.slice(2);
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(v);
+  if (!m) return String(raw ?? "").trim();       // سيبه زي ما هو لو مش مفهوم
+  const hh = +m[1], mm = +m[2];
+  if (hh > 23 || mm > 59) return String(raw ?? "").trim();
+  return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+}
+/** دقايق الاستئذان في نص اليوم (خرج ورجع) — بتتشال من ساعات الشغل */
+function breakMinutes(e) {
+  const a = parseTime(e.bout), b = parseTime(e.bin);
+  if (a === null || b === null) return 0;
+  let d = b - a;
+  if (d < 0) d += 24 * 60;
+  return d;
+}
+function autoHours(e) {
+  const a = parseTime(e.in), b = parseTime(e.out);
+  if (a === null || b === null) return null;
+  let d = b - a;
+  if (d < 0) d += 24 * 60;                        // وردية عدّت نص الليل
+  d -= breakMinutes(e);                           // ناقص وقت الاستئذان
+  return round2(Math.max(0, d) / 60);
+}
+/** عدد ساعات اليوم — المكتوب بإيده لو موجود، وإلا المحسوب من الحضور والانصراف */
+function hoursOf(e) {
+  if (e.h !== undefined && e.h !== null && e.h !== "") return num(e.h);
+  const a = autoHours(e);
+  return a === null ? 0 : a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   الصلاحيات
+   ──────────────────────────────────────────────────────────────
+   المدير بيشوف كل حاجة دايمًا. أي مستخدم تاني (مشرف مثلًا) بيشوف
+   بس اللي المدير علّم عليه في شاشة «الصلاحيات» — من غير أي تدخل
+   في الكود.
+══════════════════════════════════════════════════════════════ */
+const PERM_GROUPS = [
+  { title: "الشاشات", items: [
+    ["page.daily",    "التقفيل اليومي"],
+    ["page.pilot",    "كشف الطيار"],
+    ["page.month",    "تقفيل الشهر"],
+    ["page.deferred", "السلف المؤجلة"],
+    ["page.setup",    "الفروع والطيارين"],
+    ["page.settings", "الإعدادات"]
+  ]},
+  { title: "أعمدة الجدول", items: [
+    ["col.in",   "ساعة الحضور"],
+    ["col.bout", "خروج مؤقت (استئذان)"],
+    ["col.bin",  "الرجوع من الاستئذان"],
+    ["col.out",  "ساعة الانصراف"],
+    ["col.h",    "عدد ساعات العمل"],
+    ["col.o",    "عدد الأوردرات"],
+    ["col.svc",  "إجمالي الخدمة"],
+    ["col.psvc", "خدمة الطيار"],
+    ["col.net",  "صافي الخدمة"],
+    ["col.adv",  "سلف"],
+    ["col.ded",  "خصومات"],
+    ["col.note", "ملاحظات"]
+  ]},
+  { title: "بلوك التقفيل تحت الجدول", items: [
+    ["blk.hourPay",  "أجر الساعات"],
+    ["blk.devFee",   "رسوم التطوير"],
+    ["blk.pct",      "نسبة روح دمشق"],
+    ["blk.ext",      "الخارجي"],
+    ["blk.exp",      "مصاريف"],
+    ["blk.out",      "إجمالي الخارج"],
+    ["blk.cash",     "إجمالي نقدي"],
+    ["blk.net",      "صافي الفرع"],
+    ["blk.adv",      "إجمالي سلف"],
+    ["blk.recon",    "مطابقة توريد المشرف"],
+    ["blk.branches", "صافي كل الفروع"]
+  ]},
+  { title: "حساب الراتب في كشف الطيار", items: [
+    ["sal.block", "بلوك حساب الراتب كله"],
+    ["sal.leave", "الإجازة المدفوعة"],
+    ["sal.def",   "قسط السلف المؤجلة"]
+  ]},
+  { title: "صلاحيات عامة", items: [
+    ["act.edit",     "تعديل وكتابة البيانات (من غيرها بيتفرّج بس)"],
+    ["act.dateNav",  "التنقل بين التواريخ والشهور (من غيرها بيشتغل على النهارده بس)"],
+    ["act.export",   "تصدير إكسل"],
+    ["act.print",    "طباعة"],
+    ["act.pilots",   "إضافة وتعديل الفروع والطيارين"],
+    ["act.deferred", "تسجيل وتعديل السلف المؤجلة"]
+  ]}
+];
+
+/** الصلاحيات اللي بتتحط لمشرف جديد — تسجيل بيانات اليوم بس */
+const SUPERVISOR_PRESET = [
+  "page.daily", "col.in", "col.bout", "col.bin", "col.out", "col.h", "col.o",
+  "col.svc", "col.psvc", "col.net", "col.adv", "col.ded", "col.note",
+  "act.edit"                       // من غير act.dateNav = النهارده بس
+];
+
+/** Firebase مابيقبلش نقطة في اسم المفتاح — فبنخزّنها شرطة سفلية */
+function pkey(k) { return String(k).replace(/\./g, "_"); }
+
+function isAdmin() {
+  return !!S.user?.isAdmin;
+}
+/** هل المستخدم الحالي مسموح له بالحاجة دي؟ */
+function can(key) {
+  if (isAdmin()) return true;
+  return S.perms[S.user?.username]?.keys?.[pkey(key)] === true;
+}
+/** الفروع المسموحة — لستة فاضية معناها كل الفروع */
+function allowedBranches() {
+  if (isAdmin()) return S.branches;
+  const list = S.perms[S.user?.username]?.branches;
+  if (!Array.isArray(list) || !list.length) return S.branches;
+  return S.branches.filter(b => list.includes(b.id));
+}
+function canSeeBranch(id) {
+  return allowedBranches().some(b => b.id === id);
+}
+
+/** سعر ساعة الطيار وسعر أوردره (خدمته) — بتوعه هو، وإلا الافتراضي */
+function rateOf(pilot) {
+  return {
+    h: num(pilot?.hourRate)  > 0 ? num(pilot.hourRate)  : num(S.settings.hourRate),
+    o: num(pilot?.orderRate) > 0 ? num(pilot.orderRate) : num(S.settings.pilotOrderRate)
+  };
+}
+/** رسوم التطوير على الأوردر — بتاعة الشركة، واحدة للكل */
+function devRate() { return num(S.settings.orderRate); }
+
+/* ── خدمة الطيار وصافي الخدمة ──────────────────────────────────
+   خدمة الطيار = عدد أوردراته × سعر أوردره  (محسوبة)
+   صافي الخدمة = إجمالي الخدمة − خدمة الطيار
+   الاتنين ينفع تكتب فوقهم رقم بإيدك وساعتها المكتوب هو اللي يتحسب. */
+function pilotSvcOf(e, pilot) {
+  if (e.psvc !== undefined && e.psvc !== null && e.psvc !== "") return num(e.psvc);
+  return round2(num(e.o) * rateOf(pilot).o);
+}
+function svcNet(e, pilot) {
+  return round2(num(e.svc) - pilotSvcOf(e, pilot));
+}
+function netOf(e, pilot) {
+  if (e.net !== undefined && e.net !== null && e.net !== "") return num(e.net);
+  return svcNet(e, pilot);
+}
+
+/** حفظ خانة واحدة — بيمسح العقدة لو بقت فاضية تمامًا */
+const _pending = new Map();
+function saveCell(ym, pilotId, day, field, raw, dotId) {
+  const key = `${ym}|${pilotId}|${day}`;
+  const cur = { ...entryOf(ym, pilotId, day) };
+  const val = (field === "in" || field === "out") ? normalizeTime(raw)
+            : field === "note"                    ? String(raw).trim()
+            : (raw === "" ? "" : num(raw));
+  if (val === "" || val === 0 && field !== "note") delete cur[field]; else cur[field] = val;
+
+  // خزّنها محليًا فورًا عشان الحسابات تتحدث من غير انتظار السيرفر
+  S.entries[ym] = S.entries[ym] || {};
+  S.entries[ym][pilotId] = S.entries[ym][pilotId] || {};
+  if (Object.keys(cur).length) S.entries[ym][pilotId][day] = cur;
+  else delete S.entries[ym][pilotId][day];
+
+  clearTimeout(_pending.get(key));
+  const dot = dotId ? $(dotId) : null;
+  dot?.classList.add("on");
+  _pending.set(key, setTimeout(async () => {
+    try {
+      const path = `${ROOT}/entries/${ym}/${pilotId}/${day}`;
+      if (Object.keys(cur).length) await set(ref(db, path), cur);
+      else await remove(ref(db, path));
+    } catch (e) {
+      console.error("saveCell:", e);
+      showToast("تعذّر الحفظ: " + (e?.message || e), "error");
+    } finally { dot?.classList.remove("on"); }
+  }, 500));
+}
+
+/** حفظ خانة من بلوك الملخص اليومي */
+const _pendingSum = new Map();
+function saveSummary(ym, branchId, day, field, raw) {
+  const key = `${ym}|${branchId}|${day}`;
+  const cur = { ...summaryOf(ym, branchId, day) };
+  const val = raw === "" ? "" : num(raw);
+  if (val === "" || val === 0) delete cur[field]; else cur[field] = val;
+
+  S.summary[ym] = S.summary[ym] || {};
+  S.summary[ym][branchId] = S.summary[ym][branchId] || {};
+  if (Object.keys(cur).length) S.summary[ym][branchId][day] = cur;
+  else delete S.summary[ym][branchId][day];
+
+  clearTimeout(_pendingSum.get(key));
+  _pendingSum.set(key, setTimeout(async () => {
+    try {
+      const path = `${ROOT}/summary/${ym}/${branchId}/${day}`;
+      if (Object.keys(cur).length) await set(ref(db, path), cur);
+      else await remove(ref(db, path));
+    } catch (e) {
+      console.error("saveSummary:", e);
+      showToast("تعذّر الحفظ: " + (e?.message || e), "error");
+    }
+  }, 500));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   الحسابات — نفس معادلات الشيت
+   ──────────────────────────────────────────────────────────────
+   راتب الطيار = عدد ساعاته × سعر الساعة − السلف − الخصومات
+   الأوردرات مش بتدخل في راتب الطيار: أوردرات × 2 دي رسوم تطوير
+   بتدفعها الشركة، وعمولة الطيار بياخدها كاش آخر اليوم (وعشان كده
+   عمود «صافي» هو اللي بيرجع للشركة بعد ما الطيار خد نسبته).
+══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   السلف المؤجلة — سلفة كبيرة بتتقسّط على شهور
+   ──────────────────────────────────────────────────────────────
+   ليه منفصلة عن عمود «سلف»؟ لأن عمود السلف بيدخل في مطابقة توريد
+   المشرف اليومية (المشرف دفعها من نقدية اليوم). السلفة المؤجلة
+   بتتسجّل هنا وبتتخصم من الراتب على أقساط من غير ما تلخبط تقفيلة
+   اليوم.
+══════════════════════════════════════════════════════════════ */
+function nextMonth(ym) {
+  const [y, m] = String(ym).split("-").map(Number);
+  const d = new Date(y, m, 1);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+
+/** قسط شهر معيّن + الرصيد قبله وبعده لسلفة مؤجلة واحدة */
+function deferredForMonth(rec, ym) {
+  const total   = num(rec.amount);
+  const monthly = num(rec.monthly) > 0 ? num(rec.monthly) : total;
+  const start   = rec.startMonth || monthOf(rec.date);
+  if (!start || ym < start) return { due: 0, before: total, after: total, started: false };
+
+  let bal = total, cur = start, guard = 0;
+  while (guard++ < 400) {
+    // القسط: لو المستخدم كتب رقم مخصوص للشهر ده يبقى هو، وإلا القسط الثابت
+    const ov  = rec.paid?.[cur];
+    const amt = round2(Math.min(
+      (ov !== undefined && ov !== null && ov !== "") ? num(ov) : monthly, bal));
+    if (cur === ym) return { due: amt, before: round2(bal), after: round2(bal - amt), started: true };
+    bal = round2(bal - amt);
+    cur = nextMonth(cur);
+    if (cur > ym) break;
+  }
+  return { due: 0, before: round2(bal), after: round2(bal), started: true };
+}
+
+/** كل السلف المؤجلة لطيار في شهر — الإجمالي المستحق والمتبقي */
+function deferredOfPilot(pilotId, ym) {
+  const recs = S.deferred.filter(d => d.pilotId === pilotId);
+  let due = 0, remaining = 0;
+  const items = recs.map(rec => {
+    const c = deferredForMonth(rec, ym);
+    due += c.due; remaining += c.after;
+    return { rec, ...c };
+  });
+  return { items, due: round2(due), remaining: round2(remaining) };
+}
+
+/** آخر يوم يتحسب في الشهر — الشهر الحالي لحد النهارده بس، عشان
+    الأيام اللي لسه ماجتش ماتتعدّش غياب */
+function countedDaysOf(ym) {
+  const nd = daysInMonth(ym), cur = monthOf(todayStr());
+  if (ym > cur) return 0;
+  if (ym === cur) return Math.min(nd, dayOf(todayStr()));
+  return nd;
+}
+
+function pilotMonthTotals(ym, pilotId) {
+  const days = S.entries[ym]?.[pilotId] || {};
+  const t = { h: 0, o: 0, net: 0, svc: 0, psvc: 0, adv: 0, ded: 0, worked: 0 };
+  const pil = S.pilots.find(p => p.id === pilotId);
+  for (const d of Object.keys(days)) {
+    const e = days[d] || {};
+    t.h += hoursOf(e); t.o += num(e.o); t.net += netOf(e, pil);
+    t.svc += num(e.svc); t.psvc += pilotSvcOf(e, pil);
+    t.adv += num(e.adv); t.ded += num(e.ded);
+    if (hoursOf(e) > 0) t.worked++;
+  }
+  t.h = round2(t.h); t.o = round2(t.o); t.net = round2(t.net);
+  t.svc = round2(t.svc); t.psvc = round2(t.psvc);
+  t.adv = round2(t.adv); t.ded = round2(t.ded);
+  const R = rateOf(pil);
+  t.rate     = R;
+  t.hourPay  = round2(t.h * R.h);
+  t.devFee   = round2(t.o * devRate()); // رسوم تطوير على الشركة — مش للطيار
+
+  /* ── الإجازة المدفوعة ──────────────────────────────────────
+     أي يوم ساعاته صفر = غياب. أول أيام الغياب بتستهلك رصيد
+     الإجازة المدفوعة، والباقي غياب بدون أجر.
+     مثال: غاب 10 أيام وله يومين مدفوعين → يتحسبله يومين بس. */
+  const counted   = countedDaysOf(ym);
+  const workedIn  = Object.keys(days).filter(d => +d <= counted && hoursOf(days[d] || {}) > 0).length;
+  t.counted   = counted;
+  t.absent    = Math.max(0, counted - workedIn);
+  t.leaveCap  = Math.max(0, num(pil?.leaveDays));
+  t.leaveDays = Math.min(t.absent, t.leaveCap);          // الأيام المدفوعة فعلًا
+  t.leaveLeft = round2(t.leaveCap - t.leaveDays);        // رصيد لسه ما اتصرفش
+  t.shiftHours = num(S.settings.shiftHours) || 10;
+  t.leavePay  = round2(t.leaveDays * t.shiftHours * R.h);
+
+  t.gross    = round2(t.hourPay + t.leavePay);
+  const df   = deferredOfPilot(pilotId, ym);
+  t.defDue   = df.due;                  // قسط السلف المؤجلة المستحق الشهر ده
+  t.defLeft  = df.remaining;            // الباقي بعد قسط الشهر ده
+  t.defItems = df.items;
+  t.salary   = round2(t.gross - t.adv - t.ded - t.defDue);
+  return t;
+}
+
+function branchDayTotals(ym, branchId, day) {
+  const t = { h: 0, o: 0, net: 0, svc: 0, psvc: 0, adv: 0, ded: 0,
+              hourPay: 0, devFee: 0, count: 0 };
+  // كل طيار بسعره هو — عشان كده الأجر بيتجمّع طيار طيار مش بالضرب في الآخر
+  for (const p of pilotsOfBranch(branchId)) {
+    const e = entryOf(ym, p.id, day);
+    const R = rateOf(p);
+    t.h += hoursOf(e); t.o += num(e.o); t.net += netOf(e, p);
+    t.svc += num(e.svc); t.psvc += pilotSvcOf(e, p);
+    t.adv += num(e.adv); t.ded += num(e.ded);
+    t.hourPay += hoursOf(e) * R.h;
+    t.devFee  += num(e.o) * devRate();
+    if (hoursOf(e) || num(e.o) || netOf(e, p) || num(e.adv) || num(e.svc)) t.count++;
+  }
+  for (const k of ["h","o","net","svc","psvc","adv","ded","hourPay","devFee"]) t[k] = round2(t[k]);
+  return t;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   تقفيل الفرع اليومي — نفس البلوك اللي تحت شيت «تقفيل يومي»
+   ──────────────────────────────────────────────────────────────
+   فلوس خارجة:
+     • أجر الساعات   = إجمالي ساعات طيارين الفرع × 30
+                       (رواتب مستحقة النهارده حتى لو هتتدفع آخر الشهر)
+     • رسوم التطوير  = إجمالي أوردرات الفرع × 2
+     • نسبة روح دمشق + الخارجي   (المشرف بيكتبهم)
+     • مصاريف                     (المشرف بيكتبها)
+   فلوس داخلة:
+     • إجمالي النقدي = مجموع عمود «صافي» — اللي الطيارين سلّموه
+                       بعد ما كل واحد خد نسبته
+   صافي الفرع = النقدي − إجمالي الخارج
+
+   السلف مش داخلة في المعادلة: دي دَيْن على الطيار هيتخصم من راتبه
+   آخر الشهر، فلو حسبناها هنا كانت هتتحسب مرتين.
+══════════════════════════════════════════════════════════════ */
+function branchDayCloseout(ym, branchId, day) {
+  const t = branchDayTotals(ym, branchId, day);
+  const s = summaryOf(ym, branchId, day);
+  const hourPay = t.hourPay;                                   // ساعات × 30
+  const devFee  = t.devFee;                                    // أوردرات × سعر الأوردر
+  const pct = num(s.pct), ext = num(s.ext), exp = num(s.exp);
+  const outTotal = round2(hourPay + devFee + pct + ext + exp);
+  const cash = t.net;                                          // مجموع عمود «صافي»
+
+  /* مطابقة توريد المشرف:
+     المشرف بيحصّل عمود «صافي» ويدفع منه نسبة المطعم والخارجي والمصاريف
+     والسلف، واللي يفضل بيورّده للشركة. الرقم المتوقّع ده بنقارنه بالمستلم
+     فعلًا عشان نكشف أي عجز أو زيادة.
+     ملحوظة: المطابقة دي مابتغيّرش «صافي الفرع» — السلف بتتشال من المعادلة
+     لوحدها لأن الشركة هتدفع للطيار (ساعات×30 − سلف) مش الراتب كامل. */
+  const expected = round2(cash - pct - ext - exp - t.adv);
+  const hasRecv  = s.recv !== undefined && s.recv !== null && s.recv !== "";
+  const received = num(s.recv);
+
+  return {
+    t, s, hourPay, devFee, pct, ext, exp, cash, outTotal,
+    net: round2(cash - outTotal),
+    adv: t.adv,
+    expected, received, hasRecv,
+    diff: hasRecv ? round2(received - expected) : 0
+  };
+}
+
+/** تجميع الأربع فروع في يوم واحد */
+function dayAllBranches(ym, day) {
+  const per = {};
+  const all = { h: 0, o: 0, cash: 0, adv: 0, hourPay: 0, devFee: 0,
+                pct: 0, ext: 0, exp: 0, outTotal: 0, net: 0 };
+  for (const b of allowedBranches()) {
+    const c = branchDayCloseout(ym, b.id, day);
+    per[b.id] = c;
+    all.h += c.t.h; all.o += c.t.o; all.cash += c.cash; all.adv += c.adv;
+    all.hourPay += c.hourPay; all.devFee += c.devFee;
+    all.pct += c.pct; all.ext += c.ext; all.exp += c.exp;
+    all.outTotal += c.outTotal; all.net += c.net;
+  }
+  for (const k of Object.keys(all)) all[k] = round2(all[k]);
+  return { per, all };
+}
+
+/** فيه طيار في الفرع بسعر مختلف عن السعر العام؟ (عشان العنوان مايكدبش) */
+function mixedRates(branchId, which) {
+  const base = num(S.settings.hourRate);
+  return pilotsOfBranch(branchId).some(p => rateOf(p).h !== base);
+}
+
+function pilotsOfBranch(branchId) {
+  return S.pilots.filter(p => p.branchId === branchId && p.active !== false);
+}
+function branchName(id) { return S.branches.find(b => b.id === id)?.name || "—"; }
+function pilotName(id)  { return S.pilots.find(p => p.id === id)?.name || "—"; }
+
+/* ══════════════════════════════════════════════════════════════
+   SELECTS
+══════════════════════════════════════════════════════════════ */
+function fillBranchSelects() {
+  const opts = allowedBranches()
+    .map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
+  const keep = (el, html) => { if (!el) return; const v = el.value; el.innerHTML = html; if (v) el.value = v; };
+
+  keep($("dailyBranch"), opts);
+  if ($("dailyBranch") && !$("dailyBranch").value) $("dailyBranch").value = allowedBranches()[0]?.id || "";
+
+  keep($("monthBranch"), `<option value="">كل الفروع</option>` + opts);
+  keep($("pilotBranchFilter"), `<option value="">كل الفروع</option>` + opts);
+  keep($("pmBranch"), opts);
+  keep($("bkBranch"), opts);
+}
+
+window.fillPilotSelect = function() {
+  const sel = $("pilotSelect");
+  if (!sel) return;
+  const bf = $("pilotBranchFilter")?.value || "";
+  const list = S.pilots.filter(p => (!bf || p.branchId === bf) && canSeeBranch(p.branchId));
+  const prev = sel.value;
+  sel.innerHTML = list.map(p =>
+    `<option value="${esc(p.id)}">${esc(p.name)}${p.active === false ? " (موقوف)" : ""}</option>`).join("")
+    || `<option value="">— مفيش طيارين —</option>`;
+  if (prev && list.some(p => p.id === prev)) sel.value = prev;
+  if (currentPage() === "pilot") renderPilot();
+};
+
+/* ══════════════════════════════════════════════════════════════
+   1) التقفيل اليومي
+══════════════════════════════════════════════════════════════ */
+window.onDailyBranchChange = function() { renderDaily(); };
+
+window.shiftDay = function(delta) {
+  if (!can("act.dateNav")) { showToast("مالكش صلاحية تشتغل على يوم تاني", "error"); return; }
+  const el = $("dailyDate");
+  const d = new Date(el.value || todayStr());
+  d.setDate(d.getDate() + delta);
+  el.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  renderDaily();
+};
+
+window.renderDaily = function() {
+  const box = $("dailyBody");
+  if (!box) return;
+  if (!$("dailyDate").value) $("dailyDate").value = todayStr();
+  if (!can("act.dateNav")) lockToToday();
+  const date = $("dailyDate").value;
+  const ym = monthOf(date), day = dayOf(date);
+  watchMonth(ym);
+
+  const branchId = $("dailyBranch").value || allowedBranches()[0]?.id || "";
+  if (!branchId) {
+    box.innerHTML = `<div class="warn-box">مفيش فروع لسه. روح لـ <b>الفروع والطيارين</b> وضيف الفروع والطيارين الأول.</div>`;
+    return;
+  }
+  const pilots = pilotsOfBranch(branchId);
+  const t = branchDayTotals(ym, branchId, day);
+  const C = branchDayCloseout(ym, branchId, day);   // تقفيل الفرع
+  const A = dayAllBranches(ym, day);                // تجميع الأربع فروع
+  const s = C.s;
+
+  const cols = visibleCols();
+  const rows = pilots.length ? pilots.map((p, i) => {
+    const e = entryOf(ym, p.id, day);
+    return `<tr>
+      <td class="lbl idx" style="width:38px">${i + 1}</td>
+      <td class="lbl" style="min-width:150px;font-weight:600">${esc(p.name)}</td>
+      ${gridRow(cols, p.id, day, e, ym, "dailyDot", p)}
+    </tr>`;
+  }).join("") : `<tr><td colspan="${cols.length + 2}" class="empty-row">مفيش طيارين في الفرع ده</td></tr>`;
+
+  box.innerHTML = `
+    <div class="sheet-title sticky-title">تقفيل يومي &nbsp;·&nbsp; ${day} ${weekdayOf(ym, day)} &nbsp;·&nbsp; ${monthLabel(ym)} &nbsp;·&nbsp; ${esc(branchName(branchId))}</div>
+    <div class="table-wrap sheet-wrap">
+      <table class="grid-table">
+        <thead><tr>
+          <th style="width:38px">#</th>
+          <th>الاسم</th>
+          ${gridHead(cols)}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total-row">
+          <td colspan="2" style="padding:11px 13px">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${t.count} طيار شغّال)</span></td>
+          ${gridFoot(cols, t)}
+        </tr></tfoot>
+      </table>
+    </div>
+
+    <div class="sum-block">
+      <div class="sum-head">تقفيل يومي &nbsp;·&nbsp; ${day} ${weekdayOf(ym, day)} &nbsp;·&nbsp; ${monthLabel(ym)} &nbsp;·&nbsp; ${esc(branchName(branchId))}</div>
+
+${can('blk.hourPay') ? `      <div class="sum-row calc">
+        <div class="sl">أجر الساعات${mixedRates(branchId, "h") ? "" : ` × ${fmt(S.settings.hourRate)}`}
+          <div class="sh">${fmt(C.t.h)} ساعة${mixedRates(branchId, "h")
+            ? " &nbsp;·&nbsp; كل طيار بسعره" : ""} &nbsp;·&nbsp; رواتب مستحقة النهارده — <b>خارج</b></div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(C.hourPay)}</div>
+      </div>` : ''}
+${can('blk.devFee') ? `      <div class="sum-row calc">
+        <div class="sl">رسوم التطوير × ${fmt(devRate())}
+          <div class="sh">${fmt(C.t.o)} أوردر — <b>خارج</b></div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(C.devFee)}</div>
+      </div>` : ''}
+${can('blk.pct') ? `      <div class="sum-row">
+        <div class="sl">نسبة روح دمشق
+          <div class="sh">اللي بياخدها المطعم — خارج</div></div>
+        <input class="sv" type="text" inputmode="decimal" value="${s.pct ?? ""}"
+               oninput="onSumInput('${ym}','${branchId}',${day},'pct',this.value)" />
+      </div>` : ''}
+${can('blk.ext') ? `      <div class="sum-row">
+        <div class="sl">الخارجي<div class="sh">خارج</div></div>
+        <input class="sv" type="text" inputmode="decimal" value="${s.ext ?? ""}"
+               oninput="onSumInput('${ym}','${branchId}',${day},'ext',this.value)" />
+      </div>` : ''}
+${can('blk.exp') ? `      <div class="sum-row">
+        <div class="sl">مصاريف<div class="sh">خارج</div></div>
+        <input class="sv" type="text" inputmode="decimal" value="${s.exp ?? ""}"
+               oninput="onSumInput('${ym}','${branchId}',${day},'exp',this.value)" />
+      </div>` : ''}
+${can('blk.out') ? `      <div class="sum-row" style="background:rgba(249,115,22,.07)">
+        <div class="sl">إجمالي الخارج
+          <div class="sh">ساعات + أوردرات + نسبة + خارجي + مصاريف</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(C.outTotal)}</div>
+      </div>` : ''}
+
+${can('blk.cash') ? `      <div class="sum-row" style="background:rgba(34,197,94,.07)">
+        <div class="sl">إجمالي نقدي
+          <div class="sh">مجموع عمود «صافي» فوق — الداخل للشركة</div></div>
+        <div class="sv" style="color:var(--green)">${fmt(C.cash)}</div>
+      </div>` : ''}
+
+${can('blk.net') ? `      <div class="sum-row grand">
+        <div class="sl">صافي ${esc(branchName(branchId))}
+          <div class="sh">النقدي − إجمالي الخارج</div></div>
+        <div class="sv" style="color:${C.net < 0 ? "var(--red)" : "var(--green)"}">${fmt(C.net)}</div>
+      </div>` : ''}
+
+${can('blk.adv') ? `      <div class="sum-row">
+        <div class="sl">إجمالي سلف
+          <div class="sh">دَيْن على الطيارين — بيتخصم من رواتبهم آخر الشهر،
+            فمش داخل في حساب الصافي</div></div>
+        <div class="sv" style="color:var(--muted)">${fmt(C.adv)}</div>
+      </div>` : ''}
+
+${can('blk.recon') ? `      <div style="border-top:1px solid var(--border)">
+        <div class="sum-head" style="border-bottom:none;background:transparent;font-size:.84rem">
+          مطابقة توريد المشرف
+          <div style="font-size:.72rem;font-weight:600;color:var(--muted)">
+            المشرف بيحصّل عمود «صافي» ويدفع منه، واللي يفضل بيورّده</div></div>
+
+        <div class="sum-row calc">
+          <div class="sl">مجموع عمود «صافي»<div class="sh">اللي المشرف حصّله</div></div>
+          <div class="sv">${fmt(C.cash)}</div></div>
+        <div class="sum-row calc">
+          <div class="sl">− نسبة روح دمشق + الخارجي + مصاريف</div>
+          <div class="sv" style="color:var(--orange)">− ${fmt(C.pct + C.ext + C.exp)}</div></div>
+        <div class="sum-row calc">
+          <div class="sl">− السلف اللي إداها للطيارين</div>
+          <div class="sv" style="color:var(--orange)">− ${fmt(C.adv)}</div></div>
+        <div class="sum-row calc">
+          <div class="sl">المفروض يورّده المشرف</div>
+          <div class="sv" style="color:var(--blue)">${fmt(C.expected)}</div></div>
+
+        <div class="sum-row">
+          <div class="sl">المستلم فعلًا من المشرف
+            <div class="sh">اكتب المبلغ اللي وصلك بالظبط</div></div>
+          <input class="sv" type="text" inputmode="decimal" value="${s.recv ?? ""}"
+                 placeholder="${fmt(C.expected)}"
+                 oninput="onSumInput('${ym}','${branchId}',${day},'recv',this.value)" /></div>
+
+        <div class="sum-row" style="background:${
+          !C.hasRecv ? "transparent" : C.diff === 0 ? "rgba(34,197,94,.08)" : "rgba(232,25,44,.08)"}">
+          <div class="sl">الفرق
+            <div class="sh">${!C.hasRecv ? "اكتب المستلم عشان تظهر المطابقة"
+              : C.diff === 0 ? "التوريد مظبوط ✓"
+              : C.diff < 0 ? "عجز — المشرف ورّد أقل من المفروض"
+              : "زيادة — المشرف ورّد أكتر من المفروض"}</div></div>
+          <div class="sv" style="color:${
+            !C.hasRecv ? "var(--muted)" : C.diff === 0 ? "var(--green)" : "var(--red)"}">${
+            !C.hasRecv ? "—" : fmt(C.diff)}</div></div>
+      </div>` : ''}
+
+${can('blk.branches') ? `      <div style="border-top:1px solid var(--border)">
+        <div class="sum-head" style="border-bottom:none;background:transparent;font-size:.84rem">
+          صافي الفروع في يوم ${day}
+          <div style="font-size:.72rem;font-weight:600;color:var(--muted)">
+            إجمالي أوردرات الفروع ${allowedBranches().map(b => fmt(A.per[b.id].t.o)).join(" + ")}
+            = <b>${fmt(A.all.o)}</b> أوردر × ${fmt(devRate())} = <b>${fmt(A.all.devFee)}</b></div></div>
+        <div class="branch-nets">
+          ${allowedBranches().map(b => `<div class="bn-card">
+              <div class="bn-name">صافي ${esc(b.name)}</div>
+              <div class="bn-val" style="color:${A.per[b.id].net < 0 ? "var(--red)" : "var(--green)"}">${fmt(A.per[b.id].net)}</div>
+            </div>`).join("")}
+          <div class="bn-card" style="border-color:var(--sky)">
+            <div class="bn-name" style="color:var(--sky)">إجمالي صافي</div>
+            <div class="bn-val" style="color:var(--sky)">${fmt(A.all.net)}</div>
+          </div>
+        </div>
+      </div>` : ''}
+    </div>`;
+};
+
+/** خانة إدخال داخل الجدول */
+function cellHTML(pilotId, day, field, value, ym, dotId, isText = false, ph = "", isTime = false) {
+  const v = value === undefined || value === null ? "" : value;
+  const ro = can("act.edit") ? "" : " readonly";     // بيتفرّج بس
+  // خانة الوقت = input[type=time] عشان تفتح ساعة المتصفح بضغطة على الأيقونة
+  if (isTime) {
+    return `<td><input class="cell-in time" type="time"${ro}
+      data-col="${field}" value="${esc(parseTime(v) === null ? "" : v)}"
+      oninput="onCellInput('${ym}','${pilotId}',${day},'${field}',this.value,'${dotId}')"
+      onkeydown="cellKey(event)" /></td>`;
+  }
+  const cls = isText ? " txt" : "";
+  return `<td><input class="cell-in${cls}${ph && v === "" ? " auto" : ""}" type="text"${ro}
+    ${isText ? "" : 'inputmode="decimal"'} ${ph ? `placeholder="${esc(ph)}"` : ""}
+    data-col="${field}" value="${esc(v)}"
+    oninput="onCellInput('${ym}','${pilotId}',${day},'${field}',this.value,'${dotId}')"
+    onkeydown="cellKey(event)" />`;
+}
+
+window.onCellInput = function(ym, pilotId, day, field, value, dotId) {
+  saveCell(ym, pilotId, day, field, value, dotId);
+  scheduleTotals();
+};
+window.onSumInput = function(ym, branchId, day, field, value) {
+  saveSummary(ym, branchId, day, field, value);
+  scheduleTotals();
+};
+
+/** يحدّث سطور الإجماليات من غير ما يعيد بناء الجدول (عشان الفوكس مايضيعش) */
+let _totalsT = null;
+function scheduleTotals() {
+  clearTimeout(_totalsT);
+  _totalsT = setTimeout(() => {
+    const page = currentPage();
+    const el = document.activeElement;
+    // نعيد الرسم ونرجّع الفوكس لنفس الخانة
+    const sig = el?.classList?.contains("cell-in") || el?.classList?.contains("sv")
+      ? { col: el.dataset.col, idx: [...document.querySelectorAll("input")].indexOf(el), start: el.selectionStart }
+      : null;
+    try { PAGE_RENDERERS[page]?.(); } catch (e) { console.error(e); }
+    updateStickyOffsets();
+    if (sig) {
+      const again = [...document.querySelectorAll("input")][sig.idx];
+      if (again) { again.focus(); try { again.setSelectionRange(sig.start, sig.start); } catch {} }
+    }
+  }, 450);
+}
+
+/** التنقل بالكيبورد بين الخانات — زي الإكسل
+    فوق/تحت + Enter  → نفس العمود، السطر اللي فوق/تحت
+    يمين/شمال        → نفس السطر، العمود اللي جنبه (الصفحة عربي فاليمين = رجوع)
+    عشان تفضل قادر تصحّح رقم جوّه الخانة، السهم الأفقي بينقل لخانة تانية
+    بس لما يكون المؤشر واصل لآخر/أول النص أو النص كله محدّد. */
+function moveCell(next) {
+  if (!next) return;
+  next.focus();
+  // select() بيرمي استثناء على input[type=time] — فبنحاولها بس
+  try { next.select(); } catch {}
+}
+window.cellKey = function(ev) {
+  const key = ev.key;
+  const cur = ev.target;
+
+  /* خانة الوقت ليها تنقّل داخلي خاص بيها: فوق/تحت بيزوّدوا وينقّصوا
+     الساعة أو الدقيقة، ويمين/شمال بينقلوا بين المقطعين. سايبينهم للمتصفح
+     ومخلّينا Enter بس هو اللي ينقل للسطر اللي بعده. */
+  if (cur.type === "time") {
+    if (key !== "Enter") return;
+    ev.preventDefault();
+    const all = [...document.querySelectorAll(`.cell-in[data-col="${cur.dataset.col}"]`)];
+    moveCell(all[all.indexOf(cur) + 1]);
+    return;
+  }
+
+  if (["Enter", "ArrowDown", "ArrowUp"].includes(key)) {
+    ev.preventDefault();
+    const col = cur.dataset.col;
+    const all = [...document.querySelectorAll(`.cell-in[data-col="${col}"]`)];
+    moveCell(all[all.indexOf(cur) + (key === "ArrowUp" ? -1 : 1)]);
+    return;
+  }
+
+  if (key !== "ArrowRight" && key !== "ArrowLeft") return;
+
+  const len = cur.value.length;
+  const allSelected = cur.selectionStart === 0 && cur.selectionEnd === len && len > 0;
+  const atStart = cur.selectionStart === 0 && cur.selectionEnd === 0;
+  const atEnd   = cur.selectionStart === len && cur.selectionEnd === len;
+
+  // في RTL: السهم اليمين بيرجع للعمود السابق، والشمال بيروح للي بعده
+  const back = key === "ArrowRight";
+  const edge = allSelected || len === 0 || (back ? atStart : atEnd);
+  if (!edge) return;                      // سيب المؤشر يتحرك جوّه الخانة
+
+  ev.preventDefault();
+  const row = cur.closest("tr");
+  if (!row) return;
+  const cells = [...row.querySelectorAll(".cell-in")];
+  moveCell(cells[cells.indexOf(cur) + (back ? -1 : 1)]);
+};
+
+/* ══════════════════════════════════════════════════════════════
+   2) كشف الطيار
+══════════════════════════════════════════════════════════════ */
+window.renderPilot = function() {
+  const box = $("pilotBody");
+  if (!box) return;
+  if (!$("pilotMonth").value) $("pilotMonth").value = monthOf(todayStr());
+  if (!can("act.dateNav")) lockToToday();
+  const ym = $("pilotMonth").value;
+  watchMonth(ym);
+
+  const pid = $("pilotSelect")?.value || "";
+  if (!pid) {
+    box.innerHTML = `<div class="warn-box">اختار طيار من القائمة فوق. لو مفيش طيارين، ضيفهم من <b>الفروع والطيارين</b>.</div>`;
+    return;
+  }
+  const p = S.pilots.find(x => x.id === pid);
+  const nd = daysInMonth(ym);
+  const t = pilotMonthTotals(ym, pid);
+  const today = todayStr();
+
+  const cols = visibleCols();
+  let rows = "";
+  for (let d = 1; d <= nd; d++) {
+    const e = entryOf(ym, pid, d);
+    const isToday = `${ym}-${String(d).padStart(2, "0")}` === today;
+    rows += `<tr class="${isToday ? "today-row" : ""}">
+      <td class="lbl" style="width:60px;font-weight:700">${d}</td>
+      <td class="lbl idx" style="width:80px">${weekdayOf(ym, d)}</td>
+      ${gridRow(cols, pid, d, e, ym, "pilotDot", p)}
+    </tr>`;
+  }
+
+  const owes = t.salary < 0;
+
+  box.innerHTML = `
+    <div class="sheet-title sticky-title">${esc(p?.name || "")} &nbsp;·&nbsp; ${esc(branchName(p?.branchId))} &nbsp;·&nbsp; ${monthLabel(ym)}</div>
+    <div class="table-wrap sheet-wrap">
+      <table class="grid-table">
+        <thead><tr>
+          <th style="width:60px">اليوم</th>
+          <th style="width:80px"></th>
+          ${gridHead(cols)}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total-row">
+          <td colspan="2" style="padding:11px 13px">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${t.worked} يوم شغل)</span></td>
+          ${gridFoot(cols, t)}
+        </tr></tfoot>
+      </table>
+    </div>
+
+${can('sal.block') ? `    <div class="sum-block">
+      <div class="sum-head">حساب الراتب</div>
+      <div class="sum-row calc">
+        <div class="sl">عدد ساعات العمل × ${fmt(t.rate.h)}
+          <div class="sh">${fmt(t.h)} ساعة${t.leaveCap > 0 ? "" : " — دي كل مستحقاته من الشركة"}${
+            num(p?.hourRate) > 0 ? " · سعر خاص بالطيار ده" : ""}</div></div>
+        <div class="sv" style="color:var(--green)">${fmt(t.hourPay)}</div>
+      </div>
+      ${t.leaveCap > 0 && can('sal.leave') ? `
+      <div class="sum-row calc">
+        <div class="sl">إجازة مدفوعة
+          <div class="sh">${t.leaveDays} يوم × ${fmt(t.shiftHours)} ساعة × ${fmt(t.rate.h)}
+            &nbsp;·&nbsp; غاب ${t.absent} يوم من ${t.counted}، ورصيده ${t.leaveCap} يوم${
+            t.absent > t.leaveCap ? " (الزيادة بدون أجر)" : ""}${
+            t.leaveLeft > 0 ? ` · باقي ${fmt(t.leaveLeft)} يوم` : ""}</div></div>
+        <div class="sv" style="color:var(--green)">+ ${fmt(t.leavePay)}</div>
+      </div>
+      <div class="sum-row calc">
+        <div class="sl">إجمالي المستحق</div>
+        <div class="sv" style="color:var(--green)">${fmt(t.gross)}</div>
+      </div>` : ""}
+      <div class="sum-row">
+        <div class="sl">إجمالي سلف</div>
+        <div class="sv" style="color:var(--orange)">− ${fmt(t.adv)}</div>
+      </div>
+      <div class="sum-row">
+        <div class="sl">إجمالي خصومات</div>
+        <div class="sv" style="color:var(--orange)">− ${fmt(t.ded)}</div>
+      </div>
+      ${!can('sal.def') ? '' : t.defItems.filter(it => it.started && (it.due > 0 || it.after > 0)).map(it => `
+      <div class="sum-row">
+        <div class="sl">قسط سلفة مؤجلة
+          <div class="sh">سلفة ${fmt(it.rec.amount)} بتاريخ ${esc(it.rec.date || "—")}
+            ${it.rec.note ? "· " + esc(it.rec.note) : ""}
+            &nbsp;·&nbsp; الباقي بعد الشهر ده <b>${fmt(it.after)}</b></div></div>
+        <input class="sv" type="text" inputmode="decimal" value="${it.rec.paid?.[ym] ?? ""}"
+               placeholder="${fmt(it.due)}" style="color:var(--orange)"
+               oninput="onDefInput('${esc(it.rec.id)}','${ym}',this.value)" />
+      </div>`).join("")}
+      ${t.defLeft > 0 && can('sal.def') ? `
+      <div class="sum-row calc">
+        <div class="sl">باقي السلف المؤجلة<div class="sh">هيتقسّط على الشهور الجاية</div></div>
+        <div class="sv" style="color:var(--muted)">${fmt(t.defLeft)}</div>
+      </div>` : ""}
+      <div class="sum-row grand">
+        <div class="sl">${owes ? "عليه (مسحوب زيادة)" : "صافي الراتب"}</div>
+        <div class="sv" style="color:${owes ? "var(--red)" : "var(--green)"}">${fmt(Math.abs(t.salary))}</div>
+      </div>
+    </div>` : ''}
+    ${!can('act.deferred') ? '' : `<div style="margin-top:14px">
+      <button class="btn-ghost" onclick="openDefModal(null,'${esc(pid)}')">➕ تسجيل سلفة مؤجلة لـ${esc(p?.name || "")}</button>
+      <button class="btn-ghost" onclick="navigateTo('deferred')">📋 كل السلف المؤجلة</button>
+    </div>`}`;
+};
+
+/* ══════════════════════════════════════════════════════════════
+   3) تقفيل الشهر
+══════════════════════════════════════════════════════════════ */
+window.renderMonth = function() {
+  const box = $("monthBody");
+  if (!box) return;
+  if (!$("monthMonth").value) $("monthMonth").value = monthOf(todayStr());
+  if (!can("act.dateNav")) lockToToday();
+  const ym = $("monthMonth").value;
+  watchMonth(ym);
+  const bf = $("monthBranch").value || "";
+
+  const list = S.pilots.filter(p => (!bf || p.branchId === bf) && canSeeBranch(p.branchId));
+  const G = { h: 0, o: 0, gross: 0, hourPay: 0, leavePay: 0, adv: 0, ded: 0, defDue: 0, defLeft: 0, salary: 0, owed: 0 };
+
+  const rows = list.map((p, i) => {
+    const t = pilotMonthTotals(ym, p.id);
+    G.h += t.h; G.o += t.o; G.gross += t.gross; G.hourPay += t.hourPay; G.leavePay += t.leavePay;
+    G.adv += t.adv; G.ded += t.ded; G.defDue += t.defDue; G.defLeft += t.defLeft;
+    if (t.salary >= 0) G.salary += t.salary; else G.owed += -t.salary;
+    const owes = t.salary < 0;
+    return `<tr>
+      <td class="idx">${i + 1}</td>
+      <td style="font-weight:600">${esc(p.name)}${p.active === false ? ` <span class="badge bg-muted">موقوف</span>` : ""}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(branchName(p.branchId))}</td>
+      <td class="num">${fmt(t.h)}</td>
+      <td class="num">${fmt(t.worked)}</td>
+      <td class="num">${fmt(t.o)}</td>
+      <td class="num">${fmt(t.hourPay)}</td>
+      <td class="num" style="color:var(--green)">${t.leavePay ? fmt(t.leavePay) : "—"}${
+        t.leaveCap ? `<div style="font-size:.68rem;color:var(--muted)">${t.leaveDays}/${t.leaveCap} يوم</div>` : ""}</td>
+      <td class="num" style="color:var(--orange)">${fmt(t.adv)}</td>
+      <td class="num" style="color:var(--orange)">${fmt(t.ded)}</td>
+      <td class="num" style="color:var(--orange)">${t.defDue ? fmt(t.defDue) : "—"}${
+        t.defLeft > 0 ? `<div style="font-size:.68rem;color:var(--muted)">باقي ${fmt(t.defLeft)}</div>` : ""}</td>
+      <td class="num" style="font-weight:800;color:${owes ? "var(--red)" : "var(--green)"}">
+        ${owes ? "عليه " : ""}${fmt(Math.abs(t.salary))}</td>
+      <td>${!can('page.pilot') ? '' :
+        `<button class="btn-ghost btn-xs" onclick="openPilotSheet('${esc(p.id)}')">كشف</button>`}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="13" class="empty-row">مفيش طيارين</td></tr>`;
+
+  // تقفيل الشهر — مجموع البلوك اليومي (الفرع المختار أو الأربع فروع)
+  const M = { h: 0, o: 0, hourPay: 0, devFee: 0, pct: 0, ext: 0, exp: 0,
+              cash: 0, adv: 0, out: 0, net: 0 };
+  const perBranch = {};
+  for (const b of S.branches) perBranch[b.id] = 0;
+  for (let d = 1; d <= daysInMonth(ym); d++) {
+    for (const b of S.branches) {
+      const c = branchDayCloseout(ym, b.id, d);
+      perBranch[b.id] += c.net;
+      if (bf && b.id !== bf) continue;
+      M.h += c.t.h; M.o += c.t.o; M.hourPay += c.hourPay; M.devFee += c.devFee;
+      M.pct += c.pct; M.ext += c.ext; M.exp += c.exp;
+      M.cash += c.cash; M.adv += c.adv; M.out += c.outTotal; M.net += c.net;
+    }
+  }
+  for (const k of Object.keys(M)) M[k] = round2(M[k]);
+
+  const monthSum = `
+    <div class="sec-title" style="margin:26px 0 12px;font-size:.98rem">
+      💰 تقفيل ${monthLabel(ym)}
+      <span class="badge bg-muted">${bf ? esc(branchName(bf)) : "الأربع فروع"}</span></div>
+    <div class="sum-block" style="margin-top:0">
+      <div class="sum-row"><div class="sl">أجر ساعات الطيارين
+        <div class="sh">${fmt(M.h)} ساعة × ${fmt(S.settings.hourRate)} — خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.hourPay)}</div></div>
+      <div class="sum-row"><div class="sl">رسوم التطوير
+        <div class="sh">${fmt(M.o)} أوردر × ${fmt(devRate())} — خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.devFee)}</div></div>
+      <div class="sum-row"><div class="sl">نسبة روح دمشق<div class="sh">خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.pct)}</div></div>
+      <div class="sum-row"><div class="sl">الخارجي<div class="sh">خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.ext)}</div></div>
+      <div class="sum-row"><div class="sl">مصاريف<div class="sh">خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.exp)}</div></div>
+      <div class="sum-row" style="background:rgba(249,115,22,.07)">
+        <div class="sl">إجمالي الخارج</div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.out)}</div></div>
+      <div class="sum-row" style="background:rgba(34,197,94,.07)">
+        <div class="sl">إجمالي النقدي<div class="sh">مجموع عمود «صافي» — داخل</div></div>
+        <div class="sv" style="color:var(--green)">${fmt(M.cash)}</div></div>
+      <div class="sum-row grand"><div class="sl">الصافي<div class="sh">النقدي − إجمالي الخارج</div></div>
+        <div class="sv" style="color:${M.net < 0 ? "var(--red)" : "var(--green)"}">${fmt(M.net)}</div></div>
+      <div class="sum-row"><div class="sl">إجمالي سلف
+        <div class="sh">دَيْن على الطيارين — مش داخل في الصافي</div></div>
+        <div class="sv" style="color:var(--muted)">${fmt(M.adv)}</div></div>
+      <div style="border-top:1px solid var(--border)">
+        <div class="branch-nets">
+          ${S.branches.map(b => `<div class="bn-card">
+            <div class="bn-name">صافي ${esc(b.name)}</div>
+            <div class="bn-val" style="color:${perBranch[b.id] < 0 ? "var(--red)" : "var(--green)"}">${fmt(perBranch[b.id])}</div>
+          </div>`).join("")}
+          <div class="bn-card" style="border-color:var(--sky)">
+            <div class="bn-name" style="color:var(--sky)">إجمالي صافي</div>
+            <div class="bn-val" style="color:var(--sky)">${
+              fmt(Object.values(perBranch).reduce((a, v) => a + v, 0))}</div></div>
+        </div>
+      </div>
+    </div>`;
+
+  box.innerHTML = `
+    <div class="sheet-title sticky-title">تقفيل ${monthLabel(ym)} &nbsp;·&nbsp; ${bf ? esc(branchName(bf)) : "كل الفروع"}</div>
+    <div class="table-wrap sheet-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:38px">#</th><th>الطيار</th><th>الفرع</th>
+          <th class="num">الساعات</th><th class="num">أيام الشغل</th><th class="num">الأوردرات</th>
+          <th class="num">الأجر (ساعات)</th><th class="num">إجازة مدفوعة</th><th class="num">سلف</th><th class="num">خصومات</th>
+          <th class="num">قسط سلفة مؤجلة</th>
+          <th class="num">صافي الراتب</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total-row">
+          <td colspan="3" style="padding:12px 13px">الإجمالي — ${list.length} طيار</td>
+          <td class="num">${fmt(G.h)}</td><td></td><td class="num">${fmt(G.o)}</td>
+          <td class="num">${fmt(G.hourPay)}</td>
+          <td class="num" style="color:var(--green)">${fmt(G.leavePay)}</td>
+          <td class="num" style="color:var(--orange)">${fmt(G.adv)}</td>
+          <td class="num" style="color:var(--orange)">${fmt(G.ded)}</td>
+          <td class="num" style="color:var(--orange)">${fmt(G.defDue)}${
+            G.defLeft > 0 ? `<div style="font-size:.68rem;color:var(--muted);font-weight:600">باقي ${fmt(G.defLeft)}</div>` : ""}</td>
+          <td class="num" style="color:var(--green)">${fmt(G.salary)}</td><td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    ${G.owed > 0 ? `<div class="warn-box" style="margin-top:16px">⚠️ فيه <b>${fmt(G.owed)} ج</b> مسحوبة زيادة على طيارين (سلفهم أكبر من أجرهم) — دي مش داخلة في إجمالي صافي الرواتب.</div>` : ""}
+    ${monthSum}`;
+};
+
+window.openPilotSheet = function(pid) {
+  $("pilotBranchFilter").value = "";
+  fillPilotSelect();
+  $("pilotSelect").value = pid;
+  $("pilotMonth").value = $("monthMonth").value;
+  navigateTo("pilot");
+};
+
+/* ══════════════════════════════════════════════════════════════
+   3b) السلف المؤجلة
+══════════════════════════════════════════════════════════════ */
+window.renderDeferred = function() {
+  const box = $("deferredBody");
+  if (!box) return;
+  if (!$("defMonth").value) $("defMonth").value = monthOf(todayStr());
+  if (!can("act.dateNav")) lockToToday();
+  const ym = $("defMonth").value;
+
+  const G = { amount: 0, due: 0, left: 0 };
+  const rows = S.deferred.map((rec, i) => {
+    const c = deferredForMonth(rec, ym);
+    const paid = round2(num(rec.amount) - c.after);
+    G.amount += num(rec.amount); G.due += c.due; G.left += c.after;
+    const done = c.after <= 0;
+    return `<tr>
+      <td class="idx">${i + 1}</td>
+      <td style="font-weight:600">${esc(pilotName(rec.pilotId))}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(rec.date || "—")}</td>
+      <td class="num">${fmt(rec.amount)}</td>
+      <td class="num">${fmt(rec.monthly)}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(rec.startMonth || "—")}</td>
+      <td class="num" style="color:var(--orange)">${c.started ? fmt(c.due) : "—"}</td>
+      <td class="num">${fmt(paid)}</td>
+      <td class="num" style="font-weight:800;color:${done ? "var(--green)" : "var(--sky)"}">${fmt(c.after)}</td>
+      <td>${done ? `<span class="badge bg-green">اتسدّدت</span>`
+           : !c.started ? `<span class="badge bg-muted">لسه ما بدأتش</span>`
+           : `<span class="badge bg-orange">بتتقسّط</span>`}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(rec.note || "")}</td>
+      <td>${!can('act.deferred') ? '' :
+        `<button class="btn-ghost btn-xs" onclick="openDefModal('${esc(rec.id)}')">تعديل</button>`}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="12" class="empty-row">مفيش سلف مؤجلة</td></tr>`;
+
+  box.innerHTML = `
+    <div class="info-box">
+      لو طيار خد سلفة كبيرة، متكتبهاش في عمود <b>سلف</b> في التقفيل اليومي — دي هتلخبط
+      مطابقة توريد المشرف. سجّلها هنا وحدّد قسط شهري، والبرنامج هيخصمه من راتبه كل شهر
+      لحد ما تتسدّد.
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:38px">#</th><th>الطيار</th><th>تاريخ السلفة</th>
+          <th class="num">المبلغ</th><th class="num">القسط الشهري</th><th>يبدأ من</th>
+          <th class="num">قسط ${esc(monthLabel(ym))}</th><th class="num">المسدَّد</th>
+          <th class="num">المتبقي</th><th>الحالة</th><th>ملاحظة</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total-row">
+          <td colspan="3" style="padding:12px 13px">الإجمالي — ${S.deferred.length} سلفة</td>
+          <td class="num">${fmt(G.amount)}</td><td></td><td></td>
+          <td class="num" style="color:var(--orange)">${fmt(G.due)}</td>
+          <td class="num">${fmt(G.amount - G.left)}</td>
+          <td class="num" style="color:var(--sky)">${fmt(G.left)}</td>
+          <td colspan="3"></td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+};
+
+window.openDefModal = function(id, presetPilot) {
+  window._editDef = id || null;
+  const rec = id ? S.deferred.find(d => d.id === id) : null;
+  $("defModalTitle").textContent = id ? "تعديل سلفة مؤجلة" : "تسجيل سلفة مؤجلة";
+  $("dfPilot").innerHTML = S.pilots.map(p =>
+    `<option value="${esc(p.id)}">${esc(p.name)} — ${esc(branchName(p.branchId))}</option>`).join("");
+  $("dfPilot").value   = rec?.pilotId || presetPilot || S.pilots[0]?.id || "";
+  $("dfDate").value    = rec?.date || todayStr();
+  $("dfAmount").value  = rec?.amount ?? "";
+  $("dfMonthly").value = rec?.monthly ?? "";
+  $("dfStart").value   = rec?.startMonth || monthOf(rec?.date || todayStr());
+  $("dfNote").value    = rec?.note || "";
+  $("dfDelete").style.display = id ? "" : "none";
+  $("dfError").textContent = "";
+  previewDefPlan();
+  openModal("def");
+  setTimeout(() => $("dfAmount").focus(), 80);
+};
+
+/** يوريه هيتخصم كام شهر قبل ما يحفظ */
+window.previewDefPlan = function() {
+  const amount = num($("dfAmount").value), monthly = num($("dfMonthly").value);
+  const start = $("dfStart").value;
+  const box = $("dfPlan");
+  if (!box) return;
+  if (amount <= 0 || monthly <= 0 || !start) { box.textContent = ""; return; }
+  const n = Math.ceil(amount / monthly);
+  let last = start;
+  for (let i = 1; i < n; i++) last = nextMonth(last);
+  const rem = round2(amount - monthly * (n - 1));
+  box.innerHTML = `📅 هتتخصم على <b>${n}</b> شهر — من <b>${esc(start)}</b> لـ <b>${esc(last)}</b>`
+    + (rem !== monthly ? `<br>آخر قسط هيكون <b>${fmt(rem)}</b> بدل ${fmt(monthly)}` : "");
+};
+
+window.saveDeferred = async function() {
+  const pilotId = $("dfPilot").value;
+  const date    = $("dfDate").value;
+  const amount  = num($("dfAmount").value);
+  const monthly = num($("dfMonthly").value);
+  const startMonth = $("dfStart").value;
+  const note    = $("dfNote").value.trim();
+  const err = $("dfError");
+  if (!pilotId) { err.textContent = "اختار الطيار"; return; }
+  if (amount <= 0) { err.textContent = "اكتب مبلغ السلفة"; return; }
+  if (monthly <= 0) { err.textContent = "اكتب القسط الشهري"; return; }
+  if (monthly > amount) { err.textContent = "القسط أكبر من السلفة نفسها"; return; }
+  if (!startMonth) { err.textContent = "حدّد الشهر اللي يبدأ منه الخصم"; return; }
+  try {
+    const data = { pilotId, date, amount, monthly, startMonth, note };
+    if (window._editDef) await update(ref(db, `${ROOT}/deferred/${window._editDef}`), data);
+    else await push(ref(db, `${ROOT}/deferred`), data);
+    closeModal("def");
+    showToast("تم حفظ السلفة المؤجلة", "success");
+  } catch (e) { err.textContent = "تعذّر الحفظ: " + e.message; }
+};
+
+window.deleteDeferred = async function() {
+  const id = window._editDef;
+  if (!id) return;
+  const rec = S.deferred.find(d => d.id === id);
+  if (!confirm(`تحذف السلفة المؤجلة بتاعة ${pilotName(rec?.pilotId)} (${fmt(rec?.amount)})؟\nالأقساط اللي اتخصمت من الشهور اللي فاتت هترجع تظهر في الرواتب.`)) return;
+  try {
+    await remove(ref(db, `${ROOT}/deferred/${id}`));
+    closeModal("def");
+    showToast("تم الحذف", "success");
+  } catch (e) { $("dfError").textContent = "تعذّر الحذف: " + e.message; }
+};
+
+/** تعديل قسط شهر بعينه من كشف الطيار */
+const _pendingDef = new Map();
+window.onDefInput = function(defId, ym, raw) {
+  const rec = S.deferred.find(d => d.id === defId);
+  if (!rec) return;
+  rec.paid = rec.paid || {};
+  if (raw === "" ) delete rec.paid[ym]; else rec.paid[ym] = num(raw);
+  clearTimeout(_pendingDef.get(defId + ym));
+  _pendingDef.set(defId + ym, setTimeout(async () => {
+    try {
+      const path = `${ROOT}/deferred/${defId}/paid/${ym}`;
+      if (raw === "") await remove(ref(db, path));
+      else await set(ref(db, path), num(raw));
+    } catch (e) { showToast("تعذّر الحفظ: " + (e?.message || e), "error"); }
+  }, 500));
+  scheduleTotals();
+};
+
+/* ══════════════════════════════════════════════════════════════
+   4) الفروع والطيارين
+══════════════════════════════════════════════════════════════ */
+window.renderSetup = function() {
+  const box = $("setupBody");
+  if (!box) return;
+
+  const branchCards = S.branches.map(b => {
+    const all = S.pilots.filter(p => p.branchId === b.id);
+    const act = all.filter(p => p.active !== false).length;
+    const rows = all.length ? all.map((p, i) => {
+      const R = rateOf(p);
+      const custom = num(p.hourRate) > 0 || num(p.orderRate) > 0;
+      return `<tr>
+      <td class="idx" style="width:38px">${i + 1}</td>
+      <td style="font-weight:600">${esc(p.name)}</td>
+      <td><span class="badge ${p.job === "مشرف" ? "bg-purple" : "bg-blue"}">${esc(p.job || "طيار")}</span></td>
+      <td class="num" style="font-size:.8rem">${fmt(R.h)} / ${fmt(R.o)}
+        ${custom ? `<span class="badge bg-orange" style="font-size:.65rem">خاص</span>` : ""}</td>
+      <td class="num" style="font-size:.8rem">${p.leaveDays ? fmt(p.leaveDays) + " يوم" : "—"}</td>
+      <td>${p.active === false
+        ? `<span class="badge bg-muted">موقوف</span>`
+        : `<span class="badge bg-green">شغّال</span>`}</td>
+      <td style="text-align:left">${!can('act.pilots') ? '' :
+        `<button class="btn-ghost btn-xs" onclick="openPilotModal('${esc(p.id)}')">تعديل</button>`}
+      </td>
+    </tr>`; }).join("") : `<tr><td colspan="7" class="empty-row" style="padding:20px">مفيش طيارين — اضغط «إضافة قائمة أسماء»</td></tr>`;
+
+    return `<div style="margin-bottom:22px">
+      <div class="sec-header" style="margin-bottom:9px">
+        <div class="sec-title" style="font-size:.98rem">🏢 ${esc(b.name)}
+          <span class="badge bg-blue">${act} طيار</span></div>
+        <div class="toolbar">${!can('act.pilots') ? '' : `
+          <button class="btn-ghost btn-xs" onclick="openBranchModal('${esc(b.id)}')">تعديل الاسم</button>
+          <button class="btn-red btn-xs" onclick="deleteBranch('${esc(b.id)}')">حذف الفرع</button>`}
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th style="width:38px">#</th><th>الاسم</th><th>الوظيفة</th>
+          <th class="num">سعر الساعة / الأوردر</th><th class="num">إجازة مدفوعة</th>
+          <th>الحالة</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+    </div>`;
+  }).join("");
+
+  box.innerHTML = (S.branches.length
+    ? branchCards
+    : `<div class="warn-box">مفيش فروع. اضغط <b>إضافة فرع</b>.</div>`);
+};
+
+window.openBranchModal = function(id) {
+  window._editBranch = id || null;
+  $("branchModalTitle").textContent = id ? "تعديل الفرع" : "إضافة فرع";
+  $("bmName").value = id ? (S.branches.find(b => b.id === id)?.name || "") : "";
+  $("bmError").textContent = "";
+  openModal("branch");
+  setTimeout(() => $("bmName").focus(), 80);
+};
+
+window.saveBranch = async function() {
+  const name = $("bmName").value.trim();
+  if (!name) { $("bmError").textContent = "اكتب اسم الفرع"; return; }
+  try {
+    if (window._editBranch) {
+      await update(ref(db, `${ROOT}/branches/${window._editBranch}`), { name });
+    } else {
+      await push(ref(db, `${ROOT}/branches`), { name, order: S.branches.length });
+    }
+    closeModal("branch");
+    showToast("تم الحفظ", "success");
+  } catch (e) { $("bmError").textContent = "تعذّر الحفظ: " + e.message; }
+};
+
+window.deleteBranch = async function(id) {
+  const n = S.pilots.filter(p => p.branchId === id).length;
+  if (n) { showToast(`مينفعش تحذف الفرع وفيه ${n} طيار — انقلهم لفرع تاني الأول`, "error"); return; }
+  if (!confirm(`تحذف فرع «${branchName(id)}»؟`)) return;
+  try { await remove(ref(db, `${ROOT}/branches/${id}`)); showToast("تم الحذف", "success"); }
+  catch (e) { showToast("تعذّر الحذف: " + e.message, "error"); }
+};
+
+window.openPilotModal = function(id) {
+  window._editPilot = id || null;
+  const p = id ? S.pilots.find(x => x.id === id) : null;
+  $("pilotModalTitle").textContent = id ? "تعديل الطيار" : "إضافة طيار";
+  $("pmName").value      = p?.name || "";
+  $("pmBranch").value    = p?.branchId || S.branches[0]?.id || "";
+  $("pmJob").value       = p?.job || "طيار";
+  $("pmHourRate").value  = p?.hourRate  ?? "";
+  $("pmOrderRate").value = p?.orderRate ?? "";
+  $("pmLeaveDays").value = p?.leaveDays ?? "";
+  $("pmActive").value = p && p.active === false ? "0" : "1";
+  $("pmDefaultRates").textContent =
+    `${fmt(S.settings.hourRate)} للساعة · ${fmt(S.settings.pilotOrderRate ?? 0)} للأوردر`;
+  $("pmDelete").style.display = id ? "" : "none";
+  $("pmError").textContent = "";
+  openModal("pilot");
+  setTimeout(() => $("pmName").focus(), 80);
+};
+
+window.savePilot = async function() {
+  const name = $("pmName").value.trim();
+  const branchId = $("pmBranch").value;
+  const active = $("pmActive").value === "1";
+  const job = $("pmJob").value;
+  // الفاضي معناه «خد السعر العام» — بنخزّنه null عشان يتشال من قاعدة البيانات
+  const hourRate  = $("pmHourRate").value.trim()  === "" ? null : num($("pmHourRate").value);
+  const orderRate = $("pmOrderRate").value.trim() === "" ? null : num($("pmOrderRate").value);
+  const leaveDays = $("pmLeaveDays").value.trim() === "" ? null : num($("pmLeaveDays").value);
+  if (!name) { $("pmError").textContent = "اكتب اسم الطيار"; return; }
+  if (!branchId) { $("pmError").textContent = "اختار الفرع"; return; }
+  if (hourRate !== null && hourRate <= 0)  { $("pmError").textContent = "سعر الساعة لازم يكون أكبر من صفر"; return; }
+  if (orderRate !== null && orderRate < 0) { $("pmError").textContent = "سعر الأوردر مايصحّش يكون بالسالب"; return; }
+  if (leaveDays !== null && leaveDays < 0) { $("pmError").textContent = "أيام الإجازة مايصحّش تكون بالسالب"; return; }
+  const data = { name, branchId, active, job, hourRate, orderRate, leaveDays };
+  try {
+    if (window._editPilot) {
+      await update(ref(db, `${ROOT}/pilots/${window._editPilot}`), data);
+    } else {
+      await push(ref(db, `${ROOT}/pilots`), { ...data, order: S.pilots.length });
+    }
+    closeModal("pilot");
+    showToast("تم الحفظ", "success");
+  } catch (e) { $("pmError").textContent = "تعذّر الحفظ: " + e.message; }
+};
+
+window.deletePilot = async function() {
+  const id = window._editPilot;
+  if (!id) return;
+  if (!confirm(`تحذف «${pilotName(id)}»؟ بياناته المسجّلة في الشهور هتفضل موجودة في قاعدة البيانات لكن مش هتظهر.\n\nلو الطيار خرج من الشغل الأحسن تخليه «موقوف» بدل الحذف.`)) return;
+  try {
+    await remove(ref(db, `${ROOT}/pilots/${id}`));
+    closeModal("pilot");
+    showToast("تم الحذف", "success");
+  } catch (e) { $("pmError").textContent = "تعذّر الحذف: " + e.message; }
+};
+
+window.openBulkModal = function() {
+  $("bkNames").value = ""; $("bkError").textContent = "";
+  openModal("bulk");
+  setTimeout(() => $("bkNames").focus(), 80);
+};
+
+window.saveBulk = async function() {
+  const branchId = $("bkBranch").value;
+  const names = $("bkNames").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!branchId) { $("bkError").textContent = "اختار الفرع"; return; }
+  if (!names.length) { $("bkError").textContent = "اكتب اسم واحد على الأقل"; return; }
+  const existing = new Set(S.pilots.filter(p => p.branchId === branchId).map(p => p.name));
+  const fresh = names.filter(n => !existing.has(n));
+  if (!fresh.length) { $("bkError").textContent = "كل الأسماء دي موجودة في الفرع بالفعل"; return; }
+  try {
+    let order = S.pilots.length;
+    const updates = {};
+    for (const name of fresh) {
+      const key = push(ref(db, `${ROOT}/pilots`)).key;
+      updates[key] = { name, branchId, active: true, order: order++ };
+    }
+    await update(ref(db, `${ROOT}/pilots`), updates);
+    closeModal("bulk");
+    showToast(`تم إضافة ${fresh.length} طيار${names.length > fresh.length ? ` (${names.length - fresh.length} كانوا موجودين)` : ""}`, "success");
+  } catch (e) { $("bkError").textContent = "تعذّر الحفظ: " + e.message; }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   6) الصلاحيات
+══════════════════════════════════════════════════════════════ */
+window.renderPerms = function() {
+  const box = $("permsBody");
+  if (!box) return;
+  if (!isAdmin()) { box.innerHTML = `<div class="warn-box">الشاشة دي للمدير بس.</div>`; return; }
+
+  // قائمة المستخدمين (غير المديرين — المدير عنده كل حاجة أصلًا)
+  const list = S.users.filter(u => !ADMIN_ROLES.includes(String(u.role || "").trim()));
+  const sel = $("permUser");
+  const prev = sel.value;
+  sel.innerHTML = list.map(u =>
+    `<option value="${esc(u.username)}">${esc(u.displayName || u.username)} — ${esc(u.role || "")}</option>`
+  ).join("") || `<option value="">— مفيش مستخدمين —</option>`;
+  if (prev && list.some(u => u.username === prev)) sel.value = prev;
+
+  const uname = sel.value;
+  if (!uname) {
+    box.innerHTML = `<div class="warn-box">
+      مفيش حسابات لسه. اضغط <b>➕ حساب مشرف</b> فوق، اختار الاسم من الموجودين
+      في البرنامج، وحدّد اسم مستخدم وكلمة مرور.</div>`;
+    return;
+  }
+  const acc = S.users.find(u => u.username === uname);
+  const person = acc?.pilotId ? S.pilots.find(p => p.id === acc.pilotId) : null;
+  const P = S.perms[uname] || {};
+  const keys = P.keys || {};
+  const branches = Array.isArray(P.branches) ? P.branches : [];
+
+  const groups = PERM_GROUPS.map(g => {
+    const on = g.items.filter(([k]) => keys[pkey(k)] === true).length;
+    return `<div class="perm-group">
+      <div class="perm-head">
+        <label class="perm-check">
+          <input type="checkbox" ${on === g.items.length ? "checked" : ""}
+                 onchange="togglePermGroup('${esc(g.title)}',this.checked)" />
+          <span>${esc(g.title)}</span>
+        </label>
+        <span class="badge ${on ? "bg-green" : "bg-muted"}">${on} / ${g.items.length}</span>
+      </div>
+      <div class="perm-items">
+        ${g.items.map(([k, label]) => `
+          <label class="perm-check">
+            <input type="checkbox" data-perm="${esc(k)}"
+                   onchange="markPermsDirty()" ${keys[pkey(k)] === true ? "checked" : ""} />
+            <span>${esc(label)}</span>
+          </label>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="perm-group">
+      <div class="perm-head">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="user-avatar" style="width:30px;height:30px;font-size:.85rem">${
+            esc((acc?.displayName || uname).trim().charAt(0))}</div>
+          <div>
+            <div style="font-weight:800">${esc(acc?.displayName || uname)}</div>
+            <div style="font-size:.74rem;color:var(--muted)">
+              اسم المستخدم <code>${esc(uname)}</code> · ${esc(acc?.role || "")}${
+              person ? ` · ${esc(branchName(person.branchId))}` : ""}</div>
+          </div>
+        </div>
+        <button class="btn-ghost btn-xs" onclick="openAccountModal('${esc(uname)}')">تعديل الحساب</button>
+      </div>
+      ${!person && acc?.pilotId === undefined ? `
+      <div style="padding:11px 16px;font-size:.79rem;color:var(--muted)">
+        الحساب ده اتعمل من لوحة الإدارة ومش مربوط باسم من أسماء البرنامج.</div>` : ""}
+    </div>
+
+    <div class="info-box">
+      علّم على اللي عايز المشرف يشوفه ويعمله. الخانة المقفولة معناها إن البند
+      <b>مش هيظهرله خالص</b> — لا في الجدول ولا في التقفيل.
+      <br>المدير بيشوف كل حاجة دايمًا ومش محتاج صلاحيات.
+    </div>
+
+    <div class="perm-group">
+      <div class="perm-head">
+        <label class="perm-check" style="cursor:default"><span>الفروع المسموحة</span></label>
+        <span class="badge ${branches.length ? "bg-blue" : "bg-green"}">${
+          branches.length ? branches.length + " فرع" : "كل الفروع"}</span>
+      </div>
+      <div class="perm-items">
+        ${S.branches.map(b => `
+          <label class="perm-check">
+            <input type="checkbox" data-branch="${esc(b.id)}" ${branches.includes(b.id) ? "checked" : ""}
+                   onchange="markPermsDirty()" />
+            <span>${esc(b.name)}</span>
+          </label>`).join("")}
+      </div>
+      <div style="padding:0 16px 12px;font-size:.76rem;color:var(--muted)">
+        متعلّمش على حاجة = يشوف كل الفروع.
+      </div>
+    </div>
+
+    ${groups}
+
+    <div class="toolbar" style="margin-top:18px;position:sticky;bottom:10px;background:var(--night);padding:10px 0">
+      <button class="add-btn" onclick="savePerms()">💾 حفظ الصلاحيات</button>
+      <button class="btn-ghost" onclick="applyPermPreset('supervisor')">📋 قالب: مشرف يسجّل بس</button>
+      <button class="btn-ghost" onclick="applyPermPreset('all')">✅ افتح الكل</button>
+      <button class="btn-ghost" onclick="applyPermPreset('none')">🚫 اقفل الكل</button>
+      <span id="permsDirty" style="font-size:.8rem;color:var(--orange);font-weight:700"></span>
+    </div>`;
+};
+
+/* ── حسابات دخول المشرفين ─────────────────────────────────────
+   الحساب بيتربط بشخص من الموجودين في «الفروع والطيارين»، فبيتاخد
+   منه الاسم والفرع أوتوماتيك. */
+window.openAccountModal = function(username) {
+  window._editAcc = username || null;
+  const u = username ? S.users.find(x => x.username === username) : null;
+  $("accModalTitle").textContent = username ? "تعديل حساب المشرف" : "حساب دخول لمشرف";
+
+  // المشرفين الأول، وبعدين باقي الأسماء
+  const people = [...S.pilots].sort((a, b) =>
+    (b.job === "مشرف") - (a.job === "مشرف") || (a.order ?? 0) - (b.order ?? 0));
+  $("acPerson").innerHTML = people.map(p =>
+    `<option value="${esc(p.id)}">${esc(p.name)} — ${esc(branchName(p.branchId))}${
+      p.job === "مشرف" ? " (مشرف)" : ""}</option>`).join("")
+    || `<option value="">— مفيش أسماء —</option>`;
+
+  $("acPerson").value = u?.pilotId || people.find(p => p.job === "مشرف")?.id || people[0]?.id || "";
+  $("acUser").value = u?.username || "";
+  $("acUser").disabled = !!username;                 // اسم المستخدم مايتغيّرش بعد الإنشاء
+  $("acPass").value = u?.password || "";
+  $("acRole").value = u?.role || "مشرف فرع";
+  $("acPreset").checked = !username;
+  $("acPreset").closest("label").style.display = username ? "none" : "";
+  $("acDelete").style.display = username ? "" : "none";
+  $("acError").textContent = "";
+  openModal("account");
+  if (!username) setTimeout(() => $("acUser").focus(), 80);
+};
+
+/** لما يختار شخص، نقترح اسم مستخدم لو لسه فاضي */
+window.onAccPersonChange = function() {
+  if (window._editAcc || $("acUser").value.trim()) return;
+  const p = S.pilots.find(x => x.id === $("acPerson").value);
+  if (!p) return;
+  const br = S.branches.findIndex(b => b.id === p.branchId) + 1;
+  $("acUser").value = "sup" + (br || 1);
+};
+
+window.saveAccount = async function() {
+  const err = $("acError");
+  const pilotId  = $("acPerson").value;
+  const username = $("acUser").value.trim();
+  const password = $("acPass").value.trim();
+  const role     = $("acRole").value;
+  const person   = S.pilots.find(p => p.id === pilotId);
+
+  if (!person)  { err.textContent = "اختار الاسم"; return; }
+  if (!username) { err.textContent = "اكتب اسم المستخدم"; return; }
+  // Firebase مابيقبلش الرموز دي في اسم المفتاح
+  if (/[.#$/\[\]]/.test(username) || /\s/.test(username)) {
+    err.textContent = "اسم المستخدم من غير مسافات ومن غير الرموز . # $ / [ ]"; return;
+  }
+  if (password.length < 4) { err.textContent = "كلمة المرور 4 حروف على الأقل"; return; }
+  if (!window._editAcc && S.users.some(u => u.username === username)) {
+    err.textContent = "اسم المستخدم ده مستخدم قبل كده"; return;
+  }
+  const taken = S.users.find(u => u.pilotId === pilotId && u.username !== window._editAcc);
+  if (taken) { err.textContent = `${person.name} عنده حساب بالفعل (${taken.username})`; return; }
+
+  try {
+    await update(ref(db, `users/${username}`), {
+      username, password, role,
+      displayName: person.name,
+      pilotId, branchId: person.branchId,
+      allowedApps: ["damascus"],
+      source: "rd",
+      createdAt: new Date().toISOString()
+    });
+    // نفتحله صلاحيات المشرف على فرعه على طول
+    if ($("acPreset").checked) {
+      const keys = {};
+      SUPERVISOR_PRESET.forEach(k => { keys[pkey(k)] = true; });
+      await set(ref(db, `${ROOT}/perms/${username}`),
+        { keys, branches: person.branchId ? [person.branchId] : [] });
+    }
+    closeModal("account");
+    showToast("اتعمل الحساب — راجع صلاحياته تحت", "success");
+    setTimeout(() => { const s = $("permUser"); if (s) { s.value = username; renderPerms(); } }, 400);
+  } catch (e) { err.textContent = "تعذّر الحفظ: " + e.message; }
+};
+
+window.deleteAccount = async function() {
+  const username = window._editAcc;
+  if (!username) return;
+  if (!confirm(`تحذف حساب «${username}»؟ المستخدم ده مش هيقدر يدخل البرنامج تاني.`)) return;
+  try {
+    await remove(ref(db, `users/${username}`));
+    await remove(ref(db, `${ROOT}/perms/${username}`));
+    closeModal("account");
+    showToast("اتحذف الحساب", "success");
+  } catch (e) { $("acError").textContent = "تعذّر الحذف: " + e.message; }
+};
+
+window.markPermsDirty = function() {
+  const el = $("permsDirty");
+  if (el) el.textContent = "فيه تعديلات لسه ما اتحفظتش";
+};
+
+window.togglePermGroup = function(title, on) {
+  const g = PERM_GROUPS.find(x => x.title === title);
+  if (!g) return;
+  const set = new Set(g.items.map(([k]) => k));
+  document.querySelectorAll("#permsBody [data-perm]").forEach(cb => {
+    if (set.has(cb.dataset.perm)) cb.checked = on;
+  });
+  markPermsDirty();
+};
+
+window.applyPermPreset = function(kind) {
+  const preset = new Set(kind === "supervisor" ? SUPERVISOR_PRESET : []);
+  document.querySelectorAll("#permsBody [data-perm]").forEach(cb => {
+    cb.checked = kind === "all" ? true : kind === "none" ? false : preset.has(cb.dataset.perm);
+  });
+  markPermsDirty();
+};
+
+window.savePerms = async function() {
+  const uname = $("permUser").value;
+  if (!uname) return;
+  const keys = {};
+  document.querySelectorAll("#permsBody [data-perm]").forEach(cb => {
+    if (cb.checked) keys[pkey(cb.dataset.perm)] = true;
+  });
+  const branches = [...document.querySelectorAll("#permsBody [data-branch]")]
+    .filter(cb => cb.checked).map(cb => cb.dataset.branch);
+  try {
+    await set(ref(db, `${ROOT}/perms/${uname}`), { keys, branches });
+    $("permsDirty").textContent = "";
+    showToast("اتحفظت الصلاحيات", "success");
+  } catch (e) { showToast("تعذّر الحفظ: " + e.message, "error"); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   5) الإعدادات
+══════════════════════════════════════════════════════════════ */
+window.renderSettings = function() {
+  const box = $("settingsBody");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="info-box">
+      الأسعار دي بتتطبّق على <b>كل الطيارين وكل الفروع</b> وعلى <b>كل الشهور</b> — يعني لو غيّرتها،
+      حسابات الشهور القديمة هتتغيّر معاها. غيّرها بس لو السعر اتغيّر فعلًا.
+    </div>
+    <div class="sum-block" style="max-width:560px;margin-top:0">
+      <div class="sum-head">أسعار الحساب</div>
+      <div class="sum-row">
+        <div class="sl">سعر الساعة<div class="sh">بالجنيه — الافتراضي ٣٠</div></div>
+        <input class="sv" id="setHourRate" type="text" inputmode="decimal" value="${esc(S.settings.hourRate)}" />
+      </div>
+      <div class="sum-row">
+        <div class="sl">رسوم التطوير للأوردر
+          <div class="sh">بتاعة الشركة — بتتحسب <b>خارج</b> في تقفيل اليوم. الافتراضي ٢</div></div>
+        <input class="sv" id="setOrderRate" type="text" inputmode="decimal" value="${esc(S.settings.orderRate)}" />
+      </div>
+      <div class="sum-row">
+        <div class="sl">سعر أوردر الطيار (افتراضي)
+          <div class="sh">خدمة الطيار = أوردراته × السعر ده، لو مالوش سعر خاص في كارته</div></div>
+        <input class="sv" id="setPilotOrderRate" type="text" inputmode="decimal" value="${esc(S.settings.pilotOrderRate ?? 0)}" />
+      </div>
+      <div class="sum-row">
+        <div class="sl">ساعات الوردية<div class="sh">قيمة يوم الإجازة المدفوعة = الساعات دي × سعر ساعة الطيار</div></div>
+        <input class="sv" id="setShiftHours" type="text" inputmode="decimal" value="${esc(S.settings.shiftHours ?? 10)}" />
+      </div>
+      <div class="sum-row">
+        <div class="sl">اسم المطعم<div class="sh">بيظهر في العناوين</div></div>
+        <input class="sv" id="setRestName" type="text" style="min-width:180px;text-align:right;direction:rtl" value="${esc(S.settings.restName || "روح دمشق")}" />
+      </div>
+      <div style="padding:14px 16px;display:flex;gap:9px">
+        ${!can('act.edit') ? '' : `<button class="add-btn" onclick="saveSettings()">حفظ الأسعار</button>`}
+      </div>
+    </div>`;
+};
+
+window.saveSettings = async function() {
+  const hourRate       = num($("setHourRate").value);
+  const orderRate      = num($("setOrderRate").value);
+  const pilotOrderRate = num($("setPilotOrderRate").value);
+  const shiftHours     = num($("setShiftHours").value);
+  const restName   = $("setRestName").value.trim() || "روح دمشق";
+  if (hourRate <= 0) { showToast("سعر الساعة لازم يكون أكبر من صفر", "error"); return; }
+  if (shiftHours <= 0) { showToast("ساعات الوردية لازم تكون أكبر من صفر", "error"); return; }
+  try {
+    await update(ref(db, `${ROOT}/settings`),
+      { hourRate, orderRate, pilotOrderRate, shiftHours, restName });
+    showToast("تم حفظ الأسعار", "success");
+  } catch (e) { showToast("تعذّر الحفظ: " + e.message, "error"); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   التصدير لإكسل
+══════════════════════════════════════════════════════════════ */
+function download(aoa, sheetName, fileName) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 30));
+  XLSX.writeFile(wb, fileName);
+}
+
+window.exportDaily = function() {
+  const date = $("dailyDate").value, ym = monthOf(date), day = dayOf(date);
+  const bid = $("dailyBranch").value;
+  const t = branchDayTotals(ym, bid, day);
+  const C = branchDayCloseout(ym, bid, day);
+  const A = dayAllBranches(ym, day);
+  const aoa = [
+    [`تقفيل يومي — ${day} ${weekdayOf(ym, day)} — ${monthLabel(ym)} — ${branchName(bid)}`],
+    ["الاسم", "ساعة الحضور", "خروج مؤقت", "رجوع", "ساعة الانصراف", "عدد ساعات العمل", "عدد الأوردرات", "إجمالي الخدمة", "خدمة الطيار", "صافي الخدمة", "سلف", "خصومات", "ملاحظات"]
+  ];
+  for (const p of pilotsOfBranch(bid)) {
+    const e = entryOf(ym, p.id, day);
+    aoa.push([p.name, e.in ?? "", e.bout ?? "", e.bin ?? "", e.out ?? "", hoursOf(e) || "", e.o ?? "", e.svc ?? "", pilotSvcOf(e, p) || "", netOf(e, p) || "", e.adv ?? "", e.ded ?? "", e.note ?? ""]);
+  }
+  aoa.push(["الإجمالي", "", "", "", "", t.h, t.o, t.svc, t.psvc, t.net, t.adv, t.ded, ""]);
+  aoa.push([]);
+  aoa.push([`تقفيل يومي ${day} — ${branchName(bid)}`]);
+  aoa.push([`عدد ساعات العمل × ${S.settings.hourRate}`, C.t.h, C.hourPay, "خارج"]);
+  aoa.push([`رسوم التطوير × ${devRate()}`, C.t.o, C.devFee, "خارج"]);
+  aoa.push(["نسبة روح دمشق", "", C.pct, "خارج"]);
+  aoa.push(["الخارجي", "", C.ext, "خارج"]);
+  aoa.push(["مصاريف", "", C.exp, "خارج"]);
+  aoa.push(["إجمالي الخارج", "", C.outTotal]);
+  aoa.push(["إجمالي نقدي (مجموع عمود صافي)", "", C.cash, "داخل"]);
+  aoa.push([`صافي ${branchName(bid)}`, "", C.net]);
+  aoa.push(["إجمالي سلف (دَيْن — خارج الحساب)", "", C.adv]);
+  aoa.push([]);
+  aoa.push(["مطابقة توريد المشرف"]);
+  aoa.push(["المفروض يورّده", "", C.expected]);
+  aoa.push(["المستلم فعلًا", "", C.hasRecv ? C.received : ""]);
+  aoa.push(["الفرق", "", C.hasRecv ? C.diff : ""]);
+  aoa.push([]);
+  aoa.push(["صافي الفروع", ...S.branches.map(b => b.name), "الإجمالي"]);
+  aoa.push(["", ...S.branches.map(b => A.per[b.id].net), A.all.net]);
+  aoa.push([`إجمالي أوردرات الفروع × ${devRate()}`, A.all.o, A.all.devFee]);
+  download(aoa, `تقفيل ${day}`, `تقفيل ${branchName(bid)} ${date}.xlsx`);
+};
+
+window.exportPilot = function() {
+  const ym = $("pilotMonth").value, pid = $("pilotSelect").value;
+  if (!pid) return;
+  const p = S.pilots.find(x => x.id === pid);
+  const t = pilotMonthTotals(ym, pid);
+  const aoa = [
+    [`${p.name} — ${branchName(p.branchId)} — ${monthLabel(ym)}`],
+    ["اليوم", "ساعة الحضور", "خروج مؤقت", "رجوع", "ساعة الانصراف", "عدد ساعات العمل", "عدد الأوردرات", "إجمالي الخدمة", "خدمة الطيار", "صافي الخدمة", "خصومات", "سلف", "ملاحظات"]
+  ];
+  for (let d = 1; d <= daysInMonth(ym); d++) {
+    const e = entryOf(ym, pid, d);
+    aoa.push([d, e.in ?? "", e.bout ?? "", e.bin ?? "", e.out ?? "", hoursOf(e) || "", e.o ?? "", e.svc ?? "", pilotSvcOf(e, p) || "", netOf(e, p) || "", e.ded ?? "", e.adv ?? "", e.note ?? ""]);
+  }
+  aoa.push(["الإجمالي", "", "", "", "", t.h, t.o, t.svc, t.psvc, t.net, t.ded, t.adv, ""]);
+  aoa.push([]);
+  aoa.push([`عدد ساعات العمل × ${t.rate.h}`, t.hourPay]);
+  if (t.leaveCap) aoa.push([`إجازة مدفوعة (${t.leaveDays} يوم × ${t.shiftHours} ساعة)`, t.leavePay]);
+  aoa.push(["إجمالي المستحق", t.gross]);
+  aoa.push(["إجمالي سلف", t.adv]);
+  aoa.push(["إجمالي خصومات", t.ded]);
+  if (t.defDue) aoa.push(["قسط سلفة مؤجلة", t.defDue]);
+  if (t.defLeft) aoa.push(["باقي السلف المؤجلة", t.defLeft]);
+  aoa.push([t.salary < 0 ? "عليه" : "صافي الراتب", Math.abs(t.salary)]);
+  download(aoa, p.name, `${p.name} ${ym}.xlsx`);
+};
+
+window.exportMonth = function() {
+  const ym = $("monthMonth").value, bf = $("monthBranch").value;
+  const list = S.pilots.filter(p => !bf || p.branchId === bf);
+  const aoa = [
+    [`تقفيل ${monthLabel(ym)} — ${bf ? branchName(bf) : "كل الفروع"}`],
+    ["الطيار", "الفرع", "الساعات", "أيام الشغل", "الأوردرات", "الأجر (ساعات)", "إجازة مدفوعة", "سلف", "خصومات", "قسط سلفة مؤجلة", "باقي السلف المؤجلة", "صافي الراتب"]
+  ];
+  let G = { h: 0, o: 0, gross: 0, hourPay: 0, leavePay: 0, adv: 0, ded: 0, defDue: 0, defLeft: 0, salary: 0 };
+  for (const p of list) {
+    const t = pilotMonthTotals(ym, p.id);
+    G.h += t.h; G.o += t.o; G.gross += t.gross; G.hourPay += t.hourPay; G.leavePay += t.leavePay;
+    G.adv += t.adv; G.ded += t.ded; G.defDue += t.defDue; G.defLeft += t.defLeft; G.salary += t.salary;
+    aoa.push([p.name, branchName(p.branchId), t.h, t.worked, t.o, t.hourPay, t.leavePay,
+              t.adv, t.ded, t.defDue, t.defLeft, t.salary]);
+  }
+  aoa.push(["الإجمالي", "", round2(G.h), "", round2(G.o), round2(G.hourPay), round2(G.leavePay),
+            round2(G.adv), round2(G.ded), round2(G.defDue), round2(G.defLeft), round2(G.salary)]);
+  download(aoa, `تقفيل ${ym}`, `تقفيل ${bf ? branchName(bf) : "كل الفروع"} ${ym}.xlsx`);
+};
+
+/* ══════════════════════════════════════════════════════════════
+   المساعدة
+══════════════════════════════════════════════════════════════ */
+const HELP = {
+  daily: {
+    title: "🗓️ التقفيل اليومي",
+    what: "دي نفس صفحة «تقفيل يومي» اللي كانت في الإكسل — بتختار الفرع واليوم، وتكتب لكل طيار ساعاته وأوردراته وسلفه.",
+    body: `
+      <div class="help-sec">إزاي تشتغل عليها؟</div>
+      <ol class="help-steps">
+        <li>اختار <b>الفرع</b> و<b>التاريخ</b> من فوق (أو استخدم سهمي ◀ ▶ للتنقل بين الأيام).</li>
+        <li>اكتب الرقم في الخانة على طول — <b>مفيش زرار حفظ</b>، بيتحفظ لوحده.</li>
+        <li>اضغط <b>Enter</b> أو <b>السهم لتحت</b> عشان تنزل لنفس الخانة في الطيار اللي بعده.</li>
+        <li>الإجماليات وبلوك التقفيل تحت بيتحدثوا لوحدهم.</li>
+      </ol>
+      <div class="help-sec">الأعمدة</div>
+      <ul>
+        <li><b>ساعة الحضور / ساعة الانصراف</b> — دوس على أيقونة الساعة 🕐 واختار، أو اكتب
+            <code>1630</code> والبرنامج يظبّط الصيغة. و<b>عدد ساعات العمل</b> بيتحسب منهم
+            تلقائي (وبيفهم الوردية اللي بتعدّي نص الليل).</li>
+        <li><b>خروج مؤقت / رجوع</b> — لو الطيار استأذن في نص اليوم، سجّل ساعة خروجه
+            وساعة رجوعه والبرنامج <b>هيشيل المدة دي من ساعاته</b> لوحده.</li>
+        <li><b>عدد ساعات العمل</b> — لو مش هتشتغل بالمواعيد، سيب الخانتين دول فاضيين
+            واكتب عدد الساعات بإيدك على طول.</li>
+        <li><b>إجمالي الخدمة</b> — فلوس التوصيل اللي حصّلها.</li>
+        <li><b>خدمة الطيار</b> — عمولته، بتتحسب لوحدها = أوردراته × سعر أوردره.</li>
+        <li><b>صافي الخدمة</b> = إجمالي الخدمة − خدمة الطيار — ده اللي الطيار بيسلّمه.
+            مجموع العمود ده = النقدي الداخل للشركة.</li>
+        <li><b>سلف</b> — السلف الصغيرة اللي المشرف بيديها في اليوم. بتتخصم من راتبه آخر الشهر،
+            وكمان بتتشال من المبلغ اللي المفروض المشرف يورّده.</li>
+        <li><b>خصومات (سلف مؤجلة)</b> — أي خصم، وكمان مكان <b>السلفة الكبيرة</b>.</li>
+      </ul>
+      <div class="help-warn">⚠️ لو طيار خد سلفة كبيرة، <b>متكتبهاش في عمود «سلف»</b> — هتلخبط
+      مطابقة توريد المشرف لأن البرنامج هيفتكر إن المشرف دفعها من نقدية اليوم.
+      اكتبها في <b>خصومات</b> (تتخصم كاملة الشهر ده)، أو سجّلها في شاشة
+      <b>السلف المؤجلة</b> لو عايزها تتقسّط على شهور.</div>
+      <div class="help-sec">بلوك التقفيل تحت الجدول</div>
+      <p>ده تقفيل <b>الفرع المختار</b> في اليوم ده.</p>
+      <ul>
+        <li><b>فلوس خارجة:</b> ساعات × ${"{hourRate}"} (رواتب مستحقة النهارده حتى لو هتتدفع آخر الشهر)
+            + أوردرات × ${"{orderRate}"} (رسوم تطوير) + نسبة روح دمشق + الخارجي + المصاريف.</li>
+        <li><b>فلوس داخلة:</b> إجمالي النقدي = مجموع عمود «صافي» — محسوب لوحده.</li>
+        <li><b>صافي الفرع</b> = النقدي − إجمالي الخارج.</li>
+        <li><b>السلف</b> سطر معلومة بس ومش داخلة في الصافي — دي دَيْن على الطيار هيترد آخر الشهر،
+            فلو حسبناها هنا كانت هتتحسب مرتين.</li>
+      </ul>
+      <div class="help-sec">مطابقة توريد المشرف</div>
+      <p>المشرف بيحصّل عمود «صافي» من الطيارين، ويدفع منه نسبة المطعم والخارجي والمصاريف
+      والسلف، واللي يفضل بيورّده لك آخر اليوم:</p>
+      <ul>
+        <li><b>المفروض يورّده</b> = مجموع «صافي» − النسبة − الخارجي − المصاريف − السلف. محسوب لوحده.</li>
+        <li><b>المستلم فعلًا</b> — اكتب المبلغ اللي وصلك بالظبط.</li>
+        <li><b>الفرق</b> — لو صفر يبقى التقفيلة مظبوطة. لو بالسالب يبقى فيه <b>عجز</b>.</li>
+      </ul>
+      <div class="help-tip">💡 المطابقة دي <b>مابتغيّرش صافي الفرع</b> — دي مجرد مراجعة على المشرف.
+      السبب إن السلف بتتشال من المعادلة لوحدها: المشرف دفعها من النقدي، والشركة بعدين
+      هتدفع للطيار (ساعات×${"{hourRate}"} − السلف) مش الراتب كامل.</div>
+      <div class="help-sec">اللي بتكتبه بإيدك</div>
+      <p><b>نسبة روح دمشق</b> و<b>الخارجي</b> و<b>المصاريف</b> و<b>المستلم من المشرف</b> — الباقي كله محسوب.</p>
+      <div class="help-sec">التنقل بالكيبورد</div>
+      <ul>
+        <li><b>Enter</b> أو <b>↑ ↓</b> — نفس العمود، السطر اللي فوق أو تحت.</li>
+        <li><b>→ ←</b> — نفس السطر، العمود اللي جنبه.</li>
+      </ul>
+      <div class="help-tip">💡 السهم الأفقي بيحرّك المؤشر جوّه الرقم الأول، ولما يوصل لآخره
+      بينقلك للخانة اللي بعدها — فتقدر تصحّح رقم من غير ما تخرج من الخانة.</div>
+      <div class="help-tip">💡 أي رقم بتكتبه هنا بيظهر فورًا في <b>كشف الطيار</b> — مش محتاج تكتبه مرتين زي الإكسل.</div>`
+  },
+  pilot: {
+    title: "🧾 كشف الطيار",
+    what: "نفس شيت الطيار في الإكسل — ٣١ يوم، وتحتهم الإجمالي وحساب الراتب.",
+    body: `
+      <div class="help-sec">حساب الراتب</div>
+      <ul>
+        <li><b>الأجر</b> = ساعاته × <b>سعر ساعته هو</b> (من كارت الطيار، وإلا السعر العام).</li>
+        <li><b>+ إجازة مدفوعة</b> = أيام الإجازة × ساعات الوردية × سعر ساعته.</li>
+        <li><b>صافي الراتب</b> = الأجر + الإجازة − السلف − الخصومات − قسط السلفة المؤجلة</li>
+        <li>الأوردرات <b>مش بتدخل في راتب الطيار</b> — نسبته على الأوردرات بياخدها كاش آخر اليوم
+            من المشرف، واللي بيسلّمه للشركة بعدها هو اللي بيتكتب في عمود «صافي».
+            وأوردرات × ${"{orderRate}"} دي رسوم تطوير على الشركة نفسها.</li>
+        <li>لو الناتج بالسالب بيتكتب <b style="color:var(--red)">عليه كذا</b> بالأحمر — يعني الطيار سحب أكتر من مستحقه.</li>
+      </ul>
+      <div class="help-sec">التعديل</div>
+      <ul>
+        <li>تقدر تعدّل أي يوم من هنا برضه — والتعديل بيظهر في التقفيل اليومي على طول.</li>
+        <li>عمود <b>ملاحظات</b> للأجازات وأي كلام (زي «يومين إجازة»).</li>
+      </ul>
+      <div class="help-warn">⚠️ الخصومات بتتخصم من الصافي هنا. في الإكسل القديم كانت بتتكتب وما بتتخصمش — لو عايز تسجّل ملاحظة من غير خصم اكتبها في عمود الملاحظات.</div>`
+  },
+  month: {
+    title: "📊 تقفيل الشهر",
+    what: "كل طيارين الشهر في جدول واحد — الساعات والأجر والسلف وصافي الراتب لكل واحد.",
+    body: `
+      <div class="help-sec">إيه اللي في الجدول؟</div>
+      <ul>
+        <li>سطر لكل طيار فيه إجمالي شهره كله.</li>
+        <li>زرار <b>كشف</b> بيوديك على شيت الطيار التفصيلي.</li>
+        <li>سطر <b>الإجمالي</b> تحت بيجمع الفروع كلها (أو الفرع المختار).</li>
+      </ul>
+      <div class="help-sec">لو اخترت فرع واحد</div>
+      <p>هتلاقي تحت الجدول ملخص الفرع للشهر كله: الإيراد، مستحق الطيارين، المصاريف، وإجمالي النقدي.</p>
+      <div class="help-tip">💡 زرار <b>إكسل</b> بينزّلك الجدول ملف xlsx تقدر تبعته أو تطبعه.</div>`
+  },
+  deferred: {
+    title: "🧮 السلف المؤجلة",
+    what: "السلفة الكبيرة اللي مش هتتخصم مرة واحدة — بتتقسّط على شهور والبرنامج بيخصم القسط تلقائيًا من كل راتب.",
+    body: `
+      <div class="help-sec">ليه شاشة لوحدها؟</div>
+      <p>عمود <b>سلف</b> في التقفيل اليومي بيدخل في <b>مطابقة توريد المشرف</b> — يعني البرنامج
+      بيفهم إن المشرف دفع المبلغ ده من نقدية اليوم. فلو كتبت سلفة ٥٠٠٠ هناك، البرنامج هيقول
+      إن المشرف المفروض يورّد أقل بـ٥٠٠٠ وهتبان تقفيلة اليوم غلط.</p>
+      <p>السلفة المؤجلة بتتسجّل هنا: <b>مابتأثرش على تقفيلة اليوم خالص</b>، وبتتخصم من الراتب على أقساط.</p>
+      <div class="help-sec">إزاي تسجّلها؟</div>
+      <ol class="help-steps">
+        <li>اضغط <b>سلفة مؤجلة</b> واختار الطيار.</li>
+        <li>اكتب <b>المبلغ الكامل</b> (مثلاً ٥٠٠٠) و<b>القسط الشهري</b> (مثلاً ٥٠٠).</li>
+        <li>حدّد <b>الشهر اللي يبدأ منه الخصم</b> — البرنامج هيوريك هتتخصم على كام شهر قبل ما تحفظ.</li>
+      </ol>
+      <div class="help-sec">تغيير قسط شهر معيّن</div>
+      <p>لو الطيار مش قادر يدفع القسط الشهر ده، أو عايز يدفع أكتر: افتح <b>كشف الطيار</b>
+      واكتب الرقم اللي انت عايزه في خانة «قسط سلفة مؤجلة». الشهور اللي بعده هتتظبط لوحدها
+      والباقي هيتعدّل.</p>
+      <div class="help-tip">💡 لو كتبت <b>صفر</b> في قسط شهر معيّن، يبقى الطيار مدفعش حاجة الشهر ده
+      والباقي هيتقسّط على اللي بعده.</div>
+      <div class="help-warn">⚠️ لو حذفت سلفة مؤجلة، الأقساط اللي اتخصمت من الشهور اللي فاتت
+      هترجع تظهر في رواتبهم — يعني تقفيلة شهور قديمة هتتغيّر.</div>`
+  },
+  setup: {
+    title: "👥 الفروع والطيارين",
+    what: "من هنا بتضيف فروع روح دمشق والطيارين اللي في كل فرع.",
+    body: `
+      <div class="help-sec">أسرع طريقة</div>
+      <ol class="help-steps">
+        <li>اضغط <b>إضافة قائمة أسماء</b>.</li>
+        <li>اختار الفرع، والصق أسماء الطيارين — كل اسم في سطر.</li>
+        <li>اضغط إضافة — البرنامج بيتخطى الأسماء الموجودة تلقائيًا.</li>
+      </ol>
+      <div class="help-sec">بيانات الطيار</div>
+      <ul>
+        <li><b>نوع الوظيفة</b> — طيار أو مشرف.</li>
+        <li><b>سعر الساعة / سعر الأوردر</b> — سيبهم فاضيين لو على السعر العام؛ املاهم بس لو ليه سعر خاص.</li>
+        <li><b>أيام الإجازة المدفوعة</b> — رصيده الشهري. أي يوم ساعاته صفر بيتحسب غياب،
+            وأول أيام الغياب بتاخد من الرصيد ده وتتدفعله. لو غاب أكتر من رصيده،
+            الزيادة بدون أجر (غاب ١٠ وله يومين → يتدفعله يومين بس).</li>
+      </ul>
+      <div class="help-tip">💡 قيمة يوم الإجازة = <b>ساعات الوردية × سعر ساعته</b>.
+      ساعات الوردية بتتظبط مرة واحدة من <b>الإعدادات</b>.</div>
+      <div class="help-sec">الطيار اللي خرج من الشغل</div>
+      <p>خلّيه <b>موقوف</b> بدل ما تحذفه — كده بياناته القديمة تفضل في تقفيل الشهور اللي فاتت، وبس مش هيظهر في التقفيل اليومي الجديد.</p>
+      <div class="help-warn">⚠️ مينفعش تحذف فرع وفيه طيارين — انقلهم لفرع تاني الأول.</div>`
+  },
+  perms: {
+    title: "🔐 الصلاحيات",
+    what: "من هنا بتفتح للمشرف اللي عايزه يشوفه ويعمله، وتقفل الباقي — من غير ما حد يعدّل في البرنامج.",
+    body: `
+      <div class="help-sec">تعمل حساب للمشرف إزاي؟</div>
+      <ol class="help-steps">
+        <li>اضغط <b>➕ حساب مشرف</b> فوق.</li>
+        <li>اختار <b>الاسم</b> من الموجودين في البرنامج — المشرفين بيطلعوا في الأول،
+            والفرع بيتاخد من كارت الشخص أوتوماتيك.</li>
+        <li>اكتب <b>اسم مستخدم</b> بالإنجليزي و<b>كلمة مرور</b>، واضغط إنشاء.</li>
+        <li>الحساب بيتفتح له صلاحيات «مشرف يسجّل بس» على فرعه على طول — عدّلها زي ما تحب.</li>
+      </ol>
+      <div class="help-tip">💡 عشان الاسم بيتاخد من اللستة، الحساب بيفضل مربوط بالشخص —
+      فلو غيّرت اسمه في «الفروع والطيارين» بيتغيّر في الحساب برضه.</div>
+      <div class="help-sec">تظبّط الصلاحيات إزاي؟</div>
+      <ol class="help-steps">
+        <li>اختار المستخدم من القائمة فوق.</li>
+        <li>علّم ✅ على اللي عايزه يشوفه — شاشات، أعمدة، سطور بلوك التقفيل، صلاحيات عامة.</li>
+        <li>اضغط <b>حفظ الصلاحيات</b>.</li>
+      </ol>
+      <div class="help-sec">قوالب جاهزة</div>
+      <ul>
+        <li><b>مشرف يسجّل بس</b> — التقفيل اليومي وأعمدته وحق التعديل، من غير ما يشوف
+            أجر الساعات ولا صافي الفرع ولا رواتب الطيارين.</li>
+        <li><b>افتح الكل</b> / <b>اقفل الكل</b> — تبدأ منهم وتعدّل.</li>
+      </ul>
+      <div class="help-sec">حاجات مهمة</div>
+      <ul>
+        <li><b>الفروع المسموحة</b> — متعلّمش على حاجة يبقى يشوف كل الفروع؛ علّم على فرع أو اتنين
+            يبقى مش هيشوف غيرهم خالص.</li>
+        <li><b>تعديل وكتابة البيانات</b> — لو قفلتها، الشاشات بتفضل تظهرله بس كل الخانات
+            تبقى للقراءة (بيراجع مش بيكتب).</li>
+        <li><b>التنقل بين التواريخ</b> — لو قفلتها، أسهم اليوم السابق والتالي بتختفي
+            وخانة التاريخ بتتقفل على <b>النهارده</b>، فمايقدرش يعدّل يوم فات ولا يسجّل
+            في يوم جاي. (مقفولة في قالب «مشرف يسجّل بس».)</li>
+        <li>العمود المقفول <b>مش بيتخفي بس</b> — المستخدم مش بيقدر يوصله من الجدول ولا التصدير.</li>
+        <li><b>المدير</b> بيشوف كل حاجة دايمًا ومش محتاج صلاحيات، ومش بيظهر في القائمة.</li>
+      </ul>
+      <div class="help-warn">⚠️ المستخدم الجديد مالوش أي صلاحية لحد ما تظبّطها له — لو حاول يدخل
+      هيتقاله «لسه مالكش صلاحيات».</div>
+      <div class="help-warn">⚠️ الشخص لازم يكون متسجّل في <b>الفروع والطيارين</b> الأول
+      عشان تقدر تعملّه حساب. ولو نوع وظيفته «مشرف» هيطلع في أول القائمة.</div>`
+  },
+  settings: {
+    title: "⚙️ الإعدادات",
+    what: "سعر الساعة وسعر الأوردر اللي البرنامج بيحسب بيهم.",
+    body: `
+      <div class="help-sec">مهم جدًا</div>
+      <p>الأسعار عامة — بتطبّق على كل الطيارين وكل الفروع و<b>كل الشهور</b>، القديمة والجديدة.
+      يعني لو غيّرت سعر الساعة من ٣٠ لـ ٣٥، تقفيل الشهور اللي فاتت هيتحسب من جديد بـ ٣٥.</p>
+      <div class="help-warn">⚠️ متغيّرش السعر غير لما يتغيّر فعلًا، وياريت تنزّل نسخة إكسل من الشهور القديمة قبل التغيير.</div>`
+  }
+};
+
+window.openHelp = function() {
+  const page = currentPage();
+  const h = HELP[page] || { title: "دليل الاستخدام", what: "مفيش شرح متاح للشاشة دي.", body: "" };
+  $("helpTitle").textContent = h.title;
+  $("helpBody").innerHTML = `<div class="help-what">${h.what}</div>` +
+    String(h.body || "")
+      .replace(/\{hourRate\}/g, fmt(S.settings.hourRate))
+      .replace(/\{orderRate\}/g, fmt(S.settings.orderRate));
+  $("helpOverlay").classList.add("open");
+};
+window.closeHelp = function() { $("helpOverlay").classList.remove("open"); };
+document.addEventListener("keydown", e => {
+  if (e.key === "F1") { e.preventDefault(); openHelp(); }
+  if (e.key === "Escape") closeHelp();
+});
+</script>
+
+</body>
+</html>
