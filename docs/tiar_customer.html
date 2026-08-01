@@ -473,7 +473,9 @@ a{color:var(--red);text-decoration:none}
         <select id="sndZone"></select>
         <div id="sndBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
         <div class="map" id="sndMap" style="height:130px;margin-top:12px"></div>
-        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')">📍 تحديد الموقع على الخريطة</button>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')">📍 تحديد نقطة الاستلام على الخريطة *</button>
+        <div id="sndPinState" style="display:none;font-size:11.5px;color:var(--green);
+             margin-top:8px;text-align:center;font-weight:600"></div>
         <div id="sndSaved" style="margin-top:10px"></div>
       </div>
       <button class="btn" style="margin-top:14px" onclick="wizNext(2)">التالي</button>
@@ -694,6 +696,9 @@ a{color:var(--red);text-decoration:none}
         width:44px;height:44px;background:#fff;color:#111;border:none">🎯</button>
     </div>
     <div class="pad" style="border-top:1px solid var(--line)">
+      <div id="pickAccWarn" style="display:none;background:rgba(245,158,11,.12);
+        border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px;
+        font-size:11.5px;line-height:1.8;margin-bottom:10px"></div>
       <div id="pickCoords" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px;direction:ltr">—</div>
       <button class="btn" onclick="confirmMapPick()">حفظ الموقع</button>
     </div>
@@ -1267,9 +1272,18 @@ $("googleBtn").onclick = async () => {
 
 getRedirectResult(auth).catch(() => {});
 
+/* كل تطبيقات النظام على نفس الدومين، وجلسة Firebase Auth مشتركة بين
+   الصفحات كلها. بوابة المحلات بتعمل signInAnonymously، فلو المستخدم فتحها
+   قبل كده على نفس المتصفح، التطبيق ده كان بيلاقي "مستخدم" مسجّل ويعتبره
+   عميل ويعمله حساب بـ UID عشوائي — وده اللي بيخلّي الكمبيوتر والموبايل
+   يبانوا كأن كل واحد على قاعدة بيانات لوحده.
+   العميل هنا لازم يكون داخل بجوجل تحديدًا، وأي جلسة تانية بنتجاهلها. */
+const isGoogleUser = u => !!u && !u.isAnonymous &&
+  (u.providerData || []).some(p => p.providerId === "google.com");
+
 onAuthStateChanged(auth, async user => {
   detachAll();
-  if (!user) {
+  if (!isGoogleUser(user)) {
     S.uid = null; S.user = null; S.profile = null;
     $("boot").style.display = "none";
     go("splash");
@@ -1324,14 +1338,25 @@ function attachListeners() {
   S.unsub.push(onValue(ref(db, `customers/${S.uid}/addresses`), snap => {
     S.addresses = Object.entries(snap.val() || {}).map(([id, v]) => ({ id, ...v }));
     if (S.page === "addresses") renderAddresses();
+    // لو التعديل اتعمل من جهاز تاني والمستخدم واقف على فورم الطلب،
+    // نحدّث قايمة العناوين السريعة من غير ما نمسح اللي هو كاتبه
+    if (S.page === "new") renderSavedPicks();
   }));
 
   S.unsub.push(onValue(ref(db, `customers/${S.uid}/savedReceivers`), snap => {
     S.savedReceivers = Object.entries(snap.val() || {}).map(([id, v]) => ({ id, ...v }));
   }));
 
+  // البروفايل — لازم يتحدّث *ويعيد الرسم*. من غير إعادة الرسم، لو المستخدم
+  // عدّل بياناته من الموبايل، الشاشة المفتوحة على الكمبيوتر تفضل بالقديم
+  // ويبان كأن فيه قاعدتين بيانات مختلفتين.
   S.unsub.push(onValue(ref(db, "customers/" + S.uid), snap => {
-    if (snap.exists()) { const v = snap.val(); delete v.addresses; delete v.savedReceivers; S.profile = { ...S.profile, ...v }; }
+    if (!snap.exists()) return;
+    const v = snap.val();
+    delete v.addresses; delete v.savedReceivers;
+    S.profile = { ...S.profile, ...v };
+    if (S.page === "home")    renderHome();
+    if (S.page === "account") renderAccount();
   }));
 }
 function detachAll() { S.unsub.forEach(f => { try { f(); } catch (_) {} }); S.unsub = []; }
@@ -1968,6 +1993,8 @@ function startNewOrder() {
   fillZoneSelect($("sndZone"), { selected: S.profile.defaultZoneId });
   $("sndZone").onchange = onSenderZone;
   onSenderZone();
+  $("sndPinState").style.display = S.draft.sndLat ? "block" : "none";
+  $("sndPinState").innerHTML = S.draft.sndLat ? "✅ نقطة الاستلام محدّدة من بياناتك المحفوظة" : "";
 
   ["rcvName","rcvPhone","rcvPhone2"].forEach(k => $(k).value = "");
   renderAddr("rcvAddrW");
@@ -2064,6 +2091,9 @@ function renderSavedPicks() {
       $("sndZone").value = a.zoneId || ""; onSenderZone();
       S.draft.sndLat = a.lat ?? null; S.draft.sndLng = a.lng ?? null;
       showMiniMap("sndMap", a.lat, a.lng);
+      const b = $("sndPinState");
+      if (b) { b.style.display = a.lat ? "block" : "none";
+               b.innerHTML = a.lat ? "✅ نقطة الاستلام محدّدة من العنوان المحفوظ" : ""; }
       toast("تم اختيار " + a.label, "ok");
     });
   } else $("sndSaved").innerHTML = "";
@@ -2091,6 +2121,10 @@ function wizNext(step) {
       if (!validPhone($("sndPhone").value))      return toast("رقم هاتف المُرسِل غير صحيح", "err");
       if (!getAddr("sndAddrW").trim())           return toast("اكتب عنوان الاستلام", "err");
       if (!$("sndZone").value)                   return toast("اختر منطقة الاستلام", "err");
+      // من غير دبوس، الفرع بيضطر يخمّن مكان الاستلام من نص العنوان
+      // والدبوس بيقع غلط — فده إجباري
+      if (!S.draft.sndLat || !S.draft.sndLng)
+        return toast("حدّد نقطة الاستلام على الخريطة — الطيار بيروح عليها", "err");
     }
     if (S.wizStep === 2) {
       // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
@@ -2200,15 +2234,24 @@ async function submitOrder() {
       receiverPhone2: receipt ? "" : $("rcvPhone2").value.trim(),
       zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
       orderPrice: cod,
-      address: receipt ? `${zoneLabel(rz)} — العنوان على صورة الريسيت المرفقة`
-                       : getAddr("rcvAddrW"),
+      // في وضع الريسيت بنسيب العنوان = اسم المنطقة بس. لو حطّينا جملة طويلة
+      // هنا، الخريطة هتحاول تخمّن مكانها وتطلّع دبوس في مكان عشوائي غلط —
+      // اسم المنطقة بيدّي دبوس صح على مستوى المنطقة، والتفاصيل في الملاحظة.
+      address: receipt ? zoneLabel(rz) : getAddr("rcvAddrW"),
       lat: receipt ? null : (S.draft.rcvLat ?? null),
       lng: receipt ? null : (S.draft.rcvLng ?? null),
-      note: $("odNote").value.trim(),
+      note: [$("odNote").value.trim(), receipt ? "🧾 العنوان الكامل على صورة الريسيت المرفقة" : ""]
+              .filter(Boolean).join(" — "),
       status: "قيد التنفيذ",
       receiverFromReceipt: receipt,
       images: S.images.map(i => i.url).filter(Boolean)
     };
+    // خرايط الفرع والإدارة بتقرا الموقع من d.geo مش من lat/lng، ولو الحقل
+    // ده فاضي بتروح تخمّن مكان العنوان من نصّه عبر Nominatim — وده اللي
+    // بيخلّي الدبوس واقع في مكان تقريبي غلط. هنا العميل حدّد النقطة بنفسه،
+    // فبنكتبها في نفس الحقل عشان الخريطة تستخدم الموقع الحقيقي وتتجاهل التخمين.
+    if (delivery.lat && delivery.lng)
+      delivery.geo = { lat: delivery.lat, lng: delivery.lng, src: "customer-pin" };
 
     const order = {
       orderNum,
@@ -2218,6 +2261,10 @@ async function submitOrder() {
       senderPhone2: S.profile.phone2 || "",
       senderAddress: getAddr("sndAddrW"),
       senderLat: S.draft.sndLat ?? null, senderLng: S.draft.sndLng ?? null,
+      // نفس السبب: geoSender هو الحقل اللي بيرسم منه ماركر الاستلام
+      ...(S.draft.sndLat && S.draft.sndLng
+        ? { geoSender: { lat: S.draft.sndLat, lng: S.draft.sndLng, src: "customer-pin" } }
+        : {}),
       senderZoneId: sz.id, senderZoneName: zoneLabel(sz),
       branchId, branchName,
       notes: $("odNote").value.trim(),
@@ -2327,9 +2374,14 @@ function pickOnMap(target) {
       iconSize: [30, 30], iconAnchor: [15, 30],
       html: `<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 5px #000)">📍</div>` }) }).addTo(pickMap);
     S.pickLatLng = { lat: start[0], lng: start[1] };
+    S.pickAcc = null;
+    const warn = $("pickAccWarn"); if (warn) warn.style.display = "none";
     showCoords();
-    pickMarker.on("dragend", () => { const p = pickMarker.getLatLng(); S.pickLatLng = p; showCoords(); });
-    pickMap.on("click", e => { pickMarker.setLatLng(e.latlng); S.pickLatLng = e.latlng; showCoords(); });
+    // أي تحريك يدوي = المستخدم أكّد المكان بنفسه، فالتحذير ما بقاش له لازمة
+    const manual = ll => { S.pickLatLng = ll; S.pickAcc = 0; showCoords();
+                           if (warn) warn.style.display = "none"; };
+    pickMarker.on("dragend", () => manual(pickMarker.getLatLng()));
+    pickMap.on("click", e => { pickMarker.setLatLng(e.latlng); manual(e.latlng); });
     pickMap.invalidateSize();
   }, 120);
 }
@@ -2337,20 +2389,44 @@ window.pickOnMap = pickOnMap;
 const showCoords = () => $("pickCoords").textContent =
   S.pickLatLng ? `${S.pickLatLng.lat.toFixed(5)} , ${S.pickLatLng.lng.toFixed(5)}` : "—";
 
+/* تحديد الموقع تلقائيًا.
+   على الموبايل بييجي من GPS فيكون دقيق بالأمتار. على الكمبيوتر مفيش GPS،
+   فالمتصفح بيرجّع موقع تقريبي مبني على الـ WiFi/IP وممكن يبعد كيلومترات —
+   وده اللي بيخلّي العنوان يتحفظ غلط. فبنعرض دقّة القراءة، ولو وحشة
+   بننبّه المستخدم يظبّط الدبوس بإيده بدل ما نقبلها بصمت. */
 function locateMe() {
   if (!navigator.geolocation) return toast("المتصفح مش بيدعم تحديد الموقع", "err");
   toast("جاري تحديد موقعك…");
   navigator.geolocation.getCurrentPosition(p => {
-    const ll = { lat: p.coords.latitude, lng: p.coords.longitude };
-    S.pickLatLng = ll; pickMarker.setLatLng(ll); pickMap.setView(ll, 16); showCoords();
-  }, () => toast("تعذّر تحديد الموقع — فعّل صلاحية الموقع", "err"), { enableHighAccuracy: true, timeout: 9000 });
+    const ll  = { lat: p.coords.latitude, lng: p.coords.longitude };
+    const acc = Math.round(p.coords.accuracy || 0);
+    S.pickLatLng = ll; S.pickAcc = acc;
+    pickMarker.setLatLng(ll);
+    pickMap.setView(ll, acc > 1000 ? 13 : acc > 300 ? 15 : 17);
+    showCoords();
+    if (acc > 300) {
+      toast(`الموقع تقريبي (±${acc >= 1000 ? Math.round(acc / 1000) + " كم" : acc + " م"}) — اسحب الدبوس على المكان بالظبط`, "err");
+      const el = $("pickAccWarn");
+      if (el) { el.style.display = "block";
+        el.innerHTML = `⚠️ دقّة تحديد الموقع ضعيفة (±${acc >= 1000 ? Math.round(acc/1000)+" كم" : acc+" م"}).
+          الأجهزة المكتبية بتحدد الموقع من الإنترنت مش من GPS —
+          <b>اسحب الدبوس على المكان الصح</b> أو استخدم الموبايل.`; }
+    } else {
+      const el = $("pickAccWarn"); if (el) el.style.display = "none";
+      toast(`تم تحديد موقعك (±${acc} م)`, "ok");
+    }
+  }, () => toast("تعذّر تحديد الموقع — فعّل صلاحية الموقع", "err"),
+     { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 });
 }
 window.locateMe = locateMe;
 
 function confirmMapPick() {
   if (!S.pickLatLng) return closeMapModal();
   const { lat, lng } = S.pickLatLng;
-  if (S.mapTarget === "snd") { S.draft.sndLat = lat; S.draft.sndLng = lng; showMiniMap("sndMap", lat, lng); }
+  if (S.mapTarget === "snd") { S.draft.sndLat = lat; S.draft.sndLng = lng; showMiniMap("sndMap", lat, lng);
+    const b = $("sndPinState");
+    if (b) { b.style.display = "block"; b.innerHTML = `✅ نقطة الاستلام محدّدة
+      <span style="color:var(--muted);direction:ltr;display:inline-block">(${lat.toFixed(5)}, ${lng.toFixed(5)})</span>`; } }
   else if (S.mapTarget === "rcv") { S.draft.rcvLat = lat; S.draft.rcvLng = lng; showMiniMap("rcvMap", lat, lng); }
   else if (S.mapTarget === "sut") { S.draftLat = lat; S.draftLng = lng; showMiniMap("sutMap", lat, lng);
     $("sutCoords").textContent = `${lat.toFixed(5)} , ${lng.toFixed(5)}`; }
