@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Cloud Functions — الاعتماديات بتتثبّت وقت النشر
+/functions/node_modules
+/functions/package-lock.json

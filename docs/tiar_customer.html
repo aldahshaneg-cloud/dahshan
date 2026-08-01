@@ -84,16 +84,22 @@ a{color:var(--red);text-decoration:none}
 .fld input,.fld textarea,.fld select{background:transparent;border:none;padding:0;font-size:15px;border-radius:0}
 .fld input:disabled{color:var(--muted)}
 
-/* ── شاشة البداية ───────────────────────────────────────── */
-#s-splash{background:#000;position:relative;justify-content:flex-end}
-.sp-slide{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;opacity:0;transition:opacity .45s;pointer-events:none}
-.sp-slide.on{opacity:1}
-.sp-logo{width:74%;max-width:330px;margin-top:14vh;filter:drop-shadow(0 0 26px rgba(232,25,44,.45))}
-.sp-tag{font-size:19px;font-weight:700;margin-top:16px;text-align:center}
-.sp-hero{position:absolute;bottom:0;left:0;right:0;width:100%;object-fit:cover;
-  mask-image:linear-gradient(180deg,transparent,#000 22%);-webkit-mask-image:linear-gradient(180deg,transparent,#000 22%)}
-.sp-foot{position:relative;z-index:3;padding:0 22px calc(26px + var(--safe-b))}
+/* ── شاشة البداية ───────────────────────────────────────────
+   صورة الهيرو نفسها فيها اللوجو، فما بنحطّش لوجو تاني فوقها
+   عشان ما يتكرّرش. */
+#s-splash{background:#000;position:relative;justify-content:flex-start;overflow:hidden;
+  padding-top:max(2vh,env(safe-area-inset-top,0px))}
+.sp-hero{position:relative;width:100%;flex:none;
+  mask-image:linear-gradient(180deg,#000 60%,transparent 99%);
+  -webkit-mask-image:linear-gradient(180deg,#000 60%,transparent 99%)}
+.sp-copy{position:relative;z-index:3;text-align:center;padding:0 26px;margin-top:-26px;
+  flex:1;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.sp-tag{font-size:21px;font-weight:800;line-height:1.6;transition:opacity .3s}
+.sp-tag.out{opacity:0}
+.sp-sub{font-size:14px;color:var(--muted);font-weight:500;margin-top:8px;
+  line-height:1.7;transition:opacity .3s}
+.sp-sub.out{opacity:0}
+.sp-foot{position:relative;z-index:3;margin-top:auto;padding:0 22px calc(26px + var(--safe-b))}
 .dots{display:flex;gap:7px;justify-content:center;margin-top:16px}
 .dots i{width:7px;height:7px;border-radius:50%;background:#3a3a42;transition:.25s}
 .dots i.on{background:var(--red);width:20px;border-radius:4px}
@@ -289,18 +295,10 @@ a{color:var(--red);text-decoration:none}
 
 <!-- ═══ 1. شاشة البداية ═══════════════════════════════════ -->
 <section id="s-splash" class="screen">
-  <img class="sp-hero" src="assets/hero.png" alt="" onerror="this.style.display='none'" />
-  <div class="sp-slide on" data-i="0">
-    <img class="sp-logo" src="assets/logo.png" alt="الدهشان" />
-    <div class="sp-tag">توصيل أسرع.. لكل مكان</div>
-  </div>
-  <div class="sp-slide" data-i="1">
-    <img class="sp-logo" src="assets/logo.png" alt="الدهشان" />
-    <div class="sp-tag">اطلب من أي مكان<br /><span style="font-size:14px;color:var(--muted);font-weight:500">حدّد المُرسِل والمستلم والباقي علينا</span></div>
-  </div>
-  <div class="sp-slide" data-i="2">
-    <img class="sp-logo" src="assets/logo.png" alt="الدهشان" />
-    <div class="sp-tag">تابع طلبك لحظة بلحظة<br /><span style="font-size:14px;color:var(--muted);font-weight:500">من الاستلام لحد باب المستلم</span></div>
+  <img class="sp-hero" src="assets/hero.png" alt="الدهشان" onerror="this.style.display='none'" />
+  <div class="sp-copy">
+    <div class="sp-tag" id="spTag">توصيل أسرع.. لكل مكان</div>
+    <div class="sp-sub" id="spSub">شحنتك توصل بأمان في أسرع وقت</div>
   </div>
   <div class="sp-foot">
     <button class="btn" id="splashBtn">ابدأ الآن</button>
@@ -311,14 +309,14 @@ a{color:var(--red);text-decoration:none}
 <!-- ═══ 2. تسجيل الدخول ═══════════════════════════════════ -->
 <section id="s-login" class="screen" style="background:#000">
   <div class="scroll" style="padding-bottom:24px">
-    <div style="position:relative;text-align:center;padding-top:6vh">
-      <img src="assets/logo.png" style="width:62%;max-width:280px;filter:drop-shadow(0 0 22px rgba(232,25,44,.4))" alt="الدهشان" />
-      <div style="font-size:15px;font-weight:700;margin-top:10px">توصيل أسرع.. لكل مكان</div>
-      <img src="assets/hero.png" style="width:100%;margin-top:6px;
-        mask-image:linear-gradient(180deg,#000 60%,transparent);-webkit-mask-image:linear-gradient(180deg,#000 60%,transparent)"
-        alt="" onerror="this.style.display='none'" />
+    <div style="position:relative;text-align:center">
+      <img src="assets/hero.png" style="width:100%;
+        mask-image:linear-gradient(180deg,#000 55%,transparent 96%);
+        -webkit-mask-image:linear-gradient(180deg,#000 55%,transparent 96%)"
+        alt="الدهشان" onerror="this.style.display='none'" />
+      <div style="font-size:15px;font-weight:700;margin-top:-34px;position:relative">توصيل أسرع.. لكل مكان</div>
     </div>
-    <div class="pad" style="margin-top:-14px">
+    <div class="pad" style="margin-top:8px">
       <div style="text-align:center;margin-bottom:20px">
         <div style="font-size:26px;font-weight:900">مرحباً بك</div>
         <div style="color:var(--muted);font-size:14px;margin-top:4px">سجّل الدخول للمتابعة</div>
@@ -1205,11 +1203,23 @@ window.go = go;
 /* ══════════════════════════════════════════════════════════════
    الدخول بجوجل
 ══════════════════════════════════════════════════════════════ */
+const SPLASH_SLIDES = [
+  ["توصيل أسرع.. لكل مكان",  "شحنتك توصل بأمان في أسرع وقت"],
+  ["اطلب من أي مكان",         "حدّد المُرسِل والمستلم والباقي علينا"],
+  ["تابع طلبك لحظة بلحظة",    "من الاستلام لحد باب المستلم"]
+];
 let splashIdx = 0;
 setInterval(() => {
   if (S.page !== "splash") return;
-  splashIdx = (splashIdx + 1) % 3;
-  document.querySelectorAll(".sp-slide").forEach(s => s.classList.toggle("on", +s.dataset.i === splashIdx));
+  splashIdx = (splashIdx + 1) % SPLASH_SLIDES.length;
+  const [t, s] = SPLASH_SLIDES[splashIdx];
+  const tagEl = $("spTag"), subEl = $("spSub");
+  // fade-out ثم تبديل النص ثم fade-in — عشان ما يظهرش نصّين فوق بعض
+  tagEl.classList.add("out"); subEl.classList.add("out");
+  setTimeout(() => {
+    tagEl.textContent = t; subEl.textContent = s;
+    tagEl.classList.remove("out"); subEl.classList.remove("out");
+  }, 300);
   document.querySelectorAll("#spDots i").forEach((d, i) => d.classList.toggle("on", i === splashIdx));
 }, 3400);
 
