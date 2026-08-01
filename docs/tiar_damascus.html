@@ -734,7 +734,8 @@ const DEFAULT_BRANCHES = ["المنصورة", "طنطا", "دمياط", "الع�
 /* orderRate     = رسوم التطوير على كل أوردر (بتاعة الشركة — عامة)
    pilotOrderRate = خدمة الطيار على كل أوردر (الافتراضي لو الطيار مالوش سعر خاص) */
 const DEFAULT_SETTINGS = {
-  hourRate: 30, orderRate: 2, pilotOrderRate: 0, restName: "روح دمشق", shiftHours: 10
+  hourRate: 30, orderRate: 2, pilotOrderRate: 0, restName: "روح دمشق", shiftHours: 10,
+  dayStart: 8            // اليوم في البرنامج بيبدأ الساعة كام
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -772,10 +773,30 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c =>
     ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
-function todayStr() {
-  const d = new Date();
+/** التاريخ بالصيغة YYYY-MM-DD من كائن Date (بالتوقيت المحلي) */
+function isoOf(d) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
+/* ══════════════════════════════════════════════════════════════
+   «النهارده» في البرنامج مش نص الليل — بيبدأ الساعة 8 صباحًا.
+   السبب إن الوردية بتبدأ 9ص وبتخلص 6ص تاني يوم، فلو التاريخ اتغيّر
+   نص الليل كان المشرف يلاقي نفسه في يوم جديد وهو لسه بيشتغل — ومع
+   قفل التاريخ مش هيقدر يرجع للورقة اللي كان بيكتب فيها.
+   يعني الساعة 2ص يوم 31 = لسه يوم 30 في البرنامج.
+══════════════════════════════════════════════════════════════ */
+function dayStartHour() {
+  const h = num(S.settings?.dayStart);
+  return h >= 0 && h <= 23 ? h : 8;
+}
+function todayStr() {
+  const d = new Date();
+  if (d.getHours() < dayStartHour()) d.setDate(d.getDate() - 1);
+  return isoOf(d);
+}
+/** التاريخ الميلادي الحقيقي — للمقارنة وتنبيه المستخدم */
+function realTodayStr() { return isoOf(new Date()); }
+/** إحنا في الساعات اللي بعد نص الليل وقبل بداية اليوم؟ */
+function beforeDayStart() { return new Date().getHours() < dayStartHour(); }
 function monthOf(dateStr) { return String(dateStr || "").slice(0, 7); }
 function dayOf(dateStr)   { return parseInt(String(dateStr || "").slice(8, 10), 10) || 1; }
 function daysInMonth(ym) {
@@ -889,6 +910,7 @@ function applySession(d) {
   if (isAdmin()) initDefaults();
   startListeners();
   applyNavPerms();
+  watchDayRollover();
   // المدير بيفتح على طول؛ غيره بيستنى صلاحياته توصل من قاعدة البيانات
   if (isAdmin()) navigateTo("daily");
   else ensureLanding();
@@ -1027,6 +1049,21 @@ function applyNavPerms() {
     el.title = freeDate ? "" : "مالكش صلاحية تغيير التاريخ";
   });
   if (!freeDate) lockToToday();
+}
+
+/* لو البرنامج فاضل مفتوح طول الليل، لازم يقلب لليوم الجديد لوحده
+   الساعة 8 الصبح من غير ما حد يعمل ريفريش. */
+let _lastBizDay = null;
+function watchDayRollover() {
+  _lastBizDay = todayStr();
+  setInterval(() => {
+    const now = todayStr();
+    if (now === _lastBizDay) return;
+    _lastBizDay = now;
+    if (!can("act.dateNav")) lockToToday();     // المقفول بينتقل لليوم الجديد
+    try { PAGE_RENDERERS[currentPage()]?.(); } catch {}
+    showToast(`بدأ يوم جديد — التاريخ اتغيّر لـ ${now}`, "success");
+  }, 30000);
 }
 
 /** يرجّع خانات التاريخ للنهارده — لأي مستخدم مالوش صلاحية التنقل */
@@ -1693,7 +1730,16 @@ window.renderDaily = function() {
     </tr>`;
   }).join("") : `<tr><td colspan="${cols.length + 2}" class="empty-row">مفيش طيارين في الفرع ده</td></tr>`;
 
+  // بعد نص الليل وقبل بداية اليوم — نوضّح إننا لسه على ورقة إمبارح
+  const nightNote = (beforeDayStart() && date === todayStr()) ? `
+    <div class="info-box" style="margin-bottom:0;border-radius:var(--radius) var(--radius) 0 0">
+      🌙 الساعة دلوقتي بعد نص الليل، واليوم في البرنامج بيبدأ
+      <b>${dayStartHour()}:00 ص</b> — فإنت لسه بتكمّل ورقة
+      <b>يوم ${day}</b> (${weekdayOf(ym, day)}). التاريخ هيتغيّر لوحده الساعة ${dayStartHour()} الصبح.
+    </div>` : "";
+
   box.innerHTML = `
+    ${nightNote}
     <div class="sheet-title sticky-title">تقفيل يومي &nbsp;·&nbsp; ${day} ${weekdayOf(ym, day)} &nbsp;·&nbsp; ${monthLabel(ym)} &nbsp;·&nbsp; ${esc(branchName(branchId))}</div>
     <div class="table-wrap sheet-wrap">
       <table class="grid-table">
@@ -2753,6 +2799,13 @@ window.renderSettings = function() {
         <input class="sv" id="setShiftHours" type="text" inputmode="decimal" value="${esc(S.settings.shiftHours ?? 10)}" />
       </div>
       <div class="sum-row">
+        <div class="sl">اليوم يبدأ الساعة
+          <div class="sh">بالنظام 24 ساعة. الوردية بتبدأ 9ص وتخلص 6ص تاني يوم، فاليوم
+            في البرنامج بيبدأ <b>${dayStartHour()}</b> — يعني الساعة 2 بعد نص الليل
+            لسه محسوبة على يوم إمبارح</div></div>
+        <input class="sv" id="setDayStart" type="text" inputmode="numeric" value="${esc(S.settings.dayStart ?? 8)}" />
+      </div>
+      <div class="sum-row">
         <div class="sl">اسم المطعم<div class="sh">بيظهر في العناوين</div></div>
         <input class="sv" id="setRestName" type="text" style="min-width:180px;text-align:right;direction:rtl" value="${esc(S.settings.restName || "روح دمشق")}" />
       </div>
@@ -2767,12 +2820,16 @@ window.saveSettings = async function() {
   const orderRate      = num($("setOrderRate").value);
   const pilotOrderRate = num($("setPilotOrderRate").value);
   const shiftHours     = num($("setShiftHours").value);
+  const dayStart       = num($("setDayStart").value);
   const restName   = $("setRestName").value.trim() || "روح دمشق";
   if (hourRate <= 0) { showToast("سعر الساعة لازم يكون أكبر من صفر", "error"); return; }
   if (shiftHours <= 0) { showToast("ساعات الوردية لازم تكون أكبر من صفر", "error"); return; }
+  if (!(dayStart >= 0 && dayStart <= 23)) {
+    showToast("ساعة بداية اليوم لازم تكون من 0 لـ 23", "error"); return;
+  }
   try {
     await update(ref(db, `${ROOT}/settings`),
-      { hourRate, orderRate, pilotOrderRate, shiftHours, restName });
+      { hourRate, orderRate, pilotOrderRate, shiftHours, dayStart, restName });
     showToast("تم حفظ الأسعار", "success");
   } catch (e) { showToast("تعذّر الحفظ: " + e.message, "error"); }
 };
