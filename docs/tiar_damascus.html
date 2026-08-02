@@ -156,13 +156,11 @@
   /* الخانة المحسوبة تلقائيًا (صافي الخدمة) — الرقم باهت لحد ما تكتب فوقه */
   .cell-in.auto::placeholder { color: var(--green); opacity: .65; }
   .cell-in.auto:focus::placeholder { color: transparent; }
-  /* خانات الحضور والانصراف — ساعة المتصفح بتفتح من أيقونة الساعة */
-  .cell-in.time { direction: ltr; text-align: center; padding: 7px 4px; cursor: pointer; }
-  .cell-in.time::-webkit-calendar-picker-indicator {
-    cursor: pointer; opacity: .55; margin-inline-start: 2px;
-    filter: invert(var(--pick-invert, 1)); }
-  .cell-in.time:hover::-webkit-calendar-picker-indicator { opacity: 1; }
-  .cell-in.time:invalid, .cell-in.time:not(:valid) { color: var(--muted); }
+  /* خانات الوقت — عرض للقراءة بيفتح منتقي الوقت العربي بالنقر */
+  .cell-in.cell-pick { text-align: center; padding: 7px 4px; cursor: pointer;
+    caret-color: transparent; direction: rtl; }
+  .cell-in.perm-cell { font-size: .8rem; }
+  .cell-in.cell-pick::placeholder { color: var(--muted); opacity: .6; }
   .grid-table td + td { border-inline-start: 1px solid var(--border); }
   .grid-table th + th { border-inline-start: 1px solid var(--border); }
   .grid-table tbody tr.today-row { background: rgba(59,130,246,.07); }
@@ -224,6 +222,43 @@
   .form-group label { font-size: .79rem; color: var(--muted); font-weight: 700; }
   .form-group input, .form-group select, .form-group textarea { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 13px; outline: none; font-size: .88rem; width: 100%; }
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--sky); }
+
+  /* ══════════ منتقي الوقت العربي (صباحًا / مساءً) ══════════ */
+  .tp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .tp-col { display: flex; flex-direction: column; gap: 6px; }
+  .tp-col label { font-size: .79rem; color: var(--muted); font-weight: 700; text-align: center; }
+  .tp-col select { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 12px; outline: none; font-size: 1.15rem; font-weight: 700;
+    text-align: center; text-align-last: center; font-variant-numeric: tabular-nums; cursor: pointer; }
+  .tp-col select:focus { border-color: var(--sky); }
+  .tp-mer { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tp-mer button { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); font-weight: 700; font-size: .95rem;
+    cursor: pointer; font-family: var(--font); }
+  .tp-mer button.on { background: rgba(232,25,44,.12); border-color: var(--sky); color: var(--sky); }
+  .tp-preview { text-align: center; font-size: 1.4rem; font-weight: 800; color: var(--sky);
+    font-variant-numeric: tabular-nums; min-height: 32px; }
+
+  /* ══════════ فورم فترات الاستئذان ══════════ */
+  .perm-empty { text-align: center; color: var(--muted); font-size: .85rem; padding: 18px 8px; }
+  .perm-row { display: flex; align-items: center; gap: 10px; padding: 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
+  .perm-row-idx { width: 24px; height: 24px; border-radius: 50%; background: rgba(232,25,44,.14);
+    color: var(--sky); font-size: .78rem; font-weight: 800; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; }
+  .perm-row-times { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .tp-btn { flex: 1; display: flex; flex-direction: column; gap: 2px; align-items: center;
+    padding: 8px 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--night);
+    color: var(--text); cursor: pointer; font-family: var(--font); }
+  .tp-btn:hover { border-color: var(--sky); }
+  .tp-btn.empty .tp-btn-val { color: var(--muted); }
+  .tp-btn-lbl { font-size: .68rem; color: var(--muted); font-weight: 700; }
+  .tp-btn-val { font-size: .9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .perm-arrow { color: var(--muted); font-weight: 800; }
+  .perm-del { background: rgba(232,25,44,.1); border: 1px solid rgba(232,25,44,.25); color: var(--red);
+    width: 34px; height: 34px; border-radius: 8px; cursor: pointer; flex-shrink: 0; font-size: .9rem; }
+  .perm-del:hover { background: var(--red); color: #fff; }
+  .perm-dur { font-size: .74rem; color: var(--muted); margin: -3px 4px 10px; padding-inline-start: 34px; }
 
   /* ══════════ زر المساعدة ولوحة الشرح ══════════ */
   #helpBtn { position: fixed; top: 18px; left: 20px; z-index: 8000;
@@ -671,6 +706,57 @@
   </div>
 </div>
 
+<!-- ═══════════ فترات الاستئذان ═══════════ -->
+<div class="modal" id="modal-perm">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-head">
+      <div class="modal-title" id="dayPermTitle">فترات الاستئذان</div>
+      <button class="modal-close" onclick="closeModal('perm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box" id="dayPermInfo" style="margin-bottom:14px"></div>
+      <div id="dayPermRows"></div>
+      <button class="btn-ghost" style="margin-top:6px;width:100%" onclick="dayPermAdd()">＋ إضافة استئذان جديد</button>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="saveDayPerms()">حفظ</button>
+      <button class="btn-ghost" onclick="closeModal('perm')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ منتقي الوقت العربي ═══════════ -->
+<div class="modal" id="modal-timepicker">
+  <div class="modal-box" style="max-width:340px">
+    <div class="modal-head">
+      <div class="modal-title" id="tpTitle">اختيار الوقت</div>
+      <button class="modal-close" onclick="closeTimePicker()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tp-grid">
+        <div class="tp-col">
+          <label>الساعة</label>
+          <select id="tpHour"></select>
+        </div>
+        <div class="tp-col">
+          <label>الدقيقة</label>
+          <select id="tpMin"></select>
+        </div>
+      </div>
+      <div class="tp-mer">
+        <button type="button" id="tpAM" onclick="tpSetMer('am')">صباحًا</button>
+        <button type="button" id="tpPM" onclick="tpSetMer('pm')">مساءً</button>
+      </div>
+      <div id="tpPreview" class="tp-preview"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" onclick="tpConfirm()">تأكيد</button>
+      <button class="btn-ghost" id="tpClearBtn" onclick="tpClear()">مسح</button>
+      <button class="btn-ghost" onclick="closeTimePicker()">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════ زر المساعدة ═══════════ -->
 <button id="helpBtn" onclick="openHelp()" title="إيه الصفحة دي؟ (F1)">i</button>
 <div id="helpOverlay" onclick="if(event.target===this)closeHelp()">
@@ -1106,11 +1192,16 @@ function updateStickyOffsets() {
   page.style.setProperty("--stick2", (h1 + h2) + "px");
 }
 window.addEventListener("resize", updateStickyOffsets);
+/** فيه أي مودال مفتوح دلوقتي؟ — عشان مانعملش re-render وهو مفتوح */
+function anyModalOpen() { return !!document.querySelector(".modal.open"); }
 function refreshCurrentPage() {
   clearTimeout(window._refreshT);
   window._refreshT = setTimeout(() => {
-    // مانعملش re-render والمستخدم بيكتب في خانة — عشان مايضيعش الفوكس
-    if (document.activeElement?.classList?.contains("cell-in")) { refreshCurrentPage(); return; }
+    // مانعملش re-render والمستخدم بيكتب في خانة أو فيه مودال مفتوح — عشان
+    // مايضيعش الفوكس ولا يتلغبط فورم مفتوح (زي فورم الاستئذان أو منتقي الوقت)
+    if (document.activeElement?.classList?.contains("cell-in") || anyModalOpen()) {
+      refreshCurrentPage(); return;
+    }
     try { PAGE_RENDERERS[currentPage()]?.(); } catch (e) { console.error("refresh", e); }
     updateStickyOffsets();
   }, 250);
@@ -1207,8 +1298,8 @@ const TEXT_FIELDS = new Set(["note", "in", "out", "bout", "bin"]);
    في التقفيل اليومي وكشف الطيار، وبيتفلتر حسب صلاحيات المستخدم. */
 const GRID_COLS = [
   { k: "in",   th: "ساعة الحضور",     w: 104, time: true },
-  { k: "bout", th: "خروج مؤقت",       w: 104, sub: "استئذان", time: true },
-  { k: "bin",  th: "رجوع",            w: 104, sub: "من الاستئذان", time: true },
+  { k: "bout", th: "خروج مؤقت",       w: 104, sub: "استئذان", perm: true },
+  { k: "bin",  th: "رجوع",            w: 104, sub: "من الاستئذان", perm: true },
   { k: "out",  th: "ساعة الانصراف",   w: 104, time: true },
   { k: "h",    th: "عدد ساعات العمل", w: 95,  sub: "ناقص الاستئذان", total: true,
     auto: e => { const a = autoHours(e); return a === null ? "" : fmt(a); } },
@@ -1231,8 +1322,24 @@ function gridHead(cols) {
 }
 /** خانات صف واحد */
 function gridRow(cols, pilotId, day, e, ym, dotId, pilot) {
-  return cols.map(c => cellHTML(pilotId, day, c.k, e[c.k], ym, dotId,
-    !!c.text, c.auto ? c.auto(e, pilot) : "", !!c.time)).join("");
+  return cols.map(c => c.perm
+    ? permCellHTML(pilotId, day, c.k, e, ym, dotId)
+    : cellHTML(pilotId, day, c.k, e[c.k], ym, dotId,
+        !!c.text, c.auto ? c.auto(e, pilot) : "", !!c.time)).join("");
+}
+/** خانة ملخّص الاستئذان في الجدول — بتفتح فورم الفترات بالنقر (مش كتابة).
+    عمود «خروج» بيعرض أوقات الخروج، عمود «رجوع» بيعرض أوقات الرجوع. */
+function permCellHTML(pilotId, day, colKey, e, ym, dotId) {
+  const list = permsOf(e);
+  const editable = can("act.edit");
+  const side = colKey === "bout" ? "out" : "in";
+  let disp = "";
+  if (list.length === 1) disp = fmtTimeAr(list[0][side]);
+  else if (list.length > 1) disp = list.length + " استئذان";
+  const tip = list.map((pr, i) => `${i + 1}) ${fmtTimeAr(pr.out) || "—"} → ${fmtTimeAr(pr.in) || "—"}`).join("\n");
+  const oc = editable ? `onclick="openPermModal('${ym}','${pilotId}',${day},'${dotId}')"` : "";
+  return `<td><input class="cell-in cell-pick perm-cell" type="text" readonly data-col="${colKey}"
+    value="${esc(disp)}"${tip ? ` title="${esc(tip)}"` : ""} ${oc} onkeydown="cellKey(event)" /></td>`;
 }
 /** خانات سطر الإجمالي */
 function gridFoot(cols, t) {
@@ -1265,13 +1372,49 @@ function normalizeTime(raw) {
   if (hh > 23 || mm > 59) return String(raw ?? "").trim();
   return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
 }
-/** دقايق الاستئذان في نص اليوم (خرج ورجع) — بتتشال من ساعات الشغل */
+/* ── فترات الاستئذان ──────────────────────────────────────────
+   البيانات الجديدة: perms = [ { out:"16:00", in:"16:20" }, ... ]
+   التوافق مع القديم: لو فيه bout/bin من غير perms، بنحوّلهم لعنصر
+   واحد وقت القراءة بس — من غير ما نلمس البيانات القديمة في فايربيز. */
+function permsOf(e) {
+  if (Array.isArray(e?.perms)) {
+    return e.perms
+      .filter(p => p && (p.out || p.in))
+      .map(p => ({ out: p.out || "", in: p.in || "" }));
+  }
+  if (e && (e.bout || e.bin)) return [{ out: e.bout || "", in: e.bin || "" }];
+  return [];
+}
+/** أوقات جانب واحد (out/in) من كل الفترات — للتصدير لإكسل */
+function permExport(e, side) {
+  return permsOf(e).map(p => p[side]).filter(Boolean).join(" ، ");
+}
+
+/* ── وقت بالعربي (صباحًا/مساءً) بدل AM/PM الإنجليزي ── */
+function to12h(hhmm) {
+  const mins = parseTime(hhmm);
+  if (mins === null) return null;
+  const h24 = Math.floor(mins / 60), mm = mins % 60;
+  let h12 = h24 % 12; if (h12 === 0) h12 = 12;
+  return { h12, mm, h24, mer: h24 < 12 ? "am" : "pm" };
+}
+function fmtTimeAr(hhmm) {
+  const t = to12h(hhmm);
+  if (!t) return "";
+  return `${t.h12}:${String(t.mm).padStart(2, "0")} ${t.mer === "am" ? "صباحًا" : "مساءً"}`;
+}
+
+/** دقايق الاستئذان في نص اليوم — مجموع كل الفترات، بتتشال من ساعات الشغل */
 function breakMinutes(e) {
-  const a = parseTime(e.bout), b = parseTime(e.bin);
-  if (a === null || b === null) return 0;
-  let d = b - a;
-  if (d < 0) d += 24 * 60;
-  return d;
+  let total = 0;
+  for (const p of permsOf(e)) {
+    const a = parseTime(p.out), b = parseTime(p.in);
+    if (a === null || b === null) continue;
+    let d = b - a;
+    if (d < 0) d += 24 * 60;
+    total += d;
+  }
+  return total;
 }
 function autoHours(e) {
   const a = parseTime(e.in), b = parseTime(e.out);
@@ -1401,16 +1544,10 @@ function netOf(e, pilot) {
   return svcNet(e, pilot);
 }
 
-/** حفظ خانة واحدة — بيمسح العقدة لو بقت فاضية تمامًا */
+/** يخزّن عقدة اليوم كلها محليًا وعلى السيرفر — بيمسحها لو بقت فاضية */
 const _pending = new Map();
-function saveCell(ym, pilotId, day, field, raw, dotId) {
+function commitEntry(ym, pilotId, day, cur, dotId) {
   const key = `${ym}|${pilotId}|${day}`;
-  const cur = { ...entryOf(ym, pilotId, day) };
-  const val = (field === "in" || field === "out") ? normalizeTime(raw)
-            : field === "note"                    ? String(raw).trim()
-            : (raw === "" ? "" : num(raw));
-  if (val === "" || val === 0 && field !== "note") delete cur[field]; else cur[field] = val;
-
   // خزّنها محليًا فورًا عشان الحسابات تتحدث من غير انتظار السيرفر
   S.entries[ym] = S.entries[ym] || {};
   S.entries[ym][pilotId] = S.entries[ym][pilotId] || {};
@@ -1426,10 +1563,20 @@ function saveCell(ym, pilotId, day, field, raw, dotId) {
       if (Object.keys(cur).length) await set(ref(db, path), cur);
       else await remove(ref(db, path));
     } catch (e) {
-      console.error("saveCell:", e);
+      console.error("commitEntry:", e);
       showToast("تعذّر الحفظ: " + (e?.message || e), "error");
     } finally { dot?.classList.remove("on"); }
   }, 500));
+}
+
+/** حفظ خانة واحدة — بيمسح المفتاح لو بقى فاضي */
+function saveCell(ym, pilotId, day, field, raw, dotId) {
+  const cur = { ...entryOf(ym, pilotId, day) };
+  const val = (field === "in" || field === "out") ? normalizeTime(raw)
+            : field === "note"                    ? String(raw).trim()
+            : (raw === "" ? "" : num(raw));
+  if (val === "" || val === 0 && field !== "note") delete cur[field]; else cur[field] = val;
+  commitEntry(ym, pilotId, day, cur, dotId);
 }
 
 /** حفظ خانة من بلوك الملخص اليومي */
@@ -1873,11 +2020,14 @@ ${can('blk.branches') ? `      <div style="border-top:1px solid var(--border)">
 function cellHTML(pilotId, day, field, value, ym, dotId, isText = false, ph = "", isTime = false) {
   const v = value === undefined || value === null ? "" : value;
   const ro = can("act.edit") ? "" : " readonly";     // بيتفرّج بس
-  // خانة الوقت = input[type=time] عشان تفتح ساعة المتصفح بضغطة على الأيقونة
+  // خانة الوقت = عرض للقراءة بالعربي (صباحًا/مساءً) بيفتح المنتقي المخصّص
+  // بالنقر — بدل input[type=time] اللي بيعرض AM/PM إنجليزي من المتصفح
   if (isTime) {
-    return `<td><input class="cell-in time" type="time"${ro}
-      data-col="${field}" value="${esc(parseTime(v) === null ? "" : v)}"
-      oninput="onCellInput('${ym}','${pilotId}',${day},'${field}',this.value,'${dotId}')"
+    const disp = fmtTimeAr(v);
+    const oc = can("act.edit")
+      ? `onclick="pickTimeCell('${ym}','${pilotId}',${day},'${field}','${dotId}')"` : "";
+    return `<td><input class="cell-in cell-pick time-cell" type="text" readonly
+      data-col="${field}" value="${esc(disp)}" placeholder="—" ${oc}
       onkeydown="cellKey(event)" /></td>`;
   }
   const cls = isText ? " txt" : "";
@@ -1932,15 +2082,10 @@ window.cellKey = function(ev) {
   const key = ev.key;
   const cur = ev.target;
 
-  /* خانة الوقت ليها تنقّل داخلي خاص بيها: فوق/تحت بيزوّدوا وينقّصوا
-     الساعة أو الدقيقة، ويمين/شمال بينقلوا بين المقطعين. سايبينهم للمتصفح
-     ومخلّينا Enter بس هو اللي ينقل للسطر اللي بعده. */
-  if (cur.type === "time") {
-    if (key !== "Enter") return;
-    ev.preventDefault();
-    const all = [...document.querySelectorAll(`.cell-in[data-col="${cur.dataset.col}"]`)];
-    moveCell(all[all.indexOf(cur) + 1]);
-    return;
+  /* خانات الوقت/الاستئذان بقت للقراءة بس (بتفتح منتقي عائم): Enter أو
+     المسافة بيفتحوا المنتقي، والأسهم بتنقّل بين الخانات زي أي خانة. */
+  if (cur.classList.contains("cell-pick")) {
+    if (key === "Enter" || key === " ") { ev.preventDefault(); cur.click(); return; }
   }
 
   if (["Enter", "ArrowDown", "ArrowUp"].includes(key)) {
@@ -1968,6 +2113,141 @@ window.cellKey = function(ev) {
   if (!row) return;
   const cells = [...row.querySelectorAll(".cell-in")];
   moveCell(cells[cells.indexOf(cur) + (back ? -1 : 1)]);
+};
+
+/* ══════════════════════════════════════════════════════════════
+   منتقي الوقت العربي (صباحًا / مساءً) — موحّد في كل التطبيق
+   ──────────────────────────────────────────────────────────────
+   بديل عن input[type=time] بتاع المتصفح (اللي بيعرض AM/PM إنجليزي).
+   openTimePicker(current, title, cb) بيرجّع القيمة بصيغة "HH:MM" 24
+   ساعة في الـ callback، أو "" لو المستخدم دوس «مسح».
+══════════════════════════════════════════════════════════════ */
+let _tp = { cb: null, mer: "am" };
+window.openTimePicker = function(current, title, cb) {
+  _tp.cb = cb;
+  $("tpTitle").textContent = title || "اختيار الوقت";
+  const hSel = $("tpHour"), mSel = $("tpMin");
+  if (!hSel.dataset.built) {
+    for (let h = 1; h <= 12; h++) hSel.add(new Option(String(h), String(h)));
+    for (let m = 0; m < 60; m++) mSel.add(new Option(String(m).padStart(2, "0"), String(m)));
+    hSel.dataset.built = "1";
+    hSel.onchange = mSel.onchange = tpPreview;
+  }
+  const t = to12h(current) || { h12: 12, mm: 0, mer: "pm" };  // الافتراضي 12 ظهرًا
+  hSel.value = String(t.h12);
+  mSel.value = String(t.mm);
+  tpSetMer(t.mer, true);
+  tpPreview();
+  $("modal-timepicker").classList.add("open");
+  document.body.style.overflow = "hidden";
+};
+window.closeTimePicker = function() {
+  $("modal-timepicker").classList.remove("open");
+  if (!anyModalOpen()) document.body.style.overflow = "";   // سيب القفل لو لسه فيه مودال تحته
+};
+window.tpSetMer = function(mer, silent) {
+  _tp.mer = mer;
+  $("tpAM").classList.toggle("on", mer === "am");
+  $("tpPM").classList.toggle("on", mer === "pm");
+  if (!silent) tpPreview();
+};
+function tpValue() {
+  const h12 = +$("tpHour").value, mm = +$("tpMin").value;
+  let h24 = h12 % 12; if (_tp.mer === "pm") h24 += 12;
+  return String(h24).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+}
+function tpPreview() { $("tpPreview").textContent = fmtTimeAr(tpValue()); }
+window.tpConfirm = function() {
+  const v = tpValue(), cb = _tp.cb;
+  closeTimePicker();
+  cb && cb(v);
+};
+window.tpClear = function() {
+  const cb = _tp.cb;
+  closeTimePicker();
+  cb && cb("");
+};
+
+/** فتح المنتقي لخانة حضور/انصراف في الجدول */
+window.pickTimeCell = function(ym, pilotId, day, field, dotId) {
+  if (!can("act.edit")) return;
+  const cur = entryOf(ym, pilotId, day)[field] || "";
+  openTimePicker(cur, field === "in" ? "ساعة الحضور" : "ساعة الانصراف", v => {
+    saveCell(ym, pilotId, day, field, v, dotId);
+    scheduleTotals();
+  });
+};
+
+/* ══════════════════════════════════════════════════════════════
+   فورم فترات الاستئذان — طيار واحد ويوم واحد، أكتر من فترة
+   ──────────────────────────────────────────────────────────────
+   الأسماء كلها ببادئة dayPerm عشان «perms» في البرنامج ده معناها
+   الصلاحيات (savePerms/permUser/permsBody) — من غير البادئة كان
+   زرار الحفظ بينده دالة حفظ الصلاحيات بدل حفظ الاستئذان.
+══════════════════════════════════════════════════════════════ */
+let _dayPermCtx = { ym: null, pilotId: null, day: null, dotId: "", list: [] };
+window.openPermModal = function(ym, pilotId, day, dotId) {
+  if (!can("act.edit")) return;
+  _dayPermCtx = { ym, pilotId, day, dotId, list: permsOf(entryOf(ym, pilotId, day)) };
+  const p = S.pilots.find(x => x.id === pilotId);
+  $("dayPermTitle").textContent = "استئذانات " + (p ? p.name : "");
+  $("dayPermInfo").innerHTML =
+    `فترات الخروج المؤقت ليوم <b>${day} ${weekdayOf(ym, day)}</b> — كل فترة (خروج ← رجوع) بتتشال من ساعات الشغل.`;
+  renderDayPermRows();
+  openModal("perm");
+};
+function dayPermDurLabel(pr) {
+  const a = parseTime(pr.out), b = parseTime(pr.in);
+  if (a === null || b === null) return "";
+  let d = b - a; if (d < 0) d += 24 * 60;
+  const h = Math.floor(d / 60), m = d % 60;
+  return "مدّة: " + (h ? h + " س " : "") + (m || !h ? m + " د" : "");
+}
+function renderDayPermRows() {
+  const box = $("dayPermRows");
+  if (!_dayPermCtx.list.length) {
+    box.innerHTML = `<div class="perm-empty">مفيش استئذانات مسجّلة — دوس «＋ إضافة استئذان جديد».</div>`;
+    return;
+  }
+  box.innerHTML = _dayPermCtx.list.map((pr, i) => `
+    <div class="perm-row">
+      <div class="perm-row-idx">${i + 1}</div>
+      <div class="perm-row-times">
+        <button type="button" class="tp-btn${pr.out ? "" : " empty"}" onclick="dayPermPick(${i},'out')">
+          <span class="tp-btn-lbl">خروج</span>
+          <span class="tp-btn-val">${pr.out ? esc(fmtTimeAr(pr.out)) : "—"}</span>
+        </button>
+        <span class="perm-arrow">←</span>
+        <button type="button" class="tp-btn${pr.in ? "" : " empty"}" onclick="dayPermPick(${i},'in')">
+          <span class="tp-btn-lbl">رجوع</span>
+          <span class="tp-btn-val">${pr.in ? esc(fmtTimeAr(pr.in)) : "—"}</span>
+        </button>
+      </div>
+      <button type="button" class="perm-del" onclick="dayPermDel(${i})" title="حذف الفترة">🗑️</button>
+    </div>
+    ${pr.out && pr.in ? `<div class="perm-dur">${dayPermDurLabel(pr)}</div>` : ""}`).join("");
+}
+window.dayPermAdd = function() { _dayPermCtx.list.push({ out: "", in: "" }); renderDayPermRows(); };
+window.dayPermDel = function(i) { _dayPermCtx.list.splice(i, 1); renderDayPermRows(); };
+window.dayPermPick = function(i, which) {
+  const cur = _dayPermCtx.list[i]?.[which] || "";
+  openTimePicker(cur, which === "out" ? "وقت الخروج" : "وقت الرجوع", v => {
+    if (_dayPermCtx.list[i]) { _dayPermCtx.list[i][which] = v; renderDayPermRows(); }
+  });
+};
+window.saveDayPerms = function() {
+  const { ym, pilotId, day, dotId } = _dayPermCtx;
+  if (!pilotId) { closeModal("perm"); return; }
+  const clean = _dayPermCtx.list
+    .map(p => ({ out: normalizeTime(p.out), in: normalizeTime(p.in) }))
+    .filter(p => p.out || p.in);
+  const cur = { ...entryOf(ym, pilotId, day) };
+  delete cur.bout; delete cur.bin;              // نشيل الصيغة القديمة نهائيًا
+  if (clean.length) cur.perms = clean; else delete cur.perms;
+  commitEntry(ym, pilotId, day, cur, dotId);
+  closeModal("perm");
+  scheduleTotals();
+  showToast(clean.length ? "اتحفظ الاستئذان" : "اتمسحت الاستئذانات", "success");
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -2856,7 +3136,7 @@ window.exportDaily = function() {
   ];
   for (const p of pilotsOfBranch(bid)) {
     const e = entryOf(ym, p.id, day);
-    aoa.push([p.name, e.in ?? "", e.bout ?? "", e.bin ?? "", e.out ?? "", hoursOf(e) || "", e.o ?? "", e.svc ?? "", pilotSvcOf(e, p) || "", netOf(e, p) || "", e.adv ?? "", e.ded ?? "", e.note ?? ""]);
+    aoa.push([p.name, e.in ?? "", permExport(e, "out"), permExport(e, "in"), e.out ?? "", hoursOf(e) || "", e.o ?? "", e.svc ?? "", pilotSvcOf(e, p) || "", netOf(e, p) || "", e.adv ?? "", e.ded ?? "", e.note ?? ""]);
   }
   aoa.push(["الإجمالي", "", "", "", "", t.h, t.o, t.svc, t.psvc, t.net, t.adv, t.ded, ""]);
   aoa.push([]);
@@ -2893,7 +3173,7 @@ window.exportPilot = function() {
   ];
   for (let d = 1; d <= daysInMonth(ym); d++) {
     const e = entryOf(ym, pid, d);
-    aoa.push([d, e.in ?? "", e.bout ?? "", e.bin ?? "", e.out ?? "", hoursOf(e) || "", e.o ?? "", e.svc ?? "", pilotSvcOf(e, p) || "", netOf(e, p) || "", e.ded ?? "", e.adv ?? "", e.note ?? ""]);
+    aoa.push([d, e.in ?? "", permExport(e, "out"), permExport(e, "in"), e.out ?? "", hoursOf(e) || "", e.o ?? "", e.svc ?? "", pilotSvcOf(e, p) || "", netOf(e, p) || "", e.ded ?? "", e.adv ?? "", e.note ?? ""]);
   }
   aoa.push(["الإجمالي", "", "", "", "", t.h, t.o, t.svc, t.psvc, t.net, t.ded, t.adv, ""]);
   aoa.push([]);
