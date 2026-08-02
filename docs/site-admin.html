@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#08080a" />
+<title>الدهشان | لوحة تحكم الموقع</title>
+<link rel="icon" href="assets/icon-192.png" />
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+<style>
+/* ══════════════════════════════════════════════════════════════
+   لوحة تحكم الموقع — بتتحكم في محتوى home.html
+   كل حاجة بتتخزن تحت settings/site في نفس قاعدة النظام.
+══════════════════════════════════════════════════════════════ */
+:root{--ink:#08080a;--ink2:#0f0f12;--card:#141417;--line:#232329;
+  --red:#e8192c;--red-d:#8e0f1c;--txt:#fff;--muted:#8e8e97;
+  --green:#22c55e;--orange:#f59e0b;--blue:#3b82f6;--r:14px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--ink);color:var(--txt);font-family:'Tajawal',system-ui,sans-serif;line-height:1.7}
+img{max-width:100%;display:block}
+button,input,select,textarea{font-family:inherit;color:inherit;font-size:inherit}
+a{color:var(--red);text-decoration:none}
+
+/* ── دخول ── */
+#gate{min-height:100vh;display:grid;place-items:center;padding:24px;
+  background:radial-gradient(800px 400px at 50% 0%,rgba(232,25,44,.16),transparent 60%)}
+.gate-box{background:var(--card);border:1px solid var(--line);border-radius:20px;
+  padding:36px 30px;max-width:400px;width:100%;text-align:center}
+.gate-box img{height:56px;margin:0 auto 18px}
+.gate-box h1{font-size:20px;font-weight:900;margin-bottom:6px}
+.gate-box p{color:var(--muted);font-size:14px;margin-bottom:22px}
+.gbtn{width:100%;background:#fff;color:#111;border:none;border-radius:12px;padding:14px;
+  font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;gap:10px}
+.gbtn:hover{opacity:.92}
+#gateErr{color:#ff6b78;font-size:13.5px;margin-top:14px;min-height:20px}
+
+/* ── التخطيط ── */
+#app{display:none}
+#app.on{display:block}
+header{position:sticky;top:0;z-index:50;background:rgba(8,8,10,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line)}
+.hd{max-width:1000px;margin:0 auto;padding:0 18px;height:62px;display:flex;align-items:center;gap:12px}
+.hd img{height:34px}
+.hd .who{margin-inline-start:auto;font-size:13px;color:var(--muted);text-align:left}
+.hd .who b{display:block;color:var(--txt);font-size:13.5px}
+.out{background:rgba(232,25,44,.1);border:1px solid rgba(232,25,44,.3);color:var(--red);
+  padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
+.wrap{max-width:1000px;margin:0 auto;padding:22px 18px 60px}
+
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:14px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 18px;
+  font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--red);border-color:var(--red)}
+.pane{display:none}.pane.on{display:block}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:20px;margin-bottom:16px}
+.card h2{font-size:16.5px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+.f{display:flex;flex-direction:column;gap:6px}
+.f.full{grid-column:1/-1}
+.f label{font-size:12.5px;color:var(--muted);font-weight:700}
+.f input,.f textarea,.f select{background:var(--ink2);border:1px solid var(--line);
+  border-radius:11px;padding:12px 14px;outline:none;width:100%}
+.f input:focus,.f textarea:focus,.f select:focus{border-color:var(--red)}
+.f .hint{font-size:11.5px;color:#5f5f68}
+.btn{background:var(--red);color:#fff;border:none;border-radius:11px;padding:13px 22px;
+  font-weight:800;font-size:14.5px;cursor:pointer}
+.btn:hover{background:var(--red-d)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.ghost{background:var(--ink2);border:1px solid var(--line);color:var(--txt)}
+.btn.sm{padding:9px 15px;font-size:13px;border-radius:9px}
+.btn.red{background:rgba(232,25,44,.12);border:1px solid rgba(232,25,44,.32);color:var(--red)}
+.btn.red:hover{background:var(--red);color:#fff}
+.row-end{display:flex;gap:10px;justify-content:flex-start;margin-top:16px;flex-wrap:wrap}
+
+/* ── سويتش ── */
+.sw{display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none;
+  padding:10px 0;font-size:14px;font-weight:700}
+.sw input{display:none}
+.sw i{width:42px;height:24px;border-radius:99px;background:#2a2a32;position:relative;
+  flex:none;transition:.22s}
+.sw i::after{content:"";position:absolute;top:3px;right:3px;width:18px;height:18px;
+  border-radius:50%;background:#6b6b76;transition:.22s}
+.sw input:checked + i{background:rgba(232,25,44,.3)}
+.sw input:checked + i::after{transform:translateX(-18px);background:var(--red)}
+
+/* ── الشركاء ── */
+.p-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.p-card{background:var(--ink2);border:1px solid var(--line);border-radius:13px;
+  padding:14px;position:relative}
+.p-card .logo{height:64px;background:#fff;border-radius:10px;display:grid;place-items:center;
+  overflow:hidden;margin-bottom:11px}
+.p-card .logo img{max-height:56px;width:auto;object-fit:contain}
+.p-card .logo.empty{background:#1c1c22;color:#4d4d56;font-size:24px}
+.p-card b{font-size:14.5px;display:block;margin-bottom:3px}
+.p-card p{font-size:12px;color:var(--muted);min-height:32px}
+.p-card .acts{display:flex;gap:7px;margin-top:10px}
+.p-card .acts button{flex:1}
+.empty-box{text-align:center;padding:36px 18px;color:var(--muted);font-size:14px;
+  border:1.5px dashed var(--line);border-radius:13px}
+
+/* ── مودال ── */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(5px);
+  z-index:200;display:none;align-items:center;justify-content:center;padding:18px}
+.modal.on{display:flex}
+.sheet{background:var(--ink2);border:1px solid var(--line);border-radius:18px;width:100%;
+  max-width:480px;max-height:92vh;overflow-y:auto}
+.sheet-hd{padding:17px 20px;border-bottom:1px solid var(--line);display:flex;
+  align-items:center;justify-content:space-between;gap:10px}
+.sheet-hd b{font-size:16px}
+.x{background:var(--card);border:1px solid var(--line);color:var(--muted);width:32px;height:32px;
+  border-radius:50%;cursor:pointer;font-size:15px}
+.sheet-bd{padding:20px}
+.drop{border:1.5px dashed var(--line);border-radius:13px;padding:22px;text-align:center;
+  cursor:pointer;background:var(--card)}
+.drop:hover{border-color:var(--red)}
+.drop img{max-height:90px;margin:0 auto 8px;background:#fff;border-radius:8px;padding:6px}
+.drop .ph{font-size:30px;margin-bottom:6px}
+.drop small{color:var(--muted);font-size:12px;display:block}
+
+#toast{position:fixed;bottom:24px;right:50%;transform:translateX(50%) translateY(24px);
+  background:#1c1c22;border:1px solid var(--line);padding:12px 22px;border-radius:12px;
+  font-size:14px;font-weight:700;z-index:500;opacity:0;transition:.28s;pointer-events:none}
+#toast.on{opacity:1;transform:translateX(50%) translateY(0)}
+#toast.ok{border-color:rgba(34,197,94,.5);color:var(--green)}
+#toast.bad{border-color:rgba(232,25,44,.5);color:#ff6b78}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+.st{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;text-align:center}
+.st b{display:block;font-size:26px;font-weight:900;color:var(--red);line-height:1.1}
+.st span{font-size:12.5px;color:var(--muted)}
+.note{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.22);border-radius:12px;
+  padding:13px 15px;font-size:12.5px;color:#a8a8b2;line-height:1.8;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<!-- ═══ بوابة الدخول ═══ -->
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="الدهشان" />
+    <h1>لوحة تحكم الموقع</h1>
+    <p>الدخول للمديرين فقط</p>
+    <button class="gbtn" id="gBtn">
+      <svg width="19" height="19" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      دخول بحساب جوجل
+    </button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<!-- ═══ اللوحة ═══ -->
+<div id="app">
+  <header><div class="hd">
+    <img src="assets/logo.png" alt="" />
+    <div style="font-weight:800;font-size:15px">لوحة تحكم الموقع</div>
+    <div class="who"><b id="uName">—</b><span id="uMail">—</span></div>
+    <button class="out" id="outBtn">خروج</button>
+  </div></header>
+
+  <div class="wrap">
+    <div class="stats">
+      <div class="st"><b id="stPartners">0</b><span>شريك معروض</span></div>
+      <div class="st"><b id="stApps">0</b><span>تطبيق مفعّل</span></div>
+      <div class="st"><b id="stZones">0</b><span>منطقة تغطية</span></div>
+      <div class="st"><b id="stOrders">0</b><span>شحنة في النظام</span></div>
+    </div>
+
+    <div class="note">
+      💡 أي تعديل هنا بيظهر في <a href="home.html" target="_blank">الموقع</a> فورًا بعد الحفظ —
+      من غير رفع ملفات ولا تعديل كود.
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-p="info">📞 بيانات التواصل</div>
+      <div class="tab" data-p="apps">📱 التطبيقات</div>
+      <div class="tab" data-p="partners">🤝 الشركاء</div>
+      <div class="tab" data-p="hero">✍️ نصوص الصفحة</div>
+    </div>
+
+    <!-- بيانات التواصل -->
+    <div class="pane on" id="pane-info">
+      <div class="card">
+        <h2>📞 بيانات التواصل</h2>
+        <div class="sub">بتظهر في الهيدر والفوتر وزرار الواتساب العائم وصفحة التتبّع.</div>
+        <div class="grid2">
+          <div class="f"><label>رقم الهاتف</label>
+            <input id="iPhone" placeholder="01xxxxxxxxx" dir="ltr" /></div>
+          <div class="f"><label>واتساب (بصيغة دولية بدون +)</label>
+            <input id="iWa" placeholder="201xxxxxxxxx" dir="ltr" />
+            <span class="hint">مثال: 201012345678</span></div>
+          <div class="f"><label>البريد الإلكتروني</label>
+            <input id="iMail" placeholder="info@example.com" dir="ltr" /></div>
+          <div class="f"><label>مواعيد العمل</label>
+            <input id="iHours" placeholder="يوميًا من 9 ص إلى 11 م" /></div>
+        </div>
+        <div class="row-end"><button class="btn" id="saveInfo">حفظ</button></div>
+      </div>
+    </div>
+
+    <!-- التطبيقات -->
+    <div class="pane" id="pane-apps">
+      <div class="card">
+        <h2>📱 روابط التطبيقات</h2>
+        <div class="sub">قسم التحميل في الموقع. اللي مقفول مابيظهرش خالص.</div>
+        <div id="appsBox"></div>
+        <div class="row-end"><button class="btn" id="saveApps">حفظ</button></div>
+      </div>
+    </div>
+
+    <!-- الشركاء -->
+    <div class="pane" id="pane-partners">
+      <div class="card">
+        <h2>🤝 الشركاء والعملاء</h2>
+        <div class="sub">الجهات المتعاقد معها — بتظهر في آخر الموقع بصورها.</div>
+        <div class="row-end" style="margin:0 0 16px">
+          <button class="btn" id="addPartner">＋ إضافة شريك</button>
+        </div>
+        <div id="pList"></div>
+      </div>
+    </div>
+
+    <!-- نصوص -->
+    <div class="pane" id="pane-hero">
+      <div class="card">
+        <h2>✍️ نصوص الصفحة الرئيسية</h2>
+        <div class="sub">سيبها فاضية عشان تستخدم النص الافتراضي.</div>
+        <div class="grid2">
+          <div class="f full"><label>العنوان الرئيسي</label>
+            <input id="hTitle" placeholder="توصيل أسرع.. لكل مكان" /></div>
+          <div class="f full"><label>الوصف تحته</label>
+            <textarea id="hSub" rows="3" placeholder="شحنتك تتسلّم بأمان وفي أسرع وقت…"></textarea></div>
+          <div class="f full"><label>عنوان قسم الشركاء</label>
+            <input id="hPartners" placeholder="شركاء النجاح" /></div>
+        </div>
+        <div class="row-end"><button class="btn" id="saveHero">حفظ</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- مودال الشريك -->
+<div class="modal" id="pModal">
+  <div class="sheet">
+    <div class="sheet-hd"><b id="pmTitle">إضافة شريك</b>
+      <button class="x" onclick="closeP()">✕</button></div>
+    <div class="sheet-bd">
+      <div class="f full" style="margin-bottom:14px">
+        <label>الشعار / الصورة</label>
+        <div class="drop" id="drop">
+          <div id="dropPh"><div class="ph">🖼️</div><small>اضغط لاختيار صورة</small></div>
+          <img id="dropImg" style="display:none" alt="" />
+        </div>
+        <input type="file" id="pFile" accept="image/*" hidden />
+      </div>
+      <div class="f" style="margin-bottom:12px"><label>الاسم *</label>
+        <input id="pName" placeholder="اسم الشركة أو المحل" /></div>
+      <div class="f" style="margin-bottom:12px"><label>نبذة قصيرة</label>
+        <input id="pDesc" placeholder="مثال: سلسلة مطاعم — 3 فروع" /></div>
+      <div class="f" style="margin-bottom:12px"><label>رابط الموقع (اختياري)</label>
+        <input id="pUrl" placeholder="https://…" dir="ltr" /></div>
+      <div class="f"><label>الترتيب</label>
+        <input id="pOrder" type="number" value="0" dir="ltr" />
+        <span class="hint">الأصغر بيظهر الأول</span></div>
+      <div class="row-end">
+        <button class="btn" id="pSave">حفظ</button>
+        <button class="btn ghost" onclick="closeP()">إلغاء</button>
+        <button class="btn red" id="pDel" style="display:none">🗑️ حذف</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, get, set, update, remove, push, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8"
+};
+/* نفس بريست بوابة المحل وتطبيق العميل — رفع بدون سيرفر */
+const CLOUDINARY = { cloudName: "uinllmfk", uploadPreset: "aldahshaneg-cloud" };
+const SITE = "settings/site";           // كل محتوى الموقع تحت العقدة دي
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app), auth = getAuth(app);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const toast = (m, k) => { const t = $("toast"); t.textContent = m; t.className = "on " + (k || "");
+  clearTimeout(window._t); window._t = setTimeout(() => t.className = "", 2800); };
+
+const APPS = [
+  { k:"customer", icon:"📱", name:"تطبيق العملاء", def:"tiar_customer.html",
+    hint:"العميل بيسجّل منه طلباته ويتابعها" },
+  { k:"pilot",    icon:"🛵", name:"تطبيق الطيار",  def:"",
+    hint:"رابط تحميل APK أو صفحة المتجر" },
+  { k:"store",    icon:"🏪", name:"برنامج المحلات", def:"tiar_store.html",
+    hint:"بوابة المحل لتسجيل الشحنات" }
+];
+
+let SITEDATA = { info:{}, apps:{}, partners:{}, hero:{} };
+let editingId = null, uploadUrl = "";
+
+/* ══ الدخول — مدير بس (نفس منطق adminEmails في لوحة الإدارة) ══ */
+async function isAdmin(email) {
+  if (!email) return false;
+  const s = await get(ref(db, "adminEmails"));
+  if (!s.exists()) return false;
+  const v = s.val();
+  return (Array.isArray(v) ? v : Object.values(v)).filter(Boolean)
+    .map(e => String(e).trim().toLowerCase()).includes(email.trim().toLowerCase());
+}
+
+$("gBtn").onclick = async () => {
+  $("gateErr").textContent = "";
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { $("gateErr").textContent = "تعذّر الدخول: " + (e.code || e.message); }
+};
+$("outBtn").onclick = () => signOut(auth).then(() => location.reload());
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { signInAnonymously(auth).catch(() => {}); return; }
+  if (user.isAnonymous) return;                       // مجهول = لسه في شاشة الدخول
+  if (!await isAdmin(user.email)) {
+    $("gateErr").textContent = "الحساب ده مش مدير — كلّم إدارة النظام.";
+    await signOut(auth); return;
+  }
+  $("uName").textContent = user.displayName || "مدير";
+  $("uMail").textContent = user.email;
+  $("gate").style.display = "none";
+  $("app").classList.add("on");
+  boot();
+});
+
+/* ══ تحميل البيانات ══ */
+function boot() {
+  onValue(ref(db, SITE), s => {
+    SITEDATA = Object.assign({ info:{}, apps:{}, partners:{}, hero:{} }, s.val() || {});
+    fillInfo(); fillApps(); fillHero(); renderPartners(); refreshStats();
+  });
+  // إحصائيات من النظام نفسه
+  get(ref(db, "zones")).then(s => $("stZones").textContent = Object.keys(s.val() || {}).length);
+  get(ref(db, "orders")).then(s => $("stOrders").textContent = Object.keys(s.val() || {}).length);
+}
+function refreshStats() {
+  $("stPartners").textContent = Object.keys(SITEDATA.partners || {}).length;
+  $("stApps").textContent = APPS.filter(a => SITEDATA.apps?.[a.k]?.on !== false
+    && (SITEDATA.apps?.[a.k]?.url || a.def)).length;
+}
+
+/* ══ التبويبات ══ */
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+  document.querySelectorAll(".pane").forEach(p =>
+    p.classList.toggle("on", p.id === "pane-" + t.dataset.p));
+});
+
+/* ══ بيانات التواصل ══ */
+function fillInfo() {
+  const i = SITEDATA.info || {};
+  $("iPhone").value = i.phone || ""; $("iWa").value = i.whatsapp || "";
+  $("iMail").value = i.email || "";  $("iHours").value = i.hours || "";
+}
+$("saveInfo").onclick = async () => {
+  const wa = $("iWa").value.replace(/\D/g, "");
+  await update(ref(db, SITE + "/info"), {
+    phone: $("iPhone").value.trim(), whatsapp: wa,
+    email: $("iMail").value.trim(), hours: $("iHours").value.trim()
+  });
+  toast("اتحفظت بيانات التواصل ✓", "ok");
+};
+
+/* ══ التطبيقات ══ */
+function fillApps() {
+  $("appsBox").innerHTML = APPS.map(a => {
+    const v = SITEDATA.apps?.[a.k] || {};
+    const on = v.on !== false;
+    return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
+      <label class="sw" style="padding-top:0">
+        <input type="checkbox" data-on="${a.k}" ${on ? "checked" : ""} /><i></i>
+        <span>${a.icon} ${a.name}</span></label>
+      <div class="f" style="margin-top:8px"><label>الرابط</label>
+        <input data-url="${a.k}" dir="ltr" placeholder="${esc(a.def || "https://…")}"
+               value="${esc(v.url || "")}" />
+        <span class="hint">${esc(a.hint)}</span></div>
+      <div class="f" style="margin-top:10px"><label>نص الزرار (اختياري)</label>
+        <input data-lbl="${a.k}" placeholder="تحميل / فتح" value="${esc(v.label || "")}" /></div>
+    </div>`;
+  }).join("");
+}
+$("saveApps").onclick = async () => {
+  const out = {};
+  APPS.forEach(a => {
+    out[a.k] = {
+      on : $("appsBox").querySelector(`[data-on="${a.k}"]`).checked,
+      url: $("appsBox").querySelector(`[data-url="${a.k}"]`).value.trim(),
+      label: $("appsBox").querySelector(`[data-lbl="${a.k}"]`).value.trim()
+    };
+  });
+  await set(ref(db, SITE + "/apps"), out);
+  toast("اتحفظت روابط التطبيقات ✓", "ok");
+};
+
+/* ══ النصوص ══ */
+function fillHero() {
+  const h = SITEDATA.hero || {};
+  $("hTitle").value = h.title || ""; $("hSub").value = h.sub || "";
+  $("hPartners").value = h.partnersTitle || "";
+}
+$("saveHero").onclick = async () => {
+  await update(ref(db, SITE + "/hero"), {
+    title: $("hTitle").value.trim(), sub: $("hSub").value.trim(),
+    partnersTitle: $("hPartners").value.trim()
+  });
+  toast("اتحفظت النصوص ✓", "ok");
+};
+
+/* ══ الشركاء ══ */
+function renderPartners() {
+  const list = Object.entries(SITEDATA.partners || {})
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+  const box = $("pList");
+  if (!list.length) {
+    box.innerHTML = `<div class="empty-box">لسه مفيش شركاء —
+      دوس «＋ إضافة شريك» وابدأ تضيف الجهات المتعاقد معاها.</div>`;
+    return;
+  }
+  box.className = "p-list";
+  box.innerHTML = list.map(p => `
+    <div class="p-card">
+      <div class="logo ${p.logo ? "" : "empty"}">
+        ${p.logo ? `<img src="${esc(p.logo)}" alt="${esc(p.name)}" />` : "🏢"}</div>
+      <b>${esc(p.name || "—")}</b>
+      <p>${esc(p.desc || "")}</p>
+      <div class="acts">
+        <button class="btn ghost sm" data-edit="${esc(p.id)}">تعديل</button>
+        <button class="btn red sm" data-del="${esc(p.id)}">حذف</button>
+      </div>
+    </div>`).join("");
+  box.querySelectorAll("[data-edit]").forEach(b =>
+    b.onclick = () => openP(b.dataset.edit));
+  box.querySelectorAll("[data-del]").forEach(b =>
+    b.onclick = () => delPartner(b.dataset.del));
+}
+
+window.closeP = () => $("pModal").classList.remove("on");
+function openP(id) {
+  editingId = id || null;
+  const p = id ? (SITEDATA.partners?.[id] || {}) : {};
+  uploadUrl = p.logo || "";
+  $("pmTitle").textContent = id ? "تعديل شريك" : "إضافة شريك";
+  $("pName").value = p.name || ""; $("pDesc").value = p.desc || "";
+  $("pUrl").value = p.url || "";   $("pOrder").value = p.order ?? 0;
+  showLogo(uploadUrl);
+  $("pDel").style.display = id ? "block" : "none";
+  $("pModal").classList.add("on");
+}
+$("addPartner").onclick = () => openP(null);
+
+function showLogo(u) {
+  $("dropImg").style.display = u ? "block" : "none";
+  $("dropPh").style.display  = u ? "none" : "block";
+  if (u) $("dropImg").src = u;
+}
+$("drop").onclick = () => $("pFile").click();
+$("pFile").onchange = async e => {
+  const f = e.target.files?.[0]; e.target.value = "";
+  if (!f) return;
+  $("dropPh").innerHTML = `<div class="ph">⏳</div><small>بيرفع…</small>`;
+  try {
+    const fd = new FormData();
+    fd.append("file", f); fd.append("upload_preset", CLOUDINARY.uploadPreset);
+    const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`,
+      { method: "POST", body: fd });
+    if (!r.ok) throw new Error((await r.json())?.error?.message || "فشل الرفع");
+    uploadUrl = (await r.json()).secure_url;
+    showLogo(uploadUrl);
+  } catch (err) {
+    toast(err.message, "bad");
+    $("dropPh").innerHTML = `<div class="ph">🖼️</div><small>اضغط لاختيار صورة</small>`;
+  }
+};
+
+$("pSave").onclick = async () => {
+  const name = $("pName").value.trim();
+  if (!name) return toast("اكتب اسم الشريك", "bad");
+  const payload = {
+    name, desc: $("pDesc").value.trim(), url: $("pUrl").value.trim(),
+    logo: uploadUrl || "", order: Number($("pOrder").value) || 0
+  };
+  try {
+    if (editingId) await update(ref(db, `${SITE}/partners/${editingId}`), payload);
+    else await push(ref(db, SITE + "/partners"), payload);
+    closeP(); toast("اتحفظ ✓", "ok");
+  } catch (e) { toast("تعذّر الحفظ: " + e.message, "bad"); }
+};
+
+let pendingDel = null;
+$("pDel").onclick = () => { if (editingId) { const id = editingId; closeP(); delPartner(id); } };
+function delPartner(id) {
+  const p = SITEDATA.partners?.[id] || {};
+  if (pendingDel === id) {                     // ضغطة تانية = تأكيد
+    remove(ref(db, `${SITE}/partners/${id}`))
+      .then(() => toast("اتحذف الشريك", "ok"))
+      .catch(e => toast("تعذّر الحذف: " + e.message, "bad"));
+    pendingDel = null; return;
+  }
+  pendingDel = id;
+  toast(`اضغط حذف تاني لتأكيد مسح «${p.name || ""}»`, "bad");
+  setTimeout(() => { if (pendingDel === id) pendingDel = null; }, 4000);
+}
+</script>
+</body>
+</html>
