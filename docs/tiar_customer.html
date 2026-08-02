@@ -128,6 +128,17 @@ a{color:var(--red);text-decoration:none}
 
 /* ── الرئيسية ───────────────────────────────────────────── */
 .hello{font-size:21px;font-weight:800}
+/* بانر إعلاني — بتتحكم فيه الإدارة من settings/customerBanner.
+   مخفي تمامًا (display:none) لو مفيش صورة أو active=false عشان
+   ما يسيبش مساحة فاضية فوق الإحصائيات. */
+.banner{display:none;position:relative;width:100%;border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--line);background:var(--card);margin-bottom:14px}
+.banner.on{display:block}
+.banner img{display:block;width:100%;height:auto;object-fit:cover}
+.banner.link{cursor:pointer}
+.banner .cap{position:absolute;bottom:0;left:0;right:0;padding:10px 12px;
+  background:linear-gradient(0deg,rgba(0,0,0,.82),transparent);
+  font-size:13px;font-weight:700;color:#fff;text-align:right}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;
   display:flex;align-items:center;justify-content:space-between}
@@ -198,6 +209,20 @@ a{color:var(--red);text-decoration:none}
 .kind.on{background:rgba(232,25,44,.14);border-color:var(--red)}
 .kind i{font-size:20px;font-style:normal;display:block;margin-bottom:4px}
 .kind span{font-size:11px;font-weight:600}
+
+/* ── بلوك المستلم (ممكن أكتر من واحد في نفس الطلب) ────────── */
+.rcv-block{position:relative}
+.rcv-hd{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.rcv-hd .no{width:24px;height:24px;border-radius:50%;background:rgba(232,25,44,.16);color:var(--red);
+  display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.rcv-hd b{flex:1;font-size:14px}
+.rcv-del{width:32px;height:32px;border-radius:9px;flex:none;cursor:pointer;font-size:14px;
+  background:rgba(232,25,44,.1);border:1px solid rgba(232,25,44,.3);color:var(--red)}
+.rcv-del:active{transform:scale(.94)}
+.rcv-total{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:rgba(34,197,94,.09);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);
+  padding:13px 15px;font-size:13.5px}
+.rcv-total b{font-size:16px;font-weight:900;color:var(--green)}
 
 /* ── العداد ─────────────────────────────────────────────── */
 .counter{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);
@@ -283,6 +308,21 @@ a{color:var(--red);text-decoration:none}
 .empty b{display:block;font-size:15px;color:#d0d0d6;margin-bottom:5px}
 .empty span{font-size:12.5px}
 
+/* ── رسالة التوضيح العائمة (tooltip) ────────────────────────
+   عنصر واحد بيتنقل في الصفحة كلها — بيظهر بالـ hover على الديسكتوب
+   وبالضغط المطوّل على الموبايل. */
+#tip{position:fixed;z-index:1000;background:#26262c;border:1px solid #3a3a42;color:#fff;
+  padding:9px 12px;border-radius:10px;font-size:12.5px;font-weight:600;line-height:1.65;
+  max-width:min(280px,84vw);pointer-events:none;opacity:0;visibility:hidden;
+  transition:opacity .16s;box-shadow:0 8px 26px rgba(0,0,0,.55);text-align:right;direction:rtl}
+#tip.on{opacity:1;visibility:visible}
+#tip::after{content:"";position:absolute;width:9px;height:9px;background:#26262c;
+  border:1px solid #3a3a42;transform:rotate(45deg);left:calc(50% - 5px)}
+#tip.up::after{bottom:-5.5px;border-top:none;border-left:none}
+#tip.down::after{top:-5.5px;border-bottom:none;border-right:none}
+/* الضغط المطوّل على عنصر عليه شرح ما يفتحش قائمة النسخ */
+[data-tip]{-webkit-touch-callout:none}
+
 /* ── كونفيتي ────────────────────────────────────────────── */
 .cf{position:absolute;width:8px;height:13px;top:-20px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(105vh) rotate(620deg);opacity:.1}}
@@ -361,11 +401,11 @@ a{color:var(--red);text-decoration:none}
             background:var(--red);display:grid;place-items:center;font-size:12px;border:2px solid var(--bg2)">📷</span>
         </label>
       </div>
-      <div class="fld"><div class="fi">👤</div><div class="fb">
+      <div class="fld" data-tip="اسمك اللي هيظهر للفرع والطيار في كل طلباتك."><div class="fi">👤</div><div class="fb">
         <b>الاسم بالكامل</b><input id="sutName" placeholder="أدخل اسمك الكامل بالعربي" /></div></div>
-      <div class="fld"><div class="fi">📞</div><div class="fb">
+      <div class="fld" data-tip="رقمك الأساسي للتواصل معاك في أي طلب. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
         <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
-      <div class="fld"><div class="fi">📱</div><div class="fb">
+      <div class="fld" data-tip="رقم احتياطي نتصل بيه لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
         <b>رقم إضافي (اختياري)</b><input id="sutPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
       <div class="fld"><div class="fi">✉️</div><div class="fb">
         <b>البريد الإلكتروني</b><input id="sutEmail" disabled /></div></div>
@@ -406,7 +446,7 @@ a{color:var(--red);text-decoration:none}
           اختر المنطقة اللي هنستلم منها شحناتك — الفرع المسؤول عن خدمتك بيتحدد منها تلقائيًا.
         </div>
         <span class="lbl">المنطقة</span>
-        <select id="sutZone"></select>
+        <select id="sutZone" data-tip="المنطقة اللي بنستلم منها شحناتك عادةً — منها بيتحدد الفرع المسؤول عن خدمتك."></select>
         <div id="sutBranch" style="margin-top:12px;font-size:13px;display:none"></div>
       </div>
       <div style="display:flex;gap:10px">
@@ -428,6 +468,7 @@ a{color:var(--red);text-decoration:none}
       <span id="homeBell" class="dotb" style="display:none;position:absolute;top:-5px;left:-5px"></span></div>
   </div>
   <div class="scroll pad" style="padding-top:4px">
+    <div class="banner" id="homeBanner"></div>
     <span class="lbl">اليوم لديك</span>
     <div class="stats">
       <div class="stat"><div><b id="stTotal">0</b><span>طلب</span></div>
@@ -463,17 +504,18 @@ a{color:var(--red);text-decoration:none}
             display:grid;place-items:center;font-size:12px;font-weight:800">1</span>
           <b style="font-size:15px">بيانات المُرسِل</b>
         </div>
-        <div class="fld" style="margin-bottom:10px"><div class="fi">👤</div><div class="fb">
+        <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم منه الطيار الشحنة — غالبًا اسمك أو اسم محلك."><div class="fi">👤</div><div class="fb">
           <b>الاسم</b><input id="sndName" placeholder="اسم المُرسِل" /></div></div>
-        <div class="fld" style="margin-bottom:10px"><div class="fi">📞</div><div class="fb">
+        <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت الاستلام. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
           <b>رقم الهاتف</b><input id="sndPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
         <span class="lbl">عنوان الاستلام</span>
-        <div id="sndAddrW"></div>
+        <div id="sndAddrW" data-tip="العنوان اللي الطيار هيروح عليه يستلم الشحنة — اكتب الشارع ورقم العمارة والدور."></div>
         <span class="lbl" style="margin-top:12px">منطقة الاستلام (تحدد الفرع)</span>
-        <select id="sndZone"></select>
+        <select id="sndZone" data-tip="منطقة الاستلام هي اللي بتحدد الفرع المسؤول عن طلبك، ومنها بتظهر مناطق التسليم المتاحة."></select>
         <div id="sndBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
         <div class="map" id="sndMap" style="height:130px;margin-top:12px"></div>
-        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')">📍 تحديد نقطة الاستلام على الخريطة *</button>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')"
+          data-tip="حدّد الدبوس على مكان الاستلام بالظبط. من غيره الطيار بيدوّر بالعنوان المكتوب وممكن يتوه.">📍 تحديد نقطة الاستلام على الخريطة *</button>
         <div id="sndPinState" style="display:none;font-size:11.5px;color:var(--green);
              margin-top:8px;text-align:center;font-weight:600"></div>
         <div id="sndSaved" style="margin-top:10px"></div>
@@ -481,7 +523,7 @@ a{color:var(--red);text-decoration:none}
       <button class="btn" style="margin-top:14px" onclick="wizNext(2)">التالي</button>
     </div>
 
-    <!-- خطوة 2: المستلم -->
+    <!-- خطوة 2: المستلم — بلوك أو أكتر (طلب واحد لأكتر من نقطة تسليم) -->
     <div id="wz-2" style="display:none">
       <div class="card">
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
@@ -491,9 +533,11 @@ a{color:var(--red);text-decoration:none}
         </div>
 
         <!-- وضع "الريسيت": العميل معندوش بيانات المستلم، والعنوان مكتوب
-             على صورة الإيصال. المنطقة تفضل إجبارية لأنها بتحدد السعر. -->
+             على صورة الإيصال. المنطقة تفضل إجبارية لأنها بتحدد السعر.
+             في الوضع ده بيبقى مستلم واحد بس — مفيش بيانات نكرّرها. -->
         <label class="card" style="display:flex;align-items:center;gap:11px;margin-bottom:12px;
-               background:var(--card2);cursor:pointer;padding:12px">
+               background:var(--card2);cursor:pointer;padding:12px"
+               data-tip="فعّلها لو مش معاك بيانات المستلم والعنوان مكتوب على صورة الريسيت. في الحالة دي بيبقى مستلم واحد بس.">
           <input type="checkbox" id="rcvNoData" style="width:20px;height:20px;flex:none;accent-color:var(--red)" />
           <span style="flex:1">
             <b style="font-size:13.5px;display:block">مش معايا بيانات المستلم</b>
@@ -503,34 +547,24 @@ a{color:var(--red);text-decoration:none}
           <span style="font-size:19px">🧾</span>
         </label>
 
-        <div id="rcvFields">
-          <div class="fld" style="margin-bottom:10px"><div class="fi">👤</div><div class="fb">
-            <b>الاسم</b><input id="rcvName" placeholder="اسم المستلم" /></div></div>
-          <div class="fld" style="margin-bottom:10px"><div class="fi">📞</div><div class="fb">
-            <b>رقم الهاتف</b><input id="rcvPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
-          <div class="fld" style="margin-bottom:10px"><div class="fi">📱</div><div class="fb">
-            <b>رقم إضافي (اختياري)</b><input id="rcvPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
-          <span class="lbl">عنوان التسليم</span>
-          <div id="rcvAddrW"></div>
-        </div>
-
         <div id="rcvReceiptNote" style="display:none;background:rgba(245,158,11,.1);
              border:1px solid rgba(245,158,11,.35);border-radius:12px;padding:12px;
-             font-size:12.5px;line-height:1.8;margin-bottom:12px">
+             font-size:12.5px;line-height:1.8;margin-bottom:0">
           🧾 <b>مطلوب صورة الريسيت</b><br />
           <span style="color:var(--muted)">هنسيب بيانات المستلم فاضية ونعتمد على الصورة —
           لازم ترفع صورة واضحة في خطوة المرفقات، والمنطقة تحت إجبارية عشان نحسب سعر التوصيل.</span>
         </div>
-
-        <span class="lbl">منطقة التسليم</span>
-        <select id="rcvZone"></select>
-        <div id="rcvPrice" style="margin-top:9px;font-size:13px;display:none"></div>
-        <div id="rcvGeo">
-          <div class="map" id="rcvMap" style="height:130px;margin-top:12px"></div>
-          <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv')">📍 تحديد الموقع على الخريطة</button>
-        </div>
-        <div id="rcvSaved" style="margin-top:10px"></div>
       </div>
+
+      <!-- بلوكات المستلمين — بيتبنوا من S.draft.receivers -->
+      <div id="rcvBlocks"></div>
+
+      <button class="btn ghost sm" id="addRcvBtn" style="margin-top:12px" onclick="addReceiver()"
+        data-tip="ضيف مستلم تاني لنفس الطلب — الطيار هيعدّي على كل النقط في رحلة واحدة، وسعر التوصيل بيتجمع.">
+        ＋ إضافة مستلم آخر</button>
+
+      <div id="rcvTotal" style="display:none;margin-top:12px"></div>
+
       <div style="display:flex;gap:10px;margin-top:14px">
         <button class="btn ghost" onclick="wizNext(1)">السابق</button>
         <button class="btn" onclick="wizNext(3)">التالي</button>
@@ -546,21 +580,22 @@ a{color:var(--red);text-decoration:none}
           <b style="font-size:15px">بيانات الطلب</b>
         </div>
         <span class="lbl">نوع الطلب</span>
-        <div class="kinds" id="kindBox"></div>
+        <div class="kinds" id="kindBox" data-tip="نوع الشحنة — بيساعد الطيار يجهّز نفسه (وثيقة صغيرة ولا كرتونة كبيرة)."></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
-          <div><span class="lbl">مبلغ التحصيل من المستلم (ج.م)</span>
+          <div data-tip="المبلغ اللي الطيار هيحصّله من المستلم وقت التسليم. لو مفيش تحصيل سيبه صفر."><span class="lbl">مبلغ التحصيل من المستلم (ج.م)</span>
             <input id="odCod" type="number" inputmode="decimal" min="0" value="0" /></div>
-          <div><span class="lbl">قيمة البضاعة (ج.م)</span>
+          <div data-tip="قيمة البضاعة نفسها — بتستخدم للتأمين وتقدير التعويض لو حصل تلف. مش بتتحصّل من المستلم."><span class="lbl">قيمة البضاعة (ج.م)</span>
             <input id="odValue" type="number" inputmode="decimal" min="0" value="0" /></div>
         </div>
         <span class="lbl" style="margin-top:14px">طريقة الدفع</span>
-        <div class="chips" id="payBox"></div>
+        <div class="chips" id="payBox" data-tip="«كاش» = سعر التوصيل يتدفع عند التسليم. «مدفوع مسبقًا» = اتدفع قبل كده."></div>
         <span class="lbl" style="margin-top:14px">عدد القطع</span>
-        <div class="counter">
+        <div class="counter" data-tip="عدد القطع في الشحنة كلها.">
           <button onclick="bumpPieces(1)">＋</button><b id="odPieces">1</b><button onclick="bumpPieces(-1)">－</button>
         </div>
         <span class="lbl" style="margin-top:14px">ملاحظات (اختياري)</span>
-        <textarea id="odNote" rows="3" placeholder="اكتب ملاحظتك هنا"></textarea>
+        <textarea id="odNote" rows="3" placeholder="اكتب ملاحظتك هنا"
+          data-tip="أي تعليمات للطيار — مثلاً: «اتصل قبل ما توصل» أو «الشقة في الدور الرابع»."></textarea>
       </div>
       <div style="display:flex;gap:10px;margin-top:14px">
         <button class="btn ghost" onclick="wizNext(2)">السابق</button>
@@ -579,8 +614,10 @@ a{color:var(--red);text-decoration:none}
         <div id="attachHint" style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
           أضف صور للطلب أو الإيصال (اختياري)</div>
         <div class="up-grid">
-          <div class="up-box" onclick="document.getElementById('fileCam').click()"><i>📷</i><span>تصوير بالكاميرا</span></div>
-          <div class="up-box" onclick="document.getElementById('fileGal').click()"><i>🖼️</i><span>اختيار صورة</span></div>
+          <div class="up-box" onclick="document.getElementById('fileCam').click()"
+            data-tip="صوّر الشحنة أو الإيصال بكاميرا الموبايل — الحد الأقصى 6 صور للطلب."><i>📷</i><span>تصوير بالكاميرا</span></div>
+          <div class="up-box" onclick="document.getElementById('fileGal').click()"
+            data-tip="اختار صور جاهزة من معرض الصور بتاعك."><i>🖼️</i><span>اختيار صورة</span></div>
         </div>
         <input type="file" id="fileCam" accept="image/*" capture="environment" multiple hidden />
         <input type="file" id="fileGal" accept="image/*" multiple hidden />
@@ -740,6 +777,7 @@ const auth = getAuth(app);
 const S = {
   uid: null, user: null, profile: null,
   zones: [], branches: {}, orders: [], addresses: [], savedReceivers: [],
+  banner: null,
   page: "splash", orderFilter: "all", currentOrderId: null,
   wizStep: 1, setupStep: 1,
   draft: null, images: [], mapTarget: null, pickLatLng: null,
@@ -758,6 +796,76 @@ function toast(msg, kind) {
   window._tt = setTimeout(() => { t.className = ""; }, 3200);
 }
 window.toast = toast;
+
+/* ══════════════════════════════════════════════════════════════
+   رسالة التوضيح العائمة (tooltip)
+   ──────────────────────────────────────────────────────────────
+   الاستخدام: data-tip="نص التوضيح" على أي عنصر — خلاص.
+   شغّالة بالـ event delegation على الـ document، فأي عنصر بيتضاف
+   ديناميكيًا (زي بلوكات المستلمين) بياخد نفس السلوك تلقائيًا من
+   غير أي ربط إضافي.
+   ديسكتوب: hover.  موبايل: ضغطة مطوّلة 500ms (مفيش hover في اللمس).
+══════════════════════════════════════════════════════════════ */
+const TIP_HOLD = 500;
+(function initTips() {
+  let box = null, holdT = null, curEl = null;
+
+  const el = () => {
+    if (!box) { box = document.createElement("div"); box.id = "tip"; document.body.appendChild(box); }
+    return box;
+  };
+
+  function show(target, text) {
+    if (!text) return;
+    const b = el();
+    b.textContent = text;
+    b.className = "on";                       // نعرضه الأول عشان نقيس مقاسه
+    const r = target.getBoundingClientRect();
+    const bw = b.offsetWidth, bh = b.offsetHeight, gap = 9, pad = 8;
+    // فوق الخانة لو فيه مساحة، وإلا تحتها
+    let place = "up", top = r.top - bh - gap;
+    if (top < pad) { place = "down"; top = r.bottom + gap; }
+    // لو برضه خرج من تحت، نلزّقه جوّه الشاشة
+    if (top + bh > innerHeight - pad) top = Math.max(pad, innerHeight - bh - pad);
+    let left = r.left + r.width / 2 - bw / 2;
+    left = Math.min(Math.max(pad, left), Math.max(pad, innerWidth - bw - pad));
+    b.style.left = left + "px";
+    b.style.top  = top + "px";
+    b.classList.add(place);
+    curEl = target;
+  }
+
+  function hide() {
+    clearTimeout(holdT); holdT = null; curEl = null;
+    if (box) box.className = "";
+  }
+
+  const tipOf = t => (t && t.nodeType === 1 ? t.closest("[data-tip]") : null);
+
+  // ── ديسكتوب ──
+  document.addEventListener("mouseover", e => {
+    const t = tipOf(e.target);
+    if (!t) { if (curEl) hide(); return; }
+    if (t !== curEl) show(t, t.dataset.tip);
+  });
+  document.addEventListener("mouseout", e => {
+    const t = tipOf(e.target);
+    if (t && t === curEl && !t.contains(e.relatedTarget)) hide();
+  });
+
+  // ── موبايل: ضغطة مطوّلة ──
+  document.addEventListener("touchstart", e => {
+    const t = tipOf(e.target);
+    if (!t) { hide(); return; }
+    clearTimeout(holdT);
+    holdT = setTimeout(() => show(t, t.dataset.tip), TIP_HOLD);
+  }, { passive: true });
+
+  // رفع الصباع أو تحريكه أو التمرير = إخفاء
+  ["touchend", "touchcancel", "touchmove", "scroll"].forEach(ev =>
+    document.addEventListener(ev, hide, { passive: true, capture: true }));
+  window.addEventListener("resize", hide);
+})();
 
 /* ── بيانات المحافظات/المدن (منسوخة من بوابة المحل عشان
       العناوين تفضل بنفس الصيغة في كل النظام) ──────────────── */
@@ -1345,6 +1453,13 @@ function attachListeners() {
 
   S.unsub.push(onValue(ref(db, `customers/${S.uid}/savedReceivers`), snap => {
     S.savedReceivers = Object.entries(snap.val() || {}).map(([id, v]) => ({ id, ...v }));
+    if (S.page === "new") renderSavedPicks();
+  }));
+
+  // البانر الإعلاني — Realtime، فأي تغيير من الإدارة بيظهر فورًا
+  S.unsub.push(onValue(ref(db, "settings/customerBanner"), snap => {
+    S.banner = snap.val() || null;
+    if (S.page === "home") renderBanner();
   }));
 
   // البروفايل — لازم يتحدّث *ويعيد الرسم*. من غير إعادة الرسم، لو المستخدم
@@ -1495,6 +1610,32 @@ function renderHome() {
   const un = unreadCount();
   $("homeBell").style.display = un ? "grid" : "none";
   $("homeBell").textContent = un;
+  renderBanner();
+}
+
+/* ── البانر الإعلاني ──────────────────────────────────────────
+   البيانات: settings/customerBanner = { imageUrl, linkUrl, title, active }
+   الإدارة بتتحكم فيه من برّه التطبيق ده (تحديث مباشر في فايربيز أو
+   من لوحة هنجهّزها بعدين) — هنا بنقرا ونعرض بس.
+   بنقبل روابط https بس: صورة من مصدر غير آمن هتتحجب في المتصفح،
+   ورابط javascript:/data: ممكن يتنفّذ كود لو حد عدّل العقدة. */
+function safeHttps(u) {
+  try { const x = new URL(String(u || "")); return x.protocol === "https:" ? x.href : ""; }
+  catch (_) { return ""; }
+}
+function renderBanner() {
+  const el = $("homeBanner"); if (!el) return;
+  const b   = S.banner || {};
+  const img = safeHttps(b.imageUrl);
+  // active لازم تكون true صراحةً، والصورة لازم تكون https صحيحة
+  if (b.active !== true || !img) { el.className = "banner"; el.innerHTML = ""; return; }
+  const link  = safeHttps(b.linkUrl);
+  const title = String(b.title || "").trim();
+  el.className = "banner on" + (link ? " link" : "");
+  el.innerHTML = `<img src="${esc(img)}" alt="${esc(title || "إعلان")}"
+      onerror="this.closest('.banner').className='banner'" />
+    ${title ? `<div class="cap">${esc(title)}</div>` : ""}`;
+  el.onclick = link ? () => window.open(link, "_blank", "noopener,noreferrer") : null;
 }
 
 /* حالة الطلب من منظور العميل — مبنية على نفس قيم status
@@ -1978,14 +2119,16 @@ window.openSupport = openSupport; window.openAbout = openAbout;
 ══════════════════════════════════════════════════════════════ */
 const WIZ_CAPS = ["المُرسل", "المستلم", "الطلب", "المرفقات"];
 const KINDS = ["وثيقة", "طرد", "شنطة", "كرتونة", "أخرى"];
-const PAYS  = ["كاش", "فيزا", "مدفوع مسبقًا"];
+/* «فيزا» اتشالت — مش متاحة للاختيار في طلب جديد. الطلبات القديمة
+   المحفوظة بـ paymentMethod = "فيزا" بتتعرض زي ما هي في تاريخ الطلبات. */
+const PAYS  = ["كاش", "مدفوع مسبقًا"];
 
 function startNewOrder() {
   if (!S.profile?.profileCompleted) { toast("أكمل بياناتك أولاً", "err"); return openSetup(); }
   S.wizStep = 1; S.images = [];
   S.draft = { kind: "طرد", pay: "كاش", pieces: 1,
               sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
-              rcvLat: null, rcvLng: null };
+              receivers: [blankReceiver()] };
 
   $("sndName").value  = S.profile.displayNameAr || "";
   $("sndPhone").value = S.profile.phone1 || "";
@@ -1996,12 +2139,9 @@ function startNewOrder() {
   $("sndPinState").style.display = S.draft.sndLat ? "block" : "none";
   $("sndPinState").innerHTML = S.draft.sndLat ? "✅ نقطة الاستلام محدّدة من بياناتك المحفوظة" : "";
 
-  ["rcvName","rcvPhone","rcvPhone2"].forEach(k => $(k).value = "");
-  renderAddr("rcvAddrW");
-  $("rcvZone").onchange = onReceiverZone;
   $("rcvNoData").checked = false;
   $("rcvNoData").onchange = onReceiverMode;
-  onReceiverMode();
+  onReceiverMode();                 // بيرسم بلوكات المستلمين جوّه
 
   $("odCod").value = 0; $("odValue").value = 0; $("odNote").value = "";
   $("odPieces").textContent = 1;
@@ -2017,20 +2157,135 @@ function onSenderZone() {
   const z = findZone($("sndZone").value);
   S.draft.senderZone = z;
   const b = $("sndBranch");
-  if (!z) { b.textContent = "اختر منطقة الاستلام عشان نحدد الفرع"; fillZoneSelect($("rcvZone")); return; }
-  b.innerHTML = `🏢 الفرع المسؤول: <b style="color:var(--txt)">${esc(zoneBranchName(z) || "—")}</b>`;
+  if (!z) b.textContent = "اختر منطقة الاستلام عشان نحدد الفرع";
+  else b.innerHTML = `🏢 الفرع المسؤول: <b style="color:var(--txt)">${esc(zoneBranchName(z) || "—")}</b>`;
   // مناطق التسليم المتاحة = مناطق نفس الفرع (زي بوابة المحل بالظبط)
-  fillZoneSelect($("rcvZone"), { branchId: zoneBranchId(z), selected: $("rcvZone").value });
+  refillReceiverZones();
 }
+
+/* ══════════════════════════════════════════════════════════════
+   بلوكات المستلمين — طلب واحد لأكتر من نقطة تسليم
+   ──────────────────────────────────────────────────────────────
+   S.draft.receivers = [{ name, phone, phone2, address, zoneId, lat, lng }]
+   المصدر الرسمي للبيانات هو الـ state مش الـ DOM: قبل أي إعادة رسم
+   بننسخ اللي المستخدم كتبه بـ readReceiverBlocks() الأول، عشان
+   الإضافة أو الحذف ما تضيّعش كلامه.
+══════════════════════════════════════════════════════════════ */
+const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"", lat:null, lng:null });
+
+/** DOM ← state: بيقرا اللي المستخدم كتبه ويخزّنه قبل إعادة الرسم */
+function readReceiverBlocks() {
+  (S.draft?.receivers || []).forEach((r, i) => {
+    if (!$("rcvName-" + i)) return;           // البلوك ده مش مرسوم دلوقتي
+    r.name    = $("rcvName-" + i).value.trim();
+    r.phone   = $("rcvPhone-" + i).value.trim();
+    r.phone2  = $("rcvPhone2-" + i).value.trim();
+    r.address = getAddr("rcvAddrW-" + i);
+    r.zoneId  = $("rcvZone-" + i).value;
+  });
+}
+
+function receiverBlockHtml(r, i, multi, receipt) {
+  return `
+  <div class="card rcv-block" data-i="${i}">
+    <div class="rcv-hd">
+      <span class="no">${i + 1}</span>
+      <b>${multi ? `المستلم ${i + 1}` : "بيانات المستلم"}</b>
+      ${multi ? `<button type="button" class="rcv-del" onclick="removeReceiver(${i})"
+                   data-tip="حذف المستلم ده من الطلب">🗑️</button>` : ""}
+    </div>
+
+    <div id="rcvFields-${i}" style="display:${receipt ? "none" : "block"}">
+      <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم الشحنة."><div class="fi">👤</div><div class="fb">
+        <b>الاسم</b><input id="rcvName-${i}" placeholder="اسم المستلم" value="${esc(r.name)}" /></div></div>
+      <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت التسليم. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
+        <b>رقم الهاتف</b><input id="rcvPhone-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone)}" /></div></div>
+      <div class="fld" style="margin-bottom:10px" data-tip="رقم احتياطي لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
+        <b>رقم إضافي (اختياري)</b><input id="rcvPhone2-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone2)}" /></div></div>
+      <span class="lbl">عنوان التسليم</span>
+      <div id="rcvAddrW-${i}" data-tip="العنوان اللي الطيار هيسلّم عليه — كل ما يكون أدق كل ما التسليم يبقى أسرع."></div>
+    </div>
+
+    <span class="lbl" style="margin-top:${receipt ? 0 : 12}px">منطقة التسليم</span>
+    <select id="rcvZone-${i}" data-tip="منطقة التسليم هي اللي بيتحسب منها سعر التوصيل. إجبارية في كل الحالات."></select>
+    <div id="rcvPrice-${i}" style="margin-top:9px;font-size:13px;display:none"></div>
+
+    <div id="rcvGeo-${i}" style="display:${receipt ? "none" : "block"}">
+      <div class="map" id="rcvMap-${i}" style="height:130px;margin-top:12px"></div>
+      <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv',${i})"
+        data-tip="حدّد مكان التسليم بالظبط على الخريطة — بيوفّر على الطيار وقت ولفّ.">📍 تحديد الموقع على الخريطة</button>
+    </div>
+
+    <div id="rcvSaved-${i}" style="margin-top:10px;display:${receipt ? "none" : "block"}"></div>
+  </div>`;
+}
+
+/** state ← DOM: بيبني البلوكات من جديد ويرجّع كل القيم مكانها */
+function renderReceiverBlocks() {
+  const box = $("rcvBlocks"); if (!box || !S.draft) return;
+  const list = S.draft.receivers || (S.draft.receivers = [blankReceiver()]);
+  const receipt = !!S.draft.receiptMode;
+  const multi = list.length > 1;
+
+  box.innerHTML = list.map((r, i) => receiverBlockHtml(r, i, multi, receipt)).join("");
+
+  // ودجت العنوان والمنطقة والخريطة لكل بلوك — لازم بعد ما الـ HTML يتحط
+  list.forEach((r, i) => {
+    renderAddr("rcvAddrW-" + i, { value: r.address || "" });
+    const sel = $("rcvZone-" + i);
+    sel.onchange = () => onReceiverZone(i);
+    showMiniMap("rcvMap-" + i, r.lat, r.lng);
+  });
+  refillReceiverZones();
+  renderSavedPicks();
+  updateRcvTotal();
+  // زرار "إضافة مستلم آخر" — مالوش لازمة في وضع الريسيت (مفيش بيانات نكرّرها)
+  $("addRcvBtn").style.display = receipt ? "none" : "flex";
+}
+
+/** مناطق التسليم = مناطق فرع الاستلام. بتتنادى لما المُرسِل يغيّر منطقته. */
+function refillReceiverZones() {
+  const z = S.draft?.senderZone;
+  const branchId = z ? zoneBranchId(z) : undefined;
+  (S.draft?.receivers || []).forEach((r, i) => {
+    const sel = $("rcvZone-" + i); if (!sel) return;
+    fillZoneSelect(sel, { branchId, selected: r.zoneId });
+    // لو المنطقة القديمة مش تابعة للفرع الجديد، الاختيار بيفضى — نمشّي الحالة معاه
+    r.zoneId = sel.value;
+    onReceiverZone(i);
+  });
+}
+
+function addReceiver() {
+  readReceiverBlocks();
+  S.draft.receivers.push(blankReceiver());
+  renderReceiverBlocks();
+  // ننزل على البلوك الجديد عشان المستخدم يشوفه
+  const el = $("rcvBlocks")?.lastElementChild;
+  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast("اتضاف مستلم جديد", "ok");
+}
+window.addReceiver = addReceiver;
+
+function removeReceiver(i) {
+  readReceiverBlocks();
+  if (S.draft.receivers.length <= 1) return;
+  S.draft.receivers.splice(i, 1);
+  renderReceiverBlocks();
+  toast("اتشال المستلم", "ok");
+}
+window.removeReceiver = removeReceiver;
+
 /* وضع "مش معايا بيانات المستلم" — بنخفي حقول المستلم ونعتمد على صورة
-   الريسيت، والمنطقة تفضل إجبارية لأن سعر التوصيل بيتحسب منها. */
+   الريسيت، والمنطقة تفضل إجبارية لأن سعر التوصيل بيتحسب منها.
+   في الوضع ده بيبقى مستلم واحد بس — مفيش بيانات نوزّعها على أكتر من نقطة. */
 function onReceiverMode() {
   const on = $("rcvNoData").checked;
+  readReceiverBlocks();
   S.draft.receiptMode = on;
-  $("rcvFields").style.display      = on ? "none"  : "block";
-  $("rcvGeo").style.display         = on ? "none"  : "block";
+  if (on && S.draft.receivers.length > 1) S.draft.receivers = [S.draft.receivers[0]];
   $("rcvReceiptNote").style.display = on ? "block" : "none";
-  $("rcvSaved").style.display       = on ? "none"  : "block";
+  renderReceiverBlocks();
   updateAttachHint();
 }
 window.onReceiverMode = onReceiverMode;
@@ -2046,16 +2301,43 @@ function updateAttachHint() {
   }
 }
 
-function onReceiverZone() {
-  const z = findZone($("rcvZone").value);
-  S.draft.receiverZone = z;
-  const el = $("rcvPrice");
-  if (!z) { el.style.display = "none"; return; }
+function onReceiverZone(i) {
+  const sel = $("rcvZone-" + i); if (!sel) return;
+  const r = S.draft?.receivers?.[i]; if (!r) return;
+  r.zoneId = sel.value;
+  const z = findZone(r.zoneId);
+  const el = $("rcvPrice-" + i);
+  if (el) {
+    if (!z) el.style.display = "none";
+    else {
+      el.style.display = "block";
+      el.innerHTML = z.price
+        ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;
+            padding:10px;font-size:13px">🚚 سعر التوصيل التقديري: <b>${fmtMoney(z.price)} ج.م</b></div>`
+        : `<div style="font-size:12px;color:var(--muted)">سعر التوصيل هيحدده الفرع</div>`;
+    }
+  }
+  updateRcvTotal();
+}
+
+/** إجمالي التوصيل = مجموع أسعار مناطق كل المستلمين */
+function draftDeliveryTotal() {
+  return (S.draft?.receivers || []).reduce((s, r) => s + (findZone(r.zoneId)?.price || 0), 0);
+}
+function updateRcvTotal() {
+  const el = $("rcvTotal"); if (!el) return;
+  const list = S.draft?.receivers || [];
+  // بيظهر لما يكون فيه أكتر من مستلم — بلوك واحد سعره باين جوّاه خلاص
+  if (list.length < 2) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const total = draftDeliveryTotal();
+  const known = list.filter(r => findZone(r.zoneId)?.price).length;
   el.style.display = "block";
-  el.innerHTML = z.price
-    ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;
-        padding:10px;font-size:13px">🚚 سعر التوصيل التقديري: <b>${fmtMoney(z.price)} ج.م</b></div>`
-    : `<div style="font-size:12px;color:var(--muted)">سعر التوصيل هيحدده الفرع</div>`;
+  el.innerHTML = `<div class="rcv-total">
+      <span>🚚 إجمالي التوصيل — ${list.length} مستلمين
+        ${known < list.length ? `<span style="color:var(--muted);font-size:11.5px">(فيه مناطق سعرها بيحدده الفرع)</span>` : ""}
+      </span>
+      <b>${fmtMoney(total)} ج.م</b>
+    </div>`;
 }
 
 function drawKinds() {
@@ -2098,20 +2380,46 @@ function renderSavedPicks() {
     });
   } else $("sndSaved").innerHTML = "";
 
-  if (S.savedReceivers.length) {
-    $("rcvSaved").innerHTML = `<span class="lbl">مستلمون سابقون</span>
-      <div class="chips">${S.savedReceivers.slice(0, 10).map(r =>
-        `<div class="chip" data-id="${esc(r.id)}">${esc(r.name)}</div>`).join("")}</div>`;
-    $("rcvSaved").querySelectorAll(".chip").forEach(c => c.onclick = () => {
-      const r = S.savedReceivers.find(x => x.id === c.dataset.id); if (!r) return;
-      $("rcvName").value = r.name || ""; $("rcvPhone").value = r.phone || "";
-      $("rcvPhone2").value = r.phone2 || "";
-      setAddr("rcvAddrW", r.address || "");
-      if (r.zoneId) { $("rcvZone").value = r.zoneId; onReceiverZone(); }
-      S.draft.rcvLat = r.lat ?? null; S.draft.rcvLng = r.lng ?? null;
-      showMiniMap("rcvMap", r.lat, r.lng);
+  // شيبس المستلمين السابقين — لكل بلوك مستلم قايمته الخاصة
+  const picks = uniqueReceivers(S.savedReceivers);
+  (S.draft?.receivers || []).forEach((_, i) => {
+    const box = $("rcvSaved-" + i); if (!box) return;
+    if (!picks.length) { box.innerHTML = ""; return; }
+    box.innerHTML = `<span class="lbl">مستلمون سابقون</span>
+      <div class="chips">${picks.slice(0, 10).map(r =>
+        `<div class="chip" data-id="${esc(r.id)}">${esc(r.name || r.phone)}</div>`).join("")}</div>`;
+    box.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      const r = picks.find(x => x.id === c.dataset.id); if (!r) return;
+      const t = S.draft.receivers[i]; if (!t) return;
+      $("rcvName-" + i).value   = r.name || "";
+      $("rcvPhone-" + i).value  = r.phone || "";
+      $("rcvPhone2-" + i).value = r.phone2 || "";
+      setAddr("rcvAddrW-" + i, r.address || "");
+      t.lat = r.lat ?? null; t.lng = r.lng ?? null;
+      if (r.zoneId) { $("rcvZone-" + i).value = r.zoneId; }
+      onReceiverZone(i);
+      showMiniMap("rcvMap-" + i, r.lat, r.lng);
+      toast("تم اختيار " + (r.name || r.phone), "ok");
     });
-  } else $("rcvSaved").innerHTML = "";
+  });
+}
+
+/* ── دي-دوبليكيشن المستلمين ──────────────────────────────────
+   رقم الهاتف هو المعرّف — الأسماء بتتشابه. بنطبّقها عند العرض كمان
+   (مش عند الحفظ بس) عشان البيانات القديمة المكررة اللي اتسجّلت
+   في فايربيز قبل الإصلاح ما تفضلش ظاهرة مكررة في الشيبس. */
+const normPhone = p => String(p || "").replace(/\D/g, "").replace(/^0+/, "");
+function uniqueReceivers(list) {
+  const by = new Map();
+  for (const r of list || []) {
+    // من غير رقم بنرجع للاسم كمعرّف احتياطي
+    const key = normPhone(r.phone) || "n:" + String(r.name || "").trim();
+    if (!key || key === "n:") continue;
+    const old = by.get(key);
+    // بنسيب الأحدث — آخر عنوان استخدمه العميل هو الأصح للاقتراح
+    if (!old || new Date(r.createdAt || 0) >= new Date(old.createdAt || 0)) by.set(key, r);
+  }
+  return [...by.values()].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
 function wizNext(step) {
@@ -2127,12 +2435,20 @@ function wizNext(step) {
         return toast("حدّد نقطة الاستلام على الخريطة — الطيار بيروح عليها", "err");
     }
     if (S.wizStep === 2) {
-      // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
-      if (!$("rcvZone").value)                   return toast("اختر منطقة التسليم", "err");
-      if (!S.draft.receiptMode) {
-        if (!$("rcvName").value.trim())          return toast("اكتب اسم المستلم", "err");
-        if (!validPhone($("rcvPhone").value))    return toast("رقم هاتف المستلم غير صحيح", "err");
-        if (!getAddr("rcvAddrW").trim())         return toast("اكتب عنوان التسليم", "err");
+      readReceiverBlocks();
+      const list = S.draft.receivers || [];
+      if (!list.length) return toast("أضف مستلم واحد على الأقل", "err");
+      // كل بلوك مستلم بيتفحص لوحده — مش الأول بس
+      for (let i = 0; i < list.length; i++) {
+        const r = list[i];
+        const at = list.length > 1 ? ` — المستلم ${i + 1}` : "";
+        // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
+        if (!r.zoneId)                return toast("اختر منطقة التسليم" + at, "err");
+        if (!S.draft.receiptMode) {
+          if (!r.name)                return toast("اكتب اسم المستلم" + at, "err");
+          if (!validPhone(r.phone))   return toast("رقم هاتف المستلم غير صحيح" + at, "err");
+          if (!r.address.trim())      return toast("اكتب عنوان التسليم" + at, "err");
+        }
       }
     }
   }
@@ -2140,7 +2456,8 @@ function wizNext(step) {
   [1, 2, 3, 4].forEach(n => $("wz-" + n).style.display = n === step ? "block" : "none");
   drawStepper("wizStepper", WIZ_CAPS, step);
   if (step === 1) setTimeout(() => showMiniMap("sndMap", S.draft.sndLat, S.draft.sndLng), 60);
-  if (step === 2) setTimeout(() => showMiniMap("rcvMap", S.draft.rcvLat, S.draft.rcvLng), 60);
+  if (step === 2) setTimeout(() => (S.draft.receivers || []).forEach((r, i) =>
+                    showMiniMap("rcvMap-" + i, r.lat, r.lng)), 60);
   if (step === 4) { updateAttachHint(); renderSummary(); }
   $("s-new").querySelector(".scroll").scrollTop = 0;
 }
@@ -2148,14 +2465,22 @@ window.wizNext = wizNext;
 window.wizBack = () => { if (S.wizStep > 1) wizNext(S.wizStep - 1); else go("home"); };
 
 function renderSummary() {
-  const z = S.draft.receiverZone;
+  const list = S.draft.receivers || [];
+  const total = draftDeliveryTotal();
+  const allPriced = list.every(r => findZone(r.zoneId)?.price);
+  // كل مستلم في سطر لوحده عشان العميل يراجع قبل الإرسال
+  const rcvRows = S.draft.receiptMode
+    ? row("المستلم", "🧾 من صورة الريسيت — " + (zoneLabel(findZone(list[0]?.zoneId) || {}) || "—"))
+    : list.map((r, i) => row(
+        list.length > 1 ? `المستلم ${i + 1}` : "المستلم",
+        `${r.name || "—"} — ${zoneLabel(findZone(r.zoneId) || {}) || "—"}`)).join("");
   $("summaryCard").innerHTML = `<span class="lbl">ملخّص الطلب</span>
-    ${row("المستلم", S.draft.receiptMode ? "🧾 من صورة الريسيت" : $("rcvName").value)}
-    ${row("المنطقة", z ? zoneLabel(z) : "—")}
+    ${rcvRows}
     ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
     ${row("النوع", S.draft.kind + " × " + S.draft.pieces)}
     ${row("التحصيل", fmtMoney($("odCod").value) + " ج.م")}
-    ${row("سعر التوصيل", z?.price ? fmtMoney(z.price) + " ج.م" : "يحدده الفرع")}
+    ${row(list.length > 1 ? `إجمالي التوصيل (${list.length} مستلمين)` : "سعر التوصيل",
+          total ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " + مناطق يحددها الفرع") : "يحدده الفرع")}
     ${row("الدفع", S.draft.pay)}`;
 }
 
@@ -2202,9 +2527,11 @@ function drawThumbs() {
 /* ── الإرسال ─────────────────────────────────────────────── */
 async function submitOrder() {
   if (S.images.some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
-  const sz = S.draft.senderZone, rz = S.draft.receiverZone;
+  readReceiverBlocks();
+  const sz = S.draft.senderZone;
+  const receivers = (S.draft.receivers || []).filter(r => r.zoneId);
   if (!sz) { wizNext(1); return toast("اختر منطقة الاستلام", "err"); }
-  if (!rz) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
+  if (!receivers.length) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
   // من غير بيانات مستلم، الصورة هي المصدر الوحيد للعنوان — فإجبارية
   if (S.draft.receiptMode && !S.images.some(i => i.url))
     return toast("لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
@@ -2225,33 +2552,44 @@ async function submitOrder() {
     const cod = parseFloat($("odCod").value) || 0;
 
     const receipt = !!S.draft.receiptMode;
-    const delivery = {
-      receiverId: null,
-      // في وضع الريسيت بنسيب نص واضح بدل الفاضي، عشان جداول الفرع
-      // والإدارة وتطبيق الطيار تبقى مفهومة وما تبانش خانة فاضية
-      receiverName : receipt ? "🧾 البيانات على صورة الريسيت" : $("rcvName").value.trim(),
-      receiverPhone: receipt ? "" : $("rcvPhone").value.trim(),
-      receiverPhone2: receipt ? "" : $("rcvPhone2").value.trim(),
-      zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
-      orderPrice: cod,
-      // في وضع الريسيت بنسيب العنوان = اسم المنطقة بس. لو حطّينا جملة طويلة
-      // هنا، الخريطة هتحاول تخمّن مكانها وتطلّع دبوس في مكان عشوائي غلط —
-      // اسم المنطقة بيدّي دبوس صح على مستوى المنطقة، والتفاصيل في الملاحظة.
-      address: receipt ? zoneLabel(rz) : getAddr("rcvAddrW"),
-      lat: receipt ? null : (S.draft.rcvLat ?? null),
-      lng: receipt ? null : (S.draft.rcvLng ?? null),
-      note: [$("odNote").value.trim(), receipt ? "🧾 العنوان الكامل على صورة الريسيت المرفقة" : ""]
-              .filter(Boolean).join(" — "),
-      status: "قيد التنفيذ",
-      receiverFromReceipt: receipt,
-      images: S.images.map(i => i.url).filter(Boolean)
-    };
-    // خرايط الفرع والإدارة بتقرا الموقع من d.geo مش من lat/lng، ولو الحقل
-    // ده فاضي بتروح تخمّن مكان العنوان من نصّه عبر Nominatim — وده اللي
-    // بيخلّي الدبوس واقع في مكان تقريبي غلط. هنا العميل حدّد النقطة بنفسه،
-    // فبنكتبها في نفس الحقل عشان الخريطة تستخدم الموقع الحقيقي وتتجاهل التخمين.
-    if (delivery.lat && delivery.lng)
-      delivery.geo = { lat: delivery.lat, lng: delivery.lng, src: "customer-pin" };
+    const imgs = S.images.map(i => i.url).filter(Boolean);
+    const note = $("odNote").value.trim();
+
+    // طرد لكل مستلم — نفس سكيمة deliveries المستخدمة في لوحة الإدارة
+    // وبوابة المحل، فالفرع والطيار بيشوفوا كل النقط من غير أي تعديل عندهم.
+    const deliveries = receivers.map((r, idx) => {
+      const rz = findZone(r.zoneId);
+      const d = {
+        receiverId: null,
+        // في وضع الريسيت بنسيب نص واضح بدل الفاضي، عشان جداول الفرع
+        // والإدارة وتطبيق الطيار تبقى مفهومة وما تبانش خانة فاضية
+        receiverName  : receipt ? "🧾 البيانات على صورة الريسيت" : r.name,
+        receiverPhone : receipt ? "" : r.phone,
+        receiverPhone2: receipt ? "" : r.phone2,
+        zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
+        // التحصيل مبلغ واحد للطلب كله — بنحطه على أول طرد بس عشان الشاشات
+        // اللي بتجمع orderPrice عبر الطرود (زي بوابة المحل) ما تحسبهوش مرتين
+        orderPrice: idx === 0 ? cod : 0,
+        // في وضع الريسيت بنسيب العنوان = اسم المنطقة بس. لو حطّينا جملة طويلة
+        // هنا، الخريطة هتحاول تخمّن مكانها وتطلّع دبوس في مكان عشوائي غلط —
+        // اسم المنطقة بيدّي دبوس صح على مستوى المنطقة، والتفاصيل في الملاحظة.
+        address: receipt ? zoneLabel(rz) : r.address,
+        lat: receipt ? null : (r.lat ?? null),
+        lng: receipt ? null : (r.lng ?? null),
+        note: [note, receipt ? "🧾 العنوان الكامل على صورة الريسيت المرفقة" : ""]
+                .filter(Boolean).join(" — "),
+        status: "قيد التنفيذ",
+        receiverFromReceipt: receipt,
+        // الصور بتتحط على كل طرد عشان تفضل مع الطرد لو الفرع قسّم الطلب
+        images: imgs
+      };
+      // خرايط الفرع والإدارة بتقرا الموقع من d.geo مش من lat/lng، ولو الحقل
+      // ده فاضي بتروح تخمّن مكان العنوان من نصّه عبر Nominatim — وده اللي
+      // بيخلّي الدبوس واقع في مكان تقريبي غلط. هنا العميل حدّد النقطة بنفسه،
+      // فبنكتبها في نفس الحقل عشان الخريطة تستخدم الموقع الحقيقي وتتجاهل التخمين.
+      if (d.lat && d.lng) d.geo = { lat: d.lat, lng: d.lng, src: "customer-pin" };
+      return d;
+    });
 
     const order = {
       orderNum,
@@ -2267,9 +2605,10 @@ async function submitOrder() {
         : {}),
       senderZoneId: sz.id, senderZoneName: zoneLabel(sz),
       branchId, branchName,
-      notes: $("odNote").value.trim(),
-      deliveries: [delivery],
-      totalDeliveryPrice: rz.price || 0,
+      notes: note,
+      deliveries,
+      // إجمالي التوصيل = مجموع أسعار كل المناطق، مش منطقة واحدة
+      totalDeliveryPrice: deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0),
       storePrepaid: cod,
       storePrepaidNote: "",
       status: "قيد التنفيذ",
@@ -2293,13 +2632,9 @@ async function submitOrder() {
 
     await push(ref(db, "orders"), order);
 
-    // نحفظ المستلم للاقتراح في المرات الجاية (مش في وضع الريسيت — مفيش بيانات نحفظها)
-    if (!receipt) push(ref(db, `customers/${S.uid}/savedReceivers`), {
-      name: delivery.receiverName, phone: delivery.receiverPhone,
-      phone2: delivery.receiverPhone2, address: delivery.address,
-      zoneId: rz.id, lat: delivery.lat, lng: delivery.lng,
-      createdAt: now
-    }).catch(() => {});
+    // نحفظ المستلمين للاقتراح في المرات الجاية
+    // (مش في وضع الريسيت — مفيش بيانات نحفظها)
+    if (!receipt) deliveries.forEach(d => saveReceiver(d, now));
 
     showDone(orderNum);
   } catch (e) {
@@ -2309,6 +2644,29 @@ async function submitOrder() {
   }
 }
 window.submitOrder = submitOrder;
+
+/* ── حفظ المستلم للاقتراح لاحقًا ──────────────────────────────
+   قبل كده كان بيعمل push() جديد كل طلب، فنفس المستلم كان بيتكرر في
+   الشيبس كل مرة يتبعتله طلب. دلوقتي بندوّر عليه برقم الهاتف الأول:
+   لو موجود بنعمل update على نفس المفتاح بأحدث بيانات (العميل ممكن
+   يكون غيّر عنوانه)، ولو مش موجود بس ساعتها بنعمل push. */
+function saveReceiver(d, now) {
+  const phone = normPhone(d.receiverPhone);
+  const payload = {
+    name: d.receiverName, phone: d.receiverPhone, phone2: d.receiverPhone2,
+    address: d.address, zoneId: d.zoneId, lat: d.lat ?? null, lng: d.lng ?? null,
+    createdAt: now
+  };
+  // المطابقة بالهاتف — أدق من الاسم لأن فيه ناس بأسماء متشابهة
+  const hit = phone
+    ? S.savedReceivers.find(x => normPhone(x.phone) === phone)
+    : S.savedReceivers.find(x => !normPhone(x.phone) &&
+        String(x.name || "").trim() === String(d.receiverName || "").trim());
+  const p = hit
+    ? update(ref(db, `customers/${S.uid}/savedReceivers/${hit.id}`), payload)
+    : push(ref(db, `customers/${S.uid}/savedReceivers`), payload);
+  p.catch(() => {});
+}
 
 function showDone(num) {
   $("doneNum").textContent = "#" + num;
@@ -2357,10 +2715,12 @@ function showMiniMap(elId, lat, lng) {
 }
 
 let pickMap, pickMarker;
-function pickOnMap(target) {
+function pickOnMap(target, idx) {
   S.mapTarget = target;
+  S.mapIdx = idx ?? 0;                    // رقم بلوك المستلم (لو target = rcv)
+  const rc = target === "rcv" ? S.draft?.receivers?.[S.mapIdx] : null;
   const cur = target === "snd" ? [S.draft?.sndLat, S.draft?.sndLng]
-            : target === "rcv" ? [S.draft?.rcvLat, S.draft?.rcvLng]
+            : target === "rcv" ? [rc?.lat, rc?.lng]
             : [S.draftLat, S.draftLng];
   const start = (cur[0] && cur[1]) ? cur : [30.0444, 31.2357];
   $("mapModal").classList.add("on");
@@ -2427,7 +2787,9 @@ function confirmMapPick() {
     const b = $("sndPinState");
     if (b) { b.style.display = "block"; b.innerHTML = `✅ نقطة الاستلام محدّدة
       <span style="color:var(--muted);direction:ltr;display:inline-block">(${lat.toFixed(5)}, ${lng.toFixed(5)})</span>`; } }
-  else if (S.mapTarget === "rcv") { S.draft.rcvLat = lat; S.draft.rcvLng = lng; showMiniMap("rcvMap", lat, lng); }
+  else if (S.mapTarget === "rcv") {
+    const r = S.draft?.receivers?.[S.mapIdx];
+    if (r) { r.lat = lat; r.lng = lng; showMiniMap("rcvMap-" + S.mapIdx, lat, lng); } }
   else if (S.mapTarget === "sut") { S.draftLat = lat; S.draftLng = lng; showMiniMap("sutMap", lat, lng);
     $("sutCoords").textContent = `${lat.toFixed(5)} , ${lng.toFixed(5)}`; }
   else if (S.mapTarget === "addr") { S.draftLat = lat; S.draftLng = lng; showMiniMap("addrMap", lat, lng); }
