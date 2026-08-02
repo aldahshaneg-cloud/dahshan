@@ -8275,7 +8275,11 @@ window.clearBrDeliveredFilters = function() {
       const isMine = branchPilotIds.has(id);
       if (!isMine && !_showAllPilots) return;
       const p={id,...v}; const loc=p.location;
-      if (!loc?.lat||!loc?.lng) return;
+      // pilotStatus فاضي = مفيش وردية مفتوحة، فالماركر مايتعرضش — سواء كان
+      // الطيار تابع للفرع أو من «كل الطيارين». آخر إحداثيات معروفة بتفضل
+      // متسجّلة في فايربيز بعد قفل الوردية، فمن غير الشرط ده كان بيفضل ظاهر.
+      // وبما إن id مش بيتضاف لـ seenIds، حلقة التنضيف تحت بتشيل ماركره لوحدها.
+      if (!loc?.lat||!loc?.lng||!p.pilotStatus) return;
       seenIds.add(id);
       const lat=parseFloat(loc.lat), lng=parseFloat(loc.lng);
       const icon=_mkPilotIcon(p.pilotStatus, !isMine);
@@ -8284,7 +8288,7 @@ window.clearBrDeliveredFilters = function() {
     });
     Object.keys(_pilotMarkers).forEach(id=>{ if(!seenIds.has(id)){_layerPilots.removeLayer(_pilotMarkers[id]);delete _pilotMarkers[id];} });
     if (!_firstFit) {
-      const locs=Object.entries(data).filter(([id,p])=>(branchPilotIds.has(id)||_showAllPilots)&&p.location?.lat).map(([id,p])=>[parseFloat(p.location.lat),parseFloat(p.location.lng)]);
+      const locs=Object.entries(data).filter(([id,p])=>(branchPilotIds.has(id)||_showAllPilots)&&p.location?.lat&&p.pilotStatus).map(([id,p])=>[parseFloat(p.location.lat),parseFloat(p.location.lng)]);
       if (locs.length) { _firstFit=true; _pilotMap.fitBounds(locs,{padding:[50,50],maxZoom:14}); }
     }
   }

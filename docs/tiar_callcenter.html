@@ -10396,7 +10396,12 @@
     Object.entries(data).forEach(([id,v]) => {
       const p = {id,...v};
       const loc = p.location;
-      if (!loc?.lat || !loc?.lng) return;
+      // pilotStatus فاضي = مفيش وردية مفتوحة، فالماركر مايتعرضش. آخر إحداثيات
+      // معروفة بتفضل متسجّلة في فايربيز بعد قفل الوردية، فمن غير الشرط ده
+      // الطيار كان بيفضل ظاهر على الخريطة وهو خارج الشغل.
+      // وبما إن id مش بيتضاف لـ seenIds، حلقة التنضيف تحت بتشيل ماركره
+      // القديم لوحدها في نفس اللحظة اللي الوردية تتقفل فيها.
+      if (!loc?.lat || !loc?.lng || !p.pilotStatus) return;
       seenIds.add(id);
       const lat = parseFloat(loc.lat), lng = parseFloat(loc.lng);
       if (_pilotMarkers[id]) {
@@ -10412,7 +10417,7 @@
       if (!seenIds.has(id)) { _layerPilots.removeLayer(_pilotMarkers[id]); delete _pilotMarkers[id]; }
     });
     if (!_firstFit) {
-      const locs = Object.values(data).filter(p=>p.location?.lat)
+      const locs = Object.values(data).filter(p=>p.location?.lat && p.pilotStatus)
         .map(p=>[parseFloat(p.location.lat), parseFloat(p.location.lng)]);
       if (locs.length) { _firstFit=true; _pilotMap.fitBounds(locs,{padding:[50,50],maxZoom:14}); }
     }
