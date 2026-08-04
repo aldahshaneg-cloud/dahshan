@@ -827,6 +827,49 @@
           <div class="app-name">تطبيق العملاء</div>
         </div>
 
+        <div class="app-card green" id="card-customers" onclick="openApp('customers')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="14" cy="13" r="4.5" fill="#e8192c" opacity=".18" stroke="#e8192c" stroke-width="1.5"/>
+              <path d="M6 28c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="#e8192c" stroke-width="1.5"
+                    fill="#e8192c" fill-opacity=".08" stroke-linecap="round"/>
+              <circle cx="25" cy="15" r="3.2" fill="#e8192c" opacity=".35"/>
+              <path d="M21.5 27c0-3.3 2.2-5.4 5.5-5.4 2.2 0 4 1 4 3.4" stroke="#e8192c"
+                    stroke-width="1.3" fill="none" stroke-linecap="round" opacity=".6"/>
+            </svg>
+          </div>
+          <div class="app-name">إدارة العملاء</div>
+        </div>
+
+        <div class="app-card" id="card-site" onclick="openApp('site')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="18" cy="18" r="12.5" stroke="#e8192c" stroke-width="1.5"
+                      fill="#e8192c" fill-opacity=".08"/>
+              <ellipse cx="18" cy="18" rx="5.2" ry="12.5" stroke="#e8192c" stroke-width="1.3" fill="none"/>
+              <line x1="5.5" y1="18" x2="30.5" y2="18" stroke="#e8192c" stroke-width="1.3"/>
+              <line x1="8" y1="11.5" x2="28" y2="11.5" stroke="#e8192c" stroke-width="1.1" opacity=".7"/>
+              <line x1="8" y1="24.5" x2="28" y2="24.5" stroke="#e8192c" stroke-width="1.1" opacity=".7"/>
+            </svg>
+          </div>
+          <div class="app-name">الموقع العام</div>
+        </div>
+
+        <div class="app-card" id="card-siteadmin" onclick="openApp('siteadmin')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="5" y="7" width="26" height="20" rx="3" stroke="#e8192c" stroke-width="1.5"
+                    fill="#e8192c" fill-opacity=".08"/>
+              <line x1="5" y1="13" x2="31" y2="13" stroke="#e8192c" stroke-width="1.4"/>
+              <circle cx="8.8" cy="10" r="1" fill="#e8192c"/><circle cx="12" cy="10" r="1" fill="#e8192c"/>
+              <circle cx="18" cy="20" r="3.4" stroke="#e8192c" stroke-width="1.4" fill="none"/>
+              <path d="M18 15.4v-1.2M18 25.8v-1.2M22.6 20h1.2M12.2 20h1.2" stroke="#e8192c"
+                    stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="app-name">لوحة تحكم الموقع</div>
+        </div>
+
         <!-- HR (النسخة القديمة) — مؤقتة لحد التأكد من الجديد -->
         <div class="app-card legacy" id="card-hrOld" onclick="openApp('hrOld')">
           <div class="app-icon">
@@ -979,6 +1022,13 @@
           && !allowedApps.includes("customer")) {
         allowedApps = [...allowedApps, "customer"];
       }
+      // «إدارة العملاء» و«لوحة تحكم الموقع» أدوات إدارية — بتتبع صلاحية
+      // لوحة الإدارة. و«الموقع العام» صفحة عامة مفتوحة للكل.
+      if (allowedApps.includes("admin")) {
+        for (const k of ["customers", "siteadmin"])
+          if (!allowedApps.includes(k)) allowedApps = [...allowedApps, k];
+      }
+      if (!allowedApps.includes("site")) allowedApps = [...allowedApps, "site"];
       const cards = {
         admin:  document.getElementById("card-admin"),
         branch: document.getElementById("card-branch"),
@@ -988,7 +1038,10 @@
         accounts: document.getElementById("card-accounts"),
         callcenter: document.getElementById("card-callcenter"),
         damascus: document.getElementById("card-damascus"),
-        customer: document.getElementById("card-customer")
+        customer: document.getElementById("card-customer"),
+        customers:  document.getElementById("card-customers"),
+        site:       document.getElementById("card-site"),
+        siteadmin:  document.getElementById("card-siteadmin")
       };
       for (const [appKey, card] of Object.entries(cards)) {
         if (!card) continue;
@@ -1013,7 +1066,9 @@
       const ok = allowed.includes(appKey)
         || (appKey === "hrOld"   && allowed.includes("hr"))
         || (appKey === "damascus" && allowed.includes("accounts"))
-        || (appKey === "customer" && (allowed.includes("admin") || allowed.includes("callcenter")));
+        || (appKey === "customer" && (allowed.includes("admin") || allowed.includes("callcenter")))
+        || (["customers", "siteadmin"].includes(appKey) && allowed.includes("admin"))
+        || appKey === "site";                    // الموقع العام مفتوح للكل
       if (!ok) return;
 
       const urls = {
@@ -1025,7 +1080,10 @@
         accounts: "tiar_accounts.html",
         callcenter: "tiar_callcenter.html",
         damascus: "tiar_damascus.html",
-        customer: "tiar_customer.html"
+        customer: "tiar_customer.html",
+        customers: "tiar_customers.html",
+        site:      "home.html",
+        siteadmin: "site-admin.html"
       };
       if (!urls[appKey]) return;
 
@@ -1046,7 +1104,7 @@
       }
       // وإلا احسبها من الدور
       const role = (userData.role || "").trim();
-      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter", "damascus", "customer"];
+      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter", "damascus", "customer", "customers", "site", "siteadmin"];
       if (["محاسب", "مدير حسابات", "accountant"].includes(role))    return ["accounts", "damascus"];
       if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(role)) return ["hr", "hrOld"];
       if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(role))  return ["callcenter", "customer"];
