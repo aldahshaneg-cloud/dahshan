@@ -2162,6 +2162,23 @@ const hhmmToMin = t => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
   return m ? +m[1] * 60 + +m[2] : null;
 };
+/** العميل المحظور مايقدرش يعمل طلبات جديدة — الإدارة بتحظره من
+    شاشة «عملاء التطبيق». طلباته القديمة بتفضل ظاهرة له عادي. */
+function isBlocked() { return S.profile?.blocked === true; }
+function showBlocked() {
+  openModal("الحساب موقوف", `
+    <div style="text-align:center;padding:6px 0 2px">
+      <div style="font-size:52px;line-height:1;margin-bottom:14px">🚫</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px">حسابك موقوف مؤقتًا</div>
+      <div style="color:var(--muted);font-size:14px;line-height:1.9;margin-bottom:16px">
+        مش هتقدر تعمل طلبات جديدة دلوقتي. لو تفتكر إن فيه خطأ،
+        كلّم خدمة العملاء وهنراجع حسابك.
+      </div>
+      <a class="btn" href="tel:${esc(S.profile?.defaultBranchPhone || "16000")}"
+         style="text-decoration:none">📞 كلّم خدمة العملاء</a>
+    </div>`);
+}
+
 function isOpenNow() {
   const w = S.workHours;
   if (w?.closedNow) return false;                  // قفل طارئ من الإدارة
@@ -2210,6 +2227,7 @@ const PAYS  = ["كاش", "مدفوع مسبقًا"];
 
 function startNewOrder() {
   if (!S.profile?.profileCompleted) { toast("أكمل بياناتك أولاً", "err"); return openSetup(); }
+  if (isBlocked()) return showBlocked();
   // برّه مواعيد الشغل مابنفتحش الفورم أصلاً — أرحم للعميل من إنه يملا
   // كل الخطوات وبعدين يترفض في الآخر
   if (!isOpenNow()) return showClosed();
@@ -2616,6 +2634,8 @@ function drawThumbs() {
 async function submitOrder() {
   if (S.images.some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
   // فحص تاني عند الإرسال — العميل ممكن يكون فاتح الفورم قبل ميعاد القفل
+  // أو الإدارة حظرته وهو فاتح
+  if (isBlocked()) return showBlocked();
   if (!isOpenNow()) return showClosed();
   readReceiverBlocks();
   const sz = S.draft.senderZone;
