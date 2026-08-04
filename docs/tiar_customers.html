@@ -68,7 +68,7 @@ img{display:block;max-width:100%}
 .av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
   display:grid;place-items:center;font-weight:800;flex:none}
 
-.main{flex:1;display:flex;min-height:0}
+.main{flex:1;display:flex;min-height:0;min-width:0}
 /* العمود اليمين: اللستة */
 .side{width:380px;flex:none;background:var(--panel);border-inline-start:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0}
@@ -107,13 +107,17 @@ img{display:block;max-width:100%}
 .pane{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
 .pane-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
 .pane-empty i{font-size:64px;font-style:normal;display:block;margin-bottom:16px;opacity:.35}
+/* الهيدر بيلتف بدل ما يفيض — الأزرار بتنزل سطر تحت في الشاشات الضيقة */
 .pane-hd{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;
-  display:flex;align-items:center;gap:14px;flex:none}
+  display:flex;align-items:center;gap:14px;flex:none;flex-wrap:wrap;min-width:0}
 .pane-hd .p-av{width:52px;height:52px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
   display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
 .pane-hd h2{font-size:17px;font-weight:800;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .pane-hd .sub{font-size:12.5px;color:var(--muted);margin-top:2px;direction:ltr;text-align:right}
-.pane-body{flex:1;overflow-y:auto;padding:18px 20px 40px}
+/* overflow-x شبكة أمان: لو أي محتوى طلع أعرض من العمود (إيميل طويل،
+   جدول، إلخ) يبقى فيه تمرير أفقي بدل ما يتقص تحت الشاشة */
+.pane-body{flex:1;overflow-y:auto;overflow-x:auto;padding:18px 20px 40px;min-width:0}
+.kv .v{overflow-wrap:anywhere}
 .back{display:none}
 @media(max-width:900px){
   .side{width:100%}

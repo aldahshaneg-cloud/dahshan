@@ -3539,7 +3539,19 @@
       if (o.source === "store")  return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700">🏪 تطبيق المحل</div>${o.addedBy ? `<div style="font-size:.69rem;color:var(--muted);margin-top:2px">${o.addedBy}</div>` : ""}`;
       if (o.source === "branch") return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(14,165,233,.15);color:var(--sky);border:1px solid rgba(14,165,233,.3);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700">🏢 موظف الفرع</div>${o.addedBy ? `<div style="font-size:.69rem;color:var(--muted);margin-top:2px">${o.addedBy}</div>` : ""}`;
       if (o.source === "admin")  return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700">⚙️ الإدارة</div>${o.addedBy ? `<div style="font-size:.69rem;color:var(--muted);margin-top:2px">${o.addedBy}</div>` : ""}`;
-      if (o.addedBy) return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(122,154,184,.12);color:var(--muted);border:1px solid rgba(122,154,184,.25);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700">👤 ${o.addedBy}</div>`;
+      if (o.source === "customer") {
+        // اسم العميل مش الـ UID — addedBy هنا معرّف فايربيز (28 حرف)
+        // وكان بيتطبع خام فياكل عرض الجدول
+        const who = (o.customerName || "").trim(), tel = (o.customerPhone || "").trim();
+        return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700;white-space:nowrap">📱 تطبيق العميل</div>${
+          who ? `<div style="font-size:.69rem;color:var(--muted);margin-top:2px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${who}${tel ? " — " + tel : ""}">${who}</div>` : ""}`;
+      }
+      // طلبات قديمة بدون source — بنعرض الاسم بس لو مش معرّف خام
+      if (o.addedBy) {
+        const raw = String(o.addedBy);
+        const isUid = raw.length >= 20 && !/\s/.test(raw);
+        return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(122,154,184,.12);color:var(--muted);border:1px solid rgba(122,154,184,.25);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis" title="${raw}">👤 ${isUid ? "مستخدم التطبيق" : raw}</div>`;
+      }
       return `<span style="color:var(--muted);font-size:.78rem">—</span>`;
     }
 
