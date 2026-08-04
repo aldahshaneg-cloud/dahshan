@@ -7881,10 +7881,7 @@
         <span id="transfersBadge" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);background:var(--orange);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px;min-width:18px;text-align:center">0</span>
       </button>
       <button class="nav-item" onclick="navigateTo('clients')">👥 العملاء</button>
-      <button class="nav-item" onclick="navigateTo('appusers')" id="navAppUsers" style="position:relative">
-        📱 عملاء التطبيق
-        <span id="appUsersBadge" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);background:var(--red);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px;min-width:18px;text-align:center">0</span>
-      </button>
+      <button class="nav-item" onclick="window.open('tiar_customers.html','_blank')">📱 عملاء التطبيق ↗</button>
       <button class="nav-item" onclick="navigateTo('orders')" id="navOrders" style="position:relative">
         📋 الطلبات
         <span id="ordersBadge" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);background:var(--orange);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px;min-width:18px;text-align:center">0</span>
@@ -8205,38 +8202,6 @@
 
 
     <!-- صفحة العملاء (استلامون + تسليمون) -->
-    <!-- ═══ عملاء التطبيق (customers/{uid}) ═══ -->
-    <div class="page" id="page-appusers">
-      <div class="stats">
-        <div class="stat-card"><span class="stat-label">إجمالي العملاء</span><span class="stat-value" id="auTotal">0</span><span class="stat-sub">مسجّلين في التطبيق</span></div>
-        <div class="stat-card"><span class="stat-label">نشِطون</span><span class="stat-value" id="auActive" style="color:var(--green)">0</span><span class="stat-sub">يقدروا يطلبوا</span></div>
-        <div class="stat-card"><span class="stat-label">محظورون</span><span class="stat-value" id="auBlocked" style="color:var(--red)">0</span><span class="stat-sub">ممنوعين من الطلب</span></div>
-        <div class="stat-card"><span class="stat-label">جدد هذا الشهر</span><span class="stat-value" id="auNew" style="color:var(--orange)">0</span><span class="stat-sub">سجّلوا حديثاً</span></div>
-      </div>
-
-      <div class="sec-header">
-        <span class="sec-title">📱 عملاء التطبيق</span>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="auSearch" type="text" placeholder="🔍 بحث بالاسم أو الهاتف أو الإيميل" oninput="renderAppUsers()"
-            style="padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);min-width:230px" />
-          <select id="auFilter" onchange="renderAppUsers()"
-            style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)">
-            <option value="all">الكل</option>
-            <option value="active">النشطون فقط</option>
-            <option value="blocked">المحظورون فقط</option>
-            <option value="incomplete">بيانات ناقصة</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table><thead><tr>
-          <th>#</th><th>الاسم</th><th>الهاتف</th><th>البريد</th>
-          <th>المنطقة / الفرع</th><th>الطلبات</th><th>مسجّل من</th><th>الحالة</th><th>إجراء</th>
-        </tr></thead><tbody id="appUsersBody"></tbody></table>
-      </div>
-    </div>
-
     <div class="page" id="page-clients">
       <div class="stats">
         <div class="stat-card"><span class="stat-label">عملاء الاستلام</span><span class="stat-value" id="totalSenders">0</span><span class="stat-sub">يستلم منهم الطيار</span></div>
@@ -9029,18 +8994,9 @@
   </div>
 </div>
 
-<!-- Modal: تفاصيل عميل التطبيق -->
-<div class="modal" id="modal-appuser">
-  <div class="modal-box" style="max-width:620px">
-    <div class="modal-header"><span class="modal-title" id="auTitle">بيانات العميل</span>
-      <button class="modal-close" onclick="closeModal('appuser')">✕</button></div>
-    <div style="padding:20px;max-height:74vh;overflow-y:auto" id="auBody"></div>
-  </div>
-</div>
-
 <!-- Modal: إيقاف فرع مؤقتًا وتحويل أوردراته -->
-<div class="modal" id="modal-pause">
-  <div class="modal-box" style="max-width:520px">
+<div class="modal-overlay" id="modal-pause" onclick="if(event.target===this) closeModal('pause')">
+  <div class="modal-box" style="max-width:520px;padding:0">
     <div class="modal-header"><span class="modal-title">⏸️ إيقاف الفرع مؤقتًا</span>
       <button class="modal-close" onclick="closeModal('pause')">✕</button></div>
     <div style="padding:20px">
@@ -9303,7 +9259,7 @@
   (function() {
     if (localStorage.getItem("tiar-theme") === "light") document.documentElement.classList.add("light");
   })();
-  const PAGES = ["dashboard","pilots","joinrequests","pilotleave","transfers","clients","appusers","orders","delivering","delivered","undelivered","cancelled","shifts","shift-orders","hr","accounting","treasury","reports","pilot-orders","settings","pilotmap"];
+  const PAGES = ["dashboard","pilots","joinrequests","pilotleave","transfers","clients","orders","delivering","delivered","undelivered","cancelled","shifts","shift-orders","hr","accounting","treasury","reports","pilot-orders","settings","pilotmap"];
   function navigateTo(page) {
     if (window.innerWidth <= 900) closeSidebar();
     PAGES.forEach(p => { document.getElementById(`page-${p}`)?.classList.remove("active"); });
@@ -9316,7 +9272,6 @@
       btn.classList.remove("active");
       if (btn.getAttribute("onclick")?.includes(`'${page}'`)) btn.classList.add("active");
     });
-    if (page === "appusers" && window.renderAppUsers) window.renderAppUsers();
     if (page === "hr" && window.renderHRPage) window.renderHRPage();
     if (page === "accounting" && window.renderAccountingPage) window.renderAccountingPage();
     if (page === "treasury" && window.renderBranchTreasury) window.renderBranchTreasury();
@@ -9425,163 +9380,6 @@
     const p = document.getElementById('receiverAddrWidget-preview'); if (p) p.style.display = 'none';
     if (window.resetEditState) window.resetEditState();
   }
-  /* ══════════════════════════════════════════════════════════════
-     عملاء التطبيق — customers/{uid}
-     ──────────────────────────────────────────────────────────────
-     دول عملاء تطبيق العميل (بيدخلوا بجوجل)، غير «العملاء» القديمة
-     اللي هي جهات الاستلام والتسليم. الحظر بيتحط blocked:true
-     والتطبيق بيمنعه من الطلب.
-  ══════════════════════════════════════════════════════════════ */
-  window._appUsers = [];
-  /* الاشتراك بيتأجّل: الـ <script type="module"> بيتنفّذ بعد الـ scripts
-     العادية، يعني الجسر (window._db) لسه مش موجود وقت تحميل البلوك ده.
-     فبنستنى لحد ما يجهز بدل ما ننده فايربيز فورًا ونقع. */
-  window._subAppUsers = function() {
-    if (window._appUsersSubbed) return;
-    const fb = window._fbFunctions;
-    if (!fb?.onValue || !window._db) { setTimeout(window._subAppUsers, 300); return; }
-    window._appUsersSubbed = true;
-    fb.onValue(fb.ref(window._db, "customers"), snap => {
-    const d = snap.val() || {};
-    window._appUsers = Object.entries(d).map(([uid, v]) => {
-      const o = { uid, ...(v || {}) };
-      delete o.addresses; delete o.savedReceivers;   // مش محتاجينهم في اللستة
-      return o;
-    });
-    const blocked = window._appUsers.filter(u => u.blocked).length;
-    const badge = document.getElementById("appUsersBadge");
-    if (badge) { badge.textContent = blocked; badge.style.display = blocked ? "inline-block" : "none"; }
-    if (document.getElementById("page-appusers")?.classList.contains("active")) renderAppUsers();
-    });
-  };
-  window._subAppUsers();
-
-  const auOrders = uid => (window._ordersData || [])
-    .filter(o => o.customerId === uid || (o.source === "customer" && o.addedBy === uid));
-
-  window.renderAppUsers = function() {
-    const tbody = document.getElementById("appUsersBody"); if (!tbody) return;
-    const all = window._appUsers || [];
-
-    document.getElementById("auTotal").textContent   = all.length;
-    document.getElementById("auActive").textContent  = all.filter(u => !u.blocked).length;
-    document.getElementById("auBlocked").textContent = all.filter(u => u.blocked).length;
-    const mKey = new Date().toISOString().slice(0, 7);
-    document.getElementById("auNew").textContent =
-      all.filter(u => String(u.createdAt || "").slice(0, 7) === mKey).length;
-
-    const q = (document.getElementById("auSearch")?.value || "").trim().toLowerCase();
-    const f = document.getElementById("auFilter")?.value || "all";
-    let list = all.filter(u => {
-      if (f === "active"  && u.blocked) return false;
-      if (f === "blocked" && !u.blocked) return false;
-      if (f === "incomplete" && u.profileCompleted) return false;
-      if (!q) return true;
-      return [u.displayNameAr, u.name, u.phone1, u.phone2, u.email]
-        .some(x => String(x || "").toLowerCase().includes(q));
-    }).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-
-    if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="9" class="empty-row">${
-        all.length ? "لا توجد نتائج مطابقة" : "لا يوجد عملاء مسجّلين في التطبيق بعد"}</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = list.map((u, i) => {
-      const n = auOrders(u.uid).length;
-      const zone = u.defaultZoneName || "—";
-      const branch = u.defaultBranchName ? ` <span style="color:var(--muted)">/ ${u.defaultBranchName}</span>` : "";
-      const status = u.blocked
-        ? `<span class="status-badge" style="background:rgba(232,25,44,.15);color:var(--red)">🚫 محظور</span>`
-        : !u.profileCompleted
-        ? `<span class="status-badge" style="background:rgba(249,115,22,.15);color:var(--orange)">⚠️ بيانات ناقصة</span>`
-        : `<span class="status-badge" style="background:rgba(34,197,94,.15);color:var(--green)">✅ نشِط</span>`;
-      return `<tr${u.blocked ? ' style="background:rgba(232,25,44,.04)"' : ''}>
-        <td class="idx">${i + 1}</td>
-        <td><span class="name-badge">${esc2(u.displayNameAr || u.name || "—")}</span></td>
-        <td dir="ltr">${esc2(u.phone1 || "—")}</td>
-        <td dir="ltr" style="font-size:.8rem">${esc2(u.email || "—")}</td>
-        <td>${esc2(zone)}${branch}</td>
-        <td><b>${n}</b></td>
-        <td style="font-size:.8rem">${u.createdAt ? new Date(u.createdAt).toLocaleDateString("ar-EG") : "—"}</td>
-        <td>${status}</td>
-        <td>
-          <button class="edit-btn" onclick="openAppUser('${u.uid}')">تفاصيل</button>
-          <button class="${u.blocked ? "edit-btn" : "del-btn"}" onclick="toggleBlockUser('${u.uid}')">
-            ${u.blocked ? "✅ رفع الحظر" : "🚫 حظر"}</button>
-        </td>
-      </tr>`;
-    }).join("");
-  };
-  const esc2 = s => String(s ?? "").replace(/[&<>"']/g, c =>
-    ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-
-  window._blockArm = null;
-  window.toggleBlockUser = async function(uid) {
-    const u = (window._appUsers || []).find(x => x.uid === uid); if (!u) return;
-    if (!u.blocked && window._blockArm !== uid) {      // الحظر بضغطتين، رفع الحظر فورًا
-      window._blockArm = uid;
-      showToast(`اضغط «حظر» تاني لتأكيد حظر ${u.displayNameAr || "العميل"}`, "error");
-      clearTimeout(window._blockT);
-      window._blockT = setTimeout(() => { window._blockArm = null; }, 5000);
-      return;
-    }
-    window._blockArm = null; clearTimeout(window._blockT);
-    try {
-      await window._update(window._ref(window._db, "customers/" + uid), {
-        blocked: !u.blocked,
-        blockedAt: !u.blocked ? new Date().toISOString() : null,
-        blockedBy: !u.blocked ? (window._currentUser?.name || "الإدارة") : null
-      });
-      showToast(u.blocked ? "اترفع الحظر ✓" : "اتحظر العميل ✓", "success");
-    } catch (e) { showToast("تعذّر التنفيذ: " + (e?.message || e), "error"); }
-  };
-
-  window.openAppUser = function(uid) {
-    const u = (window._appUsers || []).find(x => x.uid === uid); if (!u) return;
-    const os = auOrders(uid);
-    const done = os.filter(o => o.status === "تم التسليم").length;
-    const cancelled = os.filter(o => o.status === "ملغي").length;
-    const spend = os.reduce((s, o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
-    const row = (k, v) => `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--muted);min-width:130px;font-size:.85rem">${k}</span>
-      <b style="flex:1;font-size:.88rem">${v}</b></div>`;
-    document.getElementById("auTitle").textContent = u.displayNameAr || u.name || "بيانات العميل";
-    document.getElementById("auBody").innerHTML = `
-      ${u.blocked ? `<div style="background:rgba(232,25,44,.1);border:1px solid rgba(232,25,44,.35);
-        border-radius:10px;padding:12px 15px;margin-bottom:16px;font-size:.86rem">
-        🚫 <b>العميل ده محظور</b> — مش هيقدر يعمل طلبات جديدة.
-        ${u.blockedAt ? `<div style="color:var(--muted);font-size:.78rem;margin-top:4px">
-          اتحظر ${new Date(u.blockedAt).toLocaleString("ar-EG")}${u.blockedBy ? ` — بواسطة ${esc2(u.blockedBy)}` : ""}</div>` : ""}
-      </div>` : ""}
-      <div class="stats" style="margin-bottom:18px">
-        <div class="stat-card"><span class="stat-label">إجمالي الطلبات</span><span class="stat-value">${os.length}</span></div>
-        <div class="stat-card"><span class="stat-label">تم التسليم</span><span class="stat-value" style="color:var(--green)">${done}</span></div>
-        <div class="stat-card"><span class="stat-label">ملغي</span><span class="stat-value" style="color:var(--muted)">${cancelled}</span></div>
-        <div class="stat-card"><span class="stat-label">إجمالي التوصيل</span><span class="stat-value" style="color:var(--orange)">${spend}</span></div>
-      </div>
-      ${row("الاسم", esc2(u.displayNameAr || u.name || "—"))}
-      ${row("الهاتف", `<span dir="ltr">${esc2(u.phone1 || "—")}</span>`)}
-      ${row("رقم إضافي", `<span dir="ltr">${esc2(u.phone2 || "—")}</span>`)}
-      ${row("البريد", `<span dir="ltr">${esc2(u.email || "—")}</span>`)}
-      ${row("العنوان", esc2(u.address || "—"))}
-      ${row("المنطقة", esc2(u.defaultZoneName || "—"))}
-      ${row("الفرع المسؤول", esc2(u.defaultBranchName || "—"))}
-      ${row("اكتمال البيانات", u.profileCompleted
-          ? `<span style="color:var(--green)">مكتملة ✓</span>`
-          : `<span style="color:var(--orange)">ناقصة</span>`)}
-      ${row("تاريخ التسجيل", u.createdAt ? new Date(u.createdAt).toLocaleString("ar-EG") : "—")}
-      <div style="display:flex;gap:9px;margin-top:18px;flex-wrap:wrap">
-        <button class="${u.blocked ? "submit-btn" : "cancel-btn"}"
-          onclick="toggleBlockUser('${uid}');closeModal('appuser')"
-          ${u.blocked ? "" : 'style="background:rgba(232,25,44,.12);color:var(--red);border:1px solid rgba(232,25,44,.3)"'}>
-          ${u.blocked ? "✅ ارفع الحظر" : "🚫 احظر العميل"}</button>
-        ${u.phone1 ? `<a class="cancel-btn" style="text-decoration:none;display:inline-flex;align-items:center"
-           href="tel:${esc2(u.phone1)}">📞 اتصل</a>` : ""}
-        <button class="cancel-btn" onclick="closeModal('appuser')">إغلاق</button>
-      </div>`;
-    openModal("appuser");
-  };
-
   /* ══════════════════════════════════════════════════════════════
      إيقاف فرع مؤقتًا + تحويل أوردراته الجديدة لفرع بديل
      ──────────────────────────────────────────────────────────────

@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#111b21" />
+<title>الدهشان | إدارة العملاء</title>
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+/* ══════════════════════════════════════════════════════════════
+   إدارة العملاء — تخطيط بعمودين على نمط واتساب:
+   لستة العملاء على اليمين، وتفاصيل العميل المختار على الشمال.
+   الوضع الفاتح هو الافتراضي لأنه أريح للنظر في الشغل الطويل.
+══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
+  --line:#e9edef; --line2:#d1d7db;
+  --txt:#111b21; --muted:#667781; --soft:#8696a0;
+  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  --green:#15803d; --green-soft:rgba(21,128,61,.1);
+  --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
+  --blue:#1d4ed8;
+  --font:'Cairo',system-ui,sans-serif; --hd:60px;
+}
+:root.dark{
+  --bg:#0b141a; --panel:#111b21; --hover:#182229; --active:#2a3942;
+  --line:#222d34; --line2:#2a3942;
+  --txt:#e9edef; --muted:#8696a0; --soft:#667781;
+  --brand:#e8192c; --brand-d:#b91c1c; --brand-soft:rgba(232,25,44,.14);
+  --green:#22c55e; --green-soft:rgba(34,197,94,.14);
+  --orange:#f59e0b; --orange-soft:rgba(245,158,11,.14);
+  --blue:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--txt);height:100vh;overflow:hidden}
+button,input,select,textarea{font-family:inherit;color:inherit;font-size:inherit}
+img{display:block;max-width:100%}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+
+/* ── بوابة الدخول ── */
+#gate{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:900;padding:20px}
+.gate-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:38px 32px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.07)}
+.gate-box img{height:54px;margin:0 auto 18px}
+.gate-box h1{font-size:19px;font-weight:800;margin-bottom:6px}
+.gate-box p{color:var(--muted);font-size:14px;margin-bottom:22px}
+.gbtn{width:100%;background:var(--brand);color:#fff;border:none;border-radius:10px;padding:14px;
+  font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.gbtn:hover{background:var(--brand-d)}
+#gateErr{color:var(--brand);font-size:13.5px;margin-top:14px;min-height:20px}
+
+/* ── التخطيط ── */
+#app{display:none;height:100vh}
+#app.on{display:flex;flex-direction:column}
+.topbar{height:var(--hd);background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.topbar img{height:30px}
+.topbar .ttl{font-weight:800;font-size:15.5px}
+.topbar .sp{margin-inline-start:auto;display:flex;align-items:center;gap:8px}
+.ico{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);
+  display:grid;place-items:center;cursor:pointer;font-size:16px;color:var(--muted)}
+.ico:hover{background:var(--hover);color:var(--txt)}
+.me{display:flex;align-items:center;gap:9px;font-size:13px}
+.me b{display:block;font-size:13px}.me span{color:var(--muted);font-size:11.5px}
+.av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;flex:none}
+
+.main{flex:1;display:flex;min-height:0}
+/* العمود اليمين: اللستة */
+.side{width:380px;flex:none;background:var(--panel);border-inline-start:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.side-top{padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
+.search{display:flex;align-items:center;gap:9px;background:var(--bg);border-radius:9px;padding:8px 13px}
+.search input{background:none;border:none;outline:none;flex:1;font-size:14px;min-width:0}
+.chips{display:flex;gap:6px;margin-top:9px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{padding:5px 13px;border-radius:99px;border:1px solid var(--line2);background:none;
+  font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.list{flex:1;overflow-y:auto;min-height:0}
+.row{display:flex;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line);
+  align-items:center}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--active)}
+.row .r-av{width:46px;height:46px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:17px;flex:none;position:relative}
+.row.blocked .r-av{background:var(--brand-soft);filter:grayscale(.4)}
+.row .r-av .dot{position:absolute;bottom:0;inset-inline-start:0;width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--panel)}
+.r-b{flex:1;min-width:0}
+.r-1{display:flex;align-items:baseline;gap:8px}
+.r-1 b{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.r-1 span{font-size:11px;color:var(--muted);flex:none}
+.r-2{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12.5px;color:var(--muted)}
+.r-2 .ph{direction:ltr}
+.tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.t-block{background:var(--brand-soft);color:var(--brand)}
+.t-warn{background:var(--orange-soft);color:var(--orange)}
+.t-ok{background:var(--green-soft);color:var(--green)}
+.empty{padding:60px 24px;text-align:center;color:var(--muted);font-size:14px}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+
+/* العمود الشمال: التفاصيل */
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.pane-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.pane-empty i{font-size:64px;font-style:normal;display:block;margin-bottom:16px;opacity:.35}
+.pane-hd{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;
+  display:flex;align-items:center;gap:14px;flex:none}
+.pane-hd .p-av{width:52px;height:52px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.pane-hd h2{font-size:17px;font-weight:800;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.pane-hd .sub{font-size:12.5px;color:var(--muted);margin-top:2px;direction:ltr;text-align:right}
+.pane-body{flex:1;overflow-y:auto;padding:18px 20px 40px}
+.back{display:none}
+@media(max-width:900px){
+  .side{width:100%}
+  .main.detail .side{display:none}
+  .main:not(.detail) .pane{display:none}
+  .back{display:grid}
+}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px;text-align:center}
+.kpi b{display:block;font-size:21px;font-weight:900;line-height:1.15}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:13.5px;
+  display:flex;align-items:center;gap:8px}
+.card-h .n{margin-inline-start:auto;color:var(--muted);font-weight:700;font-size:12px}
+.kv{display:flex;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted);min-width:120px;flex:none}
+.kv .v{flex:1;font-weight:700;word-break:break-word}
+.kv .v.ltr{direction:ltr;text-align:right}
+.acts{display:flex;gap:9px;flex-wrap:wrap;padding:14px 16px}
+.btn{border:1px solid var(--line2);background:var(--panel);color:var(--txt);border-radius:9px;
+  padding:9px 16px;font-size:13.5px;font-weight:700;cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.pri:hover{background:var(--brand-d)}
+.btn.danger{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.btn.danger:hover{background:var(--brand);color:#fff}
+.btn.ok{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.btn.ok:hover{background:var(--green);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.warnbox{background:var(--brand-soft);border:1px solid var(--brand);border-radius:11px;
+  padding:12px 15px;font-size:13px;line-height:1.8;margin-bottom:14px}
+
+.olist .o{display:flex;gap:11px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line)}
+.olist .o:last-child{border-bottom:none}
+.o .oi{width:38px;height:38px;border-radius:10px;background:var(--bg);display:grid;place-items:center;
+  font-size:16px;flex:none}
+.o .ob{flex:1;min-width:0}
+.o .ob b{font-size:13.5px;direction:ltr;display:block}
+.o .ob span{font-size:11.5px;color:var(--muted)}
+.o .price{font-weight:800;font-size:13.5px;white-space:nowrap}
+
+.f{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.f label{font-size:12.5px;color:var(--muted);font-weight:700}
+.f input,.f select{background:var(--bg);border:1px solid var(--line2);border-radius:9px;
+  padding:11px 13px;outline:none;width:100%}
+.f input:focus,.f select:focus{border-color:var(--brand)}
+
+/* مودال */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:none;
+  align-items:center;justify-content:center;padding:18px}
+.modal.on{display:flex}
+.sheet{background:var(--panel);border-radius:14px;width:100%;max-width:440px;max-height:90vh;
+  overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.sheet-h{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
+.sheet-b{padding:18px 20px}
+#toast{position:fixed;bottom:24px;right:50%;transform:translateX(50%) translateY(20px);
+  background:var(--txt);color:var(--panel);padding:11px 20px;border-radius:10px;font-size:13.5px;
+  font-weight:700;z-index:800;opacity:0;transition:.25s;pointer-events:none}
+#toast.on{opacity:1;transform:translateX(50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="الدهشان" onerror="this.style.display='none'" />
+    <h1>إدارة العملاء</h1>
+    <p>الدخول للمديرين فقط</p>
+    <button class="gbtn" id="gBtn">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" opacity=".9"/><path fill="#fff" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" opacity=".75"/><path fill="#fff" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" opacity=".6"/><path fill="#fff" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" opacity=".85"/></svg>
+      دخول بحساب جوجل
+    </button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <div class="ttl">إدارة العملاء</div>
+    <div class="sp">
+      <button class="ico" id="themeBtn" title="الوضع الليلي">🌙</button>
+      <div class="me"><div class="av" id="meAv">A</div>
+        <div><b id="meName">—</b><span id="meMail">—</span></div></div>
+      <button class="ico" id="outBtn" title="خروج" style="color:var(--brand)">⏻</button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <!-- لستة العملاء -->
+    <div class="side">
+      <div class="side-top">
+        <div class="search">🔍<input id="q" placeholder="ابحث بالاسم أو الرقم أو الإيميل" autocomplete="off" /></div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <!-- التفاصيل -->
+    <div class="pane" id="pane">
+      <div class="pane-empty"><div><i>👥</i>اختار عميل من اللستة عشان تشوف بياناته<br />وتتحكم في حسابه</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet">
+  <div class="sheet-h" id="mTitle">—</div>
+  <div class="sheet-b" id="mBody"></div>
+</div></div>
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, get, update, remove, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app), auth = getAuth(app);
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const toast = m => { const t = $("toast"); t.textContent = m; t.className = "on";
+  clearTimeout(window._t); window._t = setTimeout(() => t.className = "", 2600); };
+
+const S = { customers: [], orders: [], zones: [], branches: {}, sel: null, filter: "all", q: "" };
+
+/* ── الثيم: الفاتح افتراضي (أريح للنظر)، والاختيار بيتحفظ ── */
+if (localStorage.getItem("cust-theme") === "dark") document.documentElement.classList.add("dark");
+const syncTheme = () => $("themeBtn").textContent =
+  document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+syncTheme();
+$("themeBtn").onclick = () => {
+  const dark = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("cust-theme", dark ? "dark" : "light");
+  syncTheme();
+};
+
+/* ══ الدخول — مدير بس (نفس منطق adminEmails في لوحة الإدارة) ══ */
+async function isAdmin(email) {
+  if (!email) return false;
+  const s = await get(ref(db, "adminEmails"));
+  if (!s.exists()) return false;
+  const v = s.val();
+  return (Array.isArray(v) ? v : Object.values(v)).filter(Boolean)
+    .map(e => String(e).trim().toLowerCase()).includes(email.trim().toLowerCase());
+}
+$("gBtn").onclick = async () => {
+  $("gateErr").textContent = "";
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { $("gateErr").textContent = "تعذّر الدخول: " + (e.code || e.message); }
+};
+$("outBtn").onclick = () => signOut(auth).then(() => location.reload());
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { signInAnonymously(auth).catch(() => {}); return; }
+  if (user.isAnonymous) return;
+  if (!await isAdmin(user.email)) {
+    $("gateErr").textContent = "الحساب ده مش مدير — كلّم إدارة النظام.";
+    await signOut(auth); return;
+  }
+  const nm = user.displayName || "مدير";
+  $("meName").textContent = nm; $("meMail").textContent = user.email;
+  $("meAv").textContent = nm.trim()[0] || "A";
+  $("gate").style.display = "none"; $("app").classList.add("on");
+  boot();
+});
+
+/* ══ البيانات ══ */
+function boot() {
+  onValue(ref(db, "customers"), s => {
+    const d = s.val() || {};
+    S.customers = Object.entries(d).map(([uid, v]) => {
+      const o = { uid, ...(v || {}) };
+      o._addresses = o.addresses ? Object.values(o.addresses) : [];
+      o._receivers = o.savedReceivers ? Object.values(o.savedReceivers) : [];
+      delete o.addresses; delete o.savedReceivers;
+      return o;
+    });
+    renderList(); if (S.sel) renderPane(S.sel);
+  });
+  onValue(ref(db, "orders"), s => {
+    const d = s.val() || {};
+    S.orders = Object.entries(d).map(([id, v]) => ({ id, ...v }))
+      .filter(o => o.customerId || o.source === "customer");
+    renderList(); if (S.sel) renderPane(S.sel);
+  });
+  get(ref(db, "zones")).then(s => S.zones = Object.entries(s.val() || {}).map(([id, v]) => ({ id, ...v })));
+  get(ref(db, "branches")).then(s => S.branches = s.val() || {});
+}
+
+const ordersOf = uid => S.orders
+  .filter(o => o.customerId === uid || o.addedBy === uid)
+  .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+const nameOf = c => (c.displayNameAr || c.name || "").trim() || "عميل بدون اسم";
+const initial = c => nameOf(c)[0] || "؟";
+const state = c => c.blocked ? "blocked" : (c.profileCompleted ? "ok" : "warn");
+const fmtDate = v => v ? new Date(v).toLocaleDateString("ar-EG", { day:"numeric", month:"short", year:"numeric" }) : "—";
+const fmtFull = v => v ? new Date(v).toLocaleString("ar-EG") : "—";
+const money = n => (Number(n) || 0).toLocaleString("ar-EG");
+
+/* ══ اللستة ══ */
+const FILTERS = [
+  { k:"all",     t:"الكل" },
+  { k:"active",  t:"نشِطون" },
+  { k:"blocked", t:"محظورون" },
+  { k:"warn",    t:"بيانات ناقصة" },
+  { k:"top",     t:"الأكتر طلبًا" }
+];
+$("chips").innerHTML = FILTERS.map(f =>
+  `<button class="chip${f.k === "all" ? " on" : ""}" data-k="${f.k}">${f.t}</button>`).join("");
+$("chips").querySelectorAll(".chip").forEach(b => b.onclick = () => {
+  S.filter = b.dataset.k;
+  $("chips").querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === b));
+  renderList();
+});
+$("q").addEventListener("input", e => { S.q = e.target.value.trim().toLowerCase(); renderList(); });
+
+function filtered() {
+  let list = S.customers.slice();
+  if (S.filter === "active")  list = list.filter(c => !c.blocked);
+  if (S.filter === "blocked") list = list.filter(c => c.blocked);
+  if (S.filter === "warn")    list = list.filter(c => !c.profileCompleted);
+  if (S.q) list = list.filter(c =>
+    [nameOf(c), c.phone1, c.phone2, c.email].some(x => String(x || "").toLowerCase().includes(S.q)));
+  if (S.filter === "top") list.sort((a, b) => ordersOf(b.uid).length - ordersOf(a.uid).length);
+  else list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return list;
+}
+
+function renderList() {
+  const list = filtered(), box = $("list");
+  if (!list.length) {
+    box.innerHTML = `<div class="empty"><i>👤</i>${
+      S.customers.length ? "مفيش عملاء بالمواصفات دي" : "لسه مفيش عملاء مسجّلين في التطبيق"}</div>`;
+    return;
+  }
+  box.innerHTML = list.map(c => {
+    const n = ordersOf(c.uid).length, st = state(c);
+    const dot = st === "blocked" ? "var(--brand)" : st === "ok" ? "var(--green)" : "var(--orange)";
+    return `<div class="row${c.uid === S.sel ? " on" : ""}${c.blocked ? " blocked" : ""}" data-id="${esc(c.uid)}">
+      <div class="r-av">${esc(initial(c))}<span class="dot" style="background:${dot}"></span></div>
+      <div class="r-b">
+        <div class="r-1"><b>${esc(nameOf(c))}</b><span>${fmtDate(c.createdAt)}</span></div>
+        <div class="r-2">
+          <span class="ph">${esc(c.phone1 || "—")}</span>
+          <span>·</span><span>${n} طلب</span>
+          ${c.blocked ? `<span class="tag t-block">محظور</span>`
+            : !c.profileCompleted ? `<span class="tag t-warn">ناقص</span>` : ""}
+        </div>
+      </div></div>`;
+  }).join("");
+  box.querySelectorAll(".row").forEach(r => r.onclick = () => select(r.dataset.id));
+}
+
+function select(uid) {
+  S.sel = uid;
+  $("main").classList.add("detail");
+  renderList(); renderPane(uid);
+}
+window.backToList = () => { $("main").classList.remove("detail"); };
+
+/* ══ تفاصيل العميل ══ */
+function renderPane(uid) {
+  const c = S.customers.find(x => x.uid === uid);
+  if (!c) { $("pane").innerHTML = `<div class="pane-empty"><div><i>👥</i>العميل ده مابقاش موجود</div></div>`; return; }
+  const os = ordersOf(uid);
+  const done = os.filter(o => o.status === "تم التسليم").length;
+  const cancel = os.filter(o => o.status === "ملغي").length;
+  const live = os.filter(o => !["تم التسليم","ملغي"].includes(o.status)).length;
+  const spend = os.reduce((s, o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+  const kv = (k, v, ltr) => `<div class="kv"><span class="k">${k}</span><span class="v${ltr ? " ltr" : ""}">${v}</span></div>`;
+
+  $("pane").innerHTML = `
+    <div class="pane-hd">
+      <button class="ico back" onclick="backToList()">›</button>
+      <div class="p-av">${esc(initial(c))}</div>
+      <div style="flex:1;min-width:0">
+        <h2>${esc(nameOf(c))}
+          ${c.blocked ? `<span class="tag t-block">🚫 محظور</span>`
+            : !c.profileCompleted ? `<span class="tag t-warn">⚠️ بيانات ناقصة</span>`
+            : `<span class="tag t-ok">✅ نشِط</span>`}</h2>
+        <div class="sub">${esc(c.phone1 || "—")}</div>
+      </div>
+      ${c.phone1 ? `<a class="btn" href="tel:${esc(c.phone1)}">📞 اتصل</a>` : ""}
+      ${c.phone1 ? `<a class="btn" target="_blank" rel="noopener"
+         href="https://wa.me/2${esc(String(c.phone1).replace(/\D/g,""))}">💬 واتساب</a>` : ""}
+    </div>
+
+    <div class="pane-body">
+      ${c.blocked ? `<div class="warnbox">🚫 <b>الحساب محظور</b> — مش هيقدر يعمل طلبات جديدة.
+        ${c.blockedAt ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">
+          اتحظر ${fmtFull(c.blockedAt)}${c.blockedBy ? ` — بواسطة ${esc(c.blockedBy)}` : ""}</div>` : ""}</div>` : ""}
+
+      <div class="kpis">
+        <div class="kpi"><b>${os.length}</b><span>إجمالي الطلبات</span></div>
+        <div class="kpi"><b style="color:var(--green)">${done}</b><span>تم التسليم</span></div>
+        <div class="kpi"><b style="color:var(--orange)">${live}</b><span>جارية</span></div>
+        <div class="kpi"><b style="color:var(--muted)">${cancel}</b><span>ملغية</span></div>
+        <div class="kpi"><b style="color:var(--brand)">${money(spend)}</b><span>إجمالي التوصيل</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">👤 بيانات الحساب</div>
+        ${kv("الاسم", esc(nameOf(c)))}
+        ${kv("الهاتف", esc(c.phone1 || "—"), 1)}
+        ${kv("رقم إضافي", esc(c.phone2 || "—"), 1)}
+        ${kv("البريد", esc(c.email || "—"), 1)}
+        ${kv("العنوان", esc(c.address || "—"))}
+        ${kv("المنطقة", esc(c.defaultZoneName || "—"))}
+        ${kv("الفرع المسؤول", esc(c.defaultBranchName || "—"))}
+        ${kv("تاريخ التسجيل", fmtFull(c.createdAt))}
+        ${kv("اكتمال البيانات", c.profileCompleted
+            ? `<span style="color:var(--green)">مكتملة ✓</span>`
+            : `<span style="color:var(--orange)">ناقصة</span>`)}
+      </div>
+
+      <div class="card">
+        <div class="card-h">⚙️ التحكم في الحساب</div>
+        <div class="acts">
+          <button class="btn ${c.blocked ? "ok" : "danger"}" data-act="block">
+            ${c.blocked ? "✅ ارفع الحظر" : "🚫 احظر العميل"}</button>
+          <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
+          <button class="btn" data-act="zone">📍 تغيير المنطقة</button>
+          <button class="btn danger" data-act="del">🗑️ حذف الحساب</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">📦 آخر الطلبات <span class="n">${os.length}</span></div>
+        ${os.length ? `<div class="olist">${os.slice(0, 12).map(o => {
+          const ic = o.status === "تم التسليم" ? "✅" : o.status === "ملغي" ? "✖️" : "🛵";
+          return `<div class="o"><div class="oi">${ic}</div>
+            <div class="ob"><b>#${esc(o.orderNum || "—")}</b>
+              <span>${fmtDate(o.createdAt)} · ${esc(o.status || "—")} · ${esc(o.branchName || "—")}</span></div>
+            <div class="price">${money(o.totalDeliveryPrice)} ج.م</div></div>`;
+        }).join("")}</div>` : `<div class="empty" style="padding:26px"><i>📭</i>مفيش طلبات</div>`}
+      </div>
+
+      <div class="card">
+        <div class="card-h">📍 العناوين المحفوظة <span class="n">${c._addresses.length}</span></div>
+        ${c._addresses.length ? c._addresses.map(a =>
+          kv(esc(a.label || "عنوان"), esc(a.fullAddress || "—"))).join("")
+          : `<div class="empty" style="padding:22px">مفيش عناوين محفوظة</div>`}
+      </div>
+
+      <div class="card">
+        <div class="card-h">👥 المستلمون السابقون <span class="n">${c._receivers.length}</span></div>
+        ${c._receivers.length ? c._receivers.slice(0, 10).map(r =>
+          kv(esc(r.name || "—"), esc(r.phone || "—") + (r.address ? ` — ${esc(r.address)}` : ""))).join("")
+          : `<div class="empty" style="padding:22px">مفيش مستلمين محفوظين</div>`}
+      </div>
+    </div>`;
+
+  $("pane").querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b.dataset.act, c));
+}
+
+/* ══ الإجراءات ══ */
+const openM = (title, html) => { $("mTitle").textContent = title; $("mBody").innerHTML = html;
+  $("modal").classList.add("on"); };
+window.closeM = () => $("modal").classList.remove("on");
+$("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
+
+function act(a, c) {
+  if (a === "block")  return askBlock(c);
+  if (a === "edit")   return askEdit(c);
+  if (a === "zone")   return askZone(c);
+  if (a === "del")    return askDelete(c);
+}
+
+function askBlock(c) {
+  if (c.blocked) return doBlock(c, false);        // رفع الحظر من غير تأكيد
+  openM("حظر العميل", `
+    <p style="font-size:13.5px;line-height:1.9;margin-bottom:16px">
+      هتحظر <b>${esc(nameOf(c))}</b>؟ مش هيقدر يعمل طلبات جديدة من التطبيق،
+      لكن طلباته القديمة هتفضل زي ما هي.</p>
+    <div style="display:flex;gap:9px">
+      <button class="btn danger" id="okBtn">🚫 أكّد الحظر</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = () => { closeM(); doBlock(c, true); };
+}
+async function doBlock(c, on) {
+  try {
+    await update(ref(db, "customers/" + c.uid), {
+      blocked: on, blockedAt: on ? new Date().toISOString() : null,
+      blockedBy: on ? ($("meName").textContent || "الإدارة") : null
+    });
+    toast(on ? "اتحظر العميل ✓" : "اترفع الحظر ✓");
+  } catch (e) { toast("تعذّر: " + (e?.message || e)); }
+}
+
+function askEdit(c) {
+  openM("تعديل بيانات العميل", `
+    <div class="f"><label>الاسم</label><input id="eName" value="${esc(nameOf(c))}" /></div>
+    <div class="f"><label>الهاتف</label><input id="ePh1" dir="ltr" value="${esc(c.phone1 || "")}" /></div>
+    <div class="f"><label>رقم إضافي</label><input id="ePh2" dir="ltr" value="${esc(c.phone2 || "")}" /></div>
+    <div class="f"><label>العنوان</label><input id="eAddr" value="${esc(c.address || "")}" /></div>
+    <div id="eErr" style="color:var(--brand);font-size:12.5px;min-height:18px"></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="okBtn">حفظ</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = async () => {
+    const name = $("eName").value.trim(), p1 = $("ePh1").value.trim();
+    if (!name) return $("eErr").textContent = "اكتب اسم العميل";
+    if (p1 && !/^0?1[0-9]{9}$/.test(p1.replace(/[\s-]/g, "")))
+      return $("eErr").textContent = "رقم الهاتف غير صحيح";
+    try {
+      await update(ref(db, "customers/" + c.uid), {
+        displayNameAr: name, phone1: p1,
+        phone2: $("ePh2").value.trim(), address: $("eAddr").value.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      closeM(); toast("اتحفظت البيانات ✓");
+    } catch (e) { $("eErr").textContent = "تعذّر الحفظ: " + (e?.message || e); }
+  };
+}
+
+function askZone(c) {
+  const opts = S.zones.slice()
+    .sort((a, b) => (a.areaName || "").localeCompare(b.areaName || "", "ar"))
+    .map(z => `<option value="${esc(z.id)}"${c.defaultZoneId === z.id ? " selected" : ""}>${
+      esc(z.areaName || z.name || z.id)}</option>`).join("");
+  openM("تغيير منطقة العميل", `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-bottom:14px">
+      المنطقة بتحدّد الفرع المسؤول عن العميل وسعر التوصيل الافتراضي.</p>
+    <div class="f"><label>المنطقة</label>
+      <select id="zSel"><option value="">— بدون —</option>${opts}</select></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="okBtn">حفظ</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = async () => {
+    const id = $("zSel").value;
+    const z = S.zones.find(x => x.id === id);
+    const bId = z ? (z.deliveryBranchId || z.branchId || "") : "";
+    try {
+      await update(ref(db, "customers/" + c.uid), {
+        defaultZoneId: id || null,
+        defaultZoneName: z ? (z.areaName || z.name || "") : null,
+        defaultBranchId: bId || null,
+        defaultBranchName: bId ? (S.branches[bId]?.name || "") : null
+      });
+      closeM(); toast("اتغيّرت المنطقة ✓");
+    } catch (e) { toast("تعذّر: " + (e?.message || e)); }
+  };
+}
+
+function askDelete(c) {
+  const n = ordersOf(c.uid).length;
+  openM("حذف حساب العميل", `
+    <div class="warnbox">⚠️ <b>الحذف مالوش رجعة.</b><br />
+      هيتشال حساب <b>${esc(nameOf(c))}</b> وعناوينه ومستلمينه المحفوظين.
+      ${n ? `<br />طلباته (<b>${n}</b>) هتفضل في النظام زي ما هي.` : ""}
+      <br /><span style="color:var(--muted)">لو عايز توقفه بس، الأحسن تحظره بدل ما تحذفه.</span></div>
+    <div class="f"><label>اكتب <b>حذف</b> عشان تأكّد</label><input id="dW" placeholder="حذف" /></div>
+    <div style="display:flex;gap:9px">
+      <button class="btn danger" id="okBtn" disabled>🗑️ احذف نهائيًا</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("dW").addEventListener("input", e => $("okBtn").disabled = e.target.value.trim() !== "حذف");
+  $("okBtn").onclick = async () => {
+    try {
+      await remove(ref(db, "customers/" + c.uid));
+      closeM(); S.sel = null;
+      $("pane").innerHTML = `<div class="pane-empty"><div><i>👥</i>اتحذف الحساب</div></div>`;
+      toast("اتحذف الحساب");
+    } catch (e) { toast("تعذّر الحذف: " + (e?.message || e)); }
+  };
+}
+</script>
+</body>
+</html>
