@@ -6675,6 +6675,57 @@
       } catch(e) {}
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       مواعيد استقبال الطلبات
+       ──────────────────────────────────────────────────────────────
+       settings/workHours = { from:"09:00", to:"05:00", on:true, closedNow:false }
+       تطبيق العميل بيقرا نفس العقدة ويمنع الطلبات برّه المواعيد.
+       المواعيد بتعدّي نص الليل، فالمقارنة بتتعمل على دايرة 24 ساعة.
+    ══════════════════════════════════════════════════════════════ */
+    window.loadWorkHours = async function() {
+      try {
+        const s = await get(ref(db, "settings/workHours"));
+        const w = s.val() || {};
+        const f = document.getElementById("whFrom"); if (!f) return;
+        f.value = w.from || "09:00";
+        document.getElementById("whTo").value = w.to || "05:00";
+        document.getElementById("whOn").checked = w.on !== false;
+        document.getElementById("whClosed").checked = !!w.closedNow;
+        renderWhState(w);
+      } catch(e) {}
+    };
+    function renderWhState(w) {
+      const el = document.getElementById("whState"); if (!el) return;
+      const open = isOpenNow(w);
+      el.textContent = open ? "✅ مفتوح دلوقتي" : "🔴 مقفول دلوقتي";
+      el.style.color = open ? "var(--green)" : "var(--red)";
+    }
+    /** هل الشركة بتستقبل طلبات دلوقتي؟ — نفس المنطق المستخدم في تطبيق العميل */
+    function isOpenNow(w) {
+      if (w?.closedNow) return false;
+      if (!w || w.on === false) return true;          // التقييد مطفي = مفتوح دايمًا
+      const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+        return m ? +m[1] * 60 + +m[2] : null; };
+      const a = toMin(w.from), b = toMin(w.to);
+      if (a === null || b === null || a === b) return true;
+      const now = new Date(); const n = now.getHours() * 60 + now.getMinutes();
+      // لو المواعيد بتعدّي نص الليل (9ص → 5ف) الفترة بتبقى اتنين على الدايرة
+      return a < b ? (n >= a && n < b) : (n >= a || n < b);
+    }
+    window.saveWorkHours = async function() {
+      const w = {
+        from: document.getElementById("whFrom").value || "09:00",
+        to:   document.getElementById("whTo").value   || "05:00",
+        on:   document.getElementById("whOn").checked,
+        closedNow: document.getElementById("whClosed").checked
+      };
+      try {
+        await set(ref(db, "settings/workHours"), w);
+        renderWhState(w);
+        showToast("تم حفظ مواعيد استقبال الطلبات ✓", "success");
+      } catch(e) { showToast("خطأ: " + e.message, "error"); }
+    };
+
     window.saveAttendanceTimeout = async function() {
       const el = document.getElementById("attTimeoutSelect");
       if (!el) return;
@@ -8573,6 +8624,44 @@
       </div>
       <div id="settings-data" style="display:none">
 
+        <!-- ── مواعيد استقبال الطلبات ── -->
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px">
+          <div class="sec-title" style="margin-bottom:6px">🕘 مواعيد استقبال الطلبات</div>
+          <p style="color:var(--muted);font-size:.83rem;margin-bottom:16px;line-height:1.7">
+            برّه المواعيد دي، تطبيق العميل <b style="color:var(--text)">مش هيقبل طلبات جديدة</b>
+            وهيعرض للعميل إن الشركة مقفولة ومعاد الفتح. المواعيد بتعدّي نص الليل عادي
+            (مثال: من 9:00 صباحًا لـ 5:00 فجرًا).
+          </p>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+            <div>
+              <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الفتح</label>
+              <input type="time" id="whFrom" value="09:00"
+                style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)" />
+            </div>
+            <div>
+              <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">القفل</label>
+              <input type="time" id="whTo" value="05:00"
+                style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)" />
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;cursor:pointer;padding-bottom:9px">
+              <input type="checkbox" id="whOn" style="width:17px;height:17px;accent-color:var(--sky)" />
+              <span>فعّل التقييد بالمواعيد</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;cursor:pointer;padding-bottom:9px;color:var(--red)">
+              <input type="checkbox" id="whClosed" style="width:17px;height:17px;accent-color:var(--red)" />
+              <span>🚫 اقفل الطلبات دلوقتي (طارئ)</span>
+            </label>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="add-btn" onclick="saveWorkHours()">💾 حفظ المواعيد</button>
+            <span id="whState" style="font-size:.85rem;font-weight:700"></span>
+          </div>
+          <div style="margin-top:14px;padding:10px 14px;background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.2);border-radius:8px;font-size:.8rem;color:var(--muted);line-height:1.8">
+            💡 «اقفل الطلبات دلوقتي» بيوقف الاستقبال فورًا مهما كان الوقت — استخدمها في
+            الأجازات أو لو حصل ظرف طارئ، وشيل العلامة لما ترجّع الشغل.
+          </div>
+        </div>
+
         <!-- ── إعدادات الحضور والانصراف ── -->
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px">
           <div class="sec-title" style="margin-bottom:6px">🕐 إعدادات الحضور والانصراف التلقائي</div>
@@ -9186,6 +9275,7 @@
     if (tab === "data") {
       if (window.updateLastBackupLabel) window.updateLastBackupLabel();
       if (window.updateImportHint) window.updateImportHint();
+      if (window.loadWorkHours) window.loadWorkHours();
     }
   };
   window.switchHRTab = function(tab) {

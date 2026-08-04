@@ -469,6 +469,7 @@ a{color:var(--red);text-decoration:none}
   </div>
   <div class="scroll pad" style="padding-top:4px">
     <div class="banner" id="homeBanner"></div>
+    <div id="closedNotice" style="display:none"></div>
     <span class="lbl">اليوم لديك</span>
     <div class="stats">
       <div class="stat"><div><b id="stTotal">0</b><span>طلب</span></div>
@@ -777,7 +778,7 @@ const auth = getAuth(app);
 const S = {
   uid: null, user: null, profile: null,
   zones: [], branches: {}, orders: [], addresses: [], savedReceivers: [],
-  banner: null,
+  banner: null, workHours: null,
   page: "splash", orderFilter: "all", currentOrderId: null,
   wizStep: 1, setupStep: 1,
   draft: null, images: [], mapTarget: null, pickLatLng: null,
@@ -1462,6 +1463,12 @@ function attachListeners() {
     if (S.page === "home") renderBanner();
   }));
 
+  // مواعيد استقبال الطلبات — لو الإدارة قفلت، بيتطبّق فورًا
+  S.unsub.push(onValue(ref(db, "settings/workHours"), snap => {
+    S.workHours = snap.val() || null;
+    if (S.page === "home") renderClosedNotice();
+  }));
+
   // البروفايل — لازم يتحدّث *ويعيد الرسم*. من غير إعادة الرسم، لو المستخدم
   // عدّل بياناته من الموبايل، الشاشة المفتوحة على الكمبيوتر تفضل بالقديم
   // ويبان كأن فيه قاعدتين بيانات مختلفتين.
@@ -1611,6 +1618,27 @@ function renderHome() {
   $("homeBell").style.display = un ? "grid" : "none";
   $("homeBell").textContent = un;
   renderBanner();
+  renderClosedNotice();
+}
+
+/** تنبيه في الرئيسية إن الاستقبال مقفول — عشان العميل يعرف قبل ما
+    يدوس «طلب جديد» مش بعدها */
+function renderClosedNotice() {
+  const el = $("closedNotice"); if (!el) return;
+  if (isOpenNow()) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const w = S.workHours || {};
+  el.style.display = "block";
+  el.innerHTML = `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);
+      border-radius:var(--r);padding:14px 16px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
+      <span style="font-size:24px">${w.closedNow ? "🚫" : "🌙"}</span>
+      <div style="flex:1;font-size:13px;line-height:1.75">
+        <b style="display:block;font-size:14px;margin-bottom:2px">
+          ${w.closedNow ? "استقبال الطلبات متوقف مؤقتًا" : "احنا مقفولين دلوقتي"}</b>
+        <span style="color:var(--muted)">${w.closedNow
+          ? "هنرجع نستقبل قريب — كلّمنا لو الموضوع مستعجل."
+          : `بنستقبل الطلبات من ${ar12(w.from || "09:00")} لحد ${ar12(w.to || "05:00")}`}</span>
+      </div>
+    </div>`;
 }
 
 /* ── البانر الإعلاني ──────────────────────────────────────────
@@ -2115,6 +2143,54 @@ const openAbout = () => openModal("عن التطبيق", `
 window.openSupport = openSupport; window.openAbout = openAbout;
 
 /* ══════════════════════════════════════════════════════════════
+   مواعيد استقبال الطلبات
+   ──────────────────────────────────────────────────────────────
+   settings/workHours = { from:"09:00", to:"05:00", on:true, closedNow:false }
+   الإدارة بتظبطها من لوحة الإدارة. المواعيد بتعدّي نص الليل
+   (9ص → 5ف)، فالمقارنة على دايرة 24 ساعة مش مدى بسيط.
+══════════════════════════════════════════════════════════════ */
+const hhmmToMin = t => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+  return m ? +m[1] * 60 + +m[2] : null;
+};
+function isOpenNow() {
+  const w = S.workHours;
+  if (w?.closedNow) return false;                  // قفل طارئ من الإدارة
+  if (!w || w.on === false) return true;           // التقييد مطفي = مفتوح دايمًا
+  const a = hhmmToMin(w.from), b = hhmmToMin(w.to);
+  if (a === null || b === null || a === b) return true;
+  const d = new Date(), n = d.getHours() * 60 + d.getMinutes();
+  return a < b ? (n >= a && n < b) : (n >= a || n < b);
+}
+/** الوقت بالعربي 12 ساعة — «9:00 صباحًا» */
+function ar12(hhmm) {
+  const m = hhmmToMin(hhmm);
+  if (m === null) return hhmm || "";
+  const h24 = Math.floor(m / 60), mm = m % 60;
+  let h = h24 % 12; if (h === 0) h = 12;
+  return `${h}:${String(mm).padStart(2, "0")} ${h24 < 12 ? "صباحًا" : "مساءً"}`;
+}
+function showClosed() {
+  const w = S.workHours || {};
+  const emergency = !!w.closedNow;
+  openModal("مقفولين دلوقتي", `
+    <div style="text-align:center;padding:6px 0 2px">
+      <div style="font-size:52px;line-height:1;margin-bottom:14px">${emergency ? "🚫" : "🌙"}</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px">
+        ${emergency ? "استقبال الطلبات متوقف مؤقتًا" : "احنا مقفولين دلوقتي"}</div>
+      <div style="color:var(--muted);font-size:14px;line-height:1.9;margin-bottom:16px">
+        ${emergency
+          ? "فيه ظرف طارئ ووقفنا استقبال الطلبات مؤقتًا. جرّب تاني بعد شوية أو كلّمنا."
+          : `مواعيد استقبال الطلبات من <b style="color:var(--txt)">${ar12(w.from || "09:00")}</b>
+             لحد <b style="color:var(--txt)">${ar12(w.to || "05:00")}</b>.<br />
+             ارجعلنا في الميعاد ده وهنكون في خدمتك.`}
+      </div>
+      <a class="btn" href="tel:${esc(S.profile?.defaultBranchPhone || "16000")}"
+         style="text-decoration:none">📞 كلّم خدمة العملاء</a>
+    </div>`);
+}
+
+/* ══════════════════════════════════════════════════════════════
    إنشاء طلب جديد — Wizard 4 خطوات
 ══════════════════════════════════════════════════════════════ */
 const WIZ_CAPS = ["المُرسل", "المستلم", "الطلب", "المرفقات"];
@@ -2125,6 +2201,9 @@ const PAYS  = ["كاش", "مدفوع مسبقًا"];
 
 function startNewOrder() {
   if (!S.profile?.profileCompleted) { toast("أكمل بياناتك أولاً", "err"); return openSetup(); }
+  // برّه مواعيد الشغل مابنفتحش الفورم أصلاً — أرحم للعميل من إنه يملا
+  // كل الخطوات وبعدين يترفض في الآخر
+  if (!isOpenNow()) return showClosed();
   S.wizStep = 1; S.images = [];
   S.draft = { kind: "طرد", pay: "كاش", pieces: 1,
               sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
@@ -2527,6 +2606,8 @@ function drawThumbs() {
 /* ── الإرسال ─────────────────────────────────────────────── */
 async function submitOrder() {
   if (S.images.some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
+  // فحص تاني عند الإرسال — العميل ممكن يكون فاتح الفورم قبل ميعاد القفل
+  if (!isOpenNow()) return showClosed();
   readReceiverBlocks();
   const sz = S.draft.senderZone;
   const receivers = (S.draft.receivers || []).filter(r => r.zoneId);
