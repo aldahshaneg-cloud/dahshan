@@ -253,7 +253,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
 const toast = m => { const t = $("toast"); t.textContent = m; t.className = "on";
   clearTimeout(window._t); window._t = setTimeout(() => t.className = "", 2600); };
 
-const S = { customers: [], orders: [], zones: [], branches: {}, sel: null, filter: "all", q: "" };
+const S = { customers: [], orders: [], zones: [], branches: {}, sel: null, filter: "all", q: "", readErr: null };
 
 /* ── الثيم: الفاتح افتراضي (أريح للنظر)، والاختيار بيتحفظ ── */
 if (localStorage.getItem("cust-theme") === "dark") document.documentElement.classList.add("dark");
@@ -298,7 +298,11 @@ onAuthStateChanged(auth, async user => {
 
 /* ══ البيانات ══ */
 function boot() {
+  /* فايربيز بيرفض القراءة بصمت: onValue مابيرميش خطأ في الكونسول،
+     بيستدعي الـ error callback وخلاص — فمن غير المعالج ده الشاشة
+     كانت بتقول «مفيش عملاء» بدل ما تقول إن القراءة مرفوضة. */
   onValue(ref(db, "customers"), s => {
+    S.readErr = null;
     const d = s.val() || {};
     S.customers = Object.entries(d).map(([uid, v]) => {
       const o = { uid, ...(v || {}) };
@@ -308,6 +312,11 @@ function boot() {
       return o;
     });
     renderList(); if (S.sel) renderPane(S.sel);
+  }, err => {
+    // رفض القراءة = مشكلة إعدادات مش «مفيش بيانات» — نقولها صريحة
+    S.readErr = err?.message || String(err);
+    console.error("قراءة customers اترفضت:", err);
+    renderList();
   });
   onValue(ref(db, "orders"), s => {
     const d = s.val() || {};
@@ -360,6 +369,22 @@ function filtered() {
 
 function renderList() {
   const list = filtered(), box = $("list");
+  if (S.readErr) {          // مرفوض ≠ فاضي — لازم يبان الفرق
+    box.innerHTML = `<div class="empty" style="text-align:right;line-height:2">
+      <i style="text-align:center">🔒</i>
+      <b style="display:block;color:var(--brand);margin-bottom:8px;text-align:center">
+        القراءة مرفوضة من فايربيز</b>
+      <div style="font-size:13px">قواعد قاعدة البيانات مابتسمحش للمدير يقرا قايمة العملاء.</div>
+      <div style="font-size:12.5px;margin-top:10px;color:var(--soft)">
+        الحل: Firebase Console ← Realtime Database ← Rules، وحطّ تحت
+        <code style="direction:ltr;display:inline-block">"customers"</code>:
+        <div style="direction:ltr;text-align:left;background:var(--bg);border-radius:8px;
+             padding:9px 11px;margin-top:7px;font-size:11.5px">".read": "auth != null"</div>
+        وبعدين اضغط <b>Publish</b> واعمل Refresh.</div>
+      <div style="font-size:11px;margin-top:10px;color:var(--soft);direction:ltr;text-align:left">
+        ${esc(S.readErr)}</div></div>`;
+    return;
+  }
   if (!list.length) {
     box.innerHTML = `<div class="empty"><i>👤</i>${
       S.customers.length ? "مفيش عملاء بالمواصفات دي" : "لسه مفيش عملاء مسجّلين في التطبيق"}</div>`;
