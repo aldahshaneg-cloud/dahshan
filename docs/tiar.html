@@ -948,8 +948,19 @@
       } catch (e) { showToast("خطأ أثناء الحفظ: " + e.message, "error"); }
       finally { btn.disabled = false; btn.textContent = window._editState.active ? "تحديث الطيار" : "حفظ الطيار"; }
     };
+    /* التأكيد بضغطتين مش بـ confirm() — كروم بيسمح للمستخدم يوقف مربعات
+       الحوار، وساعتها confirm() بترجّع false على طول وبصمت فالحذف
+       مابيحصلش ومفيش أي رسالة تفسّر ليه. */
+    window._delArmed = null;
     window.deletePilot = async function (id) {
-      if (!confirm("هل أنت متأكد من حذف هذا الطيار؟")) return;
+      if (window._delArmed !== id) {
+        window._delArmed = id;
+        showToast("اضغط «حذف» تاني خلال 5 ثواني لتأكيد حذف الطيار", "error");
+        clearTimeout(window._delTimer);
+        window._delTimer = setTimeout(() => { window._delArmed = null; }, 5000);
+        return;
+      }
+      window._delArmed = null; clearTimeout(window._delTimer);
       try {
         const pilotSnap = await get(ref(db, "pilots/" + id));
         const pilotData = pilotSnap.val();
@@ -957,7 +968,9 @@
         if (pilotData?.username) { await remove(ref(db, "users/" + pilotData.username)); }
         showToast("تمّ حذف الطيار وحساب الدخول ✓", "success");
       }
-      catch (e) { showToast("خطأ أثناء الحذف", "error"); }
+      // نعرض رسالة الخطأ الحقيقية — قبل كده كانت بتتبلع فمكانش فيه دليل على السبب
+      catch (e) { console.error("deletePilot:", e);
+        showToast("تعذّر الحذف: " + (e?.message || e), "error"); }
     };
     window.openEditPilot = async function (id) {
       const p = window._pilotsData?.find(x => x.id === id);

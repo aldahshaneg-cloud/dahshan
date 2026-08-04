@@ -821,7 +821,11 @@ const DEFAULT_BRANCHES = ["المنصورة", "طنطا", "دمياط", "الع�
    pilotOrderRate = خدمة الطيار على كل أوردر (الافتراضي لو الطيار مالوش سعر خاص) */
 const DEFAULT_SETTINGS = {
   hourRate: 30, orderRate: 2, pilotOrderRate: 0, restName: "روح دمشق", shiftHours: 10,
-  dayStart: 8            // اليوم في البرنامج بيبدأ الساعة كام
+  dayStart: 8,           // اليوم في البرنامج بيبدأ الساعة كام
+  /* رسوم التطوير بتتحصّل من فرع واحد بس على أوردرات كل الفروع —
+     الشركة بتطلع الفروع كلها من فرع واحد. فاضي = كل فرع بيتحاسب
+     على أوردراته هو (السلوك القديم). */
+  devFeeBranchId: ""
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -1746,11 +1750,26 @@ function branchDayTotals(ym, branchId, day) {
    السلف مش داخلة في المعادلة: دي دَيْن على الطيار هيتخصم من راتبه
    آخر الشهر، فلو حسبناها هنا كانت هتتحسب مرتين.
 ══════════════════════════════════════════════════════════════ */
+/** إجمالي أوردرات كل الفروع في يوم — مش متأثّر بصلاحيات المستخدم،
+    لأن رسوم التطوير بتتحسب على الشركة كلها مش على اللي المستخدم شايفه */
+function allBranchesOrders(ym, day) {
+  let o = 0;
+  for (const p of S.pilots) o += num(entryOf(ym, p.id, day).o);
+  return o;
+}
+/** الفرع اللي بيتحمّل رسوم التطوير كلها — فاضي = كل فرع بأوردراته */
+function devFeeBranch() { return S.settings.devFeeBranchId || ""; }
+
 function branchDayCloseout(ym, branchId, day) {
   const t = branchDayTotals(ym, branchId, day);
   const s = summaryOf(ym, branchId, day);
   const hourPay = t.hourPay;                                   // ساعات × 30
-  const devFee  = t.devFee;                                    // أوردرات × سعر الأوردر
+  /* رسوم التطوير: لو الإدارة حدّدت فرع بيتحمّلها، الفرع ده بياخد
+     أوردرات كل الفروع × السعر، وباقي الفروع بصفر — لأن الشركة
+     بتطلّع الفروع كلها من فرع واحد. */
+  const dfb = devFeeBranch();
+  const devFeeOrders = dfb ? (branchId === dfb ? allBranchesOrders(ym, day) : 0) : t.o;
+  const devFee  = round2(devFeeOrders * devRate());
   const pct = num(s.pct), ext = num(s.ext), exp = num(s.exp);
   const outTotal = round2(hourPay + devFee + pct + ext + exp);
   const cash = t.net;                                          // مجموع عمود «صافي»
@@ -1766,7 +1785,7 @@ function branchDayCloseout(ym, branchId, day) {
   const received = num(s.recv);
 
   return {
-    t, s, hourPay, devFee, pct, ext, exp, cash, outTotal,
+    t, s, hourPay, devFee, devFeeOrders, pct, ext, exp, cash, outTotal,
     net: round2(cash - outTotal),
     adv: t.adv,
     expected, received, hasRecv,
@@ -1787,6 +1806,10 @@ function dayAllBranches(ym, day) {
     all.pct += c.pct; all.ext += c.ext; all.exp += c.exp;
     all.outTotal += c.outTotal; all.net += c.net;
   }
+  /* لو فيه فرع بيتحمّل رسوم التطوير كلها، الإجمالي بيتحسب من أوردرات
+     الشركة كلها مباشرة — مش بجمع الفروع، لأن المستخدم ممكن يكون
+     مصرّح له بفروع معيّنة والفرع المتحمّل مش منهم فيطلع الإجمالي صفر. */
+  if (devFeeBranch()) all.devFee = round2(allBranchesOrders(ym, day) * devRate());
   for (const k of Object.keys(all)) all[k] = round2(all[k]);
   return { per, all };
 }
@@ -1912,9 +1935,13 @@ ${can('blk.hourPay') ? `      <div class="sum-row calc">
             ? " &nbsp;·&nbsp; كل طيار بسعره" : ""} &nbsp;·&nbsp; رواتب مستحقة النهارده — <b>خارج</b></div></div>
         <div class="sv" style="color:var(--orange)">${fmt(C.hourPay)}</div>
       </div>` : ''}
-${can('blk.devFee') ? `      <div class="sum-row calc">
+${/* السطر ده بيظهر في الفرع المتحمّل للرسوم بس — باقي الفروع
+      مالهاش رسوم تطوير في تقفيلتها خالص */
+  can('blk.devFee') && (!devFeeBranch() || branchId === devFeeBranch())
+  ? `      <div class="sum-row calc">
         <div class="sl">رسوم التطوير × ${fmt(devRate())}
-          <div class="sh">${fmt(C.t.o)} أوردر — <b>خارج</b></div></div>
+          <div class="sh">${fmt(C.devFeeOrders)} أوردر${devFeeBranch()
+            ? " &nbsp;·&nbsp; <b>إجمالي أوردرات كل الفروع</b>" : ""} — <b>خارج</b></div></div>
         <div class="sv" style="color:var(--orange)">${fmt(C.devFee)}</div>
       </div>` : ''}
 ${can('blk.pct') ? `      <div class="sum-row">
@@ -2001,7 +2028,9 @@ ${can('blk.branches') ? `      <div style="border-top:1px solid var(--border)">
           صافي الفروع في يوم ${day}
           <div style="font-size:.72rem;font-weight:600;color:var(--muted)">
             إجمالي أوردرات الفروع ${allowedBranches().map(b => fmt(A.per[b.id].t.o)).join(" + ")}
-            = <b>${fmt(A.all.o)}</b> أوردر × ${fmt(devRate())} = <b>${fmt(A.all.devFee)}</b></div></div>
+            = <b>${fmt(devFeeBranch() ? allBranchesOrders(ym, day) : A.all.o)}</b> أوردر
+            × ${fmt(devRate())} = <b>${fmt(A.all.devFee)}</b>${devFeeBranch()
+              ? ` &nbsp;·&nbsp; بتتحصّل كلها من <b>${esc(branchName(devFeeBranch()))}</b>` : ""}</div></div>
         <div class="branch-nets">
           ${allowedBranches().map(b => `<div class="bn-card">
               <div class="bn-name">صافي ${esc(b.name)}</div>
@@ -2400,7 +2429,7 @@ window.renderMonth = function() {
   }).join("") || `<tr><td colspan="13" class="empty-row">مفيش طيارين</td></tr>`;
 
   // تقفيل الشهر — مجموع البلوك اليومي (الفرع المختار أو الأربع فروع)
-  const M = { h: 0, o: 0, hourPay: 0, devFee: 0, pct: 0, ext: 0, exp: 0,
+  const M = { h: 0, o: 0, hourPay: 0, devFee: 0, devFeeOrders: 0, pct: 0, ext: 0, exp: 0,
               cash: 0, adv: 0, out: 0, net: 0 };
   const perBranch = {};
   for (const b of S.branches) perBranch[b.id] = 0;
@@ -2410,6 +2439,7 @@ window.renderMonth = function() {
       perBranch[b.id] += c.net;
       if (bf && b.id !== bf) continue;
       M.h += c.t.h; M.o += c.t.o; M.hourPay += c.hourPay; M.devFee += c.devFee;
+      M.devFeeOrders += c.devFeeOrders;
       M.pct += c.pct; M.ext += c.ext; M.exp += c.exp;
       M.cash += c.cash; M.adv += c.adv; M.out += c.outTotal; M.net += c.net;
     }
@@ -2424,9 +2454,11 @@ window.renderMonth = function() {
       <div class="sum-row"><div class="sl">أجر ساعات الطيارين
         <div class="sh">${fmt(M.h)} ساعة × ${fmt(S.settings.hourRate)} — خارج</div></div>
         <div class="sv" style="color:var(--orange)">${fmt(M.hourPay)}</div></div>
+      ${!devFeeBranch() || !bf || bf === devFeeBranch() ? `
       <div class="sum-row"><div class="sl">رسوم التطوير
-        <div class="sh">${fmt(M.o)} أوردر × ${fmt(devRate())} — خارج</div></div>
-        <div class="sv" style="color:var(--orange)">${fmt(M.devFee)}</div></div>
+        <div class="sh">${fmt(M.devFeeOrders)} أوردر × ${fmt(devRate())}${
+          devFeeBranch() ? " &nbsp;·&nbsp; <b>كل الفروع</b>" : ""} — خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.devFee)}</div></div>` : ""}
       <div class="sum-row"><div class="sl">نسبة روح دمشق<div class="sh">خارج</div></div>
         <div class="sv" style="color:var(--orange)">${fmt(M.pct)}</div></div>
       <div class="sum-row"><div class="sl">الخارجي<div class="sh">خارج</div></div>
@@ -2769,15 +2801,36 @@ window.savePilot = async function() {
   } catch (e) { $("pmError").textContent = "تعذّر الحفظ: " + e.message; }
 };
 
+/* التأكيد جوّه الصفحة مش بـ confirm() — كروم بيسمح للمستخدم يوقف
+   مربعات الحوار، وساعتها confirm() بترجّع false على طول وبصمت
+   فالحذف مابيحصلش ومفيش رسالة تقول ليه. */
+let _delArm = null;
 window.deletePilot = async function() {
   const id = window._editPilot;
   if (!id) return;
-  if (!confirm(`تحذف «${pilotName(id)}»؟ بياناته المسجّلة في الشهور هتفضل موجودة في قاعدة البيانات لكن مش هتظهر.\n\nلو الطيار خرج من الشغل الأحسن تخليه «موقوف» بدل الحذف.`)) return;
+  const btn = $("pmDelete"), err = $("pmError");
+  if (_delArm !== id) {                       // ضغطة أولى = تحذير
+    _delArm = id;
+    btn.textContent = "⚠️ اضغط تاني للتأكيد";
+    err.innerHTML = `هتحذف «<b>${esc(pilotName(id))}</b>» — بياناته في الشهور
+      هتفضل في قاعدة البيانات بس مش هتظهر.<br />
+      لو خرج من الشغل الأحسن تخليه <b>موقوف</b> بدل الحذف.`;
+    clearTimeout(window._delT);
+    window._delT = setTimeout(() => {
+      if (_delArm === id) { _delArm = null; btn.textContent = "🗑️ حذف"; err.textContent = ""; }
+    }, 5000);
+    return;
+  }
+  _delArm = null; clearTimeout(window._delT);
+  btn.disabled = true; btn.textContent = "⏳ جاري الحذف…";
   try {
     await remove(ref(db, `${ROOT}/pilots/${id}`));
     closeModal("pilot");
     showToast("تم الحذف", "success");
-  } catch (e) { $("pmError").textContent = "تعذّر الحذف: " + e.message; }
+  } catch (e) {
+    console.error("deletePilot:", e);
+    err.textContent = "تعذّر الحذف: " + (e?.message || e);
+  } finally { btn.disabled = false; btn.textContent = "🗑️ حذف"; }
 };
 
 window.openBulkModal = function() {
@@ -3070,6 +3123,17 @@ window.renderSettings = function() {
         <input class="sv" id="setOrderRate" type="text" inputmode="decimal" value="${esc(S.settings.orderRate)}" />
       </div>
       <div class="sum-row">
+        <div class="sl">فرع تحصيل رسوم التطوير
+          <div class="sh">الشركة بتطلّع الفروع كلها من فرع واحد — فالفرع ده بياخد
+            <b>رسوم أوردرات كل الفروع</b>، وباقي الفروع مايظهرش عندها سطر رسوم تطوير
+            خالص. «كل فرع لوحده» = كل فرع بيتحاسب على أوردراته هو.</div></div>
+        <select class="sv" id="setDevBranch" style="min-width:180px;text-align:right;direction:rtl">
+          <option value="">كل فرع لوحده</option>
+          ${S.branches.map(b => `<option value="${esc(b.id)}"${
+            S.settings.devFeeBranchId === b.id ? " selected" : ""}>${esc(b.name)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="sum-row">
         <div class="sl">سعر أوردر الطيار (افتراضي)
           <div class="sh">خدمة الطيار = أوردراته × السعر ده، لو مالوش سعر خاص في كارته</div></div>
         <input class="sv" id="setPilotOrderRate" type="text" inputmode="decimal" value="${esc(S.settings.pilotOrderRate ?? 0)}" />
@@ -3102,6 +3166,7 @@ window.saveSettings = async function() {
   const shiftHours     = num($("setShiftHours").value);
   const dayStart       = num($("setDayStart").value);
   const restName   = $("setRestName").value.trim() || "روح دمشق";
+  const devFeeBranchId = $("setDevBranch")?.value || "";
   if (hourRate <= 0) { showToast("سعر الساعة لازم يكون أكبر من صفر", "error"); return; }
   if (shiftHours <= 0) { showToast("ساعات الوردية لازم تكون أكبر من صفر", "error"); return; }
   if (!(dayStart >= 0 && dayStart <= 23)) {
@@ -3109,7 +3174,7 @@ window.saveSettings = async function() {
   }
   try {
     await update(ref(db, `${ROOT}/settings`),
-      { hourRate, orderRate, pilotOrderRate, shiftHours, dayStart, restName });
+      { hourRate, orderRate, pilotOrderRate, shiftHours, dayStart, restName, devFeeBranchId });
     showToast("تم حفظ الأسعار", "success");
   } catch (e) { showToast("تعذّر الحفظ: " + e.message, "error"); }
 };
@@ -3142,7 +3207,9 @@ window.exportDaily = function() {
   aoa.push([]);
   aoa.push([`تقفيل يومي ${day} — ${branchName(bid)}`]);
   aoa.push([`عدد ساعات العمل × ${S.settings.hourRate}`, C.t.h, C.hourPay, "خارج"]);
-  aoa.push([`رسوم التطوير × ${devRate()}`, C.t.o, C.devFee, "خارج"]);
+  if (!devFeeBranch() || bid === devFeeBranch())
+    aoa.push([`رسوم التطوير × ${devRate()}${devFeeBranch() ? " (كل الفروع)" : ""}`,
+              C.devFeeOrders, C.devFee, "خارج"]);
   aoa.push(["نسبة روح دمشق", "", C.pct, "خارج"]);
   aoa.push(["الخارجي", "", C.ext, "خارج"]);
   aoa.push(["مصاريف", "", C.exp, "خارج"]);
