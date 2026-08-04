@@ -219,6 +219,11 @@ a{color:var(--red);text-decoration:none}
 .rcv-del{width:32px;height:32px;border-radius:9px;flex:none;cursor:pointer;font-size:14px;
   background:rgba(232,25,44,.1);border:1px solid rgba(232,25,44,.3);color:var(--red)}
 .rcv-del:active{transform:scale(.94)}
+.rcv-copy{flex:none;cursor:pointer;font-size:11.5px;font-weight:700;padding:6px 11px;
+  border-radius:9px;background:var(--card2);border:1px solid var(--line);color:var(--muted);
+  white-space:nowrap;font-family:inherit}
+.rcv-copy:hover{border-color:var(--red);color:var(--red)}
+.rcv-copy:active{transform:scale(.96)}
 .rcv-total{display:flex;align-items:center;justify-content:space-between;gap:10px;
   background:rgba(34,197,94,.09);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);
   padding:13px 15px;font-size:13.5px}
@@ -562,7 +567,7 @@ a{color:var(--red);text-decoration:none}
 
       <button class="btn ghost sm" id="addRcvBtn" style="margin-top:12px" onclick="addReceiver()"
         data-tip="ضيف مستلم تاني لنفس الطلب — الطيار هيعدّي على كل النقط في رحلة واحدة، وسعر التوصيل بيتجمع.">
-        ＋ إضافة مستلم آخر</button>
+        ＋ إضافة طرد لمستلم آخر</button>
 
       <div id="rcvTotal" style="display:none;margin-top:12px"></div>
 
@@ -2296,9 +2301,11 @@ function receiverBlockHtml(r, i, multi, receipt) {
   <div class="card rcv-block" data-i="${i}">
     <div class="rcv-hd">
       <span class="no">${i + 1}</span>
-      <b>${multi ? `المستلم ${i + 1}` : "بيانات المستلم"}</b>
+      <b>${multi ? `📦 الطرد ${i + 1}` : "📦 بيانات الطرد"}</b>
+      ${!receipt ? `<button type="button" class="rcv-copy" onclick="addParcelSameReceiver(${i})"
+                   data-tip="طرد تاني لنفس المستلم — بينسخ بياناته وإنت تختار منطقته بس">＋ طرد لنفس المستلم</button>` : ""}
       ${multi ? `<button type="button" class="rcv-del" onclick="removeReceiver(${i})"
-                   data-tip="حذف المستلم ده من الطلب">🗑️</button>` : ""}
+                   data-tip="حذف الطرد ده من الطلب">🗑️</button>` : ""}
     </div>
 
     <div id="rcvFields-${i}" style="display:${receipt ? "none" : "block"}">
@@ -2345,7 +2352,7 @@ function renderReceiverBlocks() {
   refillReceiverZones();
   renderSavedPicks();
   updateRcvTotal();
-  // زرار "إضافة مستلم آخر" — مالوش لازمة في وضع الريسيت (مفيش بيانات نكرّرها)
+  // زرار الإضافة — مالوش لازمة في وضع الريسيت (مفيش بيانات نكرّرها)
   $("addRcvBtn").style.display = receipt ? "none" : "flex";
 }
 
@@ -2361,6 +2368,22 @@ function refillReceiverZones() {
     onReceiverZone(i);
   });
 }
+
+/* طرد تاني لنفس المستلم — بينسخ بياناته وبيسيبه يختار المنطقة.
+   نفس نمط تطبيق الفروع: كل طرد سطر مستقل بسعره، والمستلم ممكن
+   يتكرر في أكتر من طرد، والإجمالي بيجمع سعر كل طرد. */
+function addParcelSameReceiver(i) {
+  readReceiverBlocks();
+  const src = S.draft.receivers[i]; if (!src) return;
+  S.draft.receivers.splice(i + 1, 0, {
+    name: src.name, phone: src.phone, phone2: src.phone2, address: src.address,
+    zoneId: src.zoneId, lat: src.lat, lng: src.lng
+  });
+  renderReceiverBlocks();
+  $("rcvBlocks")?.children[i + 1]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast("اتضاف طرد تاني لنفس المستلم", "ok");
+}
+window.addParcelSameReceiver = addParcelSameReceiver;
 
 function addReceiver() {
   readReceiverBlocks();
@@ -2426,7 +2449,7 @@ function onReceiverZone(i) {
   updateRcvTotal();
 }
 
-/** إجمالي التوصيل = مجموع أسعار مناطق كل المستلمين */
+/** إجمالي التوصيل = مجموع سعر منطقة كل طرد — زي تطبيق الفروع */
 function draftDeliveryTotal() {
   return (S.draft?.receivers || []).reduce((s, r) => s + (findZone(r.zoneId)?.price || 0), 0);
 }
@@ -2439,7 +2462,7 @@ function updateRcvTotal() {
   const known = list.filter(r => findZone(r.zoneId)?.price).length;
   el.style.display = "block";
   el.innerHTML = `<div class="rcv-total">
-      <span>🚚 إجمالي التوصيل — ${list.length} مستلمين
+      <span>🚚 إجمالي التوصيل — ${list.length} طرود
         ${known < list.length ? `<span style="color:var(--muted);font-size:11.5px">(فيه مناطق سعرها بيحدده الفرع)</span>` : ""}
       </span>
       <b>${fmtMoney(total)} ج.م</b>
@@ -2543,11 +2566,11 @@ function wizNext(step) {
     if (S.wizStep === 2) {
       readReceiverBlocks();
       const list = S.draft.receivers || [];
-      if (!list.length) return toast("أضف مستلم واحد على الأقل", "err");
+      if (!list.length) return toast("أضف طرد واحد على الأقل", "err");
       // كل بلوك مستلم بيتفحص لوحده — مش الأول بس
       for (let i = 0; i < list.length; i++) {
         const r = list[i];
-        const at = list.length > 1 ? ` — المستلم ${i + 1}` : "";
+        const at = list.length > 1 ? ` — الطرد ${i + 1}` : "";
         // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
         if (!r.zoneId)                return toast("اختر منطقة التسليم" + at, "err");
         if (!S.draft.receiptMode) {
@@ -2578,14 +2601,14 @@ function renderSummary() {
   const rcvRows = S.draft.receiptMode
     ? row("المستلم", "🧾 من صورة الريسيت — " + (zoneLabel(findZone(list[0]?.zoneId) || {}) || "—"))
     : list.map((r, i) => row(
-        list.length > 1 ? `المستلم ${i + 1}` : "المستلم",
+        list.length > 1 ? `الطرد ${i + 1}` : "المستلم",
         `${r.name || "—"} — ${zoneLabel(findZone(r.zoneId) || {}) || "—"}`)).join("");
   $("summaryCard").innerHTML = `<span class="lbl">ملخّص الطلب</span>
     ${rcvRows}
     ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
     ${row("النوع", S.draft.kind + " × " + S.draft.pieces)}
     ${row("التحصيل", fmtMoney($("odCod").value) + " ج.م")}
-    ${row(list.length > 1 ? `إجمالي التوصيل (${list.length} مستلمين)` : "سعر التوصيل",
+    ${row(list.length > 1 ? `إجمالي التوصيل (${list.length} طرود)` : "سعر التوصيل",
           total ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " + مناطق يحددها الفرع") : "يحدده الفرع")}
     ${row("الدفع", S.draft.pay)}`;
 }
