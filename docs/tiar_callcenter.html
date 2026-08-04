@@ -2814,8 +2814,10 @@
       const sel = document.getElementById("orderBranchSelect");
       if (!sel) return;
       const cur = sel.value;
+      // الفرع الموقوف بيتعلّم عليه — الموظف هنا بيختار بإيده فمابنحوّلش
+      // من ورا ظهره، بس لازم يشوف إنه موقوف قبل ما يختاره
       sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-        window._branchesList.map(b => `<option value="${b.id}">${b.name} – ${b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '')}</option>`).join("");
+        window._branchesList.map(b => `<option value="${b.id}">${b.paused ? "⏸️ (موقوف) " : ""}${b.name} – ${b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '')}</option>`).join("");
       if (cur) sel.value = cur;
     }
 

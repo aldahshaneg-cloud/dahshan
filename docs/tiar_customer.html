@@ -1306,6 +1306,15 @@ function setAddr(containerId, text) {
    الفرع المسؤول عن العميل بيتحدد من zone الاستلام (المُرسِل).
 ══════════════════════════════════════════════════════════════ */
 const zoneBranchId   = z => z.deliveryBranchId || z.branchId || "";
+/* لو الفرع موقوف مؤقتًا من الإدارة، أوردراته الجديدة بتتسجّل على
+   الفرع البديل. بنمشي خطوة واحدة بس عشان لو حصل تحويل دائري
+   (أ ← ب و ب ← أ) مايفضلش يلف. */
+function routeBranch(id) {
+  const b = S.branches?.[id];
+  if (!b?.paused || !b.failoverBranchId) return id;
+  const alt = S.branches?.[b.failoverBranchId];
+  return (alt && !alt.paused) ? b.failoverBranchId : id;
+}
 const zoneBranchName = z => z.deliveryBranchName || S.branches[zoneBranchId(z)]?.name || "";
 const zoneLabel      = z => z.areaName || z.name || "—";
 
@@ -2617,9 +2626,11 @@ async function submitOrder() {
   if (S.draft.receiptMode && !S.images.some(i => i.url))
     return toast("لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
 
-  const branchId   = zoneBranchId(sz);
-  const branchName = zoneBranchName(sz);
-  if (!branchId) return toast("المنطقة دي مش مربوطة بفرع — كلّم خدمة العملاء", "err");
+  const origBranchId = zoneBranchId(sz);
+  if (!origBranchId) return toast("المنطقة دي مش مربوطة بفرع — كلّم خدمة العملاء", "err");
+  // لو فرع المنطقة موقوف، الأوردر بيروح للفرع البديل تلقائيًا
+  const branchId   = routeBranch(origBranchId);
+  const branchName = S.branches[branchId]?.name || zoneBranchName(sz);
 
   const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
   try {

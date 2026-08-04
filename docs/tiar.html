@@ -2448,17 +2448,25 @@
       if (window.renderAccountingPage) window.renderAccountingPage();
       document.getElementById("totalBranches").textContent = list.length;
       const tbody = document.getElementById("branchesBody");
-      if (!list.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty-row">لا توجد فروع مسجّلة بعد</td></tr>`; }
+      if (!list.length) { tbody.innerHTML = `<tr><td colspan="8" class="empty-row">لا توجد فروع مسجّلة بعد</td></tr>`; }
       else tbody.innerHTML = list.map((b,i) => {
         const areasText = b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '—');
-        return `<tr>
+        // الفرع الموقوف: أوردراته الجديدة بتروح للفرع البديل
+        const alt = b.paused ? list.find(x => x.id === b.failoverBranchId) : null;
+        const statusHtml = b.paused
+          ? `<span style="background:rgba(232,25,44,.15);color:var(--red);padding:3px 10px;border-radius:20px;font-weight:700;font-size:.78rem">⏸️ موقوف</span>
+             <div style="font-size:.72rem;color:var(--muted);margin-top:3px">${
+               alt ? `الأوردرات ← <b>${alt.name}</b>` : `<span style="color:var(--orange)">⚠️ مفيش فرع بديل</span>`}</div>`
+          : `<span style="background:rgba(34,197,94,.15);color:var(--green);padding:3px 10px;border-radius:20px;font-weight:700;font-size:.78rem">✅ شغّال</span>`;
+        return `<tr${b.paused ? ' style="background:rgba(232,25,44,.04)"' : ''}>
         <td class="idx">${i+1}</td>
         <td><span class="name-badge">${b.name}</span></td>
         <td><span style="background:rgba(249,115,22,.15);color:var(--orange);padding:3px 10px;border-radius:20px;font-weight:700;font-size:.82rem;font-family:monospace;letter-spacing:.05em">${b.code || "—"}</span></td>
         <td>${areasText}</td>
         <td dir="ltr">${b.phone}</td>
         <td>${b.manager || "—"}</td>
-        <td><button class="edit-btn" onclick="openEditBranch('${b.id}')">تعديل</button><button class="del-btn" onclick="deleteBranch('${b.id}')">حذف</button></td>
+        <td>${statusHtml}</td>
+        <td><button class="edit-btn" onclick="openPauseBranch('${b.id}')">${b.paused ? "▶️ تشغيل" : "⏸️ إيقاف"}</button><button class="edit-btn" onclick="openEditBranch('${b.id}')">تعديل</button><button class="del-btn" onclick="deleteBranch('${b.id}')">حذف</button></td>
       </tr>`;}).join("");
       populateBranchSelect();
     });
@@ -2823,8 +2831,10 @@
       const sel = document.getElementById("orderBranchSelect");
       if (!sel) return;
       const cur = sel.value;
+      // الفرع الموقوف بيتعلّم عليه — الموظف هنا بيختار بإيده فمابنحوّلش
+      // من ورا ظهره، بس لازم يشوف إنه موقوف قبل ما يختاره
       sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-        window._branchesList.map(b => `<option value="${b.id}">${b.name} – ${b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '')}</option>`).join("");
+        window._branchesList.map(b => `<option value="${b.id}">${b.paused ? "⏸️ (موقوف) " : ""}${b.name} – ${b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '')}</option>`).join("");
       if (cur) sel.value = cur;
     }
 
@@ -8612,7 +8622,7 @@
       </div>
       <div id="settings-branches">
         <div class="sec-header"><span class="sec-title">🏢 إدارة الفروع</span><button class="add-btn" onclick="resetBranchModal();openModal('branch')">➕ إضافة فرع جديد</button></div>
-        <div class="table-wrap"><table><thead><tr><th>#</th><th>اسم الفرع</th><th>الكود</th><th>المنطقة</th><th>هاتف</th><th>المدير</th><th>إجراء</th></tr></thead><tbody id="branchesBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>اسم الفرع</th><th>الكود</th><th>المنطقة</th><th>هاتف</th><th>المدير</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="branchesBody"></tbody></table></div>
       </div>
       <div id="settings-zones" style="display:none">
         <div class="sec-header"><span class="sec-title">🗺️ إدارة مناطق التوصيل</span><button class="add-btn" onclick="resetZoneModal();openModal('zone')">➕ إضافة منطقة جديدة</button></div>
@@ -8982,6 +8992,31 @@
   </div>
 </div>
 
+<!-- Modal: إيقاف فرع مؤقتًا وتحويل أوردراته -->
+<div class="modal" id="modal-pause">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header"><span class="modal-title">⏸️ إيقاف الفرع مؤقتًا</span>
+      <button class="modal-close" onclick="closeModal('pause')">✕</button></div>
+    <div style="padding:20px">
+      <div id="pauseInfo" style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);
+        border-radius:10px;padding:13px 16px;font-size:.85rem;line-height:1.85;margin-bottom:16px"></div>
+      <div class="form-group full" id="pauseAltWrap">
+        <label>الأوردرات الجديدة تروح لأنهي فرع؟ <span class="req">*</span></label>
+        <select id="pauseAlt"></select>
+        <small style="color:var(--muted);font-size:.75rem;display:block;margin-top:6px">
+          أي أوردر جديد على مناطق الفرع الموقوف هيتسجّل على الفرع ده تلقائيًا.
+          <b>الأوردرات القديمة هتفضل مكانها</b> — لو عايز تنقلها، انقلها بإيدك من شاشة الطلبات.
+        </small>
+      </div>
+      <div id="pauseErr" style="color:var(--red);font-size:.82rem;min-height:18px;margin-top:10px"></div>
+      <div class="form-actions" style="margin-top:6px">
+        <button class="submit-btn" id="pauseSaveBtn" onclick="saveBranchPause()">حفظ</button>
+        <button class="cancel-btn" onclick="closeModal('pause')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: إضافة منطقة توصيل -->
 <div id="modal-zone" class="modal-overlay" onclick="if(event.target===this) closeModal('zone')">
   <div class="modal-box" style="max-width:560px">
@@ -9343,6 +9378,66 @@
     const p = document.getElementById('receiverAddrWidget-preview'); if (p) p.style.display = 'none';
     if (window.resetEditState) window.resetEditState();
   }
+  /* ══════════════════════════════════════════════════════════════
+     إيقاف فرع مؤقتًا + تحويل أوردراته الجديدة لفرع بديل
+     ──────────────────────────────────────────────────────────────
+     branches/{id} = { …, paused: true, failoverBranchId: "…" }
+     كل الشاشات اللي بتنشئ أوردر بتعدّي الفرع على routeBranch()
+     الأول، فلو الفرع موقوف الأوردر بيتسجّل على البديل تلقائيًا.
+     الأوردرات القديمة مابتتحركش — نقلها قرار يدوي من الإدارة.
+  ══════════════════════════════════════════════════════════════ */
+  window._pauseBranchId = null;
+  window.openPauseBranch = function(id) {
+    const list = window._branchesList || [];
+    const b = list.find(x => x.id === id); if (!b) return;
+    window._pauseBranchId = id;
+    document.getElementById("pauseErr").textContent = "";
+    const wrap = document.getElementById("pauseAltWrap");
+    const sel  = document.getElementById("pauseAlt");
+    const info = document.getElementById("pauseInfo");
+
+    if (b.paused) {                       // الفرع موقوف → الزرار بيرجّعه شغّال
+      info.innerHTML = `الفرع <b>${b.name}</b> موقوف دلوقتي وأوردراته بتروح لفرع تاني.<br />
+        هترجّعه شغّال، والأوردرات الجديدة على مناطقه هتتسجّل عليه هو تاني.`;
+      wrap.style.display = "none";
+      document.getElementById("pauseSaveBtn").textContent = "▶️ رجّع الفرع للشغل";
+    } else {
+      info.innerHTML = `الفرع <b>${b.name}</b> هيتوقف عن استقبال أوردرات جديدة.<br />
+        اختار الفرع اللي هيستلم أوردراته لحد ما يرجع.`;
+      wrap.style.display = "";
+      sel.innerHTML = `<option value="">— اختر الفرع البديل —</option>` +
+        list.filter(x => x.id !== id && !x.paused)
+            .map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+      sel.value = b.failoverBranchId || "";
+      document.getElementById("pauseSaveBtn").textContent = "⏸️ أوقف الفرع";
+    }
+    openModal("pause");
+  };
+
+  window.saveBranchPause = async function() {
+    const id = window._pauseBranchId; if (!id) return;
+    const b = (window._branchesList || []).find(x => x.id === id); if (!b) return;
+    const err = document.getElementById("pauseErr");
+    const btn = document.getElementById("pauseSaveBtn");
+    try {
+      if (b.paused) {
+        await update(ref(db, "branches/" + id), { paused: false, failoverBranchId: null });
+        showToast(`رجع فرع ${b.name} للشغل ✓`, "success");
+      } else {
+        const alt = document.getElementById("pauseAlt").value;
+        if (!alt) { err.textContent = "لازم تختار الفرع البديل"; return; }
+        // منع سلسلة تحويلات: البديل نفسه مايكونش موقوف
+        const altB = (window._branchesList || []).find(x => x.id === alt);
+        if (altB?.paused) { err.textContent = "الفرع البديل موقوف هو كمان — اختار فرع شغّال"; return; }
+        btn.disabled = true;
+        await update(ref(db, "branches/" + id), { paused: true, failoverBranchId: alt });
+        showToast(`اتوقف فرع ${b.name} — أوردراته هتروح ${altB?.name} ✓`, "success");
+      }
+      closeModal("pause");
+    } catch (e) { err.textContent = "تعذّر الحفظ: " + (e?.message || e); }
+    finally { btn.disabled = false; }
+  };
+
   function resetBranchModal() {
     document.getElementById("addBranchForm").reset();
         window.renderAddressWidget("branchAddrWidget", { required: false, value: "" });

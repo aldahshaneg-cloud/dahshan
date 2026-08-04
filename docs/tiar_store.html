@@ -1289,10 +1289,20 @@
       const btn = $("saveBtn");
       btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
       try {
-        const bSnap     = await get(ref(db, "branches/" + u.branchId));
+        /* لو فرع المحل موقوف مؤقتًا من الإدارة، الأوردر بيتسجّل على
+           الفرع البديل — خطوة واحدة بس عشان لو حصل تحويل دائري
+           (أ ← ب و ب ← أ) مايفضلش يلف. */
+        let branchId = u.branchId;
+        const myB = await get(ref(db, "branches/" + branchId));
+        const myV = myB.exists() ? myB.val() : null;
+        if (myV?.paused && myV.failoverBranchId) {
+          const altS = await get(ref(db, "branches/" + myV.failoverBranchId));
+          if (altS.exists() && !altS.val().paused) branchId = myV.failoverBranchId;
+        }
+        const bSnap     = await get(ref(db, "branches/" + branchId));
         const branchCode= bSnap.exists() ? (bSnap.val().code || "STR") : "STR";
         const today     = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        const cRef      = ref(db, `counters/${u.branchId}/${today}`);
+        const cRef      = ref(db, `counters/${branchId}/${today}`);
         let   count     = 1;
         await runTransaction(cRef, cur => { count = (cur || 0) + 1; return count; });
         const orderNum  = `${branchCode}-${String(count).padStart(3, "0")}`;
@@ -1311,8 +1321,8 @@
             senderLng: window._geoPins.pickup.lng,
             geoSender: { ...window._geoPins.pickup, src: "store-pin" }
           } : {}),
-          branchId    : u.branchId,
-          branchName  : u.branchName,
+          branchId    : branchId,
+          branchName  : (bSnap.exists() ? bSnap.val().name : null) || u.branchName,
           notes, deliveries,
           totalDeliveryPrice: total,
           storePrepaid: totalOrderPrice,
