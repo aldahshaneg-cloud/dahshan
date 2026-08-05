@@ -410,7 +410,10 @@ a{color:var(--red);text-decoration:none}
       <div class="fld" data-tip="اسمك اللي هيظهر للفرع والطيار في كل طلباتك."><div class="fi">👤</div><div class="fb">
         <b>الاسم بالكامل</b><input id="sutName" placeholder="أدخل اسمك الكامل بالعربي" /></div></div>
       <div class="fld" data-tip="رقمك الأساسي للتواصل معاك في أي طلب. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
-        <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+        <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"
+          oninput="lookupMyShipments()" /></div></div>
+      <!-- لو الرقم ده مستلم في شحنة موجودة، بنقوله ونعرض نملا بياناته -->
+      <div id="sutFound"></div>
       <div class="fld" data-tip="رقم احتياطي نتصل بيه لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
         <b>رقم إضافي (اختياري)</b><input id="sutPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
       <div class="fld"><div class="fi">✉️</div><div class="fb">
@@ -1449,20 +1452,111 @@ async function loadRefData() {
   S.branches = bs.val() || {};
 }
 
+/* ══════════════════════════════════════════════════════════════
+   شحناتي المسجّلة عند حد تاني
+   ──────────────────────────────────────────────────────────────
+   لو العميل ده كان مستلم في أوردر عمله محل أو فرع أو كول سنتر قبل ما
+   ينزّل التطبيق، بياناته (اسمه وعنوانه) اتسجّلت هناك. أول ما يكتب رقم
+   تليفونه في شاشة التسجيل بنلاقي شحناته ونعرض نملا بياناته منها.
+══════════════════════════════════════════════════════════════ */
+function findShipmentsFor(phone) {
+  const p = normPhone(phone);
+  if (!p || p.length < 8) return [];
+  const out = [];
+  for (const [id, o] of Object.entries(S._rawOrders || {})) {
+    (o.deliveries || []).forEach(d => {
+      if (normPhone(d.receiverPhone) === p) out.push({ id, order: o, d });
+    });
+  }
+  return out.sort((a, b) =>
+    new Date(b.order.createdAt || 0) - new Date(a.order.createdAt || 0));
+}
+
+window.lookupMyShipments = function () {
+  const box = $("sutFound"); if (!box) return;
+  const hits = findShipmentsFor($("sutPhone").value);
+  if (!hits.length) { box.innerHTML = ""; window._foundShipment = null; return; }
+  const top = hits[0];
+  window._foundShipment = top;
+  const senderName = top.order.senderName || top.order.customerName || "—";
+  box.innerHTML = `
+    <div class="card" style="background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.3);margin-top:10px">
+      <div style="font-weight:800;font-size:13.5px;color:#22c55e">
+        📦 لقينا ${hits.length > 1 ? `<b>${hits.length}</b> شحنات` : "شحنة"} على الرقم ده
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.9">
+        آخر شحنة من <b>${esc(senderName)}</b>${top.d.zoneName ? ` — ${esc(top.d.zoneName)}` : ""}<br />
+        هتلاقيها في «طلباتي» وتقدر تتابعها بعد ما تكمّل تسجيلك.
+      </div>
+      ${(top.d.receiverName || top.d.address) ? `
+        <button class="btn ghost sm" style="margin-top:10px" onclick="fillFromShipment()">
+          ✨ املا بياناتي من الشحنة
+        </button>` : ""}
+    </div>`;
+};
+
+/* بيملا الاسم والعنوان من اللي المُرسِل سجّله عن العميل */
+window.fillFromShipment = function () {
+  const f = window._foundShipment; if (!f) return;
+  const d = f.d;
+  if (d.receiverName && !d.receiverFromReceipt && !$("sutName").value.trim())
+    $("sutName").value = d.receiverName;
+  if (d.receiverPhone2 && !$("sutPhone2").value.trim())
+    $("sutPhone2").value = d.receiverPhone2;
+  if (d.address && !d.receiverFromReceipt) setAddr("sutAddrW", d.address);
+  // منطقة التسليم اللي اتسجّلت له = منطقته الافتراضية
+  const zs = $("sutZone");
+  if (zs && d.zoneId && [...zs.options].some(o => o.value === d.zoneId)) {
+    zs.value = d.zoneId;
+    zs.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  if (d.lat && d.lng) { S.draftLat = d.lat; S.draftLng = d.lng; }
+  toast("اتملت بياناتك من الشحنة — راجعها وعدّل لو محتاج", "ok");
+};
+
+/* أرقام تليفون العميل بعد التوحيد — الأساسي والاحتياطي */
+function myPhoneSet() {
+  return new Set([S.profile?.phone1, S.profile?.phone2]
+    .map(p => normPhone(p))
+    .filter(p => p && p.length >= 8));
+}
+
+/* بيبني قايمة الطلبات من آخر نسخة اتقريت.
+   بتشمل حاجتين:
+   1) الطلبات اللي العميل عملها بنفسه.
+   2) الشحنات الجاية له — حد تاني (محل/فرع/كول سنتر/عميل) عمل أوردر وهو
+      المستلم فيه. بنطابق برقم تليفونه اللي في حسابه، فأول ما ينزّل
+      التطبيق ويسجّل بيلاقي شحناته مستنياه من غير ما يعمل أي حاجة.
+   منفصلة عن الـ listener عشان نقدر ننادي عليها كمان بعد ما يحفظ رقمه. */
+function recomputeOrders() {
+  const all = S._rawOrders || {};
+  const myPhones = myPhoneSet();
+  S.orders = Object.entries(all)
+    .map(([id, v]) => ({ id, ...v }))
+    .map(o => {
+      if (o.customerId === S.uid || (o.source === "customer" && o.addedBy === S.uid))
+        return { ...o, _incoming: false };
+      if (!myPhones.size) return null;
+      const mine = (o.deliveries || [])
+        .map((d, i) => myPhones.has(normPhone(d.receiverPhone)) ? i : -1)
+        .filter(i => i >= 0);
+      return mine.length ? { ...o, _incoming: true, _myParcels: mine } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  refreshBadge();
+  if (S.page === "home")   renderHome();
+  if (S.page === "orders") renderOrders();
+  if (S.page === "notifs") renderNotifs();
+  if (S.page === "detail") renderDetail();
+}
+
 function attachListeners() {
   // طلبات هذا العميل — الفلترة على العميل بتتم هنا لأن الطلبات
   // مشتركة مع المحلات والفروع في نفس العقدة.
   S.unsub.push(onValue(ref(db, "orders"), snap => {
-    const all = snap.val() || {};
-    S.orders = Object.entries(all)
-      .map(([id, v]) => ({ id, ...v }))
-      .filter(o => o.customerId === S.uid || (o.source === "customer" && o.addedBy === S.uid))
-      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-    refreshBadge();
-    if (S.page === "home")   renderHome();
-    if (S.page === "orders") renderOrders();
-    if (S.page === "notifs") renderNotifs();
-    if (S.page === "detail") renderDetail();
+    S._rawOrders = snap.val() || {};
+    recomputeOrders();
   }));
 
   S.unsub.push(onValue(ref(db, `customers/${S.uid}/addresses`), snap => {
@@ -1616,7 +1710,13 @@ async function saveProfile() {
         isDefault: true, createdAt: new Date().toISOString()
       });
     }
-    toast("تم حفظ بياناتك ✅", "ok");
+    // دلوقتي بقى له رقم محفوظ — نعيد بناء القايمة عشان الشحنات الجاية
+    // له (اللي حد تاني عاملها وهو المستلم فيها) تظهر على طول
+    recomputeOrders();
+    const incoming = S.orders.filter(o => o._incoming).length;
+    toast(incoming
+      ? `تم حفظ بياناتك ✅ — لقينالك ${incoming} شحنة باسمك`
+      : "تم حفظ بياناتك ✅", "ok");
     go("home");
   } catch (e) { toast("خطأ في الحفظ: " + e.message, "err"); }
   finally { btn.disabled = false; btn.textContent = "حفظ البيانات"; }
@@ -1724,16 +1824,23 @@ function renderOrders() {
     return;
   }
   $("ordersList").innerHTML = list.map(o => {
-    const d  = (o.deliveries && o.deliveries[0]) || {};
+    // في الشحنات الجاية له، بنعرض الطرد بتاعه هو مش أول طرد في الأوردر
+    const idx = o._incoming && o._myParcels ? o._myParcels[0] : 0;
+    const d  = (o.deliveries && o.deliveries[idx]) || {};
     const m  = STATE_META[orderState(o)];
     const dt = new Date(o.createdAt || 0);
     const isToday = dt.toDateString() === todayKey();
+    // رقم الطرد المركّب لو الأوردر أكتر من طرد — نفس اللي على الباركود
+    const num = (o._incoming && (o.deliveries || []).length > 1 && d.parcelNo)
+      ? `${o.orderNum}-${d.parcelNo}` : (o.orderNum || "—");
     return `<div class="o-item" data-id="${esc(o.id)}">
-      <div class="oi">${KIND_ICON[o.orderKind] || "📦"}</div>
+      <div class="oi">${o._incoming ? "📥" : (KIND_ICON[o.orderKind] || "📦")}</div>
       <div class="ob">
-        <div class="r1"><span class="num">#${esc(o.orderNum || "—")}</span>
+        <div class="r1"><span class="num">#${esc(num)}</span>
           <span class="badge ${m.c}">${m.t}</span></div>
-        <div class="nm">${d.receiverFromReceipt ? "🧾 مستلم من الريسيت" : esc(d.receiverName || "—")}</div>
+        <div class="nm">${o._incoming
+          ? `<span style="color:#22c55e">شحنة جاية لك</span> — من ${esc(o.senderName || "—")}`
+          : (d.receiverFromReceipt ? "🧾 مستلم من الريسيت" : esc(d.receiverName || "—"))}</div>
         <div class="r3"><span>${fmtMoney(d.orderPrice)} ج.م</span>
           <span>${isToday ? "اليوم" : dt.toLocaleDateString("ar-EG")} ${dt.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})}</span></div>
       </div></div>`;
