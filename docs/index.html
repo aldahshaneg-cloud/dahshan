@@ -855,6 +855,20 @@
           <div class="app-name">إدارة العملاء</div>
         </div>
 
+        <!-- إدارة المحلات -->
+        <div class="app-card" id="card-storesadmin" onclick="openApp('storesadmin')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 14h22v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V14z" fill="#e8192c" fill-opacity=".14"
+                    stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M6 9.5h24l1.4 4.5H4.6L6 9.5z" fill="#e8192c" fill-opacity=".3" stroke="#e8192c"
+                    stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M15 30v-7h6v7" stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="app-name">إدارة المحلات</div>
+        </div>
+
         <!-- إدارة التقييمات -->
         <div class="app-card" id="card-perf" onclick="openApp('perf')">
           <div class="app-icon">
@@ -1053,7 +1067,7 @@
       // «إدارة العملاء» و«لوحة تحكم الموقع» أدوات إدارية — بتتبع صلاحية
       // لوحة الإدارة. و«الموقع العام» صفحة عامة مفتوحة للكل.
       if (allowedApps.includes("admin")) {
-        for (const k of ["customers", "siteadmin", "perf"])
+        for (const k of ["customers", "siteadmin", "perf", "storesadmin"])
           if (!allowedApps.includes(k)) allowedApps = [...allowedApps, k];
       }
       // قياس الأداء بيتبع الموارد البشرية كمان — دي شغلتهم الأساسية
@@ -1072,6 +1086,7 @@
         customer: document.getElementById("card-customer"),
         customers:  document.getElementById("card-customers"),
         perf:       document.getElementById("card-perf"),
+        storesadmin: document.getElementById("card-storesadmin"),
         site:       document.getElementById("card-site"),
         siteadmin:  document.getElementById("card-siteadmin")
       };
@@ -1099,7 +1114,7 @@
         || (appKey === "hrOld"   && allowed.includes("hr"))
         || (appKey === "damascus" && allowed.includes("accounts"))
         || (appKey === "customer" && (allowed.includes("admin") || allowed.includes("callcenter")))
-        || (["customers", "siteadmin", "perf"].includes(appKey) && allowed.includes("admin"))
+        || (["customers", "siteadmin", "perf", "storesadmin"].includes(appKey) && allowed.includes("admin"))
         || (appKey === "perf" && allowed.includes("hr"))
         || appKey === "site";                    // الموقع العام مفتوح للكل
       if (!ok) return;
@@ -1116,6 +1131,7 @@
         customer: "tiar_customer.html",
         customers: "tiar_customers.html",
         perf:      "tiar_perf.html",
+        storesadmin: "tiar_stores.html",
         site:      "home.html",
         siteadmin: "site-admin.html"
       };
@@ -1138,7 +1154,7 @@
       }
       // وإلا احسبها من الدور
       const role = (userData.role || "").trim();
-      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter", "damascus", "customer", "customers", "site", "siteadmin", "perf"];
+      if (["مدير", "مدير عام", "admin"].includes(role))            return ["admin", "branch", "store", "hr", "hrOld", "accounts", "callcenter", "damascus", "customer", "customers", "site", "siteadmin", "perf", "storesadmin"];
       if (["محاسب", "مدير حسابات", "accountant"].includes(role))    return ["accounts", "damascus"];
       if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(role)) return ["hr", "hrOld", "perf"];
       if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(role))  return ["callcenter", "customer"];

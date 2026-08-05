@@ -75,9 +75,10 @@ img{display:block;max-width:100%}
 .side-top{padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
 .search{display:flex;align-items:center;gap:9px;background:var(--bg);border-radius:9px;padding:8px 13px}
 .search input{background:none;border:none;outline:none;flex:1;font-size:14px;min-width:0}
-.chips{display:flex;gap:6px;margin-top:9px;overflow-x:auto;scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
-.chip{padding:5px 13px;border-radius:99px;border:1px solid var(--line2);background:none;
+/* التبويبات بتلفّ لسطر تاني بدل الـ scroll الأفقي — كان بيخفي آخر
+   تبويب من غير أي علامة إن في حاجة وراه */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.chip{padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:none;
   font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
 .chip.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
 .list{flex:1;overflow-y:auto;min-height:0}
@@ -236,6 +237,7 @@ img{display:block;max-width:100%}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, get, update, remove, onValue }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { walletCardHtml, walletFormHtml, addTxn, TXN_TYPES } from "./wallet.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -459,6 +461,8 @@ function renderPane(uid) {
         <div class="kpi"><b style="color:var(--brand)">${money(spend)}</b><span>إجمالي التوصيل</span></div>
       </div>
 
+      ${walletCardHtml(c.wallet)}
+
       <div class="card">
         <div class="card-h">👤 بيانات الحساب</div>
         ${kv("الاسم", esc(nameOf(c)))}
@@ -512,6 +516,29 @@ function renderPane(uid) {
     </div>`;
 
   $("pane").querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b.dataset.act, c));
+  $("pane").querySelectorAll("[data-w-act]").forEach(b =>
+    b.onclick = () => openWallet(b.dataset.wAct, c));
+}
+
+/* ══ المحفظة ══════════════════════════════════════════════════
+   الرصيد الموجب = فلوس ليه عندنا يقدر يستخدمها في أوردر مجاني أو خصم.
+   بتتخزّن في customers/{uid}/wallet جوّه حساب العميل نفسه. */
+function openWallet(type, c) {
+  const cfg = TXN_TYPES[type] || TXN_TYPES.credit;
+  openM(`${cfg.icon} ${cfg.t} — ${nameOf(c)}`, walletFormHtml(type));
+  $("wSave").onclick = async () => {
+    const amt = parseFloat($("wAmt").value);
+    if (!amt || amt <= 0) { toast("اكتب مبلغ صحيح"); return; }
+    $("wSave").disabled = true;
+    try {
+      const after = await addTxn(db, "customer", c.uid, {
+        type, amount: amt, note: $("wNote").value,
+        by: $("meName").textContent || "الإدارة"
+      });
+      closeM();
+      toast(`اتسجّلت الحركة — الرصيد بقى ${after} ج.م`);
+    } catch (e) { $("wSave").disabled = false; toast("خطأ: " + e.message); }
+  };
 }
 
 /* ══ الإجراءات ══ */

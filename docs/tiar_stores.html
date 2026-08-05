@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>الدهشان | إدارة المحلات</title>
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
+  --line:#e9edef; --line2:#d1d7db;
+  --txt:#111b21; --muted:#667781;
+  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  --green:#15803d; --green-soft:rgba(21,128,61,.1);
+  --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
+  --blue:#1d4ed8;
+  --font:'Cairo',system-ui,sans-serif; --hd:60px;
+}
+:root.dark{
+  --bg:#0b141a; --panel:#111b21; --hover:#182229; --active:#2a3942;
+  --line:#222d34; --line2:#2a3942;
+  --txt:#e9edef; --muted:#8696a0;
+  --brand:#e8192c; --brand-d:#b91c1c; --brand-soft:rgba(232,25,44,.14);
+  --green:#22c55e; --green-soft:rgba(34,197,94,.14);
+  --orange:#f97316; --orange-soft:rgba(249,115,22,.14);
+  --blue:#60a5fa;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);height:100vh;overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;color:inherit}
+
+#gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:60;padding:20px}
+.gate-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 26px;
+  width:100%;max-width:360px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.gate-box img{height:48px;margin-bottom:14px}
+.gate-box h1{font-size:17px;font-weight:800;margin-bottom:4px}
+.gate-box p{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+.gate-box input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;font-size:14px;margin-bottom:9px;outline:none}
+.gate-box input:focus{border-color:var(--brand)}
+.gbtn{width:100%;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;
+  font-weight:800;font-size:14.5px;cursor:pointer}
+#gateErr{color:var(--brand);font-size:12.5px;margin-top:9px;min-height:17px}
+
+#app{display:none;height:100vh;flex-direction:column}
+#app.on{display:flex}
+.topbar{height:var(--hd);flex:none;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:0 16px}
+.topbar img{height:30px}
+.topbar .ttl{font-size:16px;font-weight:800}
+.topbar .sp{margin-inline-start:auto;display:flex;align-items:center;gap:10px}
+.ico{width:36px;height:36px;border-radius:50%;border:none;background:none;cursor:pointer;
+  font-size:16px;color:var(--muted)}
+.ico:hover{background:var(--hover)}
+.me b{font-size:13px;display:block;line-height:1.3}
+.me span{font-size:11px;color:var(--muted)}
+.me{display:flex;align-items:center;gap:8px}
+.av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:14px}
+.main{flex:1;display:flex;min-height:0;min-width:0}
+
+.side{width:380px;flex:none;background:var(--panel);border-inline-start:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.side-top{padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
+.search{display:flex;align-items:center;gap:9px;background:var(--bg);border-radius:9px;padding:8px 13px}
+.search input{background:none;border:none;outline:none;flex:1;font-size:14px;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.chip{padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:none;
+  font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.addBtn{width:100%;margin-top:9px;background:var(--brand);color:#fff;border:none;border-radius:9px;
+  padding:10px;font-weight:800;font-size:13px;cursor:pointer}
+.list{flex:1;overflow-y:auto;min-height:0}
+.row{display:flex;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line);
+  align-items:center}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--active)}
+.r-av{width:46px;height:46px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:17px;flex:none}
+.r-b{flex:1;min-width:0}
+.r-1{display:flex;align-items:baseline;gap:8px}
+.r-1 b{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.r-2{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12.5px;color:var(--muted)}
+.tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.t-block{background:var(--brand-soft);color:var(--brand)}
+.t-ok{background:var(--green-soft);color:var(--green)}
+.t-warn{background:var(--orange-soft);color:var(--orange)}
+.empty{padding:60px 24px;text-align:center;color:var(--muted);font-size:14px}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.pane-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.pane-empty i{font-size:64px;font-style:normal;display:block;margin-bottom:16px;opacity:.35}
+.pane-hd{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;
+  display:flex;align-items:center;gap:14px;flex:none;flex-wrap:wrap;min-width:0}
+.p-av{width:52px;height:52px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.pane-hd h2{font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pane-hd .sub{font-size:12.5px;color:var(--muted)}
+.pane-body{flex:1;overflow-y:auto;padding:18px 20px}
+.back{display:none}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px;text-align:center}
+.kpi b{font-size:20px;font-weight:900;display:block}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:12px}
+.card-h{font-size:13.5px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.card-h .n{background:var(--brand-soft);color:var(--brand);border-radius:99px;padding:1px 8px;font-size:11px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;
+  border-bottom:1px solid var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:700;text-align:end}
+.kv .v.ltr{direction:ltr}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{border:1px solid var(--line2);background:var(--panel);color:var(--txt);border-radius:9px;
+  padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.danger{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.btn.ok{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.warnbox{background:var(--brand-soft);border:1px solid var(--brand);border-radius:11px;
+  padding:12px 14px;font-size:13px;margin-bottom:14px}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:none;
+  align-items:flex-end;justify-content:center}
+.modal.on{display:flex}
+.sheet{background:var(--panel);width:100%;max-width:460px;border-radius:16px 16px 0 0;
+  max-height:88vh;display:flex;flex-direction:column}
+@media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
+.sheet-h{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
+.sheet-b{padding:18px 20px;overflow-y:auto}
+.sheet-b input,.sheet-b textarea,.sheet-b select{width:100%;background:var(--bg);
+  border:1px solid var(--line2);border-radius:10px;padding:11px 13px;font-size:13.5px;
+  outline:none;margin-top:10px;resize:none}
+.sheet-b label{font-size:12px;color:var(--muted);font-weight:700;display:block;margin-top:12px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+  background:var(--txt);color:var(--bg);border-radius:9px;padding:11px 20px;
+  font-size:13.5px;font-weight:700;display:none}
+#toast.on{display:block}
+@media(max-width:820px){
+  .side{width:100%;border:none}
+  .main.detail .side{display:none}
+  .main:not(.detail) .pane{display:none}
+  .back{display:block}
+  .me b,.me span{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <h1>🏪 إدارة المحلات</h1>
+    <p>إضافة المحلات والتحكم في حساباتها ومحافظها</p>
+    <input id="gUser" placeholder="اسم المستخدم" dir="ltr" autocomplete="username" />
+    <input id="gPass" type="password" placeholder="كلمة المرور" dir="ltr" autocomplete="current-password" />
+    <button class="gbtn" onclick="doLogin()">دخول</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <div class="ttl">🏪 إدارة المحلات</div>
+    <div class="sp">
+      <button class="ico" id="themeBtn" title="الوضع الليلي">🌙</button>
+      <button class="ico" onclick="location.href='index.html'" title="البوابة">🏠</button>
+      <div class="me"><div class="av" id="meAv">A</div>
+        <div><b id="meName">—</b><span id="meRole">—</span></div></div>
+      <button class="ico" onclick="doLogout()" title="خروج" style="color:var(--brand)">⏻</button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="side">
+      <div class="side-top">
+        <div class="search">🔍<input id="q" placeholder="ابحث باسم المحل أو الرقم…" oninput="renderList()" /></div>
+        <div class="chips" id="chips"></div>
+        <button class="addBtn" onclick="openAdd()">➕ إضافة محل جديد</button>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="pane" id="pane">
+      <div class="pane-empty"><div><i>🏪</i>اختار محل من اللستة عشان تشوف بياناته<br />وتتحكم في حسابه ومحفظته</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet">
+  <div class="sheet-h" id="mTitle">—</div>
+  <div class="sheet-b" id="mBody"></div>
+</div></div>
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, get, set, update, remove, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { walletCardHtml, walletFormHtml, addTxn, readWallet, TXN_TYPES } from "./wallet.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
+  projectId: "aldahshaneg-92f66"
+});
+const db = getDatabase(app), auth = getAuth(app);
+onAuthStateChanged(auth, u => { if (!u) signInAnonymously(auth).catch(() => {}); });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const money = v => (Number(v) || 0).toLocaleString("ar-EG");
+const toast = m => { const t = $("toast"); t.textContent = m; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 2600); };
+const nameOf = s => (s.shopName || s.username || "").trim() || "محل بدون اسم";
+const initial = s => nameOf(s)[0] || "؟";
+const fmtFull = d => d ? new Date(d).toLocaleString("ar-EG") : "—";
+
+if (localStorage.getItem("stores-theme") === "dark") document.documentElement.classList.add("dark");
+const syncTheme = () => $("themeBtn").textContent =
+  document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+syncTheme();
+$("themeBtn").onclick = () => {
+  const d = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("stores-theme", d ? "dark" : "light"); syncTheme();
+};
+
+/* ── الدخول ─────────────────────────────────────────── */
+const ALLOWED = ["مدير", "مدير عام", "admin", "مشرف"];
+let ME = null;
+function applySession(s) {
+  ME = s; $("gate").style.display = "none"; $("app").classList.add("on");
+  $("meName").textContent = s.username; $("meRole").textContent = s.role || "";
+  $("meAv").textContent = (s.username || "A")[0];
+  start();
+}
+window.doLogin = async function () {
+  const u = $("gUser").value.trim(), p = $("gPass").value, err = $("gateErr");
+  err.textContent = "";
+  if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
+  try {
+    if (!auth.currentUser) { try { await signInAnonymously(auth); } catch (e) {} }
+    const snap = await get(ref(db, "users/" + u));
+    if (!snap.exists()) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+    const v = snap.val();
+    if (v.password !== p) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+    if (!ALLOWED.includes((v.role || "").trim())) { err.textContent = "الصفحة دي للإدارة بس"; return; }
+    const s = { username: u, role: v.role };
+    localStorage.setItem("tiar-session", JSON.stringify(s));
+    applySession(s);
+  } catch (e) { err.textContent = "خطأ في الاتصال: " + e.message; }
+};
+window.doLogout = () => { localStorage.removeItem("tiar-session"); location.reload(); };
+(function () {
+  try {
+    const s = JSON.parse(localStorage.getItem("tiar-session") || "null");
+    if (s && s.username && ALLOWED.includes((s.role || "").trim())) applySession(s);
+  } catch (e) {}
+})();
+
+/* ── البيانات ───────────────────────────────────────── */
+const S = { stores: [], orders: [], zones: [], branches: {}, sel: null, filter: "all" };
+
+function start() {
+  onValue(ref(db, "users"), s => {
+    S.stores = Object.entries(s.val() || {})
+      .map(([username, v]) => ({ username, ...v }))
+      .filter(u => (u.role || "").trim() === "صاحب محل")
+      .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "ar"));
+    refresh();
+  });
+  onValue(ref(db, "orders"), s => {
+    S.orders = Object.entries(s.val() || {}).map(([id, o]) => ({ id, ...o })); refresh();
+  });
+  onValue(ref(db, "zones"), s => {
+    S.zones = Object.entries(s.val() || {}).map(([id, z]) => ({ id, ...z })); refresh();
+  });
+  onValue(ref(db, "branches"), s => { S.branches = s.val() || {}; refresh(); });
+}
+
+const ordersOf = u => S.orders.filter(o => o.source === "store" && o.addedBy === u);
+
+const FILTERS = [
+  { k: "all",     t: "الكل" },
+  { k: "active",  t: "نشِطة" },
+  { k: "blocked", t: "موقوفة" },
+  { k: "credit",  t: "لها رصيد" },
+  { k: "top",     t: "الأكتر شحنًا" },
+];
+
+window.setFilter = k => { S.filter = k; refresh(); };
+window.openStore = u => { S.sel = u; renderList(); renderPane(); $("main").classList.add("detail"); };
+window.backToList = () => $("main").classList.remove("detail");
+
+function filtered() {
+  const q = ($("q").value || "").trim().toLowerCase();
+  let list = S.stores.slice();
+  if (S.filter === "active")  list = list.filter(s => !s.blocked);
+  if (S.filter === "blocked") list = list.filter(s => s.blocked);
+  if (S.filter === "credit")  list = list.filter(s => readWallet(s.wallet).balance > 0);
+  if (S.filter === "top")     list = list.sort((a, b) => ordersOf(b.username).length - ordersOf(a.username).length);
+  if (q) list = list.filter(s =>
+    nameOf(s).toLowerCase().includes(q) ||
+    String(s.username).toLowerCase().includes(q) ||
+    String(s.shopPhone || "").includes(q));
+  return list;
+}
+
+window.renderList = function () {
+  const list = filtered(), box = $("list");
+  if (!list.length) {
+    box.innerHTML = `<div class="empty"><i>🏪</i>مفيش محلات هنا${
+      S.stores.length ? "" : "<br /><span style='font-size:12.5px'>ابدأ بإضافة محل من الزرار فوق</span>"}</div>`;
+    return;
+  }
+  box.innerHTML = list.map(s => {
+    const os = ordersOf(s.username), w = readWallet(s.wallet);
+    return `<div class="row ${S.sel === s.username ? "on" : ""}" onclick="openStore('${esc(s.username)}')">
+      <div class="r-av">${esc(initial(s))}</div>
+      <div class="r-b">
+        <div class="r-1"><b>${esc(nameOf(s))}</b>${
+          s.blocked ? `<span class="tag t-block">موقوف</span>`
+          : w.balance > 0 ? `<span class="tag t-ok">${money(w.balance)} ج</span>` : ""}</div>
+        <div class="r-2"><span dir="ltr">${esc(s.shopPhone || s.username)}</span>
+          · ${os.length} شحنة</div>
+      </div></div>`;
+  }).join("");
+};
+
+/* ── التفاصيل ───────────────────────────────────────── */
+function renderPane() {
+  if (!S.sel) return;
+  const s = S.stores.find(x => x.username === S.sel);
+  if (!s) { S.sel = null; $("pane").innerHTML =
+    `<div class="pane-empty"><div><i>🏪</i>المحل ده مابقاش موجود</div></div>`; return; }
+
+  const os = ordersOf(s.username);
+  const done   = os.filter(o => o.status === "تم التسليم").length;
+  const live   = os.filter(o => !["تم التسليم", "ملغي", "لم يتم التوصيل"].includes(o.status)).length;
+  const cancel = os.filter(o => ["ملغي", "لم يتم التوصيل"].includes(o.status)).length;
+  const deliv  = os.reduce((a, o) => a + (Number(o.totalDeliveryPrice) || 0), 0);
+  const cod    = os.reduce((a, o) => a + (Number(o.storePrepaid) || 0), 0);
+  const kv = (k, v, ltr) => `<div class="kv"><span class="k">${k}</span><span class="v${ltr ? " ltr" : ""}">${v}</span></div>`;
+
+  $("pane").innerHTML = `
+    <div class="pane-hd">
+      <button class="ico back" onclick="backToList()">›</button>
+      <div class="p-av">${esc(initial(s))}</div>
+      <div style="flex:1;min-width:0">
+        <h2>${esc(nameOf(s))}
+          ${s.blocked ? `<span class="tag t-block">🚫 موقوف</span>`
+            : `<span class="tag t-ok">✅ نشِط</span>`}</h2>
+        <div class="sub" dir="ltr">${esc(s.shopPhone || "—")}</div>
+      </div>
+      ${s.shopPhone ? `<a class="btn" href="tel:${esc(s.shopPhone)}">📞 اتصل</a>
+      <a class="btn" target="_blank" rel="noopener"
+        href="https://wa.me/2${esc(String(s.shopPhone).replace(/\D/g, ""))}">💬 واتساب</a>` : ""}
+    </div>
+
+    <div class="pane-body">
+      ${s.blocked ? `<div class="warnbox">🚫 <b>الحساب موقوف</b> — مش هيقدر يدخل البوابة ولا يبعت شحنات.
+        ${s.blockedAt ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">
+        من ${fmtFull(s.blockedAt)}${s.blockedBy ? ` — بواسطة ${esc(s.blockedBy)}` : ""}</div>` : ""}</div>` : ""}
+
+      <div class="kpis">
+        <div class="kpi"><b>${os.length}</b><span>إجمالي الشحنات</span></div>
+        <div class="kpi"><b style="color:var(--green)">${done}</b><span>تم التسليم</span></div>
+        <div class="kpi"><b style="color:var(--orange)">${live}</b><span>جارية</span></div>
+        <div class="kpi"><b style="color:var(--muted)">${cancel}</b><span>ملغية</span></div>
+        <div class="kpi"><b style="color:var(--brand)">${money(deliv)}</b><span>إجمالي التوصيل</span></div>
+        <div class="kpi"><b style="color:var(--blue)">${money(cod)}</b><span>إجمالي العهدة</span></div>
+      </div>
+
+      ${walletCardHtml(s.wallet)}
+
+      <div class="card">
+        <div class="card-h">🏪 بيانات المحل</div>
+        ${kv("اسم المحل", esc(s.shopName || "—"))}
+        ${kv("اسم المستخدم", esc(s.username), 1)}
+        ${kv("كلمة المرور", esc(s.password || "—"), 1)}
+        ${kv("الهاتف", esc(s.shopPhone || "—"), 1)}
+        ${kv("هاتف إضافي", esc(s.shopPhone2 || "—"), 1)}
+        ${kv("العنوان", esc(s.shopAddress || "—"))}
+        ${kv("اتسجّل", fmtFull(s.createdAt))}
+        <div class="acts">
+          <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
+          <button class="btn ${s.blocked ? "ok" : "danger"}" data-act="block">
+            ${s.blocked ? "✅ إلغاء الإيقاف" : "🚫 إيقاف المحل"}</button>
+          <button class="btn danger" data-act="del">🗑️ حذف المحل</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">📦 آخر الشحنات <span class="n">${os.length}</span></div>
+        ${os.length ? os.slice()
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+          .slice(0, 12).map(o => kv(
+            `<b dir="ltr">${esc(o.orderNum || "—")}</b>
+             <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
+               ${esc(o.status || "—")} · ${fmtFull(o.createdAt)}</div>`,
+            `${money(o.totalDeliveryPrice)} ج.م`)).join("")
+          : `<div class="empty" style="padding:24px"><i>📭</i>مفيش شحنات لسه</div>`}
+      </div>
+    </div>`;
+
+  $("pane").querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b.dataset.act, s));
+  $("pane").querySelectorAll("[data-w-act]").forEach(b => b.onclick = () => openWallet(b.dataset.wAct, s));
+}
+
+/* ── النوافذ ────────────────────────────────────────── */
+const openM = (title, html) => { $("mTitle").textContent = title; $("mBody").innerHTML = html;
+  $("modal").classList.add("on"); };
+window.closeM = () => $("modal").classList.remove("on");
+$("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
+
+function act(a, s) {
+  if (a === "edit")  return openEdit(s);
+  if (a === "block") return doBlock(s, !s.blocked);
+  if (a === "del")   return askDelete(s);
+}
+
+function formHtml(s = {}, isNew = false) {
+  return `
+    <label>اسم المحل *</label><input id="fShop" value="${esc(s.shopName || "")}" placeholder="مثال: محل النور" />
+    <label>اسم المستخدم *</label>
+    <input id="fUser" value="${esc(s.username || "")}" dir="ltr" ${isNew ? "" : "disabled"}
+           placeholder="بيدخل بيه على بوابة المحلات" />
+    <label>كلمة المرور *</label><input id="fPass" value="${esc(s.password || "")}" dir="ltr" />
+    <label>هاتف المحل *</label><input id="fPhone" value="${esc(s.shopPhone || "")}" dir="ltr" placeholder="01xxxxxxxxx" />
+    <label>هاتف إضافي</label><input id="fPhone2" value="${esc(s.shopPhone2 || "")}" dir="ltr" />
+    <label>عنوان المحل</label><textarea id="fAddr" rows="2">${esc(s.shopAddress || "")}</textarea>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.8">
+      💡 المحل مش مربوط بفرع — الفرع المسؤول بيتحدّد من منطقة الاستلام في كل شحنة.</div>
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn pri" style="flex:1" id="fSave">${isNew ? "➕ إضافة المحل" : "💾 حفظ"}</button>
+    </div>`;
+}
+
+function readForm() {
+  return {
+    shopName:   $("fShop").value.trim(),
+    username:   $("fUser").value.trim(),
+    password:   $("fPass").value.trim(),
+    shopPhone:  $("fPhone").value.trim(),
+    shopPhone2: $("fPhone2").value.trim(),
+    shopAddress:$("fAddr").value.trim(),
+  };
+}
+
+window.openAdd = function () {
+  openM("➕ إضافة محل جديد", formHtml({}, true));
+  $("fSave").onclick = async () => {
+    const f = readForm();
+    if (!f.shopName)  return toast("اكتب اسم المحل");
+    if (!f.username)  return toast("اكتب اسم المستخدم");
+    if (!f.password)  return toast("اكتب كلمة المرور");
+    if (!f.shopPhone) return toast("اكتب هاتف المحل");
+    $("fSave").disabled = true;
+    try {
+      const exists = await get(ref(db, "users/" + f.username));
+      if (exists.exists()) { $("fSave").disabled = false; return toast("اسم المستخدم ده متسجّل قبل كده"); }
+      await set(ref(db, "users/" + f.username), {
+        ...f, role: "صاحب محل", createdAt: new Date().toISOString(),
+        createdBy: ME?.username || ""
+      });
+      closeM(); S.sel = f.username; toast("اتضاف المحل ✅");
+    } catch (e) { $("fSave").disabled = false; toast("خطأ: " + e.message); }
+  };
+};
+
+function openEdit(s) {
+  openM("✏️ تعديل " + nameOf(s), formHtml(s, false));
+  $("fSave").onclick = async () => {
+    const f = readForm();
+    if (!f.shopName)  return toast("اكتب اسم المحل");
+    if (!f.password)  return toast("اكتب كلمة المرور");
+    if (!f.shopPhone) return toast("اكتب هاتف المحل");
+    $("fSave").disabled = true;
+    try {
+      const { username, ...rest } = f;
+      await update(ref(db, "users/" + s.username), { ...rest, updatedAt: new Date().toISOString() });
+      closeM(); toast("اتحفظت البيانات ✅");
+    } catch (e) { $("fSave").disabled = false; toast("خطأ: " + e.message); }
+  };
+}
+
+async function doBlock(s, on) {
+  try {
+    await update(ref(db, "users/" + s.username), {
+      blocked: on,
+      blockedAt: on ? new Date().toISOString() : null,
+      blockedBy: on ? (ME?.username || "الإدارة") : null
+    });
+    toast(on ? "اتوقف المحل 🚫" : "اترفع الإيقاف ✅");
+  } catch (e) { toast("خطأ: " + e.message); }
+}
+
+function askDelete(s) {
+  const os = ordersOf(s.username);
+  openM("🗑️ حذف المحل", `
+    <p style="font-size:13.5px;line-height:1.9">
+      هتحذف <b>${esc(nameOf(s))}</b> نهائيًا؟ الحساب مش هيقدر يدخل تاني.
+      ${os.length ? `<br /><b style="color:var(--brand)">عنده ${os.length} شحنة</b> — الشحنات نفسها
+      هتفضل زي ما هي في النظام، بس مش هتقدر تربطها بحسابه بعد كده.` : ""}
+      <br /><span style="color:var(--muted);font-size:12.5px">لو عايز توقفه مؤقتًا بس، استخدم «إيقاف المحل».</span>
+    </p>
+    <div style="display:flex;gap:9px;margin-top:16px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn danger" style="flex:1" id="delOk">🗑️ أكّد الحذف</button>
+    </div>`);
+  $("delOk").onclick = async () => {
+    try {
+      await remove(ref(db, "users/" + s.username));
+      closeM(); S.sel = null; $("main").classList.remove("detail"); toast("اتحذف المحل");
+    } catch (e) { toast("خطأ: " + e.message); }
+  };
+}
+
+/* ── المحفظة ────────────────────────────────────────── */
+function openWallet(type, s) {
+  const cfg = TXN_TYPES[type] || TXN_TYPES.credit;
+  openM(`${cfg.icon} ${cfg.t} — ${nameOf(s)}`, walletFormHtml(type));
+  $("wSave").onclick = async () => {
+    const amt = parseFloat($("wAmt").value);
+    if (!amt || amt <= 0) return toast("اكتب مبلغ صحيح");
+    $("wSave").disabled = true;
+    try {
+      const after = await addTxn(db, "store", s.username, {
+        type, amount: amt, note: $("wNote").value, by: ME?.username || "الإدارة"
+      });
+      closeM(); toast(`اتسجّلت الحركة — الرصيد بقى ${after} ج.م`);
+    } catch (e) { $("wSave").disabled = false; toast("خطأ: " + e.message); }
+  };
+}
+
+/* ── الرسم ──────────────────────────────────────────── */
+window.refresh = function () {
+  if (!ME) return;
+  $("chips").innerHTML = FILTERS.map(f =>
+    `<button class="chip ${S.filter === f.k ? "on" : ""}" onclick="setFilter('${f.k}')">${f.t}</button>`).join("");
+  renderList();
+  if (S.sel) renderPane();
+};
+</script>
+</body>
+</html>

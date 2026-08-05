@@ -6826,6 +6826,7 @@
       { key: "customers",  label: "إدارة العملاء",       icon: "👥" },
       { key: "siteadmin",  label: "لوحة تحكم الموقع",    icon: "🛠️" },
       { key: "perf",       label: "إدارة التقييمات",       icon: "⭐" },
+      { key: "storesadmin",label: "إدارة المحلات",         icon: "🏪" },
       { key: "site",       label: "الموقع العام",        icon: "🌐" },
     ];
     const APP_LABEL = Object.fromEntries(APP_PERMS.map(a => [a.key, a.icon + " " + a.label]));
@@ -6836,7 +6837,7 @@
     window.roleDefaultApps = function roleDefaultApps(role) {
       const r = (role || "").trim();
       if (["مدير", "مدير عام", "admin"].includes(r))
-        return ["admin","branch","store","hr","hrOld","accounts","callcenter","damascus","customer","customers","site","siteadmin","perf"];
+        return ["admin","branch","store","hr","hrOld","accounts","callcenter","damascus","customer","customers","site","siteadmin","perf","storesadmin"];
       if (["محاسب", "مدير حسابات", "accountant"].includes(r))       return ["accounts","damascus","site"];
       if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(r))   return ["hr","hrOld","perf","site"];
       if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(r))     return ["callcenter","customer","site"];
