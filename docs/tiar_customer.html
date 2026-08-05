@@ -1913,6 +1913,83 @@ function orderTimeline(o) {
   return rows;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   تقييم الأوردر — بيظهر بعد ما الشحنة تتسلّم
+   ──────────────────────────────────────────────────────────────
+   بيتخزّن في orders/{id}/ratings/customer عشان المحل يقدر يقيّم كمان
+   في خانة منفصلة (ratings/store) من غير ما يمسحوا بعض.
+══════════════════════════════════════════════════════════════ */
+const RATE_LABEL = ["", "سيئة", "مش كويسة", "كويسة", "حلوة", "ممتازة"];
+
+function starsHtml(n, interactive) {
+  return [1,2,3,4,5].map(i => `<span ${interactive ? `onclick="pickStar(${i})"` : ""}
+    class="rt-star" data-i="${i}" style="cursor:${interactive ? "pointer" : "default"};
+    font-size:29px;line-height:1;color:${i <= n ? "#f5b800" : "#3a3a44"}">★</span>`).join("");
+}
+
+function ratingCardHtml(o) {
+  if (orderState(o) !== "done") return "";       // التقييم بعد التسليم بس
+  const r = (o.ratings || {}).customer;
+  if (r) {
+    return `<div class="card">
+      <span class="lbl">تقييمك للطلب</span>
+      <div style="display:flex;gap:3px;margin-top:4px">${starsHtml(r.stars, false)}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">
+        ${RATE_LABEL[r.stars] || ""}${r.note ? ` — ${esc(r.note)}` : ""}</div>
+      <button class="btn ghost sm" style="margin-top:12px" onclick="editRating()">✏️ تعديل التقييم</button>
+    </div>`;
+  }
+  return `<div class="card" id="rateCard">
+    <span class="lbl">قيّم الطلب</span>
+    <div style="font-size:13px;color:var(--muted);margin:2px 0 10px">
+      رأيك بيساعدنا نحسّن الخدمة 🙏</div>
+    <div style="display:flex;gap:3px" id="rateStars">${starsHtml(0, true)}</div>
+    <div id="rateLabel" style="font-size:13px;color:#f5b800;font-weight:700;margin-top:7px;min-height:18px"></div>
+    <textarea id="rateNote" rows="2" placeholder="عايز تضيف حاجة؟ (اختياري)"
+      style="width:100%;margin-top:10px;background:#08080a;border:1px solid var(--line);
+             border-radius:12px;padding:11px 13px;color:inherit;font-family:inherit;
+             font-size:14px;outline:none;resize:none"></textarea>
+    <button class="btn" id="rateBtn" style="margin-top:10px" onclick="submitRating()" disabled>
+      إرسال التقييم</button>
+  </div>`;
+}
+
+window._rateStars = 0;
+window.pickStar = function (n) {
+  window._rateStars = n;
+  const box = $("rateStars"); if (box) box.innerHTML = starsHtml(n, true);
+  const lbl = $("rateLabel"); if (lbl) lbl.textContent = RATE_LABEL[n] || "";
+  const btn = $("rateBtn"); if (btn) btn.disabled = !n;
+};
+
+window.editRating = function () {
+  const o = S.orders.find(x => x.id === S.currentOrderId); if (!o) return;
+  // بنشيل التقييم القديم من العرض عشان الفورم يرجع يبان
+  o.ratings = { ...(o.ratings || {}) }; delete o.ratings.customer;
+  renderDetail();
+};
+
+window.submitRating = async function () {
+  const o = S.orders.find(x => x.id === S.currentOrderId); if (!o) return;
+  const stars = window._rateStars;
+  if (!stars) return;
+  const btn = $("rateBtn"); if (btn) { btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…"; }
+  try {
+    await set(ref(db, `orders/${o.id}/ratings/customer`), {
+      stars,
+      note: ($("rateNote")?.value || "").trim(),
+      by: S.profile?.displayNameAr || S.uid,
+      byId: S.uid,
+      at: new Date().toISOString()
+    });
+    window._rateStars = 0;
+    toast("شكرًا لتقييمك 🌟", "ok");
+  } catch (e) {
+    toast("تعذّر إرسال التقييم: " + (e.message || e), "err");
+    if (btn) { btn.disabled = false; btn.textContent = "إرسال التقييم"; }
+  }
+};
+
 function renderDetail() {
   const o = S.orders.find(x => x.id === S.currentOrderId);
   if (!o) { $("detailBody").innerHTML = `<div class="empty"><i>❓</i><b>الطلب غير موجود</b></div>`; return; }
@@ -1939,6 +2016,8 @@ function renderDetail() {
           <span style="color:var(--red)">📞</span></div>
         <div style="font-size:12.5px;color:var(--muted);margin-top:7px">📍 ${esc(d.address || "—")}</div>`}
     </div>
+
+    ${ratingCardHtml(o)}
 
     <div class="card">
       <span class="lbl">تتبّع الطلب</span>

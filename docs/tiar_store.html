@@ -1653,6 +1653,7 @@
                 <span class="badge ${statusCls(d.status || o.status)} dp-st">${d.status || o.status}</span>
               </div>`).join("")}
             ${o.notes ? `<div class="det-note">📝 ملاحظة: ${o.notes}</div>` : ""}
+            ${ratingBoxHtml(o)}
           </div>
         </div>`;
       }).join("");
@@ -1660,6 +1661,78 @@
 
     window.toggleDet = function (id) {
       document.getElementById("det-" + id)?.classList.toggle("open");
+    };
+
+    /* ══════════════════════════════════════════════════════
+       تقييم الأوردر — بيظهر بعد ما الشحنة تتسلّم
+       ──────────────────────────────────────────────────────
+       بيتخزّن في orders/{id}/ratings/store عشان العميل يقدر يقيّم
+       كمان في خانة منفصلة (ratings/customer) من غير ما يمسحوا بعض.
+    ══════════════════════════════════════════════════════ */
+    const RATE_LABEL = ["", "سيئة", "مش كويسة", "كويسة", "حلوة", "ممتازة"];
+
+    function starsHtml(id, n, interactive) {
+      return [1,2,3,4,5].map(i => `<span ${interactive ? `onclick="pickStar('${id}',${i})"` : ""}
+        style="cursor:${interactive ? "pointer" : "default"};font-size:26px;line-height:1;
+        color:${i <= n ? "#f5b800" : "#3a3a44"}">★</span>`).join("");
+    }
+
+    function ratingBoxHtml(o) {
+      if ((o.status || "") !== "تم التسليم") return "";   // التقييم بعد التسليم بس
+      const r = (o.ratings || {}).store;
+      if (r) {
+        return `<div class="det-note" style="border-color:rgba(245,184,0,.3)">
+          <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">تقييمك للطلب</div>
+          <div>${starsHtml(o.id, r.stars, false)}</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:4px">
+            ${RATE_LABEL[r.stars] || ""}${r.note ? " — " + r.note : ""}</div>
+        </div>`;
+      }
+      return `<div class="det-note" id="rate-${o.id}" style="border-color:rgba(245,184,0,.3)">
+        <div style="font-size:.82rem;font-weight:700;margin-bottom:2px">⭐ قيّم الطلب</div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">رأيك بيساعدنا نحسّن الخدمة</div>
+        <div id="stars-${o.id}">${starsHtml(o.id, 0, true)}</div>
+        <div id="rlbl-${o.id}" style="font-size:.78rem;color:#f5b800;font-weight:700;margin-top:5px;min-height:16px"></div>
+        <input id="rnote-${o.id}" placeholder="عايز تضيف حاجة؟ (اختياري)"
+          style="width:100%;margin-top:8px;background:var(--night);border:1px solid var(--border);
+                 border-radius:9px;padding:9px 11px;color:inherit;font-family:inherit;font-size:.82rem;outline:none" />
+        <button id="rbtn-${o.id}" onclick="submitRating('${o.id}')" disabled
+          style="width:100%;margin-top:8px;background:#f5b800;color:#111;border:none;padding:10px;
+                 border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.83rem;
+                 opacity:.5">إرسال التقييم</button>
+      </div>`;
+    }
+
+    window._rateStars = {};
+    window.pickStar = function (id, n) {
+      window._rateStars[id] = n;
+      const box = document.getElementById("stars-" + id);
+      if (box) box.innerHTML = starsHtml(id, n, true);
+      const lbl = document.getElementById("rlbl-" + id);
+      if (lbl) lbl.textContent = RATE_LABEL[n] || "";
+      const btn = document.getElementById("rbtn-" + id);
+      if (btn) { btn.disabled = !n; btn.style.opacity = n ? "1" : ".5"; }
+    };
+
+    window.submitRating = async function (id) {
+      const stars = window._rateStars[id];
+      if (!stars) return;
+      const btn = document.getElementById("rbtn-" + id);
+      if (btn) { btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…"; }
+      try {
+        await set(ref(db, `orders/${id}/ratings/store`), {
+          stars,
+          note: (document.getElementById("rnote-" + id)?.value || "").trim(),
+          by: window._currentUser?.shopName || window._currentUser?.username || "",
+          byId: window._currentUser?.username || "",
+          at: new Date().toISOString()
+        });
+        delete window._rateStars[id];
+        toast("شكرًا لتقييمك 🌟", "ok");
+      } catch (e) {
+        toast("تعذّر إرسال التقييم: " + (e.message || e), "err");
+        if (btn) { btn.disabled = false; btn.textContent = "إرسال التقييم"; }
+      }
     };
 
     /* ══════════════════════════════════════════════════════
