@@ -68,6 +68,71 @@ export async function addTxn(db, kind, id, { type, amount, note, by }) {
   return after;
 }
 
+/** بيقرا الرصيد الحالي من القاعدة مباشرة */
+export async function getBalance(db, kind, id) {
+  if (!id) return 0;
+  try {
+    const s = await get(ref(db, walletPath(kind, id) + "/balance"));
+    return Number(s.val()) || 0;
+  } catch (e) { return 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   خصم تلقائي وقت عمل الأوردر
+   ──────────────────────────────────────────────────────────────
+   بياخد من الرصيد أقل قيمة بين (الرصيد المتاح) و(إجمالي التوصيل)،
+   وبيسجّل حركة use. بيرجّع { used, remaining } عشان الأوردر يتحفظ
+   بالمبلغ اللي اتخصم فعلًا.
+
+   بيستخدم runTransaction فبيمنع إن اتنين أوردرات في نفس اللحظة
+   ياخدوا نفس الرصيد مرتين — بيخصم اللي متاح وقتها بالظبط.
+══════════════════════════════════════════════════════════════ */
+export async function useWallet(db, kind, id, orderTotal, meta = {}) {
+  const total = Number(orderTotal) || 0;
+  if (!id || total <= 0) return { used: 0, remaining: 0 };
+
+  const base = walletPath(kind, id);
+  let used = 0;
+  const res = await runTransaction(ref(db, base + "/balance"), cur => {
+    const bal = Number(cur) || 0;
+    if (bal <= 0) { used = 0; return bal; }
+    used = Math.min(bal, total);
+    return Math.round((bal - used) * 100) / 100;
+  });
+  const after = Number(res.snapshot.val()) || 0;
+  if (!used) return { used: 0, remaining: after };
+
+  const tRef = push(ref(db, base + "/txns"));
+  await set(tRef, {
+    amount: -used, type: "use",
+    note: meta.orderNum ? `أوردر ${meta.orderNum}` : "خصم من أوردر",
+    orderNum: meta.orderNum || "", by: meta.by || "النظام",
+    at: new Date().toISOString(), balanceAfter: after
+  });
+  await update(ref(db, base), { updatedAt: new Date().toISOString() });
+  return { used, remaining: after };
+}
+
+/** شريط بيوري صاحب الحساب رصيده — بيتحط في تطبيق العميل والمحل */
+export function balanceBarHtml(balance, opts = {}) {
+  const b = Number(balance) || 0;
+  if (!b && !opts.showZero) return "";
+  const pos = b > 0;
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:14px;
+      background:${pos ? "rgba(34,197,94,.11)" : "rgba(232,25,44,.11)"};
+      border:1px solid ${pos ? "rgba(34,197,94,.32)" : "rgba(232,25,44,.32)"};${opts.style || ""}">
+      <span style="font-size:24px">👛</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;opacity:.8">${pos ? "رصيدك في المحفظة" : "مستحق عليك"}</div>
+        <div style="font-size:20px;font-weight:900;direction:ltr;text-align:start;
+          color:${pos ? "#22c55e" : "#e8192c"}">${money(Math.abs(b))} ج.م</div>
+      </div>
+      ${pos ? `<div style="font-size:11.5px;opacity:.75;max-width:130px;line-height:1.6">
+        بيتخصم تلقائيًا من أوردرك الجاي</div>` : ""}
+    </div>`;
+}
+
 /* ══════════════════════════════════════════════════════════════
    عرض كارت المحفظة — بيرجّع HTML بس، التطبيق هو اللي بيربط الأزرار
    عن طريق data-w-act

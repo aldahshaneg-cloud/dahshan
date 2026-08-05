@@ -25,6 +25,7 @@
     import {
       getDatabase, ref, push, set, onValue, get, update, runTransaction
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { useWallet, balanceBarHtml, readWallet } from "./wallet.js";
     import { getAuth, onAuthStateChanged, signOut, signInAnonymously }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -313,8 +314,9 @@
     /* ══════════════════════════════════════════════════════
        NAVIGATION
     ══════════════════════════════════════════════════════ */
-    const PAGES = ["new-order", "my-orders", "profile"];
-    const PAGE_TITLES = { "new-order": "طلب جديد", "my-orders": "طلباتي", "profile": "حسابي" };
+    const PAGES = ["home", "new-order", "my-orders", "profile"];
+    const PAGE_TITLES = { "home": "الرئيسية", "new-order": "طلب جديد",
+                          "my-orders": "طلباتي", "profile": "حسابي" };
 
     window.navigateTo = function (page) {
       PAGES.forEach(p => {
@@ -327,6 +329,7 @@
       window._currentPage = page;
       if (page === "new-order")  resetForm();
       if (page === "my-orders")  renderOrders();
+      if (page === "home")       renderHome();
     };
 
     /* ══════════════════════════════════════════════════════
@@ -411,6 +414,12 @@
       window._branchesUnsub = onValue(ref(db, "branches"), snap => {
         window._branchesMap = snap.val() || {};
         renderPickupBranch();
+      });
+
+      // المحفظة — الرصيد بيتحدّث لايف عشان المحل يشوفه أول بأول
+      window._walletUnsub = onValue(ref(db, "users/" + u.username + "/wallet"), snap => {
+        window._wallet = readWallet(snap.val());
+        renderWalletBits();
       });
 
       // Orders for this merchant (real-time)
@@ -1413,6 +1422,17 @@
         const total          = deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0);
         const totalOrderPrice = deliveries.reduce((s, d) => s + (d.orderPrice || 0), 0);
 
+        /* خصم تلقائي من المحفظة — بياخد أقل قيمة بين رصيده وسعر التوصيل.
+           بيتعمل بعد توليد رقم الأوردر عشان الحركة تتسجّل باسمه، وقبل
+           الحفظ عشان الأوردر يتخزّن بالمبلغ المخصوم فعلًا. */
+        let walletUsed = 0;
+        try {
+          const w = await useWallet(db, "store", u.username, total, {
+            orderNum, by: u.shopName || u.username
+          });
+          walletUsed = w.used;
+        } catch (e) { console.warn("wallet:", e); }
+
         await push(ref(db, "orders"), {
           orderNum,
           senderId    : null,
@@ -1433,6 +1453,8 @@
           branchName  : (bSnap.exists() ? bSnap.val().name : null) || u.branchName,
           notes, deliveries,
           totalDeliveryPrice: total,
+          // اللي اتخصم من محفظة المحل، والمتبقّي اللي هيتحصّل منه فعلًا
+          ...(walletUsed ? { walletUsed, netDeliveryPrice: Math.round((total - walletUsed) * 100) / 100 } : {}),
           storePrepaid: totalOrderPrice,
           storePrepaidNote: "",
           status     : "قيد التنفيذ",
@@ -1452,7 +1474,9 @@
         }
 
         await _storeDiag({ step: "success", orderNum });
-        toast(`✅ تمّ إرسال الطلب ${orderNum}`, "ok");
+        toast(walletUsed
+          ? `✅ تمّ إرسال الطلب ${orderNum} — اتخصم ${walletUsed} ج من محفظتك`
+          : `✅ تمّ إرسال الطلب ${orderNum}`, "ok");
         // مهم: نرجّع الزر والفورم لحالتهم فورًا. من غير كده الزر بيفضل
         // عالق على "جاري الإرسال…" فالمحل يفتكر إن مفيش حاجة حصلت ويضغط
         // تاني فيتبعت الطلب مرتين.
@@ -1675,6 +1699,85 @@
 
     window.toggleDet = function (id) {
       document.getElementById("det-" + id)?.classList.toggle("open");
+    };
+
+    /* ══════════════════════════════════════════════════════
+       الصفحة الرئيسية + المحفظة
+    ══════════════════════════════════════════════════════ */
+    function renderWalletBits() {
+      const w = window._wallet || { balance: 0, txns: [] };
+      const box = $("profWallet");
+      if (box) box.innerHTML = balanceBarHtml(w.balance, { showZero: true });
+      if (window._currentPage === "home") renderHome();
+    }
+
+    window.renderHome = function () {
+      const el = $("homeBody"); if (!el) return;
+      const u = window._currentUser || {};
+      const w = window._wallet || { balance: 0, txns: [] };
+      const os = window._ordersData || [];
+      const today = new Date().toDateString();
+      const isToday = o => new Date(o.createdAt || 0).toDateString() === today;
+      const cnt = s => os.filter(o => o.status === s).length;
+      const live = os.filter(o => !["تم التسليم", "ملغي", "لم يتم التوصيل"].includes(o.status)).length;
+      const cod = os.filter(o => o.status !== "ملغي")
+                    .reduce((a, o) => a + (Number(o.storePrepaid) || 0), 0);
+
+      el.innerHTML = `
+        <div style="background:linear-gradient(135deg,rgba(14,165,233,.14),rgba(14,165,233,.04));
+          border:1px solid rgba(14,165,233,.25);border-radius:16px;padding:18px;margin-bottom:14px">
+          <div style="font-size:.8rem;color:var(--muted)">أهلًا بيك 👋</div>
+          <div style="font-size:1.25rem;font-weight:900;margin-top:2px">${u.shopName || u.username || "—"}</div>
+        </div>
+
+        ${balanceBarHtml(w.balance, { showZero: true, style: "margin-bottom:14px" })}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin-bottom:14px">
+          ${[["إجمالي الشحنات", os.length, "var(--text)"],
+             ["النهارده", os.filter(isToday).length, "var(--sky)"],
+             ["جارية", live, "var(--orng)"],
+             ["تم التسليم", cnt("تم التسليم"), "var(--green)"],
+             ["إجمالي العهدة", cod + " ج", "var(--orange)"]
+            ].map(([k, v, c]) => `
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:13px;
+              padding:13px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:900;color:${c}">${v}</div>
+              <div style="font-size:.72rem;color:var(--muted);margin-top:2px">${k}</div>
+            </div>`).join("")}
+        </div>
+
+        <button onclick="navigateTo('new-order')" style="width:100%;background:var(--sky);color:#fff;
+          border:none;padding:15px;border-radius:14px;font-weight:800;font-size:.95rem;cursor:pointer;
+          font-family:inherit;margin-bottom:14px">➕ اعمل شحنة جديدة</button>
+
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px">
+          <div style="font-size:.85rem;font-weight:800;margin-bottom:10px">📦 آخر الشحنات</div>
+          ${os.length ? os.slice(0, 5).map(o => `
+            <div onclick="navigateTo('my-orders')" style="display:flex;justify-content:space-between;
+              gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
+              <div><b dir="ltr" style="font-size:.86rem">${o.orderNum || "—"}</b>
+                <div style="font-size:.72rem;color:var(--muted);margin-top:2px">${o.status || "—"}</div></div>
+              <b style="font-size:.85rem;color:var(--green);white-space:nowrap">${o.totalDeliveryPrice || 0} ج.م</b>
+            </div>`).join("")
+            : `<div style="text-align:center;color:var(--muted);padding:20px;font-size:.85rem">
+                 مفيش شحنات لسه — ابدأ بأول واحدة</div>`}
+        </div>
+
+        ${w.txns.length ? `
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;
+          padding:15px;margin-top:12px">
+          <div style="font-size:.85rem;font-weight:800;margin-bottom:10px">👛 آخر حركات المحفظة</div>
+          ${w.txns.slice(0, 5).map(t => {
+            const up = Number(t.amount) > 0;
+            return `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+              border-bottom:1px solid var(--border)">
+              <div style="font-size:.82rem">${t.note || (up ? "إضافة رصيد" : "خصم")}
+                <div style="font-size:.7rem;color:var(--muted);margin-top:2px">
+                  ${t.at ? new Date(t.at).toLocaleString("ar-EG") : ""}</div></div>
+              <b style="color:${up ? "var(--green)" : "var(--red)"};white-space:nowrap">
+                ${up ? "+" : "−"}${Math.abs(t.amount)} ج</b></div>`;
+          }).join("")}
+        </div>` : ""}`;
     };
 
     /* ══════════════════════════════════════════════════════
@@ -2673,6 +2776,11 @@
   </div>
 
   <!-- ── PAGE: My Orders ── -->
+  <!-- ── PAGE: Home ── -->
+  <div class="page" id="page-home">
+    <div id="homeBody"></div>
+  </div>
+
   <div class="page" id="page-my-orders">
     <!-- Filter chips -->
     <div class="chips">
@@ -2695,6 +2803,9 @@
       <div class="ph-name"   id="prof-shop">—</div>
       <div class="ph-branch">🏢 <span id="prof-branch">—</span></div>
     </div>
+
+    <!-- رصيد المحفظة — المحل لازم يشوفه -->
+    <div id="profWallet" style="margin-bottom:12px"></div>
 
     <div class="info-card">
       <div class="irow">
@@ -2728,6 +2839,10 @@
 
   <!-- Bottom Navigation -->
   <div class="bottom-nav">
+    <button class="nav-btn" data-page="home" onclick="navigateTo('home')">
+      <span class="ni">🏠</span>
+      <span>الرئيسية</span>
+    </button>
     <button class="nav-btn active" data-page="new-order" onclick="navigateTo('new-order')">
       <span class="ni">➕</span>
       <span>طلب جديد</span>
