@@ -3,245 +3,276 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>الدهشان | قياس الأداء</title>
+<title>الدهشان | إدارة التقييمات</title>
 <link rel="icon" href="assets/icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 <style>
 :root{
-  --bg:#0a0a0b; --panel:#15161c; --card:#1c1d24; --night:#08080a;
-  --border:#2a2b33; --text:#e8e8ef; --muted:#8b93a7;
-  --red:#e8192c; --green:#22c55e; --sky:#0ea5e9; --orange:#f97316; --gold:#f5b800;
+  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
+  --line:#e9edef; --line2:#d1d7db;
+  --txt:#111b21; --muted:#667781; --soft:#8696a0;
+  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  --green:#15803d; --green-soft:rgba(21,128,61,.1);
+  --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
+  --gold:#b45309; --gold-soft:rgba(180,83,9,.12);
+  --blue:#1d4ed8;
+  --font:'Cairo',system-ui,sans-serif; --hd:60px;
+}
+:root.dark{
+  --bg:#0b141a; --panel:#111b21; --hover:#182229; --active:#2a3942;
+  --line:#222d34; --line2:#2a3942;
+  --txt:#e9edef; --muted:#8696a0; --soft:#667781;
+  --brand:#e8192c; --brand-d:#b91c1c; --brand-soft:rgba(232,25,44,.14);
+  --green:#22c55e; --green-soft:rgba(34,197,94,.14);
+  --orange:#f97316; --orange-soft:rgba(249,115,22,.14);
+  --gold:#f5b800; --gold-soft:rgba(245,184,0,.14);
+  --blue:#60a5fa;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:Tajawal,system-ui,sans-serif;
-  min-height:100vh;-webkit-font-smoothing:antialiased}
-button,input,select{font-family:inherit}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);height:100vh;overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;color:inherit}
 
-/* ── شاشة الدخول ─────────────────────────────────────── */
-#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
-.lg-box{background:var(--panel);border:1px solid var(--border);border-radius:20px;
-  padding:32px 28px;width:100%;max-width:380px;text-align:center}
-.lg-box img{height:54px;margin-bottom:16px}
-.lg-box h1{font-size:1.15rem;font-weight:900;margin-bottom:4px}
-.lg-box p{font-size:.82rem;color:var(--muted);margin-bottom:20px}
-.lg-box input{width:100%;background:var(--night);border:1px solid var(--border);
-  border-radius:12px;padding:13px 15px;color:var(--text);font-size:.92rem;
-  margin-bottom:10px;outline:none}
-.lg-box input:focus{border-color:var(--red)}
-.lg-box button{width:100%;background:var(--red);color:#fff;border:none;padding:13px;
-  border-radius:12px;font-weight:800;font-size:.95rem;cursor:pointer}
-.lg-err{color:var(--red);font-size:.8rem;margin-top:10px;min-height:18px}
+/* ── بوابة الدخول ─────────────────────────────────────── */
+#gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:60;padding:20px}
+.gate-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 26px;
+  width:100%;max-width:360px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.gate-box img{height:48px;margin-bottom:14px}
+.gate-box h1{font-size:17px;font-weight:800;margin-bottom:4px}
+.gate-box p{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+.gate-box input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;font-size:14px;margin-bottom:9px;outline:none}
+.gate-box input:focus{border-color:var(--brand)}
+.gbtn{width:100%;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;
+  font-weight:800;font-size:14.5px;cursor:pointer}
+#gateErr{color:var(--brand);font-size:12.5px;margin-top:9px;min-height:17px}
 
-/* ── الهيكل ──────────────────────────────────────────── */
-#app{display:none;min-height:100vh;flex-direction:column}
+/* ── الهيكل ───────────────────────────────────────────── */
+#app{display:none;height:100vh;flex-direction:column}
 #app.on{display:flex}
-header{background:var(--panel);border-bottom:1px solid var(--border);
-  padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
-header img{height:34px}
-header h1{font-size:1rem;font-weight:900;flex:1}
-.hbtn{background:transparent;border:1px solid var(--border);color:var(--muted);
-  padding:8px 14px;border-radius:9px;cursor:pointer;font-size:.8rem;font-weight:700}
-.hbtn:hover{color:var(--text)}
-.wrap{padding:20px;max-width:1200px;margin:0 auto;width:100%;flex:1}
+.topbar{height:var(--hd);flex:none;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:0 16px}
+.topbar img{height:30px}
+.topbar .ttl{font-size:16px;font-weight:800}
+.topbar .sp{margin-inline-start:auto;display:flex;align-items:center;gap:10px}
+.ico{width:36px;height:36px;border-radius:50%;border:none;background:none;cursor:pointer;
+  font-size:16px;color:var(--muted)}
+.ico:hover{background:var(--hover)}
+.me{display:flex;align-items:center;gap:8px}
+.me b{font-size:13px;display:block;line-height:1.3}
+.me span{font-size:11px;color:var(--muted)}
+.av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:14px}
+.main{flex:1;display:flex;min-height:0;min-width:0}
 
-.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
-.tab{background:var(--card);border:1px solid var(--border);color:var(--muted);
-  padding:10px 18px;border-radius:11px;cursor:pointer;font-weight:700;font-size:.87rem}
-.tab.on{background:rgba(232,25,44,.13);border-color:rgba(232,25,44,.4);color:var(--red)}
-.tab .cnt{background:var(--red);color:#fff;border-radius:20px;padding:1px 7px;
-  font-size:.68rem;margin-inline-start:6px}
+/* العمود اليمين: اللستة */
+.side{width:380px;flex:none;background:var(--panel);border-inline-start:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.side-top{padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
+.search{display:flex;align-items:center;gap:9px;background:var(--bg);border-radius:9px;padding:8px 13px}
+.search input{background:none;border:none;outline:none;flex:1;font-size:14px;min-width:0}
+.chips{display:flex;gap:6px;margin-top:9px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{padding:5px 13px;border-radius:99px;border:1px solid var(--line2);background:none;
+  font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.chip .n{background:var(--brand);color:#fff;border-radius:99px;padding:0 6px;font-size:10.5px;
+  margin-inline-start:5px}
+.periodSel{width:100%;margin-top:9px;background:var(--bg);border:1px solid var(--line2);
+  border-radius:9px;padding:8px 11px;font-size:12.5px;font-weight:700;outline:none}
+.list{flex:1;overflow-y:auto;min-height:0}
+.row{display:flex;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line);
+  align-items:center}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--active)}
+.r-av{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+  font-weight:800;font-size:16px;flex:none}
+.r-b{flex:1;min-width:0}
+.r-1{display:flex;align-items:baseline;gap:8px}
+.r-1 b{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.r-2{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12.5px;color:var(--muted)}
+.tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.t-ok{background:var(--green-soft);color:var(--green)}
+.t-warn{background:var(--orange-soft);color:var(--orange)}
+.t-bad{background:var(--brand-soft);color:var(--brand)}
+.t-gold{background:var(--gold-soft);color:var(--gold)}
+.stars{color:var(--gold);letter-spacing:.5px}
+.empty{padding:60px 24px;text-align:center;color:var(--muted);font-size:14px}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
 
-.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-.bar select,.bar input{background:var(--card);border:1px solid var(--border);
-  color:var(--text);padding:9px 13px;border-radius:9px;font-size:.85rem;outline:none}
+/* العمود الشمال: التفاصيل */
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.pane-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.pane-empty i{font-size:64px;font-style:normal;display:block;margin-bottom:16px;opacity:.35}
+.pane-hd{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;
+  display:flex;align-items:center;gap:14px;flex:none;flex-wrap:wrap;min-width:0}
+.p-av{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+  font-weight:800;font-size:19px;flex:none}
+.pane-hd .nm{flex:1;min-width:0}
+.pane-hd .nm b{font-size:16px;display:block}
+.pane-hd .nm span{font-size:12.5px;color:var(--muted)}
+.pane-body{flex:1;overflow-y:auto;padding:18px 20px}
+.back{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)}
 
-/* ── كروت الملخّص ────────────────────────────────────── */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px}
-.kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
-.kpi .k{font-size:.76rem;color:var(--muted);font-weight:600}
-.kpi .v{font-size:1.6rem;font-weight:900;margin-top:5px}
-.kpi .s{font-size:.72rem;color:var(--muted);margin-top:3px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px}
+.kpi .k{font-size:11.5px;color:var(--muted);font-weight:700}
+.kpi .v{font-size:22px;font-weight:900;margin-top:3px}
+.kpi .s{font-size:11px;color:var(--muted);margin-top:2px}
 
-/* ── الجداول ─────────────────────────────────────────── */
-.tw{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:auto}
-table{width:100%;border-collapse:collapse;font-size:.85rem;min-width:640px}
-th{background:var(--night);color:var(--muted);font-weight:700;font-size:.76rem;
-  padding:12px 10px;text-align:right;white-space:nowrap;position:sticky;top:0}
-td{padding:12px 10px;border-top:1px solid var(--border);vertical-align:middle}
-tr:hover td{background:rgba(255,255,255,.02)}
-.name{font-weight:800}
-.sub{font-size:.72rem;color:var(--muted)}
-.empty{text-align:center;color:var(--muted);padding:34px;font-size:.88rem}
-
-/* شريط النتيجة */
-.score{display:flex;align-items:center;gap:9px;min-width:130px}
-.sbar{flex:1;height:7px;background:var(--night);border-radius:20px;overflow:hidden}
-.sbar i{display:block;height:100%;border-radius:20px}
-.snum{font-weight:900;font-size:.92rem;min-width:34px;text-align:left}
-.stars{color:var(--gold);letter-spacing:1px;white-space:nowrap}
-.rank{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
-  font-weight:900;font-size:.78rem;background:var(--night);color:var(--muted)}
-.rank.g1{background:rgba(245,184,0,.18);color:var(--gold)}
-.rank.g2{background:rgba(160,160,175,.16);color:#c9c9d2}
-.rank.g3{background:rgba(205,127,50,.16);color:#cd7f32}
-
-/* ── الدعم الفني ─────────────────────────────────────── */
-.case{background:var(--card);border:1px solid var(--border);border-radius:14px;
-  padding:16px;margin-bottom:12px}
-.case.low{border-color:rgba(232,25,44,.35)}
-.case-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
-.case-h b{font-size:.95rem;direction:ltr}
-.chip{padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:800}
-.c-red{background:rgba(232,25,44,.15);color:var(--red)}
-.c-green{background:rgba(34,197,94,.15);color:var(--green)}
-.c-gold{background:rgba(245,184,0,.15);color:var(--gold)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:12px}
+.card-h{font-size:13.5px;font-weight:800;margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;
+  border-bottom:1px solid var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:none}
+.kv span{color:var(--muted)}
+.kv b{font-weight:800}
+.bar{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin-top:7px}
+.bar i{display:block;height:100%;border-radius:99px}
+.how{background:var(--bg);border:1px dashed var(--line2);border-radius:11px;padding:12px 14px;
+  font-size:12px;color:var(--muted);line-height:1.95}
+.how b{color:var(--blue)}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.acts button,.acts a{border:1px solid var(--border);background:transparent;color:var(--muted);
-  padding:8px 14px;border-radius:9px;cursor:pointer;font-size:.8rem;font-weight:700;
-  text-decoration:none;display:inline-block}
-.acts .ok{background:rgba(34,197,94,.13);color:var(--green);border-color:rgba(34,197,94,.35)}
-.acts .re{background:rgba(245,184,0,.13);color:var(--gold);border-color:rgba(245,184,0,.35)}
-.note{font-size:.82rem;color:var(--muted);margin-top:6px;line-height:1.8}
-
-/* شرح المعادلة */
-.how{background:rgba(14,165,233,.06);border:1px solid rgba(14,165,233,.2);
-  border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:.78rem;
-  color:var(--muted);line-height:2}
-.how b{color:var(--sky)}
+.btn{border:1px solid var(--line2);background:none;color:var(--muted);padding:9px 15px;
+  border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:800;text-decoration:none;display:inline-block}
+.btn.ok{background:var(--green-soft);color:var(--green);border-color:transparent}
+.btn.gold{background:var(--gold-soft);color:var(--gold);border-color:transparent}
+.btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+.quote{background:var(--bg);border-inline-start:3px solid var(--brand);border-radius:8px;
+  padding:11px 13px;font-size:13px;line-height:1.8;margin-top:4px}
 
 /* نافذة */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;display:none;
-  align-items:center;justify-content:center;padding:18px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:none;
+  align-items:flex-end;justify-content:center}
 .modal.on{display:flex}
-.modal .box{background:var(--panel);border:1px solid var(--border);border-radius:16px;
-  padding:22px;max-width:420px;width:100%}
-.modal h3{font-size:1rem;font-weight:900;margin-bottom:14px}
-.modal .st{font-size:30px;cursor:pointer;line-height:1}
-.modal textarea,.modal input{width:100%;background:var(--night);border:1px solid var(--border);
-  border-radius:10px;padding:11px 13px;color:var(--text);font-size:.87rem;outline:none;
-  margin-top:10px;resize:none}
-.modal .row{display:flex;gap:9px;margin-top:16px}
-.modal .row button{flex:1;padding:11px;border-radius:10px;font-weight:800;cursor:pointer;
-  border:1px solid var(--border);background:transparent;color:var(--muted);font-size:.86rem}
-.modal .row .pri{background:var(--red);color:#fff;border-color:var(--red)}
-#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:200;
-  background:var(--panel);border:1px solid var(--border);border-radius:11px;
-  padding:12px 20px;font-size:.86rem;font-weight:700;display:none}
+.sheet{background:var(--panel);width:100%;max-width:460px;border-radius:16px 16px 0 0;
+  max-height:88vh;display:flex;flex-direction:column;margin-bottom:0}
+@media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
+.sheet-h{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
+.sheet-b{padding:18px 20px;overflow-y:auto}
+.sheet-b textarea,.sheet-b input{width:100%;background:var(--bg);border:1px solid var(--line2);
+  border-radius:10px;padding:11px 13px;font-size:13.5px;outline:none;margin-top:10px;resize:none}
+.st{font-size:31px;cursor:pointer;line-height:1}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+  background:var(--txt);color:var(--bg);border-radius:9px;padding:11px 20px;
+  font-size:13.5px;font-weight:700;display:none}
 #toast.on{display:block}
-@media(max-width:600px){.wrap{padding:14px}header{padding:12px 14px}}
+
+@media(max-width:820px){
+  .side{width:100%;border:none}
+  .main.detail .side{display:none}
+  .main:not(.detail) .pane{display:none}
+  .back{display:block}
+  .me b,.me span{display:none}
+}
 </style>
 </head>
 <body>
 
-<!-- ═══ الدخول ═══ -->
-<div id="login">
-  <div class="lg-box">
-    <img src="assets/logo.png" alt="الدهشان" />
-    <h1>📊 قياس الأداء</h1>
-    <p>إدارة متخصصة لقياس أداء الطيارين والفروع والموظفين</p>
-    <input id="lgUser" placeholder="اسم المستخدم" dir="ltr" autocomplete="username" />
-    <input id="lgPass" type="password" placeholder="كلمة المرور" dir="ltr" autocomplete="current-password" />
-    <button onclick="doLogin()">دخول</button>
-    <div class="lg-err" id="lgErr"></div>
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <h1>⭐ إدارة التقييمات</h1>
+    <p>قياس أداء الطيارين والفروع والموظفين</p>
+    <input id="gUser" placeholder="اسم المستخدم" dir="ltr" autocomplete="username" />
+    <input id="gPass" type="password" placeholder="كلمة المرور" dir="ltr" autocomplete="current-password" />
+    <button class="gbtn" onclick="doLogin()">دخول</button>
+    <div id="gateErr"></div>
   </div>
 </div>
 
-<!-- ═══ التطبيق ═══ -->
 <div id="app">
-  <header>
-    <img src="assets/logo.png" alt="" />
-    <h1>📊 قياس الأداء</h1>
-    <span class="sub" id="who"></span>
-    <button class="hbtn" onclick="location.href='index.html'">← البوابة</button>
-    <button class="hbtn" onclick="doLogout()">خروج</button>
-  </header>
-
-  <div class="wrap">
-    <div class="bar">
-      <select id="period" onchange="render()">
-        <option value="7">آخر 7 أيام</option>
-        <option value="30" selected>آخر 30 يوم</option>
-        <option value="90">آخر 90 يوم</option>
-        <option value="0">من البداية</option>
-      </select>
-      <select id="branchFilter" onchange="render()"><option value="">كل الفروع</option></select>
-      <span class="sub" id="dataInfo"></span>
+  <div class="topbar">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <div class="ttl">⭐ إدارة التقييمات</div>
+    <div class="sp">
+      <button class="ico" id="themeBtn" title="الوضع الليلي">🌙</button>
+      <button class="ico" onclick="location.href='index.html'" title="البوابة">🏠</button>
+      <div class="me"><div class="av" id="meAv">A</div>
+        <div><b id="meName">—</b><span id="meRole">—</span></div></div>
+      <button class="ico" onclick="doLogout()" title="خروج" style="color:var(--brand)">⏻</button>
     </div>
-
-    <div class="tabs">
-      <div class="tab on" data-t="pilots"    onclick="setTab('pilots')">🛵 الطيارون</div>
-      <div class="tab"    data-t="branches"  onclick="setTab('branches')">🏢 الفروع والتشغيل</div>
-      <div class="tab"    data-t="staff"     onclick="setTab('staff')">🧑‍💼 باقي الموظفين</div>
-      <div class="tab"    data-t="support"   onclick="setTab('support')">🎧 الدعم الفني <span class="cnt" id="supCnt">0</span></div>
-    </div>
-
-    <div id="body"></div>
   </div>
-</div>
 
-<!-- نافذة إعادة التقييم -->
-<div class="modal" id="reModal">
-  <div class="box">
-    <h3>🔄 إعادة التقييم من الدعم</h3>
-    <div class="sub" id="reOrder"></div>
-    <div style="margin-top:12px" id="reStars"></div>
-    <div class="sub" id="reLbl" style="color:var(--gold);font-weight:700;min-height:18px;margin-top:6px"></div>
-    <textarea id="reNote" rows="3" placeholder="سبب إعادة التقييم — إيه اللي اتحل أو ليه الشكوى مش صحيحة؟"></textarea>
-    <div class="row">
-      <button onclick="closeRe()">إلغاء</button>
-      <button class="pri" onclick="saveRe()">حفظ التقييم</button>
+  <div class="main" id="main">
+    <div class="side">
+      <div class="side-top">
+        <div class="search">🔍<input id="q" placeholder="ابحث بالاسم…" autocomplete="off" oninput="renderList()" /></div>
+        <div class="chips" id="chips"></div>
+        <select class="periodSel" id="period" onchange="refresh()">
+          <option value="7">آخر 7 أيام</option>
+          <option value="30" selected>آخر 30 يوم</option>
+          <option value="90">آخر 90 يوم</option>
+          <option value="0">من البداية</option>
+        </select>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="pane" id="pane">
+      <div class="pane-empty"><div><i>⭐</i>اختار من اللستة عشان تشوف التقييم<br />والتفاصيل الكاملة</div></div>
     </div>
   </div>
 </div>
 
+<div class="modal" id="modal"><div class="sheet">
+  <div class="sheet-h" id="mTitle">—</div>
+  <div class="sheet-b" id="mBody"></div>
+</div></div>
 <div id="toast"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, get, set, update, onValue }
+import { getDatabase, ref, get, set, onValue }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-const firebaseConfig = {
+const app  = initializeApp({
   apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
   authDomain: "aldahshaneg-92f66.firebaseapp.com",
   databaseURL: "https://aldahshaneg-92f66-default-rtdb.firebaseio.com",
   projectId: "aldahshaneg-92f66"
-};
-const app  = initializeApp(firebaseConfig);
-const db   = getDatabase(app);
-const auth = getAuth(app);
+});
+const db = getDatabase(app), auth = getAuth(app);
 onAuthStateChanged(auth, u => { if (!u) signInAnonymously(auth).catch(() => {}); });
 
 const $   = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 const num = (v, d = 1) => (Number(v) || 0).toFixed(d).replace(/\.0+$/, "");
+const initial = s => (String(s || "؟").trim()[0] || "؟");
+function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 2600); }
 
-function toast(m) {
-  const t = $("toast"); t.textContent = m; t.classList.add("on");
-  setTimeout(() => t.classList.remove("on"), 2600);
-}
+/* الثيم */
+if (localStorage.getItem("perf-theme") === "dark") document.documentElement.classList.add("dark");
+const syncTheme = () => $("themeBtn").textContent =
+  document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+syncTheme();
+$("themeBtn").onclick = () => {
+  const d = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("perf-theme", d ? "dark" : "light"); syncTheme();
+};
 
 /* ══════════════════════════════════════════════════════════════
-   الدخول — نفس جلسة باقي اللوحات (tiar-session)
+   الدخول — نفس جلسة باقي اللوحات
 ══════════════════════════════════════════════════════════════ */
 const ALLOWED = ["مدير", "مدير عام", "admin", "موارد بشرية", "شؤون عاملين", "مشرف"];
 let ME = null;
 
 function applySession(s) {
   ME = s;
-  $("login").style.display = "none";
+  $("gate").style.display = "none";
   $("app").classList.add("on");
-  $("who").textContent = `${s.username} — ${s.role || ""}`;
+  $("meName").textContent = s.username;
+  $("meRole").textContent = s.role || "";
+  $("meAv").textContent = initial(s.username);
   start();
 }
-
 window.doLogin = async function () {
-  const u = $("lgUser").value.trim(), p = $("lgPass").value;
-  const err = $("lgErr"); err.textContent = "";
+  const u = $("gUser").value.trim(), p = $("gPass").value, err = $("gateErr");
+  err.textContent = "";
   if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
   try {
     if (!auth.currentUser) { try { await signInAnonymously(auth); } catch (e) {} }
@@ -250,20 +281,13 @@ window.doLogin = async function () {
     const v = snap.val();
     if (v.password !== p) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
     if (!ALLOWED.includes((v.role || "").trim())) {
-      err.textContent = "الصفحة دي للإدارة والموارد البشرية بس"; return;
-    }
+      err.textContent = "الصفحة دي للإدارة والموارد البشرية بس"; return; }
     const s = { username: u, role: v.role };
     localStorage.setItem("tiar-session", JSON.stringify(s));
     applySession(s);
   } catch (e) { err.textContent = "خطأ في الاتصال: " + e.message; }
 };
-
-window.doLogout = function () {
-  localStorage.removeItem("tiar-session");
-  location.reload();
-};
-
-// جلسة محفوظة من أي لوحة تانية على نفس الدومين
+window.doLogout = function () { localStorage.removeItem("tiar-session"); location.reload(); };
 (function () {
   try {
     const s = JSON.parse(localStorage.getItem("tiar-session") || "null");
@@ -275,103 +299,59 @@ window.doLogout = function () {
    البيانات
 ══════════════════════════════════════════════════════════════ */
 const D = { orders: [], pilots: [], shifts: [], users: [], branches: {}, attendance: {} };
-let TAB = "pilots";
+let TAB = "pilots", SEL = null;
 
 function start() {
-  onValue(ref(db, "orders"), s => {
-    D.orders = Object.entries(s.val() || {}).map(([id, v]) => ({ id, ...v })); render();
-  });
-  onValue(ref(db, "pilots"), s => {
-    D.pilots = Object.entries(s.val() || {}).map(([id, v]) => ({ id, ...v })); render();
-  });
-  onValue(ref(db, "shifts"), s => {
-    D.shifts = Object.entries(s.val() || {}).map(([id, v]) => ({ id, ...v })); render();
-  });
-  onValue(ref(db, "users"), s => {
-    D.users = Object.entries(s.val() || {}).map(([k, v]) => ({ username: k, ...v })); render();
-  });
-  onValue(ref(db, "attendance"), s => { D.attendance = s.val() || {}; render(); });
-  onValue(ref(db, "branches"), s => {
-    D.branches = s.val() || {};
-    const sel = $("branchFilter"), cur = sel.value;
-    sel.innerHTML = `<option value="">كل الفروع</option>` +
-      Object.entries(D.branches).map(([id, b]) =>
-        `<option value="${esc(id)}">${esc(b.name || id)}</option>`).join("");
-    sel.value = cur;
-    render();
-  });
-}
-
-window.setTab = t => {
-  TAB = t;
-  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t));
-  render();
-};
-
-/* ── الفترة والفلترة ─────────────────────────────────── */
-function periodStart() {
-  const d = Number($("period").value || 30);
-  if (!d) return 0;
-  return Date.now() - d * 86400000;
-}
-function inPeriod(iso) {
-  const t = new Date(iso || 0).getTime();
-  return t && t >= periodStart();
-}
-function scopedOrders() {
-  const b = $("branchFilter").value;
-  return D.orders.filter(o => inPeriod(o.createdAt) && (!b || o.branchId === b));
+  const on = (path, fn) => onValue(ref(db, path), s => { fn(s.val() || {}); refresh(); });
+  on("orders",     v => D.orders  = Object.entries(v).map(([id, o]) => ({ id, ...o })));
+  on("pilots",     v => D.pilots  = Object.entries(v).map(([id, o]) => ({ id, ...o })));
+  on("shifts",     v => D.shifts  = Object.entries(v).map(([id, o]) => ({ id, ...o })));
+  on("users",      v => D.users   = Object.entries(v).map(([k, o]) => ({ username: k, ...o })));
+  on("attendance", v => D.attendance = v);
+  on("branches",   v => D.branches = v);
 }
 
 /* ══════════════════════════════════════════════════════════════
    قاعدة التقييم المتفق عليها
-   ──────────────────────────────────────────────────────────────
-   • العميل ماقيّمش      → تتحسب ممتازة (5)
-   • 4 أو 5 نجوم         → ممتازة
-   • من 1 لـ 3 نجوم      → بتروح للدعم الفني يتواصل ويحل، ولو الشكوى
-                            مش واضحة أو مش صحيحة الدعم بيعيد التقييم
-   • تقييم الدعم لو موجود بيغلب تقييم العميل
+   • العميل ماقيّمش → ممتازة (5)   • 4 أو 5 → ممتازة
+   • من 1 لـ3 → الدعم يتواصل ويحل، ولو الشكوى مش واضحة أو مش صحيحة
+     يعيد التقييم — وتقييمه هو اللي بيتحسب
 ══════════════════════════════════════════════════════════════ */
 const parcels = o => Math.max(1, (o.deliveries || []).length);
 const isDone  = o => (o.status || "") === "تم التسليم";
 const isFail  = o => ["لم يتم التوصيل", "ملغي"].includes(o.status || "");
 
-/** التقييم الفعّال للأوردر: تقييم الدعم ← تقييم العميل ← 5 (مافيش تقييم) */
 function effectiveStars(o) {
   const r = o.ratings || {};
-  if (r.support && Number(r.support.stars)) return Number(r.support.stars);
+  if (r.support  && Number(r.support.stars))  return Number(r.support.stars);
   if (r.customer && Number(r.customer.stars)) return Number(r.customer.stars);
-  return 5;                       // ماقيّمش = ممتازة
+  return 5;
 }
-/** محتاج تدخّل الدعم؟ تقييم عميل من 1 لـ 3 ولسه الدعم ماتعاملش معاه */
 function needsSupport(o) {
-  const r = o.ratings || {};
-  const c = Number(r.customer?.stars || 0);
-  return isDone(o) && c >= 1 && c <= 3 && !r.support;
+  const c = Number(o.ratings?.customer?.stars || 0);
+  return isDone(o) && c >= 1 && c <= 3 && !o.ratings?.support;
 }
-
-function avg(list) { return list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0; }
-function pct(n) { return Math.max(0, Math.min(100, n)); }
-function scoreColor(v) { return v >= 80 ? "var(--green)" : v >= 60 ? "var(--gold)" : "var(--red)"; }
-function scoreBar(v) {
-  return `<div class="score"><div class="sbar"><i style="width:${pct(v)}%;background:${scoreColor(v)}"></i></div>
-    <span class="snum" style="color:${scoreColor(v)}">${Math.round(v)}</span></div>`;
-}
-/** لو مفيش تسليمات لسه، مانعرضش صفر نجوم — ده بيبان كأنه تقييم وحش */
-function starsOf(v, has) {
-  if (has === false || !v) return `<span class="sub">— لسه</span>`;
+const avg = l => l.length ? l.reduce((a, b) => a + b, 0) / l.length : 0;
+const pct = n => Math.max(0, Math.min(100, n));
+const sColor = v => v >= 80 ? "var(--green)" : v >= 60 ? "var(--gold)" : "var(--brand)";
+const sTag   = v => v >= 80 ? "t-ok" : v >= 60 ? "t-gold" : "t-bad";
+function starsTxt(v, has) {
+  if (has === false || !v) return `<span style="color:var(--muted)">— لسه</span>`;
   const f = Math.max(0, Math.min(5, Math.round(v)));
-  return `<span class="stars">${"★".repeat(f)}${"☆".repeat(5 - f)}</span>
-    <span class="sub" style="margin-inline-start:5px">${num(v, 2)}</span>`;
+  return `<span class="stars">${"★".repeat(f)}${"☆".repeat(5 - f)}</span> ${num(v, 2)}`;
+}
+function barHtml(v) {
+  return `<div class="bar"><i style="width:${pct(v)}%;background:${sColor(v)}"></i></div>`;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   ساعات عمل الطيار — من الورديات
-══════════════════════════════════════════════════════════════ */
-function pilotHours(pilotId) {
+function periodStart() { const d = Number($("period").value || 30); return d ? Date.now() - d * 86400000 : 0; }
+const inPeriod = iso => { const t = new Date(iso || 0).getTime(); return t && t >= periodStart(); };
+const scopedOrders = () => D.orders.filter(o => inPeriod(o.createdAt));
+
+function pilotHours(pid) {
   let ms = 0;
   for (const s of D.shifts) {
-    if (s.pilotId !== pilotId || !s.startedAt) continue;
+    if (s.pilotId !== pid || !s.startedAt) continue;
     const st = new Date(s.startedAt).getTime();
     if (!st || st < periodStart()) continue;
     const en = s.endedAt ? new Date(s.endedAt).getTime() : Date.now();
@@ -380,10 +360,7 @@ function pilotHours(pilotId) {
   return ms / 3600000;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   تقييم الطيارين
-   الإنتاجية 40% + تقييم العملاء 35% + الالتزام 25%
-══════════════════════════════════════════════════════════════ */
+/* ── حسابات الطيارين ─────────────────────────────────── */
 function pilotRows() {
   const os = scopedOrders();
   const rows = D.pilots.map(p => {
@@ -393,20 +370,15 @@ function pilotRows() {
     const hours = pilotHours(p.id);
     const perHour = hours > 0 ? dParcels / hours : 0;
     const rating = avg(done.map(effectiveStars));
-    // الالتزام = نسبة اللي سلّمه من اللي خلص فيه فعلًا (مسلَّم + فاشل).
-    // الأوردر اللي لسه «جاري التوصيل» مش فشل، فمابيتحسبش ضده.
-    const commitBase = done.length + fail.length;
-    const commit = commitBase ? (done.length / commitBase) * 100 : 100;
-    return { p, mine, done, fail, dParcels, hours, perHour, rating, commit };
+    const base = done.length + fail.length;
+    const commit = base ? (done.length / base) * 100 : 100;
+    return { id: p.id, name: p.name || "—", branch: D.branches[p.assignedBranchId]?.name || "—",
+             mine, done, fail, dParcels, hours, perHour, rating, commit };
   }).filter(r => r.mine.length || r.hours > 0);
 
-  // الإنتاجية نسبية لأحسن معدل في الفترة — عشان المقارنة تبقى عادلة
-  // بين الطيارين نفسهم مش مقارنة برقم ثابت من دماغنا
   const best = Math.max(0, ...rows.map(r => r.perHour));
   rows.forEach(r => {
-    r.prod  = best > 0 ? pct((r.perHour / best) * 100) : 0;
-    // الطيار اللي لسه ماسلّمش حاجة، تقييم العملاء مايتحسبش عليه —
-    // بنوزّع وزنه على الإنتاجية والالتزام بدل ما ينزّل درجته ظلم
+    r.prod = best > 0 ? pct((r.perHour / best) * 100) : 0;
     r.score = r.done.length
       ? r.prod * 0.40 + (r.rating / 5) * 100 * 0.35 + r.commit * 0.25
       : r.prod * 0.60 + r.commit * 0.40;
@@ -414,309 +386,340 @@ function pilotRows() {
   return rows.sort((a, b) => b.score - a.score);
 }
 
-function viewPilots() {
-  const rows = pilotRows();
-  const allDone = rows.reduce((s, r) => s + r.dParcels, 0);
-  const allHours = rows.reduce((s, r) => s + r.hours, 0);
-  const kpis = `
-    <div class="kpis">
-      <div class="kpi"><div class="k">طيارين نشطين</div><div class="v">${rows.length}</div></div>
-      <div class="kpi"><div class="k">طرود مسلَّمة</div><div class="v">${allDone}</div></div>
-      <div class="kpi"><div class="k">ساعات عمل</div><div class="v">${num(allHours)}</div>
-        <div class="s">من الورديات المسجّلة</div></div>
-      <div class="kpi"><div class="k">معدل الطرود/ساعة</div>
-        <div class="v">${allHours > 0 ? num(allDone / allHours, 2) : "—"}</div></div>
-      <div class="kpi"><div class="k">متوسط التقييم</div>
-        <div class="v" style="color:var(--gold)">${rows.length ? num(avg(rows.map(r => r.rating)), 2) : "—"}</div></div>
-    </div>`;
-
-  const how = `<div class="how">
-    <b>إزاي بنحسب تقييم الطيار؟</b> الإنتاجية <b>40%</b> (طرود/ساعة عمل، منسوبة لأحسن معدل في الفترة)
-    + تقييم العملاء <b>35%</b> + الالتزام <b>25%</b> (نسبة الطرود المسلَّمة من اللي اتكلّف بيها).
-    ساعات العمل بتتحسب من ورديات الطيار المسجّلة.
-  </div>`;
-
-  if (!rows.length) return kpis + how + `<div class="tw"><div class="empty">مفيش بيانات طيارين في الفترة دي</div></div>`;
-
-  return kpis + how + `<div class="tw"><table>
-    <thead><tr><th>#</th><th>الطيار</th><th>التقييم العام</th><th>طرود مسلَّمة</th>
-      <th>ساعات</th><th>طرود/ساعة</th><th>تقييم العملاء</th><th>الالتزام</th><th>لم يتم/ملغي</th></tr></thead>
-    <tbody>${rows.map((r, i) => `
-      <tr>
-        <td><span class="rank ${i < 3 ? "g" + (i + 1) : ""}">${i + 1}</span></td>
-        <td><div class="name">${esc(r.p.name || "—")}</div>
-            <div class="sub">${esc(D.branches[r.p.assignedBranchId]?.name || "—")}</div></td>
-        <td>${scoreBar(r.score)}</td>
-        <td><b>${r.dParcels}</b></td>
-        <td>${num(r.hours)}</td>
-        <td><b style="color:var(--sky)">${num(r.perHour, 2)}</b></td>
-        <td>${starsOf(r.rating, r.done.length > 0)}</td>
-        <td>${num(r.commit, 0)}%</td>
-        <td style="color:${r.fail.length ? "var(--red)" : "var(--muted)"}">${r.fail.length}</td>
-      </tr>`).join("")}</tbody></table></div>`;
-}
-
-/* ══════════════════════════════════════════════════════════════
-   تقييم الفروع والتشغيل — تقييم العملاء 60% + نسبة النجاح 40%
-══════════════════════════════════════════════════════════════ */
+/* ── حسابات الفروع ───────────────────────────────────── */
 function branchRows() {
-  const os = scopedOrders();
   const by = new Map();
-  for (const o of os) {
+  for (const o of scopedOrders()) {
     const id = o.branchId || "—";
     if (!by.has(id)) by.set(id, []);
     by.get(id).push(o);
   }
-  const rows = [...by.entries()].map(([id, list]) => {
+  return [...by.entries()].map(([id, list]) => {
     const done = list.filter(isDone), fail = list.filter(isFail);
     const rating = avg(done.map(effectiveStars));
     const base = done.length + fail.length;
     const success = base ? (done.length / base) * 100 : 100;
-    const rated = done.filter(o => Number(o.ratings?.customer?.stars || 0));
-    const low   = done.filter(needsSupport);
-    return {
-      id, name: D.branches[id]?.name || "—", list, done, fail, rating, success,
-      ratedCount: rated.length, low: low.length,
-      score: (rating / 5) * 100 * 0.60 + success * 0.40
-    };
+    return { id, name: D.branches[id]?.name || "—", list, done, fail, rating, success,
+             rated: done.filter(o => Number(o.ratings?.customer?.stars || 0)).length,
+             low: done.filter(needsSupport).length,
+             score: (rating / 5) * 100 * 0.60 + success * 0.40 };
   }).sort((a, b) => b.score - a.score);
-  return rows;
 }
 
-function viewBranches() {
-  const rows = branchRows();
-  const os = scopedOrders();
-  const done = os.filter(isDone);
-  const ratedCount = done.filter(o => Number(o.ratings?.customer?.stars || 0)).length;
-
-  const kpis = `
-    <div class="kpis">
-      <div class="kpi"><div class="k">إجمالي الأوردرات</div><div class="v">${os.length}</div></div>
-      <div class="kpi"><div class="k">تم التسليم</div><div class="v" style="color:var(--green)">${done.length}</div></div>
-      <div class="kpi"><div class="k">تقييم التشغيل العام</div>
-        <div class="v" style="color:var(--gold)">${done.length ? num(avg(done.map(effectiveStars)), 2) : "—"}</div>
-        <div class="s">من 5</div></div>
-      <div class="kpi"><div class="k">قيّمها العملاء فعلًا</div><div class="v">${ratedCount}</div>
-        <div class="s">من ${done.length} مسلَّمة</div></div>
-      <div class="kpi"><div class="k">محتاجة دعم</div>
-        <div class="v" style="color:var(--red)">${done.filter(needsSupport).length}</div></div>
-    </div>`;
-
-  const how = `<div class="how">
-    <b>قاعدة التقييم:</b> الأوردر اللي العميل ماقيّمهوش <b>بيتحسب ممتاز (5 نجوم)</b>، وكذلك اللي واخد
-    4 أو 5. الأوردر اللي واخد من <b>1 لـ 3 نجوم</b> بيروح لتبويب <b>الدعم الفني</b> عشان يتواصل مع
-    العميل ويحل المشكلة — ولو الشكوى مش واضحة أو مش صحيحة الدعم بيعيد التقييم، وتقييمه هو اللي بيتحسب.
-    <br /><b>تقييم الفرع</b> = تقييم العملاء <b>60%</b> + نسبة نجاح التسليم <b>40%</b>.
-  </div>`;
-
-  if (!rows.length) return kpis + how + `<div class="tw"><div class="empty">مفيش أوردرات في الفترة دي</div></div>`;
-
-  return kpis + how + `<div class="tw"><table>
-    <thead><tr><th>#</th><th>الفرع</th><th>التقييم العام</th><th>أوردرات</th><th>تم التسليم</th>
-      <th>لم يتم/ملغي</th><th>نسبة النجاح</th><th>تقييم العملاء</th><th>قيّموا فعلًا</th><th>محتاجة دعم</th></tr></thead>
-    <tbody>${rows.map((r, i) => `
-      <tr>
-        <td><span class="rank ${i < 3 ? "g" + (i + 1) : ""}">${i + 1}</span></td>
-        <td class="name">${esc(r.name)}</td>
-        <td>${scoreBar(r.score)}</td>
-        <td>${r.list.length}</td>
-        <td style="color:var(--green)">${r.done.length}</td>
-        <td style="color:${r.fail.length ? "var(--red)" : "var(--muted)"}">${r.fail.length}</td>
-        <td>${num(r.success, 0)}%</td>
-        <td>${starsOf(r.rating, r.done.length > 0)}</td>
-        <td>${r.ratedCount}</td>
-        <td style="color:${r.low ? "var(--red)" : "var(--muted)"}"><b>${r.low}</b></td>
-      </tr>`).join("")}</tbody></table></div>`;
-}
-
-/* ══════════════════════════════════════════════════════════════
-   باقي الموظفين — من سجل الحضور
-══════════════════════════════════════════════════════════════ */
+/* ── حسابات باقي الموظفين ────────────────────────────── */
 function staffRows() {
-  const from = periodStart();
-  const by = new Map();
-  for (const [dayKey, users] of Object.entries(D.attendance || {})) {
-    const dayT = new Date(dayKey).getTime();
-    if (from && (!dayT || dayT < from)) continue;
+  const from = periodStart(), by = new Map();
+  for (const [day, users] of Object.entries(D.attendance || {})) {
+    const t = new Date(day).getTime();
+    if (from && (!t || t < from)) continue;
     for (const [uname, rec] of Object.entries(users || {})) {
-      const sessions = Object.values(rec.sessions || {});
+      const ss = Object.values(rec.sessions || {});
       let ms = 0;
-      for (const s of sessions) {
+      for (const s of ss) {
         if (!s.checkIn) continue;
         const a = new Date(s.checkIn).getTime();
-        const b = s.checkOut ? new Date(s.checkOut).getTime() : (s.lastSeen ? new Date(s.lastSeen).getTime() : a);
+        const b = s.checkOut ? new Date(s.checkOut).getTime()
+                : s.lastSeen ? new Date(s.lastSeen).getTime() : a;
         if (b > a) ms += b - a;
       }
-      if (!by.has(uname)) by.set(uname, { username: uname, days: new Set(), ms: 0, sessions: 0 });
-      const e = by.get(uname);
-      e.days.add(dayKey); e.ms += ms; e.sessions += sessions.length;
+      if (!by.has(uname)) by.set(uname, { name: uname, days: new Set(), ms: 0, sessions: 0 });
+      const e = by.get(uname); e.days.add(day); e.ms += ms; e.sessions += ss.length;
     }
   }
-  const totalDays = new Set(Object.keys(D.attendance || {})
-    .filter(k => { const t = new Date(k).getTime(); return !from || (t && t >= from); })).size || 1;
-
+  const totalDays = Object.keys(D.attendance || {})
+    .filter(k => { const t = new Date(k).getTime(); return !from || (t && t >= from); }).length || 1;
   return [...by.values()].map(e => {
-    const u = D.users.find(x => x.username === e.username);
+    const u = D.users.find(x => x.username === e.name);
     const hours = e.ms / 3600000;
     const attend = pct((e.days.size / totalDays) * 100);
-    return {
-      ...e, role: u?.role || "—", hours, attend, totalDays,
-      score: attend * 0.6 + pct((hours / (e.days.size * 8 || 1)) * 100) * 0.4
-    };
+    const perDay = pct((hours / (e.days.size * 8 || 1)) * 100);
+    return { id: e.name, name: e.name, role: u?.role || "—", hours, attend, perDay,
+             days: e.days.size, totalDays, sessions: e.sessions,
+             score: attend * 0.6 + perDay * 0.4 };
   }).sort((a, b) => b.score - a.score);
 }
 
-function viewStaff() {
-  const rows = staffRows();
-  const how = `<div class="how">
-    <b>باقي الموظفين</b> (مشرفين، كول سنتر، محاسبة، موارد بشرية…) بيتقاسوا بالحضور:
-    <b>الانتظام 60%</b> (أيام الحضور من أيام الفترة) + <b>ساعات العمل 40%</b> (منسوبة لـ8 ساعات/يوم).
-    البيانات من سجل الحضور والانصراف التلقائي.
-  </div>`;
-  if (!rows.length) return how + `<div class="tw"><div class="empty">مفيش سجلات حضور في الفترة دي</div></div>`;
-
-  return how + `<div class="tw"><table>
-    <thead><tr><th>#</th><th>الموظف</th><th>الدور</th><th>التقييم العام</th>
-      <th>أيام حضور</th><th>ساعات</th><th>متوسط/يوم</th><th>الانتظام</th></tr></thead>
-    <tbody>${rows.map((r, i) => `
-      <tr>
-        <td><span class="rank ${i < 3 ? "g" + (i + 1) : ""}">${i + 1}</span></td>
-        <td class="name">${esc(r.username)}</td>
-        <td class="sub">${esc(r.role)}</td>
-        <td>${scoreBar(r.score)}</td>
-        <td>${r.days.size} <span class="sub">من ${r.totalDays}</span></td>
-        <td>${num(r.hours)}</td>
-        <td>${num(r.hours / (r.days.size || 1))}</td>
-        <td>${num(r.attend, 0)}%</td>
-      </tr>`).join("")}</tbody></table></div>`;
-}
+const supportCases  = () => scopedOrders().filter(needsSupport)
+  .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+const resolvedCases = () => scopedOrders().filter(o => o.ratings?.support)
+  .sort((a, b) => new Date(b.ratings.support.at || 0) - new Date(a.ratings.support.at || 0));
 
 /* ══════════════════════════════════════════════════════════════
-   الدعم الفني — الأوردرات اللي تقييمها من 1 لـ 3
+   اللستة
 ══════════════════════════════════════════════════════════════ */
-function supportCases() {
-  return scopedOrders().filter(needsSupport)
-    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-}
-function resolvedCases() {
-  return scopedOrders().filter(o => o.ratings?.support)
-    .sort((a, b) => new Date(b.ratings.support.at || 0) - new Date(a.ratings.support.at || 0));
+const TABS = [
+  { k: "pilots",   t: "🛵 الطيارون" },
+  { k: "branches", t: "🏢 الفروع" },
+  { k: "staff",    t: "🧑‍💼 الموظفين" },
+  { k: "support",  t: "🎧 الشكاوى" },
+];
+window.setTab = k => { TAB = k; SEL = null; refresh(); $("main").classList.remove("detail"); };
+window.openItem = id => { SEL = id; renderList(); renderPane(); $("main").classList.add("detail"); };
+window.backList = () => { $("main").classList.remove("detail"); };
+
+function currentRows() {
+  return TAB === "pilots"   ? pilotRows()
+       : TAB === "branches" ? branchRows()
+       : TAB === "staff"    ? staffRows()
+       :                      supportCases().map(o => ({ id: o.id, name: o.orderNum || "—", order: o }));
 }
 
-function viewSupport() {
-  const open = supportCases(), closed = resolvedCases();
-  const how = `<div class="how">
-    الأوردرات اللي العميل قيّمها من <b>1 لـ 3 نجوم</b> بتظهر هنا. الدعم بيتواصل مع العميل ويحدّد المشكلة ويحلّها.
-    لو الشكوى <b>مش واضحة أو مش صحيحة</b>، الدعم يعيد التقييم — والتقييم الجديد هو اللي بيتحسب في أداء
-    الطيار والفرع بدل تقييم العميل.
-  </div>`;
+window.renderList = function () {
+  const q = ($("q").value || "").trim().toLowerCase();
+  let rows = currentRows();
+  if (q) rows = rows.filter(r => String(r.name).toLowerCase().includes(q));
+  const box = $("list");
 
-  const card = o => {
-    const d = (o.deliveries || [])[0] || {};
-    const r = o.ratings?.customer || {};
-    let phone = String(d.receiverPhone || o.customerPhone || o.senderPhone || "").replace(/\D/g, "");
-    if (phone.startsWith("0")) phone = "2" + phone;
-    return `<div class="case low">
-      <div class="case-h">
-        <b>${esc(o.orderNum || "—")}</b>
-        <span class="chip c-red">${"★".repeat(r.stars || 0)}${"☆".repeat(5 - (r.stars || 0))} ${r.stars || 0}/5</span>
-        <span class="sub">${esc(D.branches[o.branchId]?.name || "—")}</span>
-        ${o.pilotName ? `<span class="sub">🛵 ${esc(o.pilotName)}</span>` : ""}
-      </div>
-      ${r.note ? `<div class="note">💬 «${esc(r.note)}»</div>` : `<div class="note">مفيش ملاحظة من العميل</div>`}
-      <div class="note">👤 ${esc(r.by || d.receiverName || "—")}
-        ${d.receiverPhone ? `· <span dir="ltr">${esc(d.receiverPhone)}</span>` : ""}</div>
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty"><i>${TAB === "support" ? "🎉" : "📭"}</i>${
+      TAB === "support" ? "مفيش شكاوى مفتوحة — كله تمام" : "مفيش بيانات في الفترة دي"}</div>`;
+    return;
+  }
+
+  box.innerHTML = rows.map((r, i) => {
+    if (TAB === "support") {
+      const o = r.order, st = Number(o.ratings?.customer?.stars || 0);
+      return `<div class="row ${SEL === r.id ? "on" : ""}" onclick="openItem('${esc(r.id)}')">
+        <div class="r-av" style="background:var(--brand-soft);color:var(--brand)">⚠️</div>
+        <div class="r-b">
+          <div class="r-1"><b dir="ltr">${esc(o.orderNum || "—")}</b>
+            <span class="tag t-bad">${st}/5</span></div>
+          <div class="r-2">${esc(o.ratings?.customer?.note || "من غير ملاحظة")}</div>
+        </div></div>`;
+    }
+    const v = Math.round(r.score);
+    return `<div class="row ${SEL === r.id ? "on" : ""}" onclick="openItem('${esc(r.id)}')">
+      <div class="r-av" style="background:${sColor(r.score)}1f;color:${sColor(r.score)}">${
+        i < 3 ? ["🥇","🥈","🥉"][i] : esc(initial(r.name))}</div>
+      <div class="r-b">
+        <div class="r-1"><b>${esc(r.name)}</b><span class="tag ${sTag(r.score)}">${v}</span></div>
+        <div class="r-2">${
+          TAB === "pilots"   ? `${r.dParcels} طرد · ${num(r.perHour, 2)}/ساعة`
+        : TAB === "branches" ? `${r.list.length} أوردر · ${r.low ? `<b style="color:var(--brand)">${r.low} شكوى</b>` : "مفيش شكاوى"}`
+        :                      `${esc(r.role)} · ${r.days} يوم`}</div>
+      </div></div>`;
+  }).join("");
+};
+
+/* ══════════════════════════════════════════════════════════════
+   التفاصيل
+══════════════════════════════════════════════════════════════ */
+function paneShell(av, avColor, title, sub, body) {
+  return `<div class="pane-hd">
+      <button class="back" onclick="backList()">›</button>
+      <div class="p-av" style="background:${avColor}1f;color:${avColor}">${av}</div>
+      <div class="nm"><b>${title}</b><span>${sub}</span></div>
+    </div><div class="pane-body">${body}</div>`;
+}
+
+function renderPane() {
+  const pane = $("pane");
+  if (!SEL) {
+    pane.innerHTML = `<div class="pane-empty"><div><i>⭐</i>اختار من اللستة عشان تشوف التقييم<br />والتفاصيل الكاملة</div></div>`;
+    return;
+  }
+  if (TAB === "support")  return void (pane.innerHTML = paneSupport());
+  const r = currentRows().find(x => x.id === SEL);
+  if (!r) { SEL = null; return renderPane(); }
+  pane.innerHTML = TAB === "pilots" ? panePilot(r) : TAB === "branches" ? paneBranch(r) : paneStaff(r);
+}
+
+function panePilot(r) {
+  const body = `
+    <div class="kpis">
+      <div class="kpi"><div class="k">التقييم العام</div>
+        <div class="v" style="color:${sColor(r.score)}">${Math.round(r.score)}</div>${barHtml(r.score)}</div>
+      <div class="kpi"><div class="k">طرود مسلَّمة</div><div class="v">${r.dParcels}</div></div>
+      <div class="kpi"><div class="k">ساعات العمل</div><div class="v">${num(r.hours)}</div>
+        <div class="s">من الورديات</div></div>
+      <div class="kpi"><div class="k">طرود/ساعة</div>
+        <div class="v" style="color:var(--blue)">${num(r.perHour, 2)}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-h">🧮 تفكيك الدرجة</div>
+      <div class="kv"><span>الإنتاجية (40%)</span><b>${num(r.prod, 0)}%</b></div>${barHtml(r.prod)}
+      <div class="kv" style="margin-top:10px"><span>تقييم العملاء (35%)</span>
+        <b>${starsTxt(r.rating, r.done.length > 0)}</b></div>${barHtml((r.rating / 5) * 100)}
+      <div class="kv" style="margin-top:10px"><span>الالتزام (25%)</span><b>${num(r.commit, 0)}%</b></div>${barHtml(r.commit)}
+    </div>
+    <div class="card">
+      <div class="card-h">📦 الأوردرات في الفترة</div>
+      <div class="kv"><span>اتكلّف بيها</span><b>${r.mine.length}</b></div>
+      <div class="kv"><span>تم التسليم</span><b style="color:var(--green)">${r.done.length}</b></div>
+      <div class="kv"><span>لم يتم / ملغي</span>
+        <b style="color:${r.fail.length ? "var(--brand)" : "var(--muted)"}">${r.fail.length}</b></div>
+      <div class="kv"><span>شكاوى مفتوحة</span>
+        <b style="color:var(--brand)">${r.done.filter(needsSupport).length}</b></div>
+    </div>
+    <div class="how"><b>إزاي بنحسب؟</b> الإنتاجية <b>40%</b> (طرود ÷ ساعات العمل، منسوبة لأحسن معدل
+      بين الطيارين في الفترة) + تقييم العملاء <b>35%</b> + الالتزام <b>25%</b> (نسبة اللي سلّمه من
+      اللي خلص فيه). الأوردر اللي لسه «جاري التوصيل» مابيتحسبش فشل.</div>`;
+  return paneShell(esc(initial(r.name)), sColor(r.score), esc(r.name), esc(r.branch), body);
+}
+
+function paneBranch(r) {
+  const body = `
+    <div class="kpis">
+      <div class="kpi"><div class="k">التقييم العام</div>
+        <div class="v" style="color:${sColor(r.score)}">${Math.round(r.score)}</div>${barHtml(r.score)}</div>
+      <div class="kpi"><div class="k">أوردرات</div><div class="v">${r.list.length}</div></div>
+      <div class="kpi"><div class="k">تم التسليم</div>
+        <div class="v" style="color:var(--green)">${r.done.length}</div></div>
+      <div class="kpi"><div class="k">شكاوى مفتوحة</div>
+        <div class="v" style="color:${r.low ? "var(--brand)" : "var(--muted)"}">${r.low}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-h">🧮 تفكيك الدرجة</div>
+      <div class="kv"><span>تقييم العملاء (60%)</span><b>${starsTxt(r.rating, r.done.length > 0)}</b></div>
+      ${barHtml((r.rating / 5) * 100)}
+      <div class="kv" style="margin-top:10px"><span>نسبة نجاح التسليم (40%)</span><b>${num(r.success, 0)}%</b></div>
+      ${barHtml(r.success)}
+    </div>
+    <div class="card">
+      <div class="card-h">⭐ تفاصيل التقييمات</div>
+      <div class="kv"><span>قيّمها العملاء فعلًا</span><b>${r.rated}</b></div>
+      <div class="kv"><span>من غير تقييم (بتتحسب ممتازة)</span><b>${r.done.length - r.rated}</b></div>
+      <div class="kv"><span>محتاجة تدخّل الدعم</span>
+        <b style="color:${r.low ? "var(--brand)" : "var(--muted)"}">${r.low}</b></div>
+      <div class="kv"><span>لم يتم / ملغي</span>
+        <b style="color:${r.fail.length ? "var(--brand)" : "var(--muted)"}">${r.fail.length}</b></div>
+    </div>
+    <div class="how"><b>قاعدة التقييم:</b> الأوردر اللي العميل ماقيّمهوش بيتحسب <b>ممتاز (5)</b>،
+      وكذلك اللي واخد 4 أو 5. اللي واخد من <b>1 لـ3</b> بيروح لتبويب الشكاوى عشان الدعم يتواصل
+      ويحل — ولو الشكوى مش واضحة أو مش صحيحة الدعم يعيد التقييم وتقييمه هو اللي بيتحسب.
+      <br /><b>الدرجة</b> = تقييم العملاء <b>60%</b> + نسبة النجاح <b>40%</b>.</div>`;
+  return paneShell("🏢", sColor(r.score), esc(r.name), `${r.list.length} أوردر في الفترة`, body);
+}
+
+function paneStaff(r) {
+  const body = `
+    <div class="kpis">
+      <div class="kpi"><div class="k">التقييم العام</div>
+        <div class="v" style="color:${sColor(r.score)}">${Math.round(r.score)}</div>${barHtml(r.score)}</div>
+      <div class="kpi"><div class="k">أيام حضور</div><div class="v">${r.days}</div>
+        <div class="s">من ${r.totalDays}</div></div>
+      <div class="kpi"><div class="k">ساعات</div><div class="v">${num(r.hours)}</div></div>
+      <div class="kpi"><div class="k">متوسط/يوم</div><div class="v">${num(r.hours / (r.days || 1))}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-h">🧮 تفكيك الدرجة</div>
+      <div class="kv"><span>الانتظام (60%)</span><b>${num(r.attend, 0)}%</b></div>${barHtml(r.attend)}
+      <div class="kv" style="margin-top:10px"><span>ساعات العمل (40%)</span><b>${num(r.perDay, 0)}%</b></div>
+      ${barHtml(r.perDay)}
+      <div class="kv" style="margin-top:10px"><span>عدد الجلسات</span><b>${r.sessions}</b></div>
+    </div>
+    <div class="how"><b>باقي الموظفين</b> بيتقاسوا من سجل الحضور والانصراف التلقائي:
+      <b>الانتظام 60%</b> (أيام حضوره من أيام الفترة) + <b>ساعات العمل 40%</b> (منسوبة لـ8 ساعات/يوم).</div>`;
+  return paneShell(esc(initial(r.name)), sColor(r.score), esc(r.name), esc(r.role), body);
+}
+
+function paneSupport() {
+  const o = D.orders.find(x => x.id === SEL);
+  if (!o) { SEL = null; return `<div class="pane-empty"><div><i>⭐</i>اختار شكوى</div></div>`; }
+  const d = (o.deliveries || [])[0] || {};
+  const r = o.ratings?.customer || {};
+  let wa = String(d.receiverPhone || o.customerPhone || "").replace(/\D/g, "");
+  if (wa.startsWith("0")) wa = "2" + wa;
+
+  const body = `
+    <div class="card">
+      <div class="card-h">💬 شكوى العميل</div>
+      <div style="font-size:26px" class="stars">${"★".repeat(r.stars || 0)}${"☆".repeat(5 - (r.stars || 0))}</div>
+      <div class="quote">${r.note ? esc(r.note) : "العميل قيّم من غير ما يكتب ملاحظة"}</div>
+      <div class="kv" style="margin-top:12px"><span>العميل</span><b>${esc(r.by || d.receiverName || "—")}</b></div>
+      <div class="kv"><span>الهاتف</span><b dir="ltr">${esc(d.receiverPhone || "—")}</b></div>
+      <div class="kv"><span>الفرع</span><b>${esc(D.branches[o.branchId]?.name || "—")}</b></div>
+      <div class="kv"><span>الطيار</span><b>${esc(o.pilotName || "—")}</b></div>
       <div class="acts">
-        ${phone ? `<a href="tel:${esc(d.receiverPhone || "")}">📞 اتصال</a>
-        <a href="https://wa.me/${phone}" target="_blank" rel="noopener">💬 واتساب</a>` : ""}
-        <button class="ok" onclick="resolveCase('${esc(o.id)}')">✅ اتواصلت واتحلّت</button>
-        <button class="re" onclick="openRe('${esc(o.id)}')">🔄 إعادة التقييم</button>
+        ${d.receiverPhone ? `<a class="btn" href="tel:${esc(d.receiverPhone)}">📞 اتصال</a>
+        <a class="btn ok" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬 واتساب</a>` : ""}
+        <button class="btn ok" onclick="openResolve()">✅ اتواصلت واتحلّت</button>
+        <button class="btn gold" onclick="openRe()">🔄 إعادة التقييم</button>
       </div>
-    </div>`;
-  };
-
-  const closedCard = o => {
-    const s = o.ratings.support;
-    return `<div class="case">
-      <div class="case-h">
-        <b>${esc(o.orderNum || "—")}</b>
-        <span class="chip ${s.stars >= 4 ? "c-green" : "c-gold"}">${"★".repeat(s.stars)}${"☆".repeat(5 - s.stars)} ${s.stars}/5</span>
-        <span class="chip c-green">${s.action === "resolved" ? "اتحلّت" : "أعاد الدعم التقييم"}</span>
-      </div>
-      ${s.note ? `<div class="note">📝 ${esc(s.note)}</div>` : ""}
-      <div class="note sub">بواسطة ${esc(s.by || "—")} · ${new Date(s.at).toLocaleString("ar-EG")}</div>
-    </div>`;
-  };
-
-  return how +
-    `<h3 style="font-size:.95rem;font-weight:900;margin:6px 0 12px">
-      🔴 محتاجة تدخّل (${open.length})</h3>` +
-    (open.length ? open.map(card).join("")
-                 : `<div class="tw"><div class="empty">مفيش شكاوى مفتوحة — كله تمام 👌</div></div>`) +
-    `<h3 style="font-size:.95rem;font-weight:900;margin:22px 0 12px">
-      ✅ اتعامل معاها الدعم (${closed.length})</h3>` +
-    (closed.length ? closed.map(closedCard).join("")
-                   : `<div class="tw"><div class="empty">لسه مفيش حالات متعامل معاها</div></div>`);
+    </div>
+    <div class="how">لو المشكلة اتحلّت والشكوى صحيحة، سجّلها بـ«اتواصلت واتحلّت» والتقييم يفضل زي ما هو.
+      ولو الشكوى <b>مش واضحة أو مش صحيحة</b>، اعمل «إعادة التقييم» — والتقييم الجديد هو اللي هيتحسب
+      في أداء الطيار والفرع بدل تقييم العميل، وتقييم العميل الأصلي بيفضل محفوظ.</div>`;
+  return paneShell("⚠️", "var(--brand)", esc(o.orderNum || "—"),
+    new Date(o.createdAt || 0).toLocaleString("ar-EG"), body);
 }
 
 /* ── إجراءات الدعم ───────────────────────────────────── */
-window.resolveCase = async function (id) {
-  const o = D.orders.find(x => x.id === id); if (!o) return;
-  const note = prompt("اكتب باختصار المشكلة وإزاي اتحلّت:", "");
-  if (note === null) return;
+const RATE_LABEL = ["", "سيئة", "مش كويسة", "كويسة", "حلوة", "ممتازة"];
+let reStars = 0;
+const closeModal = () => $("modal").classList.remove("on");
+window.closeModal = closeModal;
+$("modal").onclick = e => { if (e.target === $("modal")) closeModal(); };
+
+window.openResolve = function () {
+  $("mTitle").textContent = "✅ تسجيل حل المشكلة";
+  $("mBody").innerHTML = `
+    <div style="font-size:13px;color:var(--muted);line-height:1.9">
+      اكتب باختصار المشكلة كانت إيه وإزاي اتحلّت. تقييم العميل هيفضل زي ما هو.</div>
+    <textarea id="mNote" rows="4" placeholder="مثال: الطيار اتأخر بسبب زحمة — اتعوّض العميل واعتذرنا"></textarea>
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn" style="flex:1" onclick="closeModal()">إلغاء</button>
+      <button class="btn pri" style="flex:1" onclick="saveResolve()">حفظ</button>
+    </div>`;
+  $("modal").classList.add("on");
+};
+window.saveResolve = async function () {
+  const o = D.orders.find(x => x.id === SEL); if (!o) return;
+  const note = $("mNote").value.trim();
+  if (!note) { toast("اكتب إيه اللي حصل"); return; }
   try {
-    await set(ref(db, `orders/${id}/ratings/support`), {
-      stars: Number(o.ratings?.customer?.stars || 3),   // بنسيب تقييم العميل زي ما هو
-      note: note.trim(), action: "resolved",
-      by: ME?.username || "", at: new Date().toISOString()
+    await set(ref(db, `orders/${SEL}/ratings/support`), {
+      stars: Number(o.ratings?.customer?.stars || 3),   // تقييم العميل زي ما هو
+      note, action: "resolved", by: ME?.username || "", at: new Date().toISOString()
     });
-    toast("اتسجّل إن المشكلة اتحلّت ✅");
+    closeModal(); SEL = null; toast("اتسجّل إن المشكلة اتحلّت ✅");
   } catch (e) { toast("خطأ: " + e.message); }
 };
 
-let reId = null, reStars = 0;
-const RATE_LABEL = ["", "سيئة", "مش كويسة", "كويسة", "حلوة", "ممتازة"];
-window.openRe = function (id) {
-  reId = id; reStars = 0;
-  const o = D.orders.find(x => x.id === id);
-  $("reOrder").textContent = `الأوردر ${o?.orderNum || ""} — تقييم العميل ${o?.ratings?.customer?.stars || 0}/5`;
-  $("reNote").value = "";
-  drawReStars(); $("reLbl").textContent = "";
-  $("reModal").classList.add("on");
+window.openRe = function () {
+  const o = D.orders.find(x => x.id === SEL); if (!o) return;
+  reStars = 0;
+  $("mTitle").textContent = "🔄 إعادة التقييم من الدعم";
+  $("mBody").innerHTML = `
+    <div style="font-size:13px;color:var(--muted)">تقييم العميل الحالي:
+      <b style="color:var(--brand)">${o.ratings?.customer?.stars || 0}/5</b> — هيفضل محفوظ للرجوع ليه</div>
+    <div id="reStars" style="margin-top:12px"></div>
+    <div id="reLbl" style="font-size:13px;color:var(--gold);font-weight:800;min-height:19px;margin-top:5px"></div>
+    <textarea id="mNote" rows="3" placeholder="سبب إعادة التقييم — الشكوى مش دقيقة ولا إيه؟"></textarea>
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn" style="flex:1" onclick="closeModal()">إلغاء</button>
+      <button class="btn pri" style="flex:1" onclick="saveRe()">حفظ التقييم</button>
+    </div>`;
+  drawRe(); $("modal").classList.add("on");
 };
-function drawReStars() {
+function drawRe() {
   $("reStars").innerHTML = [1,2,3,4,5].map(i =>
-    `<span class="st" onclick="pickRe(${i})" style="color:${i <= reStars ? "var(--gold)" : "#3a3a44"}">★</span>`).join("");
+    `<span class="st" onclick="pickRe(${i})" style="color:${i <= reStars ? "var(--gold)" : "var(--line2)"}">★</span>`).join("");
 }
-window.pickRe = function (n) { reStars = n; drawReStars(); $("reLbl").textContent = RATE_LABEL[n] || ""; };
-window.closeRe = function () { $("reModal").classList.remove("on"); reId = null; };
+window.pickRe = n => { reStars = n; drawRe(); $("reLbl").textContent = RATE_LABEL[n] || ""; };
 window.saveRe = async function () {
-  if (!reId) return;
   if (!reStars) { toast("اختار التقييم الجديد الأول"); return; }
-  const note = $("reNote").value.trim();
+  const note = $("mNote").value.trim();
   if (!note) { toast("اكتب سبب إعادة التقييم"); return; }
   try {
-    await set(ref(db, `orders/${reId}/ratings/support`), {
+    await set(ref(db, `orders/${SEL}/ratings/support`), {
       stars: reStars, note, action: "re-rated",
       by: ME?.username || "", at: new Date().toISOString()
     });
-    closeRe(); toast("اتحفظ التقييم الجديد ✅");
+    closeModal(); SEL = null; toast("اتحفظ التقييم الجديد ✅");
   } catch (e) { toast("خطأ: " + e.message); }
 };
 
-/* ══════════════════════════════════════════════════════════════
-   الرسم
-══════════════════════════════════════════════════════════════ */
-function render() {
+/* ══════════════════════════════════════════════════════════════ */
+window.refresh = function () {
   if (!ME) return;
-  $("supCnt").textContent = supportCases().length;
-  $("dataInfo").textContent = `${scopedOrders().length} أوردر في الفترة`;
-  $("body").innerHTML =
-      TAB === "pilots"   ? viewPilots()
-    : TAB === "branches" ? viewBranches()
-    : TAB === "staff"    ? viewStaff()
-    :                      viewSupport();
-}
+  const open = supportCases().length;
+  $("chips").innerHTML = TABS.map(t =>
+    `<button class="chip ${TAB === t.k ? "on" : ""}" onclick="setTab('${t.k}')">${t.t}${
+      t.k === "support" && open ? `<span class="n">${open}</span>` : ""}</button>`).join("");
+  renderList();
+  renderPane();
+};
 </script>
 </body>
 </html>
