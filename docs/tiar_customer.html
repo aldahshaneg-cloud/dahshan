@@ -480,6 +480,8 @@ a{color:var(--red);text-decoration:none}
     <div class="banner" id="homeBanner"></div>
     <!-- رصيد المحفظة — العميل لازم يشوفه -->
     <div id="homeWallet"></div>
+    <!-- خدمة العملاء — ظاهر في الرئيسية مش مخبّي في القائمة -->
+    <div id="homeSupport"></div>
     <div id="closedNotice" style="display:none"></div>
     <span class="lbl">اليوم لديك</span>
     <div class="stats">
@@ -1618,6 +1620,15 @@ function attachListeners() {
     if (S.page === "new") renderSavedPicks();
   }));
 
+  // أرقام خدمة العملاء — نفس مصدر الموقع العام (settings/site/info)
+  S.unsub.push(onValue(ref(db, "settings/site/info"), snap => {
+    const v = snap.val() || {};
+    SUPPORT.phone    = v.phone    || "";
+    SUPPORT.whatsapp = v.whatsapp || "";
+    SUPPORT.hours    = v.hours    || "";
+    if (S.page === "home") renderSupportBar();
+  }));
+
   // البانر الإعلاني — Realtime، فأي تغيير من الإدارة بيظهر فورًا
   S.unsub.push(onValue(ref(db, "settings/customerBanner"), snap => {
     S.banner = snap.val() || null;
@@ -1788,6 +1799,31 @@ function renderHome() {
   renderClosedNotice();
   const wb = $("homeWallet");
   if (wb) wb.innerHTML = balanceBarHtml(S.wallet?.balance, { style: "margin:4px 0 14px" });
+  renderSupportBar();
+}
+
+/** شريط خدمة العملاء في الرئيسية — اتصال وواتساب بضغطة */
+function renderSupportBar() {
+  const el = $("homeSupport"); if (!el) return;
+  if (!SUPPORT.phone && !SUPPORT.whatsapp) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:14px;
+      background:rgba(14,165,233,.09);border:1px solid rgba(14,165,233,.28);margin:0 0 14px">
+      <span style="font-size:22px">🎧</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;color:var(--muted)">خدمة العملاء</div>
+        <div style="font-size:16px;font-weight:900;direction:ltr;text-align:start">
+          ${esc(SUPPORT.phone || "—")}</div>
+        ${SUPPORT.hours ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">
+          ${esc(SUPPORT.hours)}</div>` : ""}
+      </div>
+      ${SUPPORT.phone ? `<a href="tel:${esc(SUPPORT.phone)}" style="text-decoration:none;
+        background:#0ea5e9;color:#fff;padding:9px 13px;border-radius:10px;font-weight:800;
+        font-size:13px">📞 اتصل</a>` : ""}
+      ${SUPPORT.whatsapp ? `<a href="https://wa.me/${esc(SUPPORT.whatsapp)}" target="_blank"
+        rel="noopener" style="text-decoration:none;background:rgba(34,197,94,.16);color:#22c55e;
+        padding:9px 13px;border-radius:10px;font-weight:800;font-size:13px">💬</a>` : ""}
+    </div>`;
 }
 
 /** تنبيه في الرئيسية إن الاستقبال مقفول — عشان العميل يعرف قبل ما
@@ -2382,12 +2418,27 @@ async function saveEditProfile() {
 }
 window.saveEditProfile = saveEditProfile;
 
+/* أرقام خدمة العملاء بتتقرا من settings/site/info — نفس المصدر اللي
+   الموقع العام بيقرا منه، فالمدير بيغيّرها من لوحة تحكم الموقع مرة
+   واحدة وتتحدّث في كل حتة. قبل كده كان الرقم مكتوب ثابت في الكود. */
+const SUPPORT = { phone: "", whatsapp: "", hours: "" };
+
 const openSupport = () => openModal("الدعم والمساعدة", `
   <div class="card" style="text-align:center">
     <div style="font-size:34px">🎧</div>
     <b style="display:block;margin:8px 0 4px">فريق خدمة العملاء</b>
-    <div style="font-size:12.5px;color:var(--muted)">متاحين لمساعدتك في أي وقت</div>
-    <a class="btn" style="margin-top:14px" href="tel:${esc(S.profile?.defaultBranchPhone || "16000")}">📞 اتصل بنا</a>
+    <div style="font-size:12.5px;color:var(--muted)">
+      ${SUPPORT.hours ? esc(SUPPORT.hours) : "متاحين لمساعدتك في أي وقت"}</div>
+    ${SUPPORT.phone ? `
+      <div style="font-size:22px;font-weight:900;direction:ltr;margin:12px 0 4px">
+        ${esc(SUPPORT.phone)}</div>
+      <a class="btn" style="margin-top:8px" href="tel:${esc(SUPPORT.phone)}">📞 اتصل بنا</a>` : ""}
+    ${SUPPORT.whatsapp ? `
+      <a class="btn ghost" style="margin-top:9px" target="_blank" rel="noopener"
+         href="https://wa.me/${esc(SUPPORT.whatsapp)}">💬 واتساب</a>` : ""}
+    ${!SUPPORT.phone && !SUPPORT.whatsapp
+      ? `<div style="font-size:12.5px;color:var(--muted);margin-top:12px">
+           أرقام الدعم لسه ماتسجّلتش — كلّم الفرع</div>` : ""}
   </div>`);
 const openAbout = () => openModal("عن التطبيق", `
   <div style="text-align:center;padding:10px 0">

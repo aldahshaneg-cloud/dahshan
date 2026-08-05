@@ -422,6 +422,13 @@
         renderWalletBits();
       });
 
+      /* أرقام خدمة العملاء — نفس مصدر الموقع العام (settings/site/info)،
+         فالمدير بيغيّرها من لوحة تحكم الموقع وتتحدّث هنا فورًا */
+      window._supportUnsub = onValue(ref(db, "settings/site/info"), snap => {
+        window._support = snap.val() || {};
+        renderSupportBits();
+      });
+
       // Orders for this merchant (real-time)
       window._ordersUnsub = onValue(ref(db, "orders"), snap => {
         const d = snap.val() || {};
@@ -1711,6 +1718,34 @@
       if (window._currentPage === "home") renderHome();
     }
 
+    /** كارت خدمة العملاء — بيتعرض في الرئيسية وفي صفحة الحساب */
+    function supportCardHtml() {
+      const s = window._support || {};
+      if (!s.phone && !s.whatsapp) return "";
+      return `
+        <div style="display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:14px;
+          background:rgba(14,165,233,.09);border:1px solid rgba(14,165,233,.28)">
+          <span style="font-size:22px">🎧</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.74rem;color:var(--muted)">خدمة العملاء</div>
+            <div style="font-size:1.05rem;font-weight:900;direction:ltr;text-align:start">
+              ${s.phone || "—"}</div>
+            ${s.hours ? `<div style="font-size:.7rem;color:var(--muted)">${s.hours}</div>` : ""}
+          </div>
+          ${s.phone ? `<a href="tel:${s.phone}" style="text-decoration:none;background:var(--sky);
+            color:#fff;padding:9px 13px;border-radius:10px;font-weight:800;font-size:.8rem">📞 اتصل</a>` : ""}
+          ${s.whatsapp ? `<a href="https://wa.me/${s.whatsapp}" target="_blank" rel="noopener"
+            style="text-decoration:none;background:rgba(34,197,94,.16);color:var(--green);
+            padding:9px 13px;border-radius:10px;font-weight:800;font-size:.8rem">💬</a>` : ""}
+        </div>`;
+    }
+
+    function renderSupportBits() {
+      const box = $("profSupport");
+      if (box) box.innerHTML = supportCardHtml();
+      if (window._currentPage === "home") renderHome();
+    }
+
     window.renderHome = function () {
       const el = $("homeBody"); if (!el) return;
       const u = window._currentUser || {};
@@ -1731,6 +1766,8 @@
         </div>
 
         ${balanceBarHtml(w.balance, { showZero: true, style: "margin-bottom:14px" })}
+
+        ${supportCardHtml() ? `<div style="margin-bottom:14px">${supportCardHtml()}</div>` : ""}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin-bottom:14px">
           ${[["إجمالي الشحنات", os.length, "var(--text)"],
@@ -2806,6 +2843,8 @@
 
     <!-- رصيد المحفظة — المحل لازم يشوفه -->
     <div id="profWallet" style="margin-bottom:12px"></div>
+    <!-- خدمة العملاء -->
+    <div id="profSupport" style="margin-bottom:12px"></div>
 
     <div class="info-card">
       <div class="irow">
