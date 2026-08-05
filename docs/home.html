@@ -185,6 +185,35 @@ section.alt{background:var(--ink2)}
 .zone{background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:11px 19px;font-size:14.5px;font-weight:700}
 .zone small{color:var(--red);font-weight:800;margin-inline-start:6px}
+.zones-more{margin-top:18px;text-align:center}
+.zones-more button{background:transparent;color:var(--red);border:1.5px solid rgba(232,25,44,.45);
+  border-radius:12px;padding:12px 26px;font-weight:800;font-size:14.5px;cursor:pointer;
+  font-family:inherit;transition:.2s}
+.zones-more button:hover{background:rgba(232,25,44,.1)}
+
+/* ── نافذة كل المناطق ───────────────────────────────────── */
+#zonesModal{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.75);
+  display:none;align-items:center;justify-content:center;padding:18px}
+#zonesModal.on{display:flex;animation:rise .25s ease}
+#zonesModal .zm-box{background:var(--card);border:1px solid var(--line);border-radius:20px;
+  width:100%;max-width:640px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+#zonesModal .zm-hd{display:flex;align-items:center;gap:12px;padding:20px 22px;
+  border-bottom:1px solid var(--line)}
+#zonesModal .zm-hd h3{font-size:18px;font-weight:900;flex:1}
+#zonesModal .zm-x{background:transparent;border:1px solid var(--line);color:var(--muted);
+  width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:16px;line-height:1}
+#zonesModal .zm-search{padding:14px 22px 0}
+#zonesModal .zm-search input{width:100%;background:#08080a;border:1.5px solid var(--line);
+  border-radius:12px;padding:13px 15px;font-size:15px;font-weight:600;outline:none;
+  color:inherit;font-family:inherit}
+#zonesModal .zm-search input:focus{border-color:var(--red)}
+#zonesModal .zm-body{padding:16px 22px 22px;overflow:auto}
+#zonesModal .zm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:9px}
+#zonesModal .zm-item{background:#08080a;border:1px solid var(--line);border-radius:11px;
+  padding:11px 14px;font-size:14px;font-weight:700;display:flex;align-items:center;
+  justify-content:space-between;gap:8px}
+#zonesModal .zm-item small{color:var(--red);font-weight:800;white-space:nowrap}
+#zonesModal .zm-empty{text-align:center;color:var(--muted);padding:26px;font-size:14px}
 
 /* ── التطبيقات ──────────────────────────────────────────── */
 .app-card{background:var(--card);border:1px solid var(--line);border-radius:18px;
@@ -253,6 +282,12 @@ footer img{height:52px;margin:0 auto 14px;opacity:.92}
 footer .links{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
 footer .links a{font-size:13.5px;color:var(--muted);font-weight:700}
 footer .links a:hover{color:var(--red)}
+footer .legal{display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap;
+  margin-bottom:12px;color:var(--muted);font-size:13px;font-weight:600}
+footer .legal b{color:#c9c9d2;font-weight:800;margin-inline-start:4px}
+footer .legal i{width:4px;height:4px;border-radius:50%;background:#3a3a44;display:inline-block}
+@media(max-width:520px){footer .legal i{display:none}
+  footer .legal{flex-direction:column;gap:6px}}
 footer .cr{color:#4d4d56;font-size:12.5px}
 
 /* واتساب عائم */
@@ -380,8 +415,26 @@ footer .cr{color:#4d4d56;font-size:12.5px}
     <div class="zones" id="zones">
       <div class="zone">جاري تحميل المناطق…</div>
     </div>
+    <!-- بيبان بس لو فيه مناطق أكتر من اللي معروض -->
+    <div class="zones-more" id="zonesMore" style="display:none">
+      <button type="button" onclick="openZones()">إظهار المزيد <span id="zonesMoreCount"></span></button>
+    </div>
   </div>
 </section>
+
+<!-- ═══════════ كل مناطق التغطية ═══════════ -->
+<div id="zonesModal" onclick="if(event.target===this) closeZones()">
+  <div class="zm-box">
+    <div class="zm-hd">
+      <h3>🗺️ مناطق التغطية</h3>
+      <button class="zm-x" onclick="closeZones()" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="zm-search">
+      <input id="zonesSearch" placeholder="دوّر على منطقتك…" autocomplete="off" oninput="filterZones()" />
+    </div>
+    <div class="zm-body"><div class="zm-grid" id="zonesAll"></div></div>
+  </div>
+</div>
 
 <!-- ═══════════ التطبيقات ═══════════ -->
 <section class="alt" id="apps">
@@ -492,6 +545,11 @@ footer .cr{color:#4d4d56;font-size:12.5px}
       <a href="#join">انضم إلينا</a>
       <a href="tiar_customer.html">تطبيق العملاء</a>
       <a href="index.html">دخول الموظفين</a>
+    </div>
+    <div class="legal">
+      <span>سجل تجاري رقم <b dir="ltr">165501</b></span>
+      <i></i>
+      <span>بطاقة ضريبية رقم <b dir="ltr">637-469-782</b></span>
     </div>
     <div class="cr">© <span id="yr"></span> الدهشان لخدمات التوصيل — جميع الحقوق محفوظة</div>
   </div>
@@ -809,6 +867,38 @@ $("trackForm").addEventListener("submit", async e => {
 });
 
 /* ══════════════════════════════════════════════════════════════
+   نافذة كل مناطق التغطية
+   ──────────────────────────────────────────────────────────────
+   الصفحة بتعرض 5 مناطق بس عشان القسم مايبقاش طويل، والباقي هنا
+   مع خانة بحث عشان الزباين يلاقوا منطقتهم بسرعة.
+══════════════════════════════════════════════════════════════ */
+function renderAllZones(q) {
+  const grid = $("zonesAll"); if (!grid) return;
+  const term = String(q || "").trim().toLowerCase();
+  const list = (window._siteZones || [])
+    .filter(z => !term || z.name.toLowerCase().includes(term));
+  grid.innerHTML = list.length
+    ? list.map(z => `<div class="zm-item"><span>${esc(z.name)}</span>${
+        z.price ? `<small>${z.price} ج.م</small>` : ""}</div>`).join("")
+    : `<div class="zm-empty">مالقيناش منطقة بالاسم ده — كلّمنا على ${INFO.phone} ونشوفها لك</div>`;
+}
+window.filterZones = () => renderAllZones($("zonesSearch").value);
+window.openZones = () => {
+  $("zonesSearch").value = "";
+  renderAllZones();
+  $("zonesModal").classList.add("on");
+  document.body.style.overflow = "hidden";
+  setTimeout(() => $("zonesSearch").focus(), 80);
+};
+window.closeZones = () => {
+  $("zonesModal").classList.remove("on");
+  document.body.style.overflow = "";
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("zonesModal")?.classList.contains("on")) closeZones();
+});
+
+/* ══════════════════════════════════════════════════════════════
    المناطق والفروع — بتتقرا من نفس قاعدة النظام
 ══════════════════════════════════════════════════════════════ */
 (async () => {
@@ -817,15 +907,25 @@ $("trackForm").addEventListener("submit", async e => {
     const zones = Object.values(zs.val() || {});
     const branches = Object.entries(bs.val() || {}).map(([id, v]) => ({ id, ...v }));
 
-    // شرائح المناطق
+    // شرائح المناطق — بنعرض 5 بس، والباقي في نافذة «إظهار المزيد»
     const box = $("zones");
+    const ZONES_SHOWN = 5;
     if (zones.length) {
-      box.innerHTML = zones
+      const list = zones
         .map(z => ({ name: z.areaName || z.name || "", price: z.price || 0 }))
         .filter(z => z.name)
-        .sort((a, b) => a.name.localeCompare(b.name, "ar"))
+        .sort((a, b) => a.name.localeCompare(b.name, "ar"));
+      window._siteZones = list;
+
+      box.innerHTML = list.slice(0, ZONES_SHOWN)
         .map(z => `<div class="zone">${esc(z.name)}${
           z.price ? `<small>${z.price} ج.م</small>` : ""}</div>`).join("");
+
+      if (list.length > ZONES_SHOWN) {
+        $("zonesMoreCount").textContent = `(+${list.length - ZONES_SHOWN})`;
+        $("zonesMore").style.display = "";
+      }
+      renderAllZones();
     } else {
       box.innerHTML = `<div class="zone">كلّمنا نقولك بنغطي منطقتك ولا لأ 📞</div>`;
     }
