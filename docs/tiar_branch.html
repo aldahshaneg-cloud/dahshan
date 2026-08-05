@@ -173,6 +173,49 @@
       // start listeners
       startBranchListeners(data.branchId);
       navigateTo("orders");
+      applyPagePerms(data);
+    }
+
+    /* ── صلاحيات الصفحات ───────────────────────────────────────────────
+       المدير بيحدّد من لوحة الإدارة أي صفحات كل مستخدم يشوفها
+       (users/{username}/pagePerms.branch). لو مفيش تخصيص = كل الصفحات،
+       فالمستخدمين القدامى مايتقفلش عليهم حاجة. */
+    async function applyPagePerms(sess) {
+      try {
+        const uname = sess && sess.username;
+        // الإدارة الداخلة بجوجل بتشوف كل حاجة
+        if (!uname || sess.viaGoogleAdmin) return;
+        const snap = await get(ref(db, "users/" + uname));
+        if (!snap.exists()) return;
+        const list = ((snap.val() || {}).pagePerms || {}).branch;
+        if (!Array.isArray(list)) return;          // مفيش تخصيص لهذا التطبيق
+        const allowed = new Set(list);
+        window._allowedPages = allowed;
+
+        // إخفاء أزرار القائمة الجانبية للصفحات الممنوعة
+        document.querySelectorAll('[onclick*="navigateTo("]').forEach(el => {
+          const m = /navigateTo\(\s*['"]([\w-]+)['"]/.exec(el.getAttribute("onclick") || "");
+          if (m && !allowed.has(m[1])) el.style.display = "none";
+        });
+
+        // حارس على التنقّل نفسه — الإخفاء لوحده مش كفاية
+        if (!window._navGuarded) {
+          window._navGuarded = true;
+          const orig = window.navigateTo;
+          window.navigateTo = function (page) {
+            if (window._allowedPages && !window._allowedPages.has(page)) {
+              showToast("مالكش صلاحية للصفحة دي", "error");
+              return;
+            }
+            return orig.apply(this, arguments);
+          };
+        }
+        // لو الصفحة الافتراضية ممنوعة، نوديه لأول صفحة مسموحة
+        if (!allowed.has("orders")) {
+          const first = list[0];
+          if (first) window.navigateTo(first);
+        }
+      } catch (e) { console.warn("page perms:", e); }
     }
 
 

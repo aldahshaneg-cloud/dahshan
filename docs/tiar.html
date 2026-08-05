@@ -669,6 +669,38 @@
       document.getElementById("sidebar-role").textContent = role || "";
       setTimeout(() => { try { disableAutoBackupOnce().then(() => checkAutoBackup()); } catch(e) {} }, 1500);
       setTimeout(() => { try { loadAttendanceTimeout(); } catch(e) {} }, 2000);
+      applyPagePerms(username);
+    }
+
+    /* ── صلاحيات الصفحات ───────────────────────────────────────────────
+       المدير بيحدّد من الإعدادات → المستخدمين أي صفحات كل واحد يشوفها
+       (users/{username}/pagePerms.admin). مفيش تخصيص = كل الصفحات. */
+    async function applyPagePerms(uname) {
+      try {
+        if (!uname) return;
+        const snap = await get(ref(db, "users/" + uname));
+        if (!snap.exists()) return;
+        const list = ((snap.val() || {}).pagePerms || {}).admin;
+        if (!Array.isArray(list)) return;
+        const allowed = new Set(list);
+        window._allowedPages = allowed;
+        document.querySelectorAll('[onclick*="navigateTo("]').forEach(el => {
+          const m = /navigateTo\(\s*['"]([\w-]+)['"]/.exec(el.getAttribute("onclick") || "");
+          if (m && !allowed.has(m[1])) el.style.display = "none";
+        });
+        if (!window._navGuarded) {
+          window._navGuarded = true;
+          const orig = window.navigateTo;
+          window.navigateTo = function (page) {
+            if (window._allowedPages && !window._allowedPages.has(page)) {
+              showToast("مالكش صلاحية للصفحة دي", "error");
+              return;
+            }
+            return orig.apply(this, arguments);
+          };
+        }
+        if (!allowed.has("dashboard") && list[0]) window.navigateTo(list[0]);
+      } catch (e) { console.warn("page perms:", e); }
     }
 
     const _savedSession = localStorage.getItem("tiar-session");
@@ -4594,9 +4626,11 @@
         // عشان مايتقفلش عليه كل حاجة بالغلط
         let allowedApps = getUserPerms();
         if (!allowedApps.length) allowedApps = roleDefaultApps(role);
+        // صفحات كل تطبيق — التطبيق اللي كل صفحاته متحدّدة مش بيتخزّن أصلاً
+        const pagePerms = getPagePerms();
 
         if (window._editState.active && window._editState.type === 'user') {
-          const updateData = { password, role, allowedApps, updatedAt: new Date().toISOString() };
+          const updateData = { password, role, allowedApps, pagePerms, updatedAt: new Date().toISOString() };
           if (role === "مشرف فرع") {
             updateData.branchId = branchId; updateData.branchName = branchName;
             updateData.shopName = null; updateData.shopPhone = null; updateData.shopPhone2 = null; updateData.shopAddress = null; updateData.senderId = null;
@@ -4614,7 +4648,7 @@
         } else {
           const snap = await get(ref(db, "users/" + username));
           if (snap.exists()) { showToast("اسم المستخدم موجود مسبقاً", "error"); return; }
-          const userData = { username, password, role, allowedApps, createdAt: new Date().toISOString() };
+          const userData = { username, password, role, allowedApps, pagePerms, createdAt: new Date().toISOString() };
           if (role === "مشرف فرع") {
             userData.branchId = branchId; userData.branchName = branchName;
           } else if (role === "صاحب محل") {
@@ -4649,6 +4683,7 @@
       document.getElementById("newPassword").value    = u.password;
       document.getElementById("newRole").value        = u.role || "موظف";
       // الصلاحيات المحفوظة، وإلا افتراضي الدور
+      window._pendingPagePerms = u.pagePerms || {};
       renderUserPerms(Array.isArray(u.allowedApps) && u.allowedApps.length
         ? u.allowedApps : roleDefaultApps(u.role));
       document.getElementById("newUsername").disabled = true;
@@ -6810,6 +6845,90 @@
     };
     const roleDefaultApps = window.roleDefaultApps;
 
+    /* ── صلاحيات الصفحات جوّه كل تطبيق ────────────────────────────────
+       بتتخزّن في users/{username}/pagePerms = { admin:[...], branch:[...],
+       callcenter:[...] }. لو تطبيق مش موجود في الماب أو لستته فاضية،
+       معناها «كل الصفحات» — عشان المستخدمين القدامى مايتقفلش عليهم حاجة. */
+    const PAGE_PERMS = {
+      admin: { label: "🗂️ لوحة الإدارة", pages: [
+        ["dashboard","لوحة المعلومات"], ["orders","الطلبات النشطة"], ["delivering","قيد التوصيل"],
+        ["delivered","الطلبات المسلَّمة"], ["undelivered","لم يتم التوصيل"], ["cancelled","الطلبات الملغاة"],
+        ["pilots","الطيارون"], ["pilotmap","خريطة الطيارين"], ["joinrequests","طلبات الانضمام"],
+        ["pilotleave","الأذونات والورديات"], ["transfers","نقل الطيارين"], ["shifts","الورديات"],
+        ["shift-orders","طلبات الوردية"], ["pilot-orders","طلبات الطيار"], ["clients","العملاء"],
+        ["hr","الموارد البشرية"], ["accounting","الحسابات"], ["treasury","الخزنة والعهد"],
+        ["reports","التقارير"], ["settings","الإعدادات"] ] },
+      branch: { label: "🏢 تطبيق الفروع", pages: [
+        ["orders","الطلبات النشطة"], ["delivering","قيد التوصيل"], ["delivered","الطلبات المسلَّمة"],
+        ["undelivered","لم يتم التوصيل"], ["cancelled","الطلبات الملغاة"], ["shifts","ورديات الطيارين"],
+        ["shift-orders","طلبات الوردية"], ["pilots","طيارو الفرع"], ["pilotmap","خريطة الطيارين"],
+        ["pilotleave","الأذونات والورديات"], ["transfers","النقل والدعم"], ["cashstores","الخزن والعهد"],
+        ["accounting","الحسابات"], ["pilot-orders","طلبات الطيار"], ["reports","التقارير"] ] },
+      callcenter: { label: "📞 الكول سنتر", pages: [
+        ["neworder","أوردر جديد"], ["ccsearch","بحث"], ["orders","الطلبات النشطة"],
+        ["delivering","قيد التوصيل"], ["delivered","الطلبات المسلَّمة"], ["undelivered","لم يتم التوصيل"],
+        ["cancelled","الطلبات الملغاة"], ["clients","العملاء"], ["ccomplaints","الشكاوى"],
+        ["cczones","المناطق"], ["ccperf","الأداء"], ["transfers","نقل الطيارين"],
+        ["pilotmap","خريطة الطيارين"], ["pilots","الطيارون"], ["joinrequests","طلبات الانضمام"],
+        ["pilotleave","الأذونات والورديات"], ["shifts","الورديات"], ["shift-orders","طلبات الوردية"],
+        ["pilot-orders","طلبات الطيار"], ["dashboard","لوحة المعلومات"], ["hr","الموارد البشرية"],
+        ["accounting","الحسابات"], ["treasury","الخزنة والعهد"], ["reports","التقارير"],
+        ["settings","الإعدادات"] ] },
+    };
+    window.PAGE_PERMS = PAGE_PERMS;
+
+    /* بيرسم صفحات كل تطبيق مسموح بيه — وبتتخفي أقسام التطبيقات غير المسموحة */
+    window.renderPagePerms = function (pagePerms) {
+      const box = document.getElementById("pagePermsBox");
+      if (!box) return;
+      const apps = new Set(getUserPerms());
+      const pp = pagePerms || {};
+      const shown = Object.entries(PAGE_PERMS).filter(([k]) => apps.has(k));
+      if (!shown.length) {
+        box.innerHTML = `<div style="font-size:.76rem;color:var(--muted)">اختار تطبيق من فوق الأول عشان تحدّد صفحاته</div>`;
+        return;
+      }
+      box.innerHTML = shown.map(([appKey, cfg]) => {
+        const sel = pp[appKey];
+        const all = !Array.isArray(sel) || !sel.length;   // مفيش تخصيص = الكل
+        const set = new Set(all ? cfg.pages.map(p => p[0]) : sel);
+        return `
+          <div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;flex-wrap:wrap">
+              <b style="font-size:.8rem;color:var(--sky)">${cfg.label}</b>
+              <button type="button" onclick="togglePagesAll('${appKey}',true)"
+                style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:6px;cursor:pointer;font-size:.7rem;font-family:inherit">تحديد الكل</button>
+              <button type="button" onclick="togglePagesAll('${appKey}',false)"
+                style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:6px;cursor:pointer;font-size:.7rem;font-family:inherit">إلغاء الكل</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:5px">
+              ${cfg.pages.map(([key, label]) => `
+                <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer">
+                  <input type="checkbox" class="_pageChk" data-app="${appKey}" value="${key}" ${set.has(key) ? "checked" : ""}
+                         style="width:14px;height:14px;accent-color:var(--sky);cursor:pointer" />
+                  <span>${label}</span>
+                </label>`).join("")}
+            </div>
+          </div>`;
+      }).join("");
+    };
+    window.togglePagesAll = function (appKey, on) {
+      document.querySelectorAll(`._pageChk[data-app="${appKey}"]`).forEach(c => { c.checked = on; });
+    };
+    /* بيرجّع { app: [pages] } — التطبيق اللي كل صفحاته متحدّدة بيتشال
+       من الماب عشان يفضل «الكل» ويستفيد من أي صفحة تتضاف بعدين */
+    window.getPagePerms = function () {
+      const out = {};
+      for (const [appKey, cfg] of Object.entries(PAGE_PERMS)) {
+        const boxes = [...document.querySelectorAll(`._pageChk[data-app="${appKey}"]`)];
+        if (!boxes.length) continue;
+        const picked = boxes.filter(c => c.checked).map(c => c.value);
+        if (picked.length === cfg.pages.length) continue;   // الكل → مفيش تخصيص
+        out[appKey] = picked;
+      }
+      return out;
+    };
+
     /* بيرسم مربعات الاختيار في مودال المستخدم */
     window.renderUserPerms = function (selected) {
       const box = document.getElementById("userPermsBox");
@@ -6819,9 +6938,12 @@
         <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;background:var(--card);
                       border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.82rem">
           <input type="checkbox" class="_permChk" value="${a.key}" ${set.has(a.key) ? "checked" : ""}
+                 onchange="renderPagePerms(window._pendingPagePerms)"
                  style="width:15px;height:15px;accent-color:var(--sky);cursor:pointer" />
           <span>${a.icon} ${a.label}</span>
         </label>`).join("");
+      // أقسام الصفحات بتتبع التطبيقات المسموحة
+      if (window.renderPagePerms) renderPagePerms(window._pendingPagePerms);
     };
     window.getUserPerms = function () {
       return [...document.querySelectorAll("._permChk:checked")].map(c => c.value);
@@ -9389,6 +9511,15 @@
             <div style="font-size:.72rem;color:var(--muted);margin-top:9px">
               ⚠️ ده بيتحكم في التطبيقات اللي بتظهر مفتوحة له في البوابة. التطبيق نفسه كمان بيتحقق من دوره عند الدخول.
             </div>
+
+            <div style="border-top:1px solid var(--border);margin:14px 0 11px"></div>
+            <div style="font-size:.82rem;font-weight:700;color:var(--sky);margin-bottom:9px">
+              📄 صفحات كل تطبيق — شيل علامة الصح من الصفحة اللي مش عايزه يشوفها
+            </div>
+            <div id="pagePermsBox"></div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:7px">
+              لو سايب كل صفحات تطبيق متحدّدة، معناها «كل الصفحات» — وأي صفحة جديدة تتضاف بعدين هيشوفها.
+            </div>
           </div>
         </div>
 
@@ -9695,7 +9826,8 @@
     document.getElementById("addUserBtn").textContent = "حفظ المستخدم";
     document.getElementById("branchSupervisorField").style.display = "none";
     document.getElementById("storeOwnerFields").style.display = "none";
-    // صلاحيات مستخدم جديد = افتراضي الدور المختار
+    // صلاحيات مستخدم جديد = افتراضي الدور المختار، وكل الصفحات مفتوحة
+    window._pendingPagePerms = {};
     renderUserPerms(roleDefaultApps(document.getElementById("newRole").value));
     // مسح بحث عميل الاستلام
     window._selectedSenderForStore = null;

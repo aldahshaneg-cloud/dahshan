@@ -673,6 +673,38 @@
       document.getElementById("sidebar-role").textContent = role || "";
       setTimeout(() => { try { disableAutoBackupOnce().then(() => checkAutoBackup()); } catch(e) {} }, 1500);
       setTimeout(() => { try { loadAttendanceTimeout(); } catch(e) {} }, 2000);
+      applyPagePerms(username);
+    }
+
+    /* ── صلاحيات الصفحات ───────────────────────────────────────────────
+       المدير بيحدّدها من لوحة الإدارة → المستخدمين
+       (users/{username}/pagePerms.callcenter). مفيش تخصيص = كل الصفحات. */
+    async function applyPagePerms(uname) {
+      try {
+        if (!uname) return;
+        const snap = await get(ref(db, "users/" + uname));
+        if (!snap.exists()) return;
+        const list = ((snap.val() || {}).pagePerms || {}).callcenter;
+        if (!Array.isArray(list)) return;
+        const allowed = new Set(list);
+        window._allowedPages = allowed;
+        document.querySelectorAll('[onclick*="navigateTo("]').forEach(el => {
+          const m = /navigateTo\(\s*['"]([\w-]+)['"]/.exec(el.getAttribute("onclick") || "");
+          if (m && !allowed.has(m[1])) el.style.display = "none";
+        });
+        if (!window._navGuarded) {
+          window._navGuarded = true;
+          const orig = window.navigateTo;
+          window.navigateTo = function (page) {
+            if (window._allowedPages && !window._allowedPages.has(page)) {
+              showToast("مالكش صلاحية للصفحة دي", "error");
+              return;
+            }
+            return orig.apply(this, arguments);
+          };
+        }
+        if (!allowed.has("ccsearch") && list[0]) window.navigateTo(list[0]);
+      } catch (e) { console.warn("page perms:", e); }
     }
 
     const _savedSession = localStorage.getItem("tiar-session");
