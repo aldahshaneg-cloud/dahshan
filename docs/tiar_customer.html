@@ -626,20 +626,11 @@ a{color:var(--red);text-decoration:none}
             display:grid;place-items:center;font-size:12px;font-weight:800">4</span>
           <b style="font-size:15px">المرفقات</b>
         </div>
-        <div id="attachHint" style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
-          أضف صور للطلب أو الإيصال (اختياري)</div>
-        <div class="up-grid">
-          <div class="up-box" onclick="document.getElementById('fileCam').click()"
-            data-tip="صوّر الشحنة أو الإيصال بكاميرا الموبايل — الحد الأقصى 6 صور للطلب."><i>📷</i><span>تصوير بالكاميرا</span></div>
-          <div class="up-box" onclick="document.getElementById('fileGal').click()"
-            data-tip="اختار صور جاهزة من معرض الصور بتاعك."><i>🖼️</i><span>اختيار صورة</span></div>
-        </div>
-        <input type="file" id="fileCam" accept="image/*" capture="environment" multiple hidden />
-        <input type="file" id="fileGal" accept="image/*" multiple hidden />
-        <div id="thumbsWrap" style="display:none">
-          <span class="lbl" style="margin-top:14px">الصور المضافة</span>
-          <div class="thumbs" id="thumbs"></div>
-        </div>
+        <!-- الصور بقت لكل طرد جوّه بلوكه في خطوة المستلمين، عشان صور
+             الطرد ما تروحش لطرد تاني. هنا بنعرض ملخّص بس. -->
+        <div id="attachHint" style="font-size:12.5px;color:var(--muted);line-height:1.9">
+          📷 صور كل طرد بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.</div>
+        <div id="attachSummary" style="margin-top:10px"></div>
       </div>
       <div class="card" id="summaryCard"></div>
       <div style="display:flex;gap:10px;margin-top:14px">
@@ -2528,7 +2519,7 @@ function startNewOrder() {
   // برّه مواعيد الشغل مابنفتحش الفورم أصلاً — أرحم للعميل من إنه يملا
   // كل الخطوات وبعدين يترفض في الآخر
   if (!isOpenNow()) return showClosed();
-  S.wizStep = 1; S.images = [];
+  S.wizStep = 1;
   S.draft = { kind: "طرد", pay: "كاش", pieces: 1,
               sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
               receivers: [blankReceiver()] };
@@ -2550,7 +2541,6 @@ function startNewOrder() {
   $("odPieces").textContent = 1;
   drawKinds(); drawPays();
   renderSavedPicks();
-  $("thumbs").innerHTML = ""; $("thumbsWrap").style.display = "none";
   wizNext(1);
   go("new");
 }
@@ -2577,7 +2567,11 @@ function onSenderZone() {
 // cod = مبلغ التحصيل بتاع الطرد ده لوحده. بقى لكل طرد بدل ما يكون رقم واحد
 // للطلب كله، عشان لو الفرع فرّق الطرود على أكتر من طيار كل طيار ياخد
 // تحصيل طروده هو بس ومايتحسبش مرتين
-const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"", lat:null, lng:null, cod:0 });
+// images = صور الطرد ده لوحده. قبل كده كانت صور واحدة بتتحط على كل
+// الطرود، فلو العميل بعت ٣ طرود مختلفة كانت صور الطرد الأول بتروح
+// للتلاتة — والفرع والطيار يشوفوا مرفقات مش بتاعة الطرد اللي معاهم.
+const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"",
+                               lat:null, lng:null, cod:0, images:[] });
 
 /** DOM ← state: بيقرا اللي المستخدم كتبه ويخزّنه قبل إعادة الرسم */
 function readReceiverBlocks() {
@@ -2624,6 +2618,19 @@ function receiverBlockHtml(r, i, multi, receipt) {
            oninput="updateRcvTotal()"
            data-tip="المبلغ اللي الطيار هيحصّله من مستلم الطرد ده بالذات. لو مفيش تحصيل سيبه صفر." />
 
+    <!-- صور الطرد ده لوحده — مش صور الطلب كله -->
+    <span class="lbl" style="margin-top:12px">صور الطرد ${multi ? `#${i + 1}` : ""}
+      ${receipt ? `<b style="color:var(--red)">*</b>` : `<small style="font-weight:500">(اختياري)</small>`}</span>
+    <div class="up-grid">
+      <div class="up-box" onclick="document.getElementById('rcvCam-${i}').click()"
+        data-tip="صوّر الطرد ده أو إيصاله — الحد الأقصى 6 صور للطرد."><i>📷</i><span>تصوير</span></div>
+      <div class="up-box" onclick="document.getElementById('rcvGal-${i}').click()"
+        data-tip="اختار صور جاهزة من معرض الصور."><i>🖼️</i><span>من المعرض</span></div>
+    </div>
+    <input type="file" id="rcvCam-${i}" accept="image/*" capture="environment" multiple hidden />
+    <input type="file" id="rcvGal-${i}" accept="image/*" multiple hidden />
+    <div class="thumbs" id="rcvThumbs-${i}" style="margin-top:9px"></div>
+
     <div id="rcvGeo-${i}" style="display:${receipt ? "none" : "block"}">
       <div class="map" id="rcvMap-${i}" style="height:130px;margin-top:12px"></div>
       <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv',${i})"
@@ -2649,6 +2656,12 @@ function renderReceiverBlocks() {
     const sel = $("rcvZone-" + i);
     sel.onchange = () => onReceiverZone(i);
     showMiniMap("rcvMap-" + i, r.lat, r.lng);
+    // صور الطرد — كل بلوك له مدخلاته وصوره
+    ["rcvCam-" + i, "rcvGal-" + i].forEach(id => {
+      const el = $(id); if (!el) return;
+      el.onchange = e => onParcelFiles(i, e);
+    });
+    drawRcvThumbs(i);
   });
   refillReceiverZones();
   renderSavedPicks();
@@ -2679,8 +2692,8 @@ function addParcelSameReceiver(i) {
   S.draft.receivers.splice(i + 1, 0, {
     name: src.name, phone: src.phone, phone2: src.phone2, address: src.address,
     zoneId: src.zoneId, lat: src.lat, lng: src.lng,
-    // التحصيل مابيتنسخش — كل طرد له مبلغه، والنسخ كان هيضاعفه بالغلط
-    cod: 0
+    // التحصيل والصور مابيتنسخوش — كل طرد له مبلغه وصوره
+    cod: 0, images: []
   });
   renderReceiverBlocks();
   $("rcvBlocks")?.children[i + 1]?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2726,11 +2739,35 @@ function updateAttachHint() {
   const el = $("attachHint"); if (!el) return;
   if (S.draft?.receiptMode) {
     el.innerHTML = `<span style="color:var(--orange);font-weight:700">
-      🧾 صورة الريسيت إجبارية</span> — العنوان وبيانات المستلم هيتقروا منها`;
+      🧾 صورة الريسيت إجبارية لكل طرد</span> — العنوان وبيانات المستلم هيتقروا منها.
+      الصور بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.`;
   } else {
     el.style.color = "var(--muted)";
-    el.textContent = "أضف صور للطلب أو الإيصال (اختياري)";
+    el.innerHTML = `📷 صور كل طرد بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.`;
   }
+  renderAttachSummary();
+}
+
+/* ملخّص الصور — بيوري العميل كل طرد مضاف عليه كام صورة، وزرار
+   بيرجّعه لخطوة المستلمين لو ناقص. مافيش رفع من هنا خالص عشان
+   الصورة تفضل مربوطة بطردها. */
+function renderAttachSummary() {
+  const box = $("attachSummary"); if (!box) return;
+  const rs = S.draft?.receivers || [];
+  const multi = rs.length > 1;
+  const need = !!S.draft?.receiptMode;
+  box.innerHTML = rs.map((r, i) => {
+    const n = (r.images || []).filter(x => x.url).length;
+    const bad = need && !n;
+    return `<div class="kv" style="align-items:center">
+      <span class="k">📦 ${multi ? `الطرد #${i + 1}` : "الطرد"}
+        ${r.name ? `<small style="color:var(--muted)"> — ${esc(r.name)}</small>` : ""}</span>
+      <span class="v" style="color:${bad ? "var(--red)" : n ? "var(--green)" : "var(--muted)"};font-weight:800">
+        ${n ? `${n} صورة` : bad ? "مفيش صورة ⚠️" : "بدون صور"}</span>
+    </div>`;
+  }).join("") + `
+    <button class="btn" style="width:100%;margin-top:10px" onclick="wizNext(2)">
+      ✏️ رجوع لخطوة المستلمين لإضافة/تعديل الصور</button>`;
 }
 
 function onReceiverZone(i) {
@@ -2945,34 +2982,48 @@ async function uploadImage(file) {
   return (await res.json()).secure_url;
 }
 
-["fileCam", "fileGal"].forEach(id => {
-  $(id).addEventListener("change", async e => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    for (const f of files) {
-      if (S.images.length >= 6) { toast("الحد الأقصى 6 صور", "err"); break; }
-      const item = { local: URL.createObjectURL(f), url: null, busy: true };
-      S.images.push(item); drawThumbs();
-      try { item.url = await uploadImage(f); }
-      catch (err) { toast(err.message, "err"); S.images = S.images.filter(x => x !== item); }
-      finally { item.busy = false; drawThumbs(); }
-    }
-  });
-});
+/* ══════════════════════════════════════════════════════════════
+   صور الطرود — كل طرد وصوره
+   ──────────────────────────────────────────────────────────────
+   قبل كده كانت الصور مجموعة واحدة بتتحط على كل الطرود، فلو العميل
+   بعت أكتر من طرد كانت صور طرد بتروح للطرود التانية والفرع والطيار
+   يشوفوا مرفقات مش بتاعة الطرد اللي معاهم. دلوقتي كل بلوك له صوره.
+══════════════════════════════════════════════════════════════ */
+async function onParcelFiles(i, e) {
+  const r = S.draft?.receivers?.[i]; if (!r) return;
+  r.images = r.images || [];
+  const files = Array.from(e.target.files || []);
+  e.target.value = "";
+  for (const f of files) {
+    if (r.images.length >= 6) { toast("الحد الأقصى 6 صور للطرد الواحد", "err"); break; }
+    const item = { local: URL.createObjectURL(f), url: null, busy: true };
+    r.images.push(item); drawRcvThumbs(i);
+    try { item.url = await uploadImage(f); }
+    catch (err) { toast(err.message, "err"); r.images = r.images.filter(x => x !== item); }
+    finally { item.busy = false; drawRcvThumbs(i); }
+  }
+}
+window.onParcelFiles = onParcelFiles;
 
-function drawThumbs() {
-  $("thumbsWrap").style.display = S.images.length ? "block" : "none";
-  $("thumbs").innerHTML = S.images.map((im, i) => `
+function drawRcvThumbs(i) {
+  const box = $("rcvThumbs-" + i); if (!box) return;
+  const imgs = S.draft?.receivers?.[i]?.images || [];
+  box.innerHTML = imgs.map((im, k) => `
     <div class="thumb"><img src="${esc(im.url || im.local)}" alt="" />
-      ${im.busy ? `<div class="ld">⏳</div>` : `<div class="x" data-i="${i}">✕</div>`}</div>`).join("");
-  $("thumbs").querySelectorAll(".x").forEach(x => x.onclick = () => {
-    S.images.splice(+x.dataset.i, 1); drawThumbs();
+      ${im.busy ? `<div class="ld">⏳</div>` : `<div class="x" data-k="${k}">✕</div>`}</div>`).join("");
+  box.querySelectorAll(".x").forEach(x => x.onclick = () => {
+    (S.draft.receivers[i].images || []).splice(+x.dataset.k, 1);
+    drawRcvThumbs(i);
   });
 }
 
+/** كل صور كل الطرود — للفحص قبل الإرسال */
+const allParcelImages = () =>
+  (S.draft?.receivers || []).flatMap(r => r.images || []);
+
 /* ── الإرسال ─────────────────────────────────────────────── */
 async function submitOrder() {
-  if (S.images.some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
+  if (allParcelImages().some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
   // فحص تاني عند الإرسال — العميل ممكن يكون فاتح الفورم قبل ميعاد القفل
   // أو الإدارة حظرته وهو فاتح
   if (isBlocked()) return showBlocked();
@@ -2982,9 +3033,17 @@ async function submitOrder() {
   const receivers = (S.draft.receivers || []).filter(r => r.zoneId);
   if (!sz) { wizNext(1); return toast("اختر منطقة الاستلام", "err"); }
   if (!receivers.length) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
-  // من غير بيانات مستلم، الصورة هي المصدر الوحيد للعنوان — فإجبارية
-  if (S.draft.receiptMode && !S.images.some(i => i.url))
-    return toast("لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
+  /* في وضع الريسيت، الصورة هي المصدر الوحيد لعنوان الطرد — فإجبارية
+     لكل طرد لوحده، مش صورة واحدة للطلب كله زي الأول. */
+  if (S.draft.receiptMode) {
+    const bad = receivers.findIndex(r => !(r.images || []).some(i => i.url));
+    if (bad !== -1) {
+      wizNext(2);
+      return toast(receivers.length > 1
+        ? `لازم ترفع صورة الريسيت للطرد #${bad + 1} — العنوان مكتوب عليها`
+        : "لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
+    }
+  }
 
   const origBranchId = zoneBranchId(sz);
   if (!origBranchId) return toast("المنطقة دي مش مربوطة بفرع — كلّم خدمة العملاء", "err");
@@ -3005,7 +3064,6 @@ async function submitOrder() {
     const now = new Date().toISOString();
 
     const receipt = !!S.draft.receiptMode;
-    const imgs = S.images.map(i => i.url).filter(Boolean);
     const note = $("odNote").value.trim();
 
     // طرد لكل مستلم — نفس سكيمة deliveries المستخدمة في لوحة الإدارة
@@ -3036,8 +3094,8 @@ async function submitOrder() {
                 .filter(Boolean).join(" — "),
         status: "قيد التنفيذ",
         receiverFromReceipt: receipt,
-        // الصور بتتحط على كل طرد عشان تفضل مع الطرد لو الفرع قسّم الطلب
-        images: imgs
+        // صور الطرد ده هو بس — بتفضل معاه لو الفرع فرّق الطلب على طيارين
+        images: (r.images || []).map(x => x.url).filter(Boolean)
       };
       // خرايط الفرع والإدارة بتقرا الموقع من d.geo مش من lat/lng، ولو الحقل
       // ده فاضي بتروح تخمّن مكان العنوان من نصّه عبر Nominatim — وده اللي
