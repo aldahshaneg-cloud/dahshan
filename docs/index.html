@@ -652,12 +652,26 @@
 
         <div class="login-error" id="loginError"></div>
 
-        <div class="lf-or">بوابة الإدارة</div>
+        <div class="lf-or">أو باسم المستخدم</div>
 
-        <div style="font-size:.78rem;color:#8b93a7;text-align:center;line-height:1.8">
-          هذه البوابة مخصّصة <b>للإدارة فقط</b>، والدخول منها بحساب جوجل مُصرَّح به.<br>
-          مشرفو الفروع وأصحاب المحلات والموارد البشرية يدخلون من روابط تطبيقاتهم
-          مباشرةً باسم المستخدم وكلمة المرور.
+        <!-- دخول باسم المستخدم — الصلاحيات بتتقرا من users/{username}/allowedApps
+             اللي المدير بيظبطها من لوحة الإدارة، فكل واحد بيشوف تطبيقاته بس -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input id="uUser" type="text" dir="ltr" placeholder="اسم المستخدم" autocomplete="username"
+                 style="width:100%;padding:13px 15px;border-radius:12px;border:1px solid #2a2b33;
+                        background:#15161c;color:#e8e8ef;font-size:.92rem;font-family:inherit" />
+          <input id="uPass" type="password" dir="ltr" placeholder="كلمة المرور" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter') window.doUserLogin()"
+                 style="width:100%;padding:13px 15px;border-radius:12px;border:1px solid #2a2b33;
+                        background:#15161c;color:#e8e8ef;font-size:.92rem;font-family:inherit" />
+          <button class="lf-btn-main" id="userLoginBtn" onclick="window.doUserLogin()">
+            <span class="btn-text">دخول</span>
+          </button>
+        </div>
+
+        <div style="font-size:.76rem;color:#8b93a7;text-align:center;line-height:1.8;margin-top:14px">
+          الإدارة بتدخل بحساب جوجل. باقي المستخدمين بيدخلوا باسم المستخدم،
+          وكل واحد بيشوف التطبيقات المسموح له بيها بس.
         </div>
 
         <!-- مدخل العملاء — ده تطبيق عام مش محتاج صلاحية، فبيبان للكل قبل الدخول -->
@@ -894,7 +908,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut }
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, signInAnonymously }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -1141,6 +1155,50 @@
       seedDefaultUsers().catch(() => {});
     }
 
+    /* دخول باسم المستخدم — بيقرا users/{username} ويبني الجلسة من
+       allowedApps اللي المدير ظبطها من لوحة الإدارة. من غير الدخول ده
+       كانت الصلاحيات محفوظة في القاعدة ومحدش بيقراها. */
+    window.doUserLogin = async function() {
+      const err  = document.getElementById("loginError");
+      const btn  = document.getElementById("userLoginBtn");
+      const bTxt = btn?.querySelector(".btn-text");
+      const username = (document.getElementById("uUser").value || "").trim();
+      const password = document.getElementById("uPass").value || "";
+      err.textContent = "";
+      if (!username || !password) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
+      if (btn) btn.disabled = true;
+      if (bTxt) bTxt.textContent = "جاري التحقق…";
+      try {
+        // القواعد بتطلب auth != null للقراءة — بندخل مجهول لو مفيش جلسة
+        if (!auth.currentUser) { try { await signInAnonymously(auth); } catch (e) {} }
+        const snap = await get(ref(db, "users/" + username));
+        if (!snap.exists()) { err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+        const u = snap.val();
+        if (u.password !== password) {
+          err.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة";
+          document.getElementById("uPass").value = "";
+          return;
+        }
+        const sessionData = {
+          username,
+          displayName: u.shopName || username,
+          role:        u.role || "موظف",
+          branchId:    u.branchId   || "",
+          branchName:  u.branchName || "",
+          allowedApps: resolveAllowedApps(u),
+          via:         "username"
+        };
+        saveSession(sessionData);
+        applySession(sessionData);
+        document.getElementById("uPass").value = "";
+      } catch (e) {
+        err.textContent = "تعذّر تسجيل الدخول: " + (e?.message || e);
+      } finally {
+        if (btn) btn.disabled = false;
+        if (bTxt) bTxt.textContent = "دخول";
+      }
+    };
+
     window.doGoogleLogin = async function() {
       const err = document.getElementById("loginError");
       const btn = document.getElementById("googleBtn");
@@ -1208,12 +1266,28 @@
 
     /* استعادة الجلسة عبر Firebase Auth — الجلسة بتفضل محفوظة في نفس المتصفح،
        وبتتشارك مع باقي التطبيقات على نفس الدومين (فتفتح من غير تسجيل دخول). */
+    /* جلسة «اسم المستخدم» مالهاش حساب جوجل، فبتتخزّن في localStorage بس.
+       من غير الاستعادة دي، أول ما onAuthStateChanged يشتغل (والمستخدم
+       مجهول) كان بيرجّعه لشاشة الدخول فورًا بعد ما يدخل. */
+    function restoreUsernameSession() {
+      if (window._indexUser) return true;
+      try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return false;
+        const d = JSON.parse(raw);
+        if (!d || d.via !== "username" || !d.username) return false;
+        applySession(d);
+        return true;
+      } catch { return false; }
+    }
+
     onAuthStateChanged(auth, async (user) => {
       const err = document.getElementById("loginError");
       // الجلسة المجهولة (اللي بتعملها التطبيقات الفرعية على نفس الدومين)
       // مش دخول إدارة — نتعامل معاها كأنه مفيش دخول، ومنعملش signOut عشان
       // ما نكسرش التطبيق التاني المفتوح في تبويب تاني.
       if (!user || user.isAnonymous || !user.email) {
+        if (restoreUsernameSession()) return;
         window._indexUser = null;
         document.getElementById("main-app").classList.remove("visible");
         document.getElementById("login-screen").classList.remove("hidden");

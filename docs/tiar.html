@@ -4590,8 +4590,13 @@
       const btn = document.getElementById("addUserBtn");
       btn.disabled = true; btn.textContent = "جاري الحفظ…";
       try {
+        // الصلاحيات المختارة — لو محدّش اختار حاجة بنرجّع افتراضي الدور
+        // عشان مايتقفلش عليه كل حاجة بالغلط
+        let allowedApps = getUserPerms();
+        if (!allowedApps.length) allowedApps = roleDefaultApps(role);
+
         if (window._editState.active && window._editState.type === 'user') {
-          const updateData = { password, role, updatedAt: new Date().toISOString() };
+          const updateData = { password, role, allowedApps, updatedAt: new Date().toISOString() };
           if (role === "مشرف فرع") {
             updateData.branchId = branchId; updateData.branchName = branchName;
             updateData.shopName = null; updateData.shopPhone = null; updateData.shopPhone2 = null; updateData.shopAddress = null; updateData.senderId = null;
@@ -4609,7 +4614,7 @@
         } else {
           const snap = await get(ref(db, "users/" + username));
           if (snap.exists()) { showToast("اسم المستخدم موجود مسبقاً", "error"); return; }
-          const userData = { username, password, role, createdAt: new Date().toISOString() };
+          const userData = { username, password, role, allowedApps, createdAt: new Date().toISOString() };
           if (role === "مشرف فرع") {
             userData.branchId = branchId; userData.branchName = branchName;
           } else if (role === "صاحب محل") {
@@ -4643,6 +4648,9 @@
       document.getElementById("newUsername").value    = u.username;
       document.getElementById("newPassword").value    = u.password;
       document.getElementById("newRole").value        = u.role || "موظف";
+      // الصلاحيات المحفوظة، وإلا افتراضي الدور
+      renderUserPerms(Array.isArray(u.allowedApps) && u.allowedApps.length
+        ? u.allowedApps : roleDefaultApps(u.role));
       document.getElementById("newUsername").disabled = true;
       document.querySelector("#modal-user .modal-title").textContent = "👤 تعديل مستخدم";
       document.getElementById("addUserBtn").textContent = "تحديث المستخدم";
@@ -6764,9 +6772,70 @@
         showToast("تمّ حذف الطلب", "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
+    /* ═══════════════════════════════════════════════════════════════
+       صلاحيات المستخدمين — أي تطبيقات يقدر كل يوزر يفتحها
+       ───────────────────────────────────────────────────────────────
+       بتتخزّن في users/{username}/allowedApps، والبوابة (index.html)
+       بتقراها زي ما هي وبتقفل الكروت غير المسموحة. لو الحقل مش موجود
+       البوابة بتحسبها من الدور — فالافتراضي تحت هو نفسه اللي عندها. */
+    const APP_PERMS = [
+      { key: "admin",      label: "لوحة الإدارة",        icon: "🗂️" },
+      { key: "branch",     label: "تطبيق الفروع",        icon: "🏢" },
+      { key: "callcenter", label: "الكول سنتر",          icon: "📞" },
+      { key: "store",      label: "بوابة المحلات",       icon: "🏪" },
+      { key: "accounts",   label: "النظام المحاسبي",     icon: "💰" },
+      { key: "damascus",   label: "تقفيل روح دمشق",      icon: "🧾" },
+      { key: "hr",         label: "الموارد البشرية",     icon: "🧑‍💼" },
+      { key: "hrOld",      label: "الموارد البشرية (القديمة)", icon: "🗄️" },
+      { key: "customer",   label: "تطبيق العملاء",       icon: "📱" },
+      { key: "customers",  label: "إدارة العملاء",       icon: "👥" },
+      { key: "siteadmin",  label: "لوحة تحكم الموقع",    icon: "🛠️" },
+      { key: "site",       label: "الموقع العام",        icon: "🌐" },
+    ];
+    const APP_LABEL = Object.fromEntries(APP_PERMS.map(a => [a.key, a.icon + " " + a.label]));
+
+    /* الافتراضي حسب الدور — نفس الجدول اللي في البوابة بالظبط.
+       متعرّضة على window لأن مودال المستخدم في سكربت عادي مش module،
+       ونطاق الـ module مش عام فمكانش شايفها. */
+    window.roleDefaultApps = function roleDefaultApps(role) {
+      const r = (role || "").trim();
+      if (["مدير", "مدير عام", "admin"].includes(r))
+        return ["admin","branch","store","hr","hrOld","accounts","callcenter","damascus","customer","customers","site","siteadmin"];
+      if (["محاسب", "مدير حسابات", "accountant"].includes(r))       return ["accounts","damascus","site"];
+      if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(r))   return ["hr","hrOld","site"];
+      if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(r))     return ["callcenter","customer","site"];
+      if (["مشرف فرع", "مشرف", "branch"].includes(r))               return ["branch","site"];
+      if (["صاحب محل", "تاجر", "محل", "store"].includes(r))         return ["store","site"];
+      return ["site"];
+    };
+    const roleDefaultApps = window.roleDefaultApps;
+
+    /* بيرسم مربعات الاختيار في مودال المستخدم */
+    window.renderUserPerms = function (selected) {
+      const box = document.getElementById("userPermsBox");
+      if (!box) return;
+      const set = new Set(selected || []);
+      box.innerHTML = APP_PERMS.map(a => `
+        <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;background:var(--card);
+                      border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.82rem">
+          <input type="checkbox" class="_permChk" value="${a.key}" ${set.has(a.key) ? "checked" : ""}
+                 style="width:15px;height:15px;accent-color:var(--sky);cursor:pointer" />
+          <span>${a.icon} ${a.label}</span>
+        </label>`).join("");
+    };
+    window.getUserPerms = function () {
+      return [...document.querySelectorAll("._permChk:checked")].map(c => c.value);
+    };
+    /* زرار «رجّع الافتراضي حسب الدور» */
+    window.applyRolePerms = function () {
+      const role = document.getElementById("newRole")?.value || "";
+      renderUserPerms(roleDefaultApps(role));
+      showToast("تم ضبط الصلاحيات على الافتراضي لدور «" + role + "»", "success");
+    };
+
     function renderUsersTable(users) {
       const tbody = document.getElementById("usersBody");
-      if (!users.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا يوجد مستخدمون</td></tr>`; return; }
+      if (!users.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty-row">لا يوجد مستخدمون</td></tr>`; return; }
       tbody.innerHTML = users.map((u, i) => `
         <tr>
           <td class="idx">${i+1}</td>
@@ -6774,6 +6843,15 @@
           <td><span class="role-badge ${u.role === 'مدير' ? 'role-admin' : 'role-user'}">${u.role || "موظف"}</span></td>
           <td>${u.role === 'مشرف فرع' ? `<span style="color:var(--sky);font-size:.82rem">🏢 ${u.branchName || '—'}</span>` : u.role === 'صاحب محل' ? `<span style="color:var(--green);font-size:.82rem">🏪 ${u.shopName || '—'} · ${u.branchName || '—'}</span>` : `<span style="color:var(--muted);font-size:.78rem">—</span>`}</td>
           <td dir="ltr" style="letter-spacing:.1em">${"•".repeat(Math.min(u.password?.length || 4, 8))}</td>
+          <td style="max-width:230px;white-space:normal">${(() => {
+            const custom = Array.isArray(u.allowedApps) && u.allowedApps.length;
+            const apps = custom ? u.allowedApps : roleDefaultApps(u.role);
+            const shown = apps.filter(k => k !== "site").slice(0, 4);
+            return `<div style="display:flex;flex-wrap:wrap;gap:3px">${
+              shown.map(k => `<span style="background:rgba(14,165,233,.13);color:var(--sky);font-size:.68rem;font-weight:700;padding:2px 6px;border-radius:6px">${APP_LABEL[k] || k}</span>`).join("")
+            }${apps.filter(k => k !== "site").length > 4 ? `<span style="color:var(--muted);font-size:.68rem">+${apps.filter(k=>k!=="site").length-4}</span>` : ""}</div>
+            <div style="font-size:.66rem;color:var(--muted);margin-top:2px">${custom ? "✏️ مخصّصة" : "حسب الدور"}</div>`;
+          })()}</td>
           <td>${u.username === "admin" ? `<span style="color:var(--muted);font-size:.78rem">محمي</span>` : `<button class="edit-btn" onclick="openEditUser('${u.username}')">تعديل</button><button class="del-btn" onclick="deleteUser('${u.username}')">حذف</button>`}</td>
         </tr>
       `).join("");
@@ -8753,7 +8831,7 @@
       </div>
       <div id="settings-users" style="display:none">
         <div class="sec-header"><span class="sec-title">👤 إدارة المستخدمين</span><button class="add-btn" onclick="resetUserModal();openModal('user')">➕ إضافة مستخدم جديد</button></div>
-        <div class="table-wrap"><table><thead><tr><th>#</th><th>اسم المستخدم</th><th>الدور</th><th>الفرع</th><th>كلمة المرور</th><th>إجراء</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>اسم المستخدم</th><th>الدور</th><th>الفرع</th><th>كلمة المرور</th><th>الصلاحيات</th><th>إجراء</th></tr></thead><tbody id="usersBody"></tbody></table></div>
       </div>
       <div id="settings-data" style="display:none">
 
@@ -9295,6 +9373,25 @@
           <label>الفرع المسؤول عنه <span class="req">*</span></label>
           <select id="newUserBranch"><option value="">— اختر الفرع —</option></select>
         </div>
+
+        <!-- صلاحيات المستخدم: التطبيقات اللي يقدر يفتحها من البوابة -->
+        <div class="form-group full">
+          <div style="background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.2);border-radius:10px;padding:14px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <span style="font-size:.82rem;font-weight:700;color:var(--sky)">🔐 الصلاحيات — التطبيقات المسموح له يفتحها</span>
+              <button type="button" onclick="applyRolePerms()"
+                      style="margin-inline-start:auto;background:transparent;border:1px solid var(--border);color:var(--muted);
+                             padding:5px 11px;border-radius:7px;cursor:pointer;font-size:.75rem;font-family:inherit">
+                ↺ الافتراضي حسب الدور
+              </button>
+            </div>
+            <div id="userPermsBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:7px"></div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:9px">
+              ⚠️ ده بيتحكم في التطبيقات اللي بتظهر مفتوحة له في البوابة. التطبيق نفسه كمان بيتحقق من دوره عند الدخول.
+            </div>
+          </div>
+        </div>
+
         <!-- حقول صاحب المحل -->
         <div id="storeOwnerFields" style="display:none;grid-column:1/-1">
           <div style="background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.2);border-radius:10px;padding:14px;margin-bottom:4px">
@@ -9598,6 +9695,8 @@
     document.getElementById("addUserBtn").textContent = "حفظ المستخدم";
     document.getElementById("branchSupervisorField").style.display = "none";
     document.getElementById("storeOwnerFields").style.display = "none";
+    // صلاحيات مستخدم جديد = افتراضي الدور المختار
+    renderUserPerms(roleDefaultApps(document.getElementById("newRole").value));
     // مسح بحث عميل الاستلام
     window._selectedSenderForStore = null;
     const si = document.getElementById("senderSearchForStore");
@@ -9612,6 +9711,9 @@
     const role  = document.getElementById("newRole").value;
     const field = document.getElementById("branchSupervisorField");
     const store = document.getElementById("storeOwnerFields");
+    // تغيير الدور بيرجّع الصلاحيات لافتراضي الدور الجديد — والمدير يقدر
+    // يعدّلها بعد كده بالمربعات
+    renderUserPerms(roleDefaultApps(role));
     // مشرف فرع
     if (role === "مشرف فرع") {
       field.style.display = "block";
