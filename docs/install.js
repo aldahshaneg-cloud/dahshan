@@ -13,6 +13,23 @@
   var deferred = null;
   var sheetOpen = false;
 
+  /* ── تحديث ذاتي ────────────────────────────────────────────────
+     التطبيقات دي PWA، والـ service worker ممكن يفضل مخدّم نسخة قديمة
+     محفوظة حتى بعد ما نرفع تعديل. هنا بنجبره يفحص التحديث كل مرة،
+     ولو نسخة جديدة استلمت التحكم بنعمل reload مرة واحدة بس. */
+  if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller;
+    var reloaded = false;
+    navigator.serviceWorker.getRegistrations()
+      .then(function (rs) { rs.forEach(function (r) { try { r.update(); } catch (e) {} }); })
+      .catch(function () {});
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || reloaded) return;   // أول تسجيل مش تحديث
+      reloaded = true;
+      location.reload();
+    });
+  }
+
   function installed() {
     return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   }

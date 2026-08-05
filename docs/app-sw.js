@@ -10,12 +10,17 @@
    بيتعامل *فقط* مع ملفات التطبيقين ومكتباتهم. أي طلب تاني بيعدّي
    للشبكة زي ما هو من غير ما نلمسه (مفيش respondWith).
 ══════════════════════════════════════════════════════════════ */
-const CACHE = "dahshan-apps-v2";
+const CACHE = "dahshan-apps-v3";
 
-/* الملفات اللي التطبيقين مش هيشتغلوا من غيرها */
+/* الملفات اللي التطبيقين مش هيشتغلوا من غيرها.
+   مهم: wallet.js و install.js لازم يكونوا هنا — الصفحتين بيعملوا
+   import ليهم، فلو الصفحة اتحمّلت من الكاش والملفات دي مش موجودة
+   الـ module كله بيفشل والتطبيق مابيفتحش خالص. */
 const SHELL = [
   "./tiar_customer.html",
   "./tiar_store.html",
+  "./wallet.js",
+  "./install.js",
   "./customer-manifest.json",
   "./store-manifest.json",
   "./assets/logo.png",
@@ -30,6 +35,7 @@ const CDN = [
 ];
 
 const OURS = ["/tiar_customer.html", "/tiar_store.html",
+              "/wallet.js", "/install.js",
               "/customer-manifest.json", "/store-manifest.json"];
 
 const isOurs = url =>
