@@ -8050,8 +8050,16 @@
                 <input id="senderPhone2" dir="ltr" style="text-align:left" /></div>
               <div class="fg full"><label>عنوان الاستلام <span class="req">*</span></label>
                 <input id="senderAddress" oninput="updateSummary()" /></div>
+              <div class="fg full smart">
+                <label>منطقة الاستلام <span class="req">*</span>
+                  <span style="font-weight:500;font-size:.72rem">— اسمع من العميل واكتب منطقته، والنظام هيحدّد الفرع</span></label>
+                <input class="big" id="senderArea" placeholder="مثال: المنصورة الجديدة…" autocomplete="off"
+                       oninput="onSenderAreaSearch()" onkeydown="onSmartKey(event,'senderArea')" />
+                <div class="smart-results" id="senderAreaResults"></div>
+              </div>
             </div>
             <div id="senderState"></div>
+            <div id="senderAreaHit" style="margin-top:10px"></div>
           </div>
 
           <div class="call-card">
@@ -10960,7 +10968,7 @@
   /* ══════════════════════════════════════════════════════════════
      شاشة الأوردر الجديد
   ══════════════════════════════════════════════════════════════ */
-  let F = { senderId:null, parcels:[], lockBranch:"", seq:0 };
+  let F = { senderId:null, parcels:[], lockBranch:"", seq:0, senderZoneId:"", senderZoneName:"" };
   const P = n => F.parcels.find(x => x.n === Number(n)) || null;
 
   window.renderNewOrder = function() {
@@ -10971,15 +10979,19 @@
   window.resetNewOrder = function(ask) {
     if (ask && !confirm("إفراغ النموذج وبدء أوردر جديد؟")) return;
     const keep = { q:$("senderSearch").value, id:F.senderId, p1:$("senderPhone").value,
-                   p2:$("senderPhone2").value, a:$("senderAddress").value };
-    F = { senderId:null, parcels:[], lockBranch:"", seq:0 };
-    ["senderSearch","senderPhone","senderPhone2","senderAddress","storePrepaid","storePrepaidNote","orderNotes"]
+                   p2:$("senderPhone2").value, a:$("senderAddress").value,
+                   zId:F.senderZoneId, zName:F.senderZoneName, br:F.lockBranch };
+    F = { senderId:null, parcels:[], lockBranch:"", seq:0, senderZoneId:"", senderZoneName:"" };
+    ["senderSearch","senderPhone","senderPhone2","senderAddress","senderArea","storePrepaid","storePrepaidNote","orderNotes"]
       .forEach(id => { const el = $(id); if (el) el.value = ""; });
-    // بنحتفظ بجهة الاستلام — محل واحد بيبعت كذا أوردر ورا بعض
+    // بنحتفظ بجهة الاستلام ومنطقتها — محل واحد بيبعت كذا أوردر ورا بعض،
+    // ومنطقة الاستلام هي اللي بيتحدّد منها الفرع فمفيش داعي يعيدها كل مرة
     $("senderSearch").value = keep.q; F.senderId = keep.id;
     $("senderPhone").value = keep.p1; $("senderPhone2").value = keep.p2; $("senderAddress").value = keep.a;
+    $("senderArea").value = keep.zName || "";
+    F.senderZoneId = keep.zId || ""; F.senderZoneName = keep.zName || ""; F.lockBranch = keep.br || "";
     $("senderResults").classList.remove("open");
-    addParcel(); renderSenderState(); renderBranchLock();
+    addParcel(); renderSenderState(); renderSenderAreaHit(); renderBranchLock();
     setTimeout(() => $(`pRecv${F.parcels[0].n}`)?.focus(), 60);
   };
 
@@ -11024,8 +11036,60 @@
     }
   }
 
+  /* ── منطقة الاستلام → الفرع المسؤول ────────────────────────────────
+     الكول سنتر مابيختارش الفرع بإيده. الموظف بيسمع من العميل ويكتب منطقة
+     الاستلام، والنظام بيطلّع الفرع منها تلقائيًا — نفس نظام تطبيق العميل.
+     وبعدين مناطق التسليم بتتقفل على مناطق نفس الفرع. */
+  window.onSenderAreaSearch = function() {
+    const q = $("senderArea").value.trim(), box = $("senderAreaResults");
+    // أول ما يغيّر الكتابة، الفرع بيتلغي لحد ما يختار منطقة من القائمة
+    if (F.senderZoneId) clearSenderZone();
+    if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; renderBranchLock(); updateSummary(); return; }
+    const hits = searchZones(q);
+    box.innerHTML = hits.length
+      ? hits.map((h,i) => `
+        <div class="smart-item${i===0?" sel":""}" onclick="pickSenderZone('${esc(h.zone.id)}')">
+          <div class="si-main">${hl(h.name,q)}</div>
+          <div class="si-sub">🏢 ${esc(branchName(h.branchId))}</div>
+        </div>`).join("")
+      : `<div class="smart-new" style="cursor:default">مفيش منطقة بالاسم ده — راجع الإدارة تضيفها</div>`;
+    box.classList.add("open");
+    renderSenderAreaHit(); updateSummary();
+  };
+
+  window.pickSenderZone = function(zoneId) {
+    const z = ZONES().find(x => x.id === zoneId); if (!z) return;
+    const bId = zoneBranchId(z);
+    // تغيير منطقة الاستلام معناه تغيير الفرع، فالوجهات المختارة على الفرع
+    // القديم مابقتش صالحة — بنفضّيها بدل ما الأوردر يروح لفرع غلط
+    if (F.lockBranch && bId !== F.lockBranch) {
+      F.parcels.forEach(p => { p.zoneId=""; p.zoneName=""; p.price=0; p.branchId=""; p.manual=false; });
+    }
+    F.senderZoneId   = zoneId;
+    F.senderZoneName = z.areaName || z.name || "";
+    F.lockBranch     = bId;
+    $("senderArea").value = F.senderZoneName;
+    $("senderAreaResults").classList.remove("open");
+    renderSenderAreaHit(); renderParcels(); renderBranchLock(); updateSummary();
+    setTimeout(() => $(`pRecv${F.parcels[0]?.n}`)?.focus(), 50);
+  };
+
+  function clearSenderZone() {
+    F.senderZoneId = ""; F.senderZoneName = ""; F.lockBranch = "";
+    renderSenderAreaHit();
+  }
+
+  function renderSenderAreaHit() {
+    const el = $("senderAreaHit"); if (!el) return;
+    if (!F.senderZoneId) { el.innerHTML = ""; return; }
+    el.innerHTML = `<div class="cc-ok">📍 الاستلام من <b>${esc(F.senderZoneName)}</b> —
+      الفرع المسؤول <b style="color:var(--green)">${esc(branchName(F.lockBranch))}</b></div>`;
+  }
+
   window.onSmartKey = function(ev, kind, n) {
-    const box = kind==="sender" ? $("senderResults") : kind==="area" ? $(`pAreaResults${n}`) : $(`pRecvResults${n}`);
+    const box = kind==="sender" ? $("senderResults")
+              : kind==="senderArea" ? $("senderAreaResults")
+              : kind==="area" ? $(`pAreaResults${n}`) : $(`pRecvResults${n}`);
     if (!box?.classList.contains("open")) return;
     const items = [...box.querySelectorAll(".smart-item, .smart-new")];
     if (!items.length) return;
@@ -11042,19 +11106,14 @@
   function renderBranchLock() {
     const el = $("branchLock"); if (!el) return;
     if (!F.lockBranch) {
-      el.innerHTML = `<div class="cc-info">💡 اكتب اسم المنطقة في أول وجهة، والنظام هيقولك <b>الفرع المسؤول</b> و<b>سعر التوصيل</b> تلقائيًا.</div>`;
+      el.innerHTML = `<div class="cc-info">💡 اختار <b>منطقة الاستلام</b> فوق الأول — منها النظام بيحدّد <b>الفرع المسؤول</b>، وبعدين تختار مناطق التسليم.</div>`;
       return;
     }
     el.innerHTML = `<div class="cc-ok" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span>🏢 الأوردر ده على <b style="color:var(--green);font-size:1rem">${esc(branchName(F.lockBranch))}</b> — باقي الوجهات لازم تكون في مناطق نفس الفرع.</span>
-      <button class="btn-ghost-cc btn-xs-cc" style="margin-inline-start:auto" onclick="unlockBranch()">🔓 تغيير الفرع</button></div>`;
+      <span>🏢 الأوردر ده على <b style="color:var(--green);font-size:1rem">${esc(branchName(F.lockBranch))}</b>
+        — اتحدّد من منطقة الاستلام (<b>${esc(F.senderZoneName || "—")}</b>)، وباقي الوجهات لازم تكون في مناطق نفس الفرع.</span>
+      </div>`;
   }
-  window.unlockBranch = function() {
-    if (!confirm("تغيير الفرع هيمسح المناطق المختارة في كل الوجهات. متابعة؟")) return;
-    F.lockBranch = "";
-    F.parcels.forEach(p => { p.zoneId=""; p.zoneName=""; p.price=0; p.branchId=""; p.manual=false; });
-    renderParcels(); renderBranchLock(); updateSummary();
-  };
 
   window.addParcel = function() {
     F.parcels.push({ n:++F.seq, receiverId:null, zoneId:"", zoneName:"", price:0, branchId:"", manual:false });
@@ -11064,7 +11123,7 @@
   window.removeParcel = function(n) {
     if (F.parcels.length <= 1) { showToast("لازم وجهة واحدة على الأقل", "error"); return; }
     F.parcels = F.parcels.filter(p => p.n !== Number(n));
-    if (!F.parcels.some(p => p.zoneId || p.manual)) F.lockBranch = "";
+    // الفرع بقى بييجي من منطقة الاستلام، فحذف وجهة مابيلغيهوش
     renderParcels(); renderBranchLock(); updateSummary();
   };
 
@@ -11141,8 +11200,13 @@
     const p = P(n); if (!p) return;
     const q = $(`pArea${n}`).value.trim(), box = $(`pAreaResults${n}`);
     p.zoneId=""; p.zoneName=""; p.price=0; p.branchId=""; p.manual=false;
+    // الفرع لازم يكون اتحدّد من منطقة الاستلام الأول
+    if (!F.lockBranch) {
+      box.innerHTML = `<div class="smart-new" style="cursor:default">⚠️ اختار منطقة الاستلام فوق الأول — منها بيتحدّد الفرع</div>`;
+      box.classList.add("open"); renderParcelHit(n); updateSummary(); return;
+    }
     if (q.length < 2) { box.classList.remove("open"); box.innerHTML="";
-      renderParcelHit(n); syncLock(); updateSummary(); return; }
+      renderParcelHit(n); updateSummary(); return; }
 
     const hits = searchZones(q, F.lockBranch);
     let html = hits.map((h,i) => `
@@ -11157,7 +11221,7 @@
       html += other.slice(0,4).map(h => `
         <div class="smart-item" style="opacity:.55;cursor:not-allowed" title="منطقة تابعة لفرع آخر — الأوردر مربوط بفرع واحد">
           <div class="si-main">${hl(h.name,q)} <span style="background:rgba(136,136,136,.15);color:var(--muted);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">فرع آخر</span></div>
-          <div class="si-sub">🏢 ${esc(branchName(h.branchId))} — اضغط «تغيير الفرع» أو اعمل أوردر منفصل</div>
+          <div class="si-sub">🏢 ${esc(branchName(h.branchId))} — غيّر منطقة الاستلام أو اعمل أوردر منفصل</div>
         </div>`).join("");
     }
     if (!hits.length) {
@@ -11172,7 +11236,7 @@
     if (!p || !z) return;
     const bId = zoneBranchId(z);
     if (F.lockBranch && bId !== F.lockBranch) {
-      showToast("المنطقة دي تابعة لفرع تاني — اضغط «تغيير الفرع» أو اعمل أوردر منفصل", "error"); return;
+      showToast("المنطقة دي تابعة لفرع تاني — غيّر منطقة الاستلام أو اعمل أوردر منفصل", "error"); return;
     }
     p.zoneId = zoneId; p.zoneName = z.areaName || z.name || "";
     p.price = Number(z.price)||0; p.branchId = bId; p.manual = false;
@@ -11198,7 +11262,9 @@
     const p = P(n); if (!p) return;
     p.price = Number($(`pmPrice${n}`).value)||0; updateSummary();
   };
-  function syncLock() { const f = F.parcels.find(p => p.branchId); F.lockBranch = f ? f.branchId : ""; }
+  /* الفرع بقى بيتحدّد من منطقة الاستلام بس — مش من أول وجهة تسليم زي قبل
+     كده. فمفيش حاجة تتزامن هنا؛ سيبناها عشان النداءات القديمة ماتكسرش. */
+  function syncLock() { /* الفرع مصدره منطقة الاستلام — مفيش مزامنة من الوجهات */ }
 
   function renderParcelHit(n) {
     const p = P(n), el = $(`pHit${n}`); if (!p || !el) return;
@@ -11253,7 +11319,9 @@
     }).join("");
     body.innerHTML = `
       <div class="sum-line"><span>جهة الاستلام</span><b>${esc(senderName||"—")}</b></div>
-      <div class="sum-line"><span>الفرع المسؤول</span>
+      <div class="sum-line"><span>منطقة الاستلام</span>
+        <b style="color:${F.senderZoneId?"var(--green)":"var(--muted)"}">${esc(F.senderZoneName||"لم تُحدَّد")}</b></div>
+      <div class="sum-line"><span>الفرع المسؤول <span style="font-size:.68rem;color:var(--muted)">(تلقائي)</span></span>
         <b style="color:${F.lockBranch?"var(--green)":"var(--muted)"}">${esc(F.lockBranch?branchName(F.lockBranch):"لم يُحدَّد")}</b></div>
       <div class="sum-line"><span>عدد الطرود</span><b>${F.parcels.length}</b></div>
       ${rows}
@@ -11276,7 +11344,9 @@
       if (!$("senderPhone")?.value.trim())   out.push("هاتف جهة الاستلام مطلوب");
       if (!$("senderAddress")?.value.trim()) out.push("عنوان جهة الاستلام مطلوب");
     }
-    if (!F.lockBranch) out.push("لم يتم تحديد الفرع — اختر المنطقة");
+    // الفرع مابيتختارش بالإيد — بييجي من منطقة الاستلام
+    if (!F.senderZoneId) out.push("اختر منطقة الاستلام — منها بيتحدّد الفرع");
+    else if (!F.lockBranch) out.push("منطقة الاستلام دي مش مربوطة بفرع — كلّم الإدارة");
     F.parcels.forEach((p,i) => {
       const L = F.parcels.length>1 ? `وجهة ${i+1}: ` : "";
       if (!$(`pRecv${p.n}`)?.value.trim())  out.push(`${L}اسم المستلِم مطلوب`);
@@ -11338,6 +11408,8 @@
       const now = new Date().toISOString();
       const rec = { orderNum, senderId, senderName:sName, senderPhone:sPhone,
         senderPhone2:sPhone2||"", senderAddress:sAddr,
+        // منطقة الاستلام — منها اتحدّد الفرع المسؤول (نفس تطبيق العميل)
+        senderZoneId: F.senderZoneId, senderZoneName: F.senderZoneName,
         branchId:branch.id, branchName:branch.name, notes:$("orderNotes").value.trim(),
         deliveries, totalDeliveryPrice: round2(deliveries.reduce((s,d)=>s+(d.zonePrice||0),0)),
         // عهدة الطلب = مجموع عهدة طروده

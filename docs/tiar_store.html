@@ -160,8 +160,9 @@
       document.getElementById("app").style.display          = "flex";
       // Profile info
       $("prof-shop").textContent     = data.shopName   || data.username;
-      $("prof-branch").textContent   = data.branchName || "—";
-      $("prof-branch-2").textContent = data.branchName || "—";
+      // المحل مبقاش مربوط بفرع ثابت — الفرع بيتحدّد لكل طلب من منطقة الاستلام
+      $("prof-branch").textContent   = "حسب منطقة الاستلام";
+      $("prof-branch-2").textContent = "حسب منطقة الاستلام";
       $("prof-user").textContent     = data.username;
       $("prof-phone").textContent    = data.shopPhone  || "—";
       $("prof-addr").textContent     = data.shopAddress || "—";
@@ -184,7 +185,8 @@
         const saved = localStorage.getItem(SESSION_KEY);
         d = saved ? JSON.parse(saved) : null;
       } catch { clearSession(); return; }
-      if (!d?.branchId) { clearSession(); return; }
+      // المحل مبقاش لازم يكون مربوط بفرع — الفرع بيتحدّد من منطقة الاستلام
+      if (!d?.username) { clearSession(); return; }
       // ما نمسحش الجلسة لمجرد خطأ في العرض — ده كان بيسجّل خروج بلا سبب
       try { applySession(d); }
       catch (e) { console.error("تعذّر استعادة الجلسة:", e); }
@@ -209,7 +211,6 @@
         if (!snap.exists()) return false;
         const u = snap.val();
         if (u.password !== pt.password) return false;
-        if (!u.branchId) return false;
         const data = {
           username:   pt.username,
           role:       u.role,
@@ -245,9 +246,7 @@
         if (u.role !== "صاحب محل") {
           errEl.textContent = "هذا التطبيق خاص بأصحاب المحلات فقط"; return;
         }
-        if (!u.branchId) {
-          errEl.textContent = "لم يتم ربط حسابك بفرع — تواصل مع الإدارة"; return;
-        }
+        // مفيش شرط ربط بفرع — الفرع المسؤول بيتحدّد من منطقة الاستلام في كل طلب
         const data = {
           username,
           role       : u.role,
@@ -374,19 +373,19 @@
 
     function startListeners(u) {
       loadStoreContacts(u.username);
-      // Zones for this branch
+      // كل المناطق — المحل مبقاش مربوط بفرع ثابت، الفرع المسؤول بيتحدّد من
+      // «منطقة الاستلام» اللي المحل بيختارها (نفس نظام تطبيق العميل)
       window._zonesUnsub = onValue(ref(db, "zones"), snap => {
         const d = snap.val() || {};
-        window._zonesList = Object.entries(d)
-          .map(([id, v]) => ({ id, ...v }))
-          .filter(z => (z.deliveryBranchId || z.branchId) === u.branchId);
-        // Refill any existing zone dropdowns on the form
-        document.querySelectorAll("[id^='rZone-']").forEach(sel => {
-          const n = sel.id.replace("rZone-", "");
-          const prevVal = sel.value;
-          fillZones(n);
-          if (prevVal) sel.value = prevVal; // restore selection if possible
-        });
+        window._allZones = Object.entries(d).map(([id, v]) => ({ id, ...v }));
+        fillPickupZones();
+        applyPickupZone({ keepSelection: true });
+      });
+
+      // أسماء الفروع — عشان نعرض الفرع المسؤول اللي طلع من منطقة الاستلام
+      window._branchesUnsub = onValue(ref(db, "branches"), snap => {
+        window._branchesMap = snap.val() || {};
+        renderPickupBranch();
       });
 
       // Orders for this merchant (real-time)
@@ -435,6 +434,10 @@
       // موقع المحل المحفوظ (لو المدير حفظه من لوحة الإدارة) يبقى نقطة البداية
       if (u.shopLat && u.shopLng) window._geoPins.pickup = { lat: u.shopLat, lng: u.shopLng };
       window.renderGeoPicker("pickupGeoBox", "pickup", "نقطة الاستلام");
+      // منطقة الاستلام بتفضل زي ما هي بين الطلبات — المحل غالبًا بيستلم من
+      // نفس المكان، وهي اللي بيتحدّد منها الفرع المسؤول
+      fillPickupZones();
+      applyPickupZone({ keepSelection: true });
       addRow();
     }
 
@@ -1152,11 +1155,70 @@
       recalc();
     };
 
+    /* ══════════════════════════════════════════════════════
+       منطقة الاستلام → الفرع المسؤول
+       المحل مبقاش مربوط بفرع ثابت. بيختار المنطقة اللي هيستلم منها،
+       والنظام بيحدّد الفرع منها تلقائيًا — نفس نظام تطبيق العميل.
+       ومناطق التسليم بعد كده بتتقفل على مناطق نفس الفرع.
+    ══════════════════════════════════════════════════════ */
+    function zoneBranchOf(z) { return z ? (z.deliveryBranchId || z.branchId || "") : ""; }
+    function zoneLabelOf(z)  { return z ? (z.areaName || z.name || "") : ""; }
+
+    function fillPickupZones() {
+      const sel = document.getElementById("pickupZone");
+      if (!sel) return;
+      const prev = sel.value;
+      const list = (window._allZones || []).slice()
+        .sort((a, b) => zoneLabelOf(a).localeCompare(zoneLabelOf(b), "ar"));
+      sel.innerHTML = `<option value="">— اختر منطقة الاستلام —</option>` +
+        list.map(z => `<option value="${z.id}">${zoneLabelOf(z)}</option>`).join("");
+      if (prev && list.some(z => z.id === prev)) sel.value = prev;
+    }
+
+    /* بيحسب الفرع من منطقة الاستلام، وبيعيد بناء قوائم مناطق التسليم عليه */
+    function applyPickupZone(opts) {
+      const keep = opts && opts.keepSelection;
+      const sel  = document.getElementById("pickupZone");
+      const zone = (window._allZones || []).find(z => z.id === (sel ? sel.value : ""));
+      window._pickupZone    = zone || null;
+      window._pickupBranchId = zoneBranchOf(zone);
+
+      window._zonesList = (window._allZones || [])
+        .filter(z => zoneBranchOf(z) === window._pickupBranchId && window._pickupBranchId);
+
+      // مناطق التسليم لازم تكون تبع نفس الفرع — أي اختيار قديم مش تابع له يتشال
+      document.querySelectorAll("[id^='rZone-']").forEach(s => {
+        const n = s.id.replace("rZone-", "");
+        const prevVal = keep ? s.value : "";
+        fillZones(n);
+        if (prevVal && window._zonesList.some(z => z.id === prevVal)) s.value = prevVal;
+        onZone(n);
+      });
+      renderPickupBranch();
+    }
+
+    function renderPickupBranch() {
+      const el = document.getElementById("pickupBranchInfo");
+      if (!el) return;
+      const bId = window._pickupBranchId;
+      if (!bId) {
+        el.innerHTML = `<div style="font-size:.78rem;color:var(--muted)">💡 اختر منطقة الاستلام والنظام هيحدّد الفرع المسؤول تلقائيًا</div>`;
+        return;
+      }
+      const b = (window._branchesMap || {})[bId];
+      el.innerHTML = `<div style="font-size:.82rem;color:var(--green);font-weight:700">
+        🏢 الفرع المسؤول: ${b?.name || "—"}</div>`;
+    }
+
+    window.onPickupZone = function () { applyPickupZone({ keepSelection: true }); };
+
     function fillZones(n) {
       const sel = document.getElementById(`rZone-${n}`);
       if (!sel) return;
-      sel.innerHTML = `<option value="">— اختر المنطقة —</option>`;
-      window._zonesList.forEach(z => {
+      sel.innerHTML = (window._pickupBranchId
+        ? `<option value="">— اختر المنطقة —</option>`
+        : `<option value="">— اختر منطقة الاستلام أولاً —</option>`);
+      (window._zonesList || []).forEach(z => {
         const o = document.createElement("option");
         o.value = z.id; o.dataset.price = z.price || 0;
         o.textContent = `${z.areaName || z.name} — ${z.price || 0} ج.م`;
@@ -1288,15 +1350,26 @@
         return;
       }
 
-      await _storeDiag({ step: "validated", branchId: u.branchId, parcels: deliveries.length });
+      /* الفرع المسؤول بيتحدّد من منطقة الاستلام، مش من ربط المحل بفرع.
+         نفس نظام تطبيق العميل — المحل بيختار المنطقة والباقي أوتوماتيك. */
+      const pickupZone = window._pickupZone;
+      if (!pickupZone || !window._pickupBranchId) {
+        toast("اختر منطقة الاستلام — منها بيتحدّد الفرع المسؤول", "err");
+        document.getElementById("pickupZone")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("pickupZone")?.focus();
+        await _storeDiag({ step: "no-pickup-zone" });
+        return;
+      }
+
+      await _storeDiag({ step: "validated", branchId: window._pickupBranchId, parcels: deliveries.length });
 
       const btn = $("saveBtn");
       btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
       try {
-        /* لو فرع المحل موقوف مؤقتًا من الإدارة، الأوردر بيتسجّل على
+        /* لو فرع منطقة الاستلام موقوف مؤقتًا من الإدارة، الأوردر بيتسجّل على
            الفرع البديل — خطوة واحدة بس عشان لو حصل تحويل دائري
            (أ ← ب و ب ← أ) مايفضلش يلف. */
-        let branchId = u.branchId;
+        let branchId = window._pickupBranchId;
         const myB = await get(ref(db, "branches/" + branchId));
         const myV = myB.exists() ? myB.val() : null;
         if (myV?.paused && myV.failoverBranchId) {
@@ -1322,6 +1395,10 @@
           senderPhone : _snd.phone,
           senderPhone2: _snd.phone2,
           senderAddress: pickupAddress || u.shopAddress || "",
+          // منطقة الاستلام — منها اتحدّد الفرع، ولوحات الإدارة والفرع
+          // بتعرضها في تفاصيل الأوردر زي أوردرات تطبيق العميل
+          senderZoneId  : pickupZone.id,
+          senderZoneName: zoneLabelOf(pickupZone),
           ...(window._geoPins.pickup ? {
             senderLat: window._geoPins.pickup.lat,
             senderLng: window._geoPins.pickup.lng,
@@ -2316,6 +2393,14 @@
               <input type="tel" id="senderPhone2In" dir="ltr" placeholder="—" />
             </div>
           </div>
+        </div>
+
+        <div class="fg" style="margin:10px 0 0">
+          <label>🗺️ منطقة الاستلام <span class="req">*</span></label>
+          <select id="pickupZone" onchange="onPickupZone()">
+            <option value="">— اختر منطقة الاستلام —</option>
+          </select>
+          <div id="pickupBranchInfo" style="margin-top:6px"></div>
         </div>
 
         <div class="fg" style="margin:10px 0 0">
