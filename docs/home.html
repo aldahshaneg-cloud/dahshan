@@ -565,18 +565,28 @@ const HERO_DEF = { title: $("heroTitle").innerHTML, sub: $("heroSub").textConten
 
 const APP_DEF = {
   customer: { icon:"📱", name:"تطبيق العملاء", def:"tiar_customer.html",
-              desc:"سجّل طلبك، تابعه لحظيًا، واحفظ عناوينك ومستلمينك.", label:"افتح التطبيق" },
+              desc:"سجّل طلبك، تابعه لحظيًا، واحفظ عناوينك ومستلمينك.", label:"تحميل التطبيق" },
   pilot   : { icon:"🛵", name:"تطبيق الطيار",  def:"",
               desc:"للطيارين: استلام الطلبات، الخريطة، والورديات.", label:"تحميل التطبيق" },
   store   : { icon:"🏪", name:"برنامج المحلات", def:"tiar_store.html",
-              desc:"لأصحاب المحلات: سجّل شحناتك وتابع تحصيلاتك وتقفيلاتك.", label:"دخول المحلات" }
+              desc:"لأصحاب المحلات: سجّل شحناتك وتابع تحصيلاتك وتقفيلاتك.", label:"تحميل التطبيق" }
 };
+
+/* تطبيق العملاء والمحلات تطبيقات ويب بتتثبّت على الموبايل (PWA)، فزرار
+   «تحميل» بيوجّه للتطبيق ومعاه install=1 وهو بيفتح نافذة التثبيت على طول.
+   تطبيق الطيار ملف APK والرابط بيتحط من لوحة تحكم الموقع، فبينزل عادي. */
+function withInstallFlag(url, key) {
+  if (key !== "customer" && key !== "store") return url;
+  if (!url || /^https?:/i.test(url)) return url;         // رابط خارجي — مانلمسوش
+  if (/[?&]install=1/.test(url)) return url;
+  return url + (url.includes("?") ? "&" : "?") + "install=1";
+}
 
 function renderApps(cfg) {
   $("appsGrid").innerHTML = Object.entries(APP_DEF).map(([k, d]) => {
     const v = cfg?.[k] || {};
     if (v.on === false) return "";                       // مقفول = مايظهرش
-    const url = (v.url || d.def || "").trim();
+    const url = withInstallFlag((v.url || d.def || "").trim(), k);
     const label = (v.label || d.label).trim();
     return `<div class="app-card">
       <div class="ic">${d.icon}</div>

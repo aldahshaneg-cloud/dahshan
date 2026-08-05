@@ -10,6 +10,14 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <!-- باركود الطرود بعد إرسال الطلب (نفس المكتبة المستخدمة في تطبيق العملاء) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+  <!-- تثبيت البوابة كتطبيق على الموبايل -->
+  <link rel="manifest" href="store-manifest.json" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="محلات الدهشان" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1519,6 +1527,61 @@
       });
     };
 
+    /* ══════════════════════════════════════════════════════
+       PWA — تثبيت البوابة كتطبيق على شاشة الموبايل
+       ──────────────────────────────────────────────────────
+       الموقع العام بيوجّه هنا بـ ?install=1 فبنفتح نافذة التثبيت
+       على طول. لو المتصفح مابيدعمش التثبيت التلقائي (سفاري مثلًا)
+       بنوريه الخطوات اليدوية.
+    ══════════════════════════════════════════════════════ */
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      window.addEventListener("load", () =>
+        navigator.serviceWorker.register("store-sw.js").catch(() => {}));
+    }
+
+    window._deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", e => {
+      e.preventDefault();
+      window._deferredPrompt = e;
+      const b = document.getElementById("installStoreBtn");
+      if (b) b.style.display = "";
+      if (window._wantInstall) { window._wantInstall = false; window.installStoreApp(); }
+    });
+    window.addEventListener("appinstalled", () => {
+      const b = document.getElementById("installStoreBtn");
+      if (b) b.style.display = "none";
+      toast("تم تثبيت التطبيق ✅", "ok");
+    });
+
+    window.installStoreApp = async function () {
+      const p = window._deferredPrompt;
+      if (!p) {
+        alert("لتثبيت التطبيق على شاشتك الرئيسية:\n\n"
+            + "أندرويد / كروم: افتح قائمة المتصفح ⋮ ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».\n\n"
+            + "آيفون / سفاري: اضغط زر المشاركة ⬆️ ثم «إضافة إلى الشاشة الرئيسية».");
+        return;
+      }
+      p.prompt();
+      const { outcome } = await p.userChoice;
+      window._deferredPrompt = null;
+      if (outcome === "accepted") {
+        const b = document.getElementById("installStoreBtn");
+        if (b) b.style.display = "none";
+      }
+    };
+
+    // ?install=1 جاي من الموقع العام
+    (function () {
+      const wants = new URLSearchParams(location.search).get("install") === "1";
+      const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+      if (!wants || installed) return;
+      window._wantInstall = true;
+      // لو الحدث اتأخّر، بعد 2.5 ثانية نوريه الخطوات اليدوية
+      setTimeout(() => {
+        if (window._wantInstall) { window._wantInstall = false; window.installStoreApp(); }
+      }, 2500);
+    })();
+
     function _codeMsg(c) {
       return `📦 شحنتك مع الدهشان\nرقم الطلب: ${c.code}\n`
            + (c.zone ? `المنطقة: ${c.zone}\n` : "")
@@ -2588,6 +2651,14 @@
         <div><div class="ik">الفرع المسؤول</div><div class="iv" id="prof-branch-2">—</div></div>
       </div>
     </div>
+
+    <!-- بيظهر بس لو المتصفح بيدعم التثبيت والتطبيق لسه مش متثبّت -->
+    <button id="installStoreBtn" onclick="installStoreApp()" style="display:none;width:100%;
+            background:rgba(14,165,233,.13);color:var(--sky);border:1px solid rgba(14,165,233,.35);
+            padding:13px;border-radius:12px;font-weight:700;cursor:pointer;font-family:inherit;
+            font-size:.9rem;margin-bottom:10px">
+      📲 تثبيت التطبيق على الموبايل
+    </button>
 
     <button class="logout-btn" onclick="doLogout()">🚪 تسجيل الخروج</button>
   </div>

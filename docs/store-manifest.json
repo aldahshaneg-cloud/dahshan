@@ -1,0 +1,23 @@
+{
+  "name": "الدهشان | بوابة المحلات",
+  "short_name": "محلات الدهشان",
+  "description": "لأصحاب المحلات: سجّل شحناتك وتابع تحصيلاتك وتقفيلاتك",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./tiar_store.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "طلب جديد", "url": "./tiar_store.html#new-order", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "طلباتي",  "url": "./tiar_store.html#my-orders", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

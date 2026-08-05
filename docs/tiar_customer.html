@@ -3090,7 +3090,26 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 }
 
 let deferredPrompt = null;
-window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; });
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault(); deferredPrompt = e;
+  // الموقع العام بيوجّه هنا بـ ?install=1 — نفتح نافذة التثبيت على طول
+  if (window._wantInstall) { window._wantInstall = false; installApp(); }
+});
+window.addEventListener("appinstalled", () => {
+  const r = $("installRow"); if (r) r.style.display = "none";
+});
+
+/* ?install=1 جاي من زرار «تحميل» في الموقع العام */
+(function () {
+  const wants = new URLSearchParams(location.search).get("install") === "1";
+  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  if (!wants || installed) return;
+  window._wantInstall = true;
+  // لو الحدث اتأخّر أو المتصفح مابيدعمهوش، نوريه الخطوات اليدوية
+  setTimeout(() => {
+    if (window._wantInstall) { window._wantInstall = false; installApp(); }
+  }, 2500);
+})();
 // لو التطبيق متثبّت ومفتوح كتطبيق، مفيش داعي لبند التثبيت
 if (matchMedia("(display-mode: standalone)").matches || navigator.standalone)
   document.addEventListener("DOMContentLoaded", () => { const r = $("installRow"); if (r) r.style.display = "none"; });
