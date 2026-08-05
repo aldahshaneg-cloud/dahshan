@@ -998,7 +998,10 @@
       document.getElementById("main-app").classList.add("visible");
       document.getElementById("topbar-username").textContent = data.displayName || data.username;
       document.getElementById("topbar-role").textContent = data.role || "";
-      document.getElementById("welcome-name").textContent = data.displayName || data.username;
+      // العنصر ده مش موجود في نسخة البوابة الحالية — لو اتشال تاني ما يكسرش
+      // الدالة، لأن renderAppCards تحته وهي اللي بتقفل التطبيقات غير المصرح بها
+      const welcome = document.getElementById("welcome-name");
+      if (welcome) welcome.textContent = data.displayName || data.username;
       renderAppCards(data.allowedApps || []);
     }
 

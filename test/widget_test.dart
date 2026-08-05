@@ -1,9 +1,9 @@
-// This is a basic Flutter widget test.
+// اختبار دخان بسيط للودجتس المشتركة في تطبيق الطيار.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// الاختبار الافتراضي القديم كان بيبني MyApp — كلاس مش موجود أصلًا — فكان
+// flutter analyze بيطلع منه error. وما ينفعش نبني TiarApp نفسه هنا لأن
+// SplashScreen بيفتح AnimationController و Future.delayed وبيوصل لفايربيز،
+// وده بيوقّع الاختبار بـ pending timer. فبنختبر ودجتس عرض خالصة بدل كده.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,20 +11,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tiar_pilot/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  Widget wrap(Widget child) => MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(body: child),
+        ),
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('StatCell يعرض القيمة والعنوان', (WidgetTester tester) async {
+    await tester.pumpWidget(wrap(
+      const Row(children: [StatCell(value: '12', label: 'أوردرات', color: Colors.red)]),
+    ));
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    expect(find.text('12'), findsOneWidget);
+    expect(find.text('أوردرات'), findsOneWidget);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('TField بياخد النص ويفضل RTL', (WidgetTester tester) async {
+    final ctrl = TextEditingController();
+    await tester.pumpWidget(wrap(
+      TField(ctrl: ctrl, hint: 'اسم المستخدم', icon: Icons.person),
+    ));
+
+    expect(find.text('اسم المستخدم'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'ahmed');
+    expect(ctrl.text, 'ahmed');
+    expect(tester.widget<TextField>(find.byType(TextField)).textDirection, TextDirection.rtl);
   });
 }

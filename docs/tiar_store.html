@@ -1252,6 +1252,10 @@
         // إحداثيات التسليم — الخرايط في اللوحات بتقرا منها مباشرة
         const _rgeo = window._geoPins[`r${n}`] || null;
         deliveries.push({
+          // رقم ثابت للطرد جوّه الطلب — منه بيتبني رقم الجزء المفصول لو الفرع
+          // حمّل بعض الطرود بس على طيار (مثال: STR-260805-004-2). والعهدة
+          // (orderPrice) جوّه الطرد أصلاً، فكل جزء بياخد عهدته معاه.
+          parcelNo: deliveries.length + 1,
           receiverId: null, receiverName: name,
           receiverPhone: phone, receiverPhone2: phone2,
           zoneId, zoneName, zonePrice: price,
@@ -1305,7 +1309,9 @@
         const cRef      = ref(db, `counters/${branchId}/${today}`);
         let   count     = 1;
         await runTransaction(cRef, cur => { count = (cur || 0) + 1; return count; });
-        const orderNum  = `${branchCode}-${String(count).padStart(3, "0")}`;
+        // التاريخ جوّه الرقم (HAL-260804-001) — العداد بيصفّر كل يوم، فمن
+        // غيره كان نفس الرقم بيتكرر كل يوم على أوردرات مختلفة
+        const orderNum  = `${branchCode}-${today.slice(2)}-${String(count).padStart(3, "0")}`;
         const total          = deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0);
         const totalOrderPrice = deliveries.reduce((s, d) => s + (d.orderPrice || 0), 0);
 

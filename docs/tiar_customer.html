@@ -588,8 +588,9 @@ a{color:var(--red);text-decoration:none}
         <span class="lbl">نوع الطلب</span>
         <div class="kinds" id="kindBox" data-tip="نوع الشحنة — بيساعد الطيار يجهّز نفسه (وثيقة صغيرة ولا كرتونة كبيرة)."></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
-          <div data-tip="المبلغ اللي الطيار هيحصّله من المستلم وقت التسليم. لو مفيش تحصيل سيبه صفر."><span class="lbl">مبلغ التحصيل من المستلم (ج.م)</span>
-            <input id="odCod" type="number" inputmode="decimal" min="0" value="0" /></div>
+          <div data-tip="مجموع مبالغ التحصيل المكتوبة على الطرود في الخطوة اللي فاتت. التحصيل بقى لكل طرد لوحده."><span class="lbl">إجمالي التحصيل (ج.م)</span>
+            <input id="odCodTotal" type="text" value="0" readonly
+                   style="color:var(--red);font-weight:800" /></div>
           <div data-tip="قيمة البضاعة نفسها — بتستخدم للتأمين وتقدير التعويض لو حصل تلف. مش بتتحصّل من المستلم."><span class="lbl">قيمة البضاعة (ج.م)</span>
             <input id="odValue" type="number" inputmode="decimal" min="0" value="0" /></div>
         </div>
@@ -2254,7 +2255,7 @@ function startNewOrder() {
   $("rcvNoData").onchange = onReceiverMode;
   onReceiverMode();                 // بيرسم بلوكات المستلمين جوّه
 
-  $("odCod").value = 0; $("odValue").value = 0; $("odNote").value = "";
+  $("odCodTotal").value = 0; $("odValue").value = 0; $("odNote").value = "";
   $("odPieces").textContent = 1;
   drawKinds(); drawPays();
   renderSavedPicks();
@@ -2282,7 +2283,10 @@ function onSenderZone() {
    بننسخ اللي المستخدم كتبه بـ readReceiverBlocks() الأول، عشان
    الإضافة أو الحذف ما تضيّعش كلامه.
 ══════════════════════════════════════════════════════════════ */
-const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"", lat:null, lng:null });
+// cod = مبلغ التحصيل بتاع الطرد ده لوحده. بقى لكل طرد بدل ما يكون رقم واحد
+// للطلب كله، عشان لو الفرع فرّق الطرود على أكتر من طيار كل طيار ياخد
+// تحصيل طروده هو بس ومايتحسبش مرتين
+const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"", lat:null, lng:null, cod:0 });
 
 /** DOM ← state: بيقرا اللي المستخدم كتبه ويخزّنه قبل إعادة الرسم */
 function readReceiverBlocks() {
@@ -2293,6 +2297,7 @@ function readReceiverBlocks() {
     r.phone2  = $("rcvPhone2-" + i).value.trim();
     r.address = getAddr("rcvAddrW-" + i);
     r.zoneId  = $("rcvZone-" + i).value;
+    r.cod     = parseFloat($("rcvCod-" + i)?.value) || 0;
   });
 }
 
@@ -2322,6 +2327,11 @@ function receiverBlockHtml(r, i, multi, receipt) {
     <span class="lbl" style="margin-top:${receipt ? 0 : 12}px">منطقة التسليم</span>
     <select id="rcvZone-${i}" data-tip="منطقة التسليم هي اللي بيتحسب منها سعر التوصيل. إجبارية في كل الحالات."></select>
     <div id="rcvPrice-${i}" style="margin-top:9px;font-size:13px;display:none"></div>
+
+    <span class="lbl" style="margin-top:12px">مبلغ التحصيل من المستلم (ج.م)</span>
+    <input id="rcvCod-${i}" type="number" inputmode="decimal" min="0" value="${esc(r.cod || 0)}"
+           oninput="updateRcvTotal()"
+           data-tip="المبلغ اللي الطيار هيحصّله من مستلم الطرد ده بالذات. لو مفيش تحصيل سيبه صفر." />
 
     <div id="rcvGeo-${i}" style="display:${receipt ? "none" : "block"}">
       <div class="map" id="rcvMap-${i}" style="height:130px;margin-top:12px"></div>
@@ -2377,7 +2387,9 @@ function addParcelSameReceiver(i) {
   const src = S.draft.receivers[i]; if (!src) return;
   S.draft.receivers.splice(i + 1, 0, {
     name: src.name, phone: src.phone, phone2: src.phone2, address: src.address,
-    zoneId: src.zoneId, lat: src.lat, lng: src.lng
+    zoneId: src.zoneId, lat: src.lat, lng: src.lng,
+    // التحصيل مابيتنسخش — كل طرد له مبلغه، والنسخ كان هيضاعفه بالغلط
+    cod: 0
   });
   renderReceiverBlocks();
   $("rcvBlocks")?.children[i + 1]?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2453,7 +2465,21 @@ function onReceiverZone(i) {
 function draftDeliveryTotal() {
   return (S.draft?.receivers || []).reduce((s, r) => s + (findZone(r.zoneId)?.price || 0), 0);
 }
+/* مجموع التحصيل المكتوب على الطرود — بيتعرض في خطوة «بيانات الطلب» */
+function draftCodTotal() {
+  const list = S.draft?.receivers || [];
+  return list.reduce((s, r, i) => {
+    const live = $("rcvCod-" + i);
+    return s + (live ? (parseFloat(live.value) || 0) : (Number(r.cod) || 0));
+  }, 0);
+}
+function updateCodTotal() {
+  const el = $("odCodTotal");
+  if (el) el.value = fmtMoney(draftCodTotal());
+}
+
 function updateRcvTotal() {
+  updateCodTotal();
   const el = $("rcvTotal"); if (!el) return;
   const list = S.draft?.receivers || [];
   // بيظهر لما يكون فيه أكتر من مستلم — بلوك واحد سعره باين جوّاه خلاص
@@ -2607,7 +2633,7 @@ function renderSummary() {
     ${rcvRows}
     ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
     ${row("النوع", S.draft.kind + " × " + S.draft.pieces)}
-    ${row("التحصيل", fmtMoney($("odCod").value) + " ج.م")}
+    ${row(list.length > 1 ? "إجمالي التحصيل" : "التحصيل", fmtMoney(draftCodTotal()) + " ج.م")}
     ${row(list.length > 1 ? `إجمالي التوصيل (${list.length} طرود)` : "سعر التوصيل",
           total ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " + مناطق يحددها الفرع") : "يحدده الفرع")}
     ${row("الدفع", S.draft.pay)}`;
@@ -2682,9 +2708,10 @@ async function submitOrder() {
     const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     let count = 1;
     await runTransaction(ref(db, `counters/${branchId}/${dayKey}`), cur => { count = (cur || 0) + 1; return count; });
-    const orderNum = `${bCode}-${String(count).padStart(3, "0")}`;
+    // التاريخ جوّه الرقم (HAL-260804-001) — العداد بيصفّر كل يوم، فمن غيره
+    // كان نفس الرقم بيتكرر كل يوم، والـ qrCode تحت هو نفس الرقم ده
+    const orderNum = `${bCode}-${dayKey.slice(2)}-${String(count).padStart(3, "0")}`;
     const now = new Date().toISOString();
-    const cod = parseFloat($("odCod").value) || 0;
 
     const receipt = !!S.draft.receiptMode;
     const imgs = S.images.map(i => i.url).filter(Boolean);
@@ -2695,6 +2722,9 @@ async function submitOrder() {
     const deliveries = receivers.map((r, idx) => {
       const rz = findZone(r.zoneId);
       const d = {
+        // رقم ثابت للطرد جوّه الطلب — منه بيتبني رقم الجزء المفصول لو الفرع
+        // حمّل بعض الطرود بس على طيار (مثال: HAL-260805-003-2)
+        parcelNo: idx + 1,
         receiverId: null,
         // في وضع الريسيت بنسيب نص واضح بدل الفاضي، عشان جداول الفرع
         // والإدارة وتطبيق الطيار تبقى مفهومة وما تبانش خانة فاضية
@@ -2702,9 +2732,9 @@ async function submitOrder() {
         receiverPhone : receipt ? "" : r.phone,
         receiverPhone2: receipt ? "" : r.phone2,
         zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
-        // التحصيل مبلغ واحد للطلب كله — بنحطه على أول طرد بس عشان الشاشات
-        // اللي بتجمع orderPrice عبر الطرود (زي بوابة المحل) ما تحسبهوش مرتين
-        orderPrice: idx === 0 ? cod : 0,
+        // التحصيل بقى لكل طرد لوحده — كده لو الفرع فرّق الطرود على أكتر من
+        // طيار، كل طيار ياخد تحصيل طروده هو بس ومايتحسبش مرتين
+        orderPrice: Number(r.cod) || 0,
         // في وضع الريسيت بنسيب العنوان = اسم المنطقة بس. لو حطّينا جملة طويلة
         // هنا، الخريطة هتحاول تخمّن مكانها وتطلّع دبوس في مكان عشوائي غلط —
         // اسم المنطقة بيدّي دبوس صح على مستوى المنطقة، والتفاصيل في الملاحظة.
@@ -2744,7 +2774,8 @@ async function submitOrder() {
       deliveries,
       // إجمالي التوصيل = مجموع أسعار كل المناطق، مش منطقة واحدة
       totalDeliveryPrice: deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0),
-      storePrepaid: cod,
+      // إجمالي التحصيل = مجموع تحصيل الطرود
+      storePrepaid: deliveries.reduce((s, d) => s + (Number(d.orderPrice) || 0), 0),
       storePrepaidNote: "",
       status: "قيد التنفيذ",
       statusSince: now,

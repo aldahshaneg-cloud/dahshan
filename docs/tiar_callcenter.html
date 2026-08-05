@@ -1097,6 +1097,33 @@
       return ordersArr.reduce((s, o) => s + parcelCount(o), 0);
     }
 
+    /* ── عهدة الطرد + رقم الطرد ──────────────────────────────────────
+       القاعدة: العهدة بتعيش جوّه الطرد نفسه (orderPrice)، وعهدة الأوردر
+       (storePrepaid) = مجموع عهدة طروده. وكل طرد له رقم ثابت (parcelNo)
+       من ساعة إنشاء الأوردر — ومنه بيتبني رقم الجزء المفصول لما نحمّل
+       بعض الطرود على طيار، فما بيتغيّرش ولا بيتكرر مهما فرّقنا. */
+    function parcelPrepaid(d) { return Number(d && d.orderPrice) || 0; }
+    function sumPrepaid(list) { return (list || []).reduce((s, d) => s + parcelPrepaid(d), 0); }
+
+    /* نسخة من الطرود كل واحد فيها له parcelNo وعهدته جوّاه. الأوردرات
+       القديمة مفيهاش parcelNo، والعهدة كانت رقم واحد على الأوردر كله —
+       فبنرقّم الطرود وبنحطّ العهدة القديمة على أول طرد، مرة واحدة. */
+    function normalizeParcels(order, parcels) {
+      const list = (parcels || []).map(d => ({ ...d }));
+      let next = Math.max(0, ...list.map(d => Number(d.parcelNo) || 0));
+      list.forEach(d => { if (!Number(d.parcelNo)) d.parcelNo = ++next; });
+      const legacy = Number(order && order.storePrepaid) || 0;
+      if (legacy > 0 && sumPrepaid(list) === 0 && list.length) list[0].orderPrice = legacy;
+      return list;
+    }
+
+    /* رقم الجزء المفصول: رقم الأوردر + أرقام طروده (HAL-…-001-2 أو -2+3) */
+    function parcelSuffixNum(orderNum, parcelsPart) {
+      const nos = (parcelsPart || []).map(d => Number(d.parcelNo) || 0)
+                    .filter(Boolean).sort((a, b) => a - b);
+      return (orderNum || "") + (nos.length ? "-" + nos.join("+") : "");
+    }
+
     function pilotCommissionFor(pilot, order) {
       const price = Number(order.totalDeliveryPrice) || 0;
       const type  = pilot?.commissionType || "percent";
@@ -2896,6 +2923,11 @@
             <label>سعر التوصيل</label>
             <input id="dPrice-${n}" type="text" readonly style="color:var(--green);font-weight:700;text-align:center" value="0 ج.م" />
           </div>
+          <div class="form-group">
+            <label>💵 عهدة الطرد <span style="font-size:.72rem;color:var(--muted)">(يدفعها الطيار للمحل)</span></label>
+            <input id="dPrepaid-${n}" type="number" min="0" step="0.5" placeholder="0.00" dir="ltr"
+                   style="text-align:left" oninput="updateOrderPrepaidTotal()" />
+          </div>
           <div class="form-group full"><label>ملاحظات هذا الطرد</label><input id="dNote-${n}" type="text" /></div>
         </div>`;
       document.getElementById("deliveriesContainer").appendChild(div);
@@ -2929,7 +2961,7 @@
 
     window.removeDeliveryRow = function (n) {
       const el = document.getElementById(`drow-${n}`);
-      if (el) { el.remove(); recalcTotalDelivery(); }
+      if (el) { el.remove(); recalcTotalDelivery(); updateOrderPrepaidTotal(); }
     };
 
     function recalcTotalDelivery() {
@@ -2945,6 +2977,18 @@
       const totalEl = document.getElementById('orderTotalDelivery');
       if (totalEl) totalEl.textContent = total + " ج.م";
     }
+
+    /* إجمالي العهدة = مجموع عهدة الطرود. العهدة بقت لكل طرد لوحده عشان لو
+       الطلب اتفرّق على أكتر من طيار، كل طيار ياخد عهدة طروده هو بس. */
+    window.updateOrderPrepaidTotal = function () {
+      let total = 0;
+      document.querySelectorAll("[id^='dPrepaid-']").forEach(el => {
+        total += parseFloat(el.value) || 0;
+      });
+      const el = document.getElementById("orderTotalPrepaid");
+      if (el) el.value = (Math.round(total * 100) / 100) + " ج.م";
+      return total;
+    };
 
     // open modal hook
     window.openModal = function (type) {
@@ -3005,25 +3049,27 @@
       }
     };
 
-    /* ── توليد رقم الطلب (فرع + عداد يومي) ────────────────────────────── */
+    /* ── توليد رقم الطلب (فرع + تاريخ + عداد يومي) ──────────────────────
+       العداد بيصفّر كل يوم، فمن غير التاريخ جوّه الرقم كان HAL-001 بيتكرر
+       كل يوم — نفس الرقم على أكتر من أوردر، والـ QR كمان. الشكل دلوقتي:
+       HAL-260804-001 (كود الفرع - سنة/شهر/يوم - المسلسل).
+       التاريخ بييجي من نفس مفتاح العداد بالظبط، فمستحيل رقمين يتلاقوا. */
     async function generateOrderNumber(branchId, branchCode) {
-      const today = new Date().toISOString().slice(0, 10);
-      const counterRef = ref(db, `counters/${branchId}/${today.replace(/-/g, "")}`);
+      const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const counterRef = ref(db, `counters/${branchId}/${dayKey}`);
       let newCount = 1;
       await runTransaction(counterRef, (current) => {
         newCount = (current || 0) + 1;
         return newCount;
       });
       const seq = String(newCount).padStart(3, "0");
-      return `${branchCode}-${seq}`;
+      return `${branchCode}-${dayKey.slice(2)}-${seq}`;
     }
 
     window.addOrder = async function () {
       const senderState = window._smartSearchState['senderSearchInput'];
       const branchSel   = document.getElementById("orderBranchSelect");
       const notes           = document.getElementById("orderNotes").value.trim();
-      const storePrepaidRaw = document.getElementById("orderStorePrepaid").value.trim();
-      const storePrepaid    = storePrepaidRaw ? parseFloat(storePrepaidRaw) : 0;
       const storePrepaidNote= document.getElementById("orderStorePrepaidNote").value.trim();
       const senderId    = senderState?.selectedId || "";
       const senderName  = senderState?.selectedData?.name || document.getElementById("senderSearchInput").value.trim();
@@ -3063,14 +3109,18 @@
         const zonePrice= parseFloat(document.getElementById(`dPrice-${n}`).value.replace(/[^0-9.]/g, '')) || 0;
         const addr     = document.getElementById(`dAddr-${n}`).value.trim();
         const dNote    = document.getElementById(`dNote-${n}`).value.trim();
+        // العهدة جوّه الطرد نفسه (orderPrice) عشان تفضل معاه لو اتفرّق
+        const dPrepaid = parseFloat(document.getElementById(`dPrepaid-${n}`)?.value) || 0;
         if (!recvName) { showToast("يرجى إدخال اسم جهة التسليم لكل طرد", "error"); return; }
         if (!zoneId)   { showToast("يرجى اختيار المنطقة لكل طرد", "error"); return; }
         deliveries.push({
+          parcelNo      : deliveries.length + 1,
           receiverId    : recvId || null,
           receiverName  : recvName,
           receiverPhone : document.getElementById(`dPhone-${n}`).value,
           receiverPhone2: document.getElementById(`dPhone2-${n}`).value || "",
           zoneId, zoneName, zonePrice,
+          orderPrice    : dPrepaid,
           address: addr, note: dNote, status: "قيد التنفيذ"
         });
       }
@@ -3089,7 +3139,8 @@
           senderAddress: document.getElementById("orderSenderAddress").value,
           branchId, branchName, notes,
           deliveries, totalDeliveryPrice: totalPrice,
-          storePrepaid      : storePrepaid || 0,
+          // عهدة الطلب = مجموع عهدة طروده
+          storePrepaid      : deliveries.reduce((s,d) => s + (Number(d.orderPrice)||0), 0),
           storePrepaidNote  : storePrepaidNote || "",
           status: "قيد التنفيذ",
           statusSince: new Date().toISOString(),
@@ -3105,8 +3156,8 @@
         });
         showToast(`تمّ حفظ الطلب ${orderNum} بنجاح ✓`, "success");
         document.getElementById("addOrderForm").reset();
-        document.getElementById("orderStorePrepaid").value = "";
         document.getElementById("orderStorePrepaidNote").value = "";
+        updateOrderPrepaidTotal();
         document.getElementById("deliveriesContainer").innerHTML = "";
         window._deliveryCount = 0;
         window._smartSearchState['senderSearchInput'] = { selectedId: null, selectedData: null };
@@ -3223,7 +3274,9 @@
 
       if (!allAvailable.length) { showToast("لا يوجد طيارون متاحون حالياً", "error"); return; }
 
-      const parcels  = order.deliveries || [];
+      // بنرقّم الطرود ونوزّع العهدة القديمة مرة واحدة هنا، عشان اللي بيتعرض
+      // في المودال يبقى هو نفسه اللي هيتحفظ (نفس الأرقام ونفس العهدة)
+      const parcels  = normalizeParcels(order, order.deliveries || []);
       const hasMulti = parcels.length > 1;
 
       function pilotOption(p) {
@@ -3241,9 +3294,14 @@
             ${parcels.map((d,i) => `
               <label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;font-size:.85rem">
                 <input type="checkbox" class="_parcelChk" value="${i}" checked style="accent-color:var(--sky);width:16px;height:16px" />
-                <span><b>${d.receiverName||"—"}</b> — ${d.zoneName||"—"} (${d.zonePrice||0} ج)</span>
+                <span>
+                  <b style="color:var(--sky)">#${d.parcelNo}</b>
+                  <b>${d.receiverName||"—"}</b> — ${d.zoneName||"—"} (${d.zonePrice||0} ج)
+                  ${parcelPrepaid(d) ? `<span style="color:var(--orange);font-weight:700">💵 عهدة ${parcelPrepaid(d)} ج</span>` : ""}
+                </span>
               </label>`).join("")}
             <div style="font-size:.75rem;color:var(--muted);margin-top:6px">✂️ يمكنك تحميل بعض الطرود فقط على هذا الطيار</div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:4px">🔢 رقم الطرد ثابت — الجزء اللي هيتحمّل هياخد رقم زي <b>${order.orderNum}-1</b></div>
           </div>`;
       }
 
@@ -3254,16 +3312,15 @@
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 32px;min-width:340px;max-width:480px;max-height:90vh;overflow-y:auto;width:100%">
           <div style="font-size:1rem;font-weight:700;margin-bottom:4px">🛵 تحميل طلب على طيار</div>
           <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">طلب: <b style="color:var(--sky)">${order.orderNum}</b> — ${parcels.length} طرد/طرود</div>
-          ${order.storePrepaid ? `
-          <div style="background:rgba(249,115,22,.13);border:2px solid var(--orange);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px">
+          <div id="_assignPrepaidBox" style="background:rgba(249,115,22,.13);border:2px solid var(--orange);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:none;align-items:flex-start;gap:10px">
             <span style="font-size:1.4rem">⚠️</span>
             <div>
               <div style="font-weight:800;color:var(--orange);font-size:.95rem">عهدة — يجب على الطيار دفع هذا المبلغ للمحل عند الاستلام</div>
-              <div style="font-size:1.3rem;font-weight:800;color:var(--orange);margin-top:4px">💵 ${order.storePrepaid} ج.م</div>
+              <div id="_assignPrepaidAmt" style="font-size:1.3rem;font-weight:800;color:var(--orange);margin-top:4px">💵 0 ج.م</div>
               ${order.storePrepaidNote ? `<div style="font-size:.78rem;color:var(--muted);margin-top:3px">📝 ${order.storePrepaidNote}</div>` : ''}
-              <div style="font-size:.74rem;color:var(--muted);margin-top:5px">يتعذّر على الطيار العودة للمحل بعد التسليم — تأكد من إحاطة الطيار بهذا المبلغ قبل التحميل</div>
+              <div style="font-size:.74rem;color:var(--muted);margin-top:5px">دي عهدة الطرود المختارة بس — الطيار التاني هياخد عهدة طروده هو</div>
             </div>
-          </div>` : ''}
+          </div>
           <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:5px">اختر الطيار:</label>
           <select id="_assignSel" style="width:100%;padding:10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.9rem">
             <option value="">— اختر الطيار —</option>
@@ -3278,6 +3335,20 @@
         </div>`;
       document.body.appendChild(box);
       document.getElementById("_assignSelWrap") && document.getElementById("_assignSelWrap").remove();
+
+      // العهدة بتتحسب على الطرود المختارة بس — كل طيار بيدفع عهدة طروده هو
+      const _refreshPrepaid = () => {
+        const idxs = hasMulti
+          ? [...box.querySelectorAll("._parcelChk:checked")].map(c => parseInt(c.value))
+          : parcels.map((_,i) => i);
+        const amt = sumPrepaid(idxs.map(i => parcels[i]));
+        const amtEl = box.querySelector("#_assignPrepaidAmt");
+        const bxEl  = box.querySelector("#_assignPrepaidBox");
+        if (amtEl) amtEl.textContent = `💵 ${amt} ج.م`;
+        if (bxEl)  bxEl.style.display = amt > 0 ? "flex" : "none";
+      };
+      box.querySelectorAll("._parcelChk").forEach(c => c.addEventListener("change", _refreshPrepaid));
+      _refreshPrepaid();
 
       document.getElementById("_assignConfirm").onclick = async function() {
         const pilotId = document.getElementById("_assignSel").value;
@@ -3298,19 +3369,39 @@
           } else {
             const selectedParcels  = checkedIdxs.map(i => parcels[i]);
             const remainingParcels = parcels.filter((_,i) => !checkedIdxs.includes(i));
-            await update(ref(db, "orders/" + orderId), {
-              deliveries: remainingParcels,
-              totalDeliveryPrice: remainingParcels.reduce((s,d) => s+(d.zonePrice||0), 0)
-            });
-            await push(ref(db, "orders"), {
-              orderNum: order.orderNum + "-B",
+
+            // فايربيز بيشيل الحقول اللي قيمتها null وقت الحفظ، فأوردرات تطبيق
+            // العميل والمحل (senderId: null) بترجع بـ senderId = undefined.
+            // و push() بيرمي خطأ على أي undefined، فكان التفريق بيقع بـ
+            // «push failed: value argument contains undefined» — فبنشيلها.
+            const _clean = obj => Object.fromEntries(
+              Object.entries(obj).filter(([, v]) => v !== undefined));
+
+            // رقم الجزء المفصول = رقم الأوردر + أرقام طروده الثابتة، مثال:
+            // HAL-260804-001-2 أو HAL-260804-001-2+3. أرقام الطرود ثابتة من
+            // ساعة إنشاء الأوردر، فالرقم ما بيتغيّرش ولا بيتكرر مهما فرّقنا.
+            const newNum = parcelSuffixNum(order.orderNum, selectedParcels);
+            // العهدة بقت جوّه كل طرد، فكل جزء بياخد عهدة طروده هو بس —
+            // قبل كده كان كل جزء بياخد عهدة الأوردر كلها فتتضاعف
+            const selectedPrepaid  = sumPrepaid(selectedParcels);
+            const remainingPrepaid = sumPrepaid(remainingParcels);
+
+            // مهم: الإنشاء الأول وبعدين تعديل الأصلي. لو اتعكسوا (زي ما كان)
+            // وفشل الإنشاء، الطرد بيتشال من الأصلي وما يتعملش له طلب — يضيع.
+            await push(ref(db, "orders"), _clean({
+              orderNum: newNum,
               senderId: order.senderId, senderName: order.senderName,
               senderPhone: order.senderPhone, senderPhone2: order.senderPhone2,
               senderAddress: order.senderAddress,
+              // نقطة الاستلام واحدة للجزئين — من غيرها الجزء المفصول بيختفي
+              // من الخريطة والطيار بيدوّر على العنوان بنفسه
+              senderLat: order.senderLat, senderLng: order.senderLng,
+              geoSender: order.geoSender,
+              senderZoneId: order.senderZoneId, senderZoneName: order.senderZoneName,
               branchId: order.branchId, branchName: order.branchName,
               notes: order.notes, deliveries: selectedParcels,
               totalDeliveryPrice: selectedParcels.reduce((s,d) => s+(d.zonePrice||0), 0),
-              storePrepaid     : order.storePrepaid || 0,
+              storePrepaid     : selectedPrepaid,
               storePrepaidNote : order.storePrepaidNote || "",
               status: "جاري التوصيل", statusSince: now,
               createdAt: order.createdAt,
@@ -3321,7 +3412,17 @@
               source: order.source || "", customerId: order.customerId || null,
               customerName: order.customerName || "", customerPhone: order.customerPhone || "",
               orderKind: order.orderKind || "", paymentMethod: order.paymentMethod || "",
-              piecesCount: order.piecesCount || null
+              piecesCount: order.piecesCount || null,
+              // الـ QR بيساوي رقم الطلب، فالجزء المفصول ياخد رقمه الجديد
+              qrCode: order.qrCode ? newNum : undefined
+            }));
+
+            // بنكتب الطرود بعد الترقيم/توزيع العهدة عشان الأرقام تفضل ثابتة
+            // في أي تفريق جاي، وعهدته تبقى عهدة طروده المتبقية بس
+            await update(ref(db, "orders/" + orderId), {
+              deliveries: remainingParcels,
+              totalDeliveryPrice: remainingParcels.reduce((s,d) => s+(d.zonePrice||0), 0),
+              storePrepaid: remainingPrepaid
             });
           }
           if (pilot.pilotStatus === "waiting") {
@@ -5022,9 +5123,14 @@
       document.getElementById("joinApprovedCount").textContent = approved;
       document.getElementById("joinRejectedCount").textContent = rejected;
       // badge في nav
+      // البادچ ده موجود في لوحة الإدارة بس؛ الكول سنتر مالوش زرار انضمام في
+      // القائمة الجانبية. من غير الحماية دي الكولباك كان بيقع هنا فما كانش
+      // renderJoinRequests تحته بيشتغل خالص وصفحة طلبات الانضمام تفضل فاضية
       const badge = document.getElementById("joinRequestsBadge");
-      if (pending > 0) { badge.textContent = pending; badge.style.display = "inline-block"; }
-      else             { badge.style.display = "none"; }
+      if (badge) {
+        if (pending > 0) { badge.textContent = pending; badge.style.display = "inline-block"; }
+        else             { badge.style.display = "none"; }
+      }
       renderJoinRequests(list);
       if (window.renderNotifBell) renderNotifBell();
     });
@@ -7959,9 +8065,10 @@
           <div class="call-card">
             <div class="call-card-title"><span class="call-step">٣</span> تفاصيل إضافية</div>
             <div class="fgrid">
-              <div class="fg"><label>عهدة يدفعها الطيار للمحل (ج.م)</label>
-                <input type="number" id="storePrepaid" min="0" step="0.5" dir="ltr" style="text-align:left"
-                       placeholder="0" oninput="updateSummary()" /></div>
+              <div class="fg"><label>إجمالي عهدة الطرود (ج.م)</label>
+                <input type="number" id="storePrepaid" readonly dir="ltr"
+                       style="text-align:left;color:var(--orange);font-weight:800" value="0"
+                       title="بيتحسب تلقائيًا من عهدة كل طرد فوق" /></div>
               <div class="fg"><label>سبب العهدة</label>
                 <input id="storePrepaidNote" placeholder="مثال: محل جديد" /></div>
               <div class="fg full"><label>ملاحظات على الأوردر</label>
@@ -9229,15 +9336,16 @@
         <div style="font-size:.82rem;font-weight:700;color:var(--orange);margin-bottom:10px">💵 مبلغ العهدة (يدفعه الطيار للمحل)</div>
         <div class="form-grid" style="margin-bottom:0">
           <div class="form-group">
-            <label>المبلغ المدفوع مقدماً <span style="font-size:.74rem;color:var(--muted)">(اتركه فارغاً إذا لا يوجد)</span></label>
-            <input type="number" id="orderStorePrepaid" placeholder="0.00" min="0" step="0.5" dir="ltr" style="text-align:left" />
+            <label>إجمالي عهدة الطرود</label>
+            <input type="text" id="orderTotalPrepaid" value="0 ج.م" readonly dir="ltr"
+                   style="text-align:left;color:var(--orange);font-weight:800" />
           </div>
           <div class="form-group">
             <label>سبب الدفع المقدم <span style="font-size:.74rem;color:var(--muted)">(اختياري)</span></label>
             <input type="text" id="orderStorePrepaidNote" placeholder="مثال: محل جديد / طلب المحل…" />
           </div>
         </div>
-        <div style="font-size:.74rem;color:var(--muted);margin-top:6px">⚠️ إذا أُدخل مبلغ، سيظهر للطيار تنبيه واضح بأنه يجب دفع هذا المبلغ للمحل عند الاستلام</div>
+        <div style="font-size:.74rem;color:var(--muted);margin-top:6px">⚠️ العهدة بتتكتب على كل طرد لوحده فوق — كده لو الطلب اتفرّق على أكتر من طيار، كل طيار ياخد عهدة طروده هو بس</div>
       </div>
 
       <div class="form-grid" style="margin-top:16px">
@@ -10965,7 +11073,8 @@
     const saved = F.parcels.map(p => ({ n:p.n,
       recv:$(`pRecv${p.n}`)?.value ?? "", ph:$(`pPhone${p.n}`)?.value ?? "",
       ph2:$(`pPhone2${p.n}`)?.value ?? "", area:$(`pArea${p.n}`)?.value ?? "",
-      addr:$(`pAddr${p.n}`)?.value ?? "", note:$(`pNote${p.n}`)?.value ?? "" }));
+      addr:$(`pAddr${p.n}`)?.value ?? "", note:$(`pNote${p.n}`)?.value ?? "",
+      prepaid:$(`pPrepaid${p.n}`)?.value ?? "" }));
     box.innerHTML = F.parcels.map((p,i) => {
       const v = saved.find(s => s.n === p.n) || {};
       return `<div class="parcel">
@@ -10993,6 +11102,9 @@
           <div class="fg full" id="pHit${p.n}"></div>
           <div class="fg full"><label>عنوان التسليم بالتفصيل <span class="req">*</span></label>
             <input id="pAddr${p.n}" value="${esc(v.addr)}" placeholder="الشارع، رقم العمارة، علامة مميزة…" oninput="updateSummary()" /></div>
+          <div class="fg"><label>💵 عهدة الطرد <span style="font-weight:500;font-size:.72rem">— يدفعها الطيار للمحل</span></label>
+            <input id="pPrepaid${p.n}" type="number" min="0" step="0.5" value="${esc(v.prepaid)}"
+                   dir="ltr" style="text-align:left" placeholder="0" oninput="updateSummary()" /></div>
           <div class="fg full"><label>ملاحظة على الطرد</label>
             <input id="pNote${p.n}" value="${esc(v.note)}" placeholder="اختياري" /></div>
         </div></div>`;
@@ -11124,13 +11236,19 @@
   window.updateSummary = function() {
     const body = $("summaryBody"); if (!body) return;
     const senderName = $("senderSearch")?.value.trim() || "";
-    const prepaid = Number($("storePrepaid")?.value)||0;
+    // العهدة بقت لكل طرد لوحده — الإجمالي بيتحسب من مجموعهم
+    let prepaid = 0;
+    F.parcels.forEach(p => { prepaid += Number($(`pPrepaid${p.n}`)?.value) || 0; });
+    prepaid = round2(prepaid);
+    const prepaidEl = $("storePrepaid");
+    if (prepaidEl) prepaidEl.value = prepaid;
     let total = 0;
     const rows = F.parcels.map((p,i) => {
       total += p.price||0;
       const recv = $(`pRecv${p.n}`)?.value.trim() || "—";
+      const pPre = Number($(`pPrepaid${p.n}`)?.value) || 0;
       return `<div class="sum-line"><span>📦 ${i+1}. ${esc(recv)}
-        <div style="font-size:.72rem">${esc(p.zoneName||"بدون منطقة")}${p.branchId?` · ${esc(branchName(p.branchId))}`:""}</div></span>
+        <div style="font-size:.72rem">${esc(p.zoneName||"بدون منطقة")}${p.branchId?` · ${esc(branchName(p.branchId))}`:""}${pPre?` · <span style="color:var(--orange)">💵 عهدة ${fmt(pPre)}</span>`:""}</div></span>
         <b>${p.price?fmt(p.price):"—"}</b></div>`;
     }).join("");
     body.innerHTML = `
@@ -11206,8 +11324,13 @@
                          createdAt:new Date().toISOString(), createdBy:ME().username||"", source:"callcenter" });
           recvId = r.key;
         }
-        deliveries.push({ receiverId:recvId, receiverName:name, receiverPhone:ph, receiverPhone2:ph2||"",
+        // العهدة جوّه الطرد (orderPrice) + رقم ثابت للطرد (parcelNo) عشان
+        // لو الطلب اتفرّق على أكتر من طيار، كل جزء ياخد عهدته ورقمه معاه
+        const prepaid = Number($(`pPrepaid${p.n}`)?.value) || 0;
+        deliveries.push({ parcelNo: deliveries.length + 1,
+          receiverId:recvId, receiverName:name, receiverPhone:ph, receiverPhone2:ph2||"",
           zoneId:p.zoneId||null, zoneName:p.zoneName, zonePrice:Number(p.price)||0,
+          orderPrice: prepaid,
           address:addr, note:note||"", status:"قيد التنفيذ" });
       }
 
@@ -11217,7 +11340,8 @@
         senderPhone2:sPhone2||"", senderAddress:sAddr,
         branchId:branch.id, branchName:branch.name, notes:$("orderNotes").value.trim(),
         deliveries, totalDeliveryPrice: round2(deliveries.reduce((s,d)=>s+(d.zonePrice||0),0)),
-        storePrepaid: Number($("storePrepaid").value)||0,
+        // عهدة الطلب = مجموع عهدة طروده
+        storePrepaid: round2(deliveries.reduce((s,d)=>s+(Number(d.orderPrice)||0),0)),
         storePrepaidNote: $("storePrepaidNote").value.trim(),
         status:"قيد التنفيذ", statusSince:now, createdAt:now,
         addedBy: ME().username||"", addedByRole: ME().role||"كول سنتر", source:"callcenter" };
