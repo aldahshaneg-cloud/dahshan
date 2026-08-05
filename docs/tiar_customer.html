@@ -649,8 +649,13 @@ a{color:var(--red);text-decoration:none}
     <div style="font-size:21px;font-weight:900">تم إنشاء الطلب بنجاح</div>
     <div style="color:var(--muted);font-size:13px;margin-top:8px">رقم الطلب</div>
     <div id="doneNum" style="font-size:28px;font-weight:900;direction:ltr;margin-top:4px">—</div>
-    <div><div class="qr-box" id="doneQr"></div></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:22px">يمكنك مشاركة هذا الكود مع المستلم</div>
+
+    <!-- باركود لكل طرد لوحده: رقم الطلب + رقم الطرد، مع زرار إرسال للمستلم -->
+    <div id="doneCodes" style="margin-top:14px"></div>
+
+    <div style="font-size:12px;color:var(--muted);margin:10px 0 22px">
+      ابعت لكل مستلم الباركود بتاعه — بيتقرا من الطيار عند التسليم
+    </div>
     <button class="btn" onclick="go('orders')">الانتقال إلى الطلبات</button>
     <button class="btn ghost" style="margin-top:10px" onclick="startNewOrder()">إنشاء طلب آخر</button>
   </div>
@@ -2802,7 +2807,7 @@ async function submitOrder() {
     // (مش في وضع الريسيت — مفيش بيانات نحفظها)
     if (!receipt) deliveries.forEach(d => saveReceiver(d, now));
 
-    showDone(orderNum);
+    showDone(orderNum, deliveries);
   } catch (e) {
     toast("تعذّر إرسال الطلب: " + (e.message || e), "err");
   } finally {
@@ -2834,14 +2839,103 @@ function saveReceiver(d, now) {
   p.catch(() => {});
 }
 
-function showDone(num) {
+/* كود الطرد = رقم الطلب لو طرد واحد، وإلا رقم الطلب + رقم الطرد
+   (HAL-260805-009-2) — نفس الرقم اللي الطرد بياخده لو الفرع فرّقه على
+   طيار لوحده، فالكود بيفضل مطابق للأوردر في كل الحالات. */
+function parcelCodeOf(orderNum, d, total) {
+  const no = Number(d && d.parcelNo) || 0;
+  return (total > 1 && no) ? `${orderNum}-${no}` : orderNum;
+}
+
+/* بيرسم الباركود لكل طرد مع زراير الإرسال للمستلم */
+function showDone(num, deliveries) {
   $("doneNum").textContent = "#" + num;
-  const box = $("doneQr"); box.innerHTML = "";
-  try { new QRCode(box, { text: num, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
-  catch (_) { box.innerHTML = `<div style="color:#111;font-weight:800;padding:20px">${esc(num)}</div>`; }
+  const list = Array.isArray(deliveries) && deliveries.length ? deliveries : [{}];
+  const box  = $("doneCodes");
+  box.innerHTML = list.map((d, i) => {
+    const code = parcelCodeOf(num, d, list.length);
+    const who  = d.receiverFromReceipt ? "🧾 المستلم على صورة الريسيت"
+               : (d.receiverName || "المستلم");
+    const zone = d.zoneName ? ` — ${esc(d.zoneName)}` : "";
+    return `
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:16px;
+                  padding:14px;margin-bottom:12px">
+        ${list.length > 1 ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">
+          📦 الطرد ${i + 1} من ${list.length}</div>` : ""}
+        <div style="font-weight:800;font-size:14px">${esc(who)}${zone}</div>
+        <div style="direction:ltr;font-weight:900;font-size:15px;margin:6px 0 10px">${esc(code)}</div>
+        <div class="qr-box" id="qrP${i}" style="margin:0 auto"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+          ${d.receiverPhone ? `<button class="btn ghost sm" onclick="sendCodeWhatsApp(${i})">📤 إرسال واتساب</button>` : ""}
+          <button class="btn ghost sm" onclick="shareCodeImage(${i})">🖼️ إرسال الصورة</button>
+          <button class="btn ghost sm" onclick="copyCode(${i})">📋 نسخ الكود</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  // بنخزّن البيانات عشان الزراير تستخدمها
+  window._doneCodes = list.map((d, i) => ({
+    code: parcelCodeOf(num, d, list.length),
+    phone: d.receiverPhone || "",
+    name: d.receiverName || "",
+    zone: d.zoneName || ""
+  }));
+
+  list.forEach((d, i) => {
+    const el = document.getElementById("qrP" + i);
+    if (!el) return;
+    const code = window._doneCodes[i].code;
+    try { new QRCode(el, { text: code, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
+    catch (_) { el.innerHTML = `<div style="color:#111;font-weight:800;padding:20px">${esc(code)}</div>`; }
+  });
+
   go("done");
   confetti();
 }
+
+function _codeMsg(c) {
+  return `📦 شحنتك مع الدهشان\n`
+       + `رقم الطلب: ${c.code}\n`
+       + (c.zone ? `المنطقة: ${c.zone}\n` : "")
+       + `\nاعرض الباركود ده للطيار عند الاستلام.`;
+}
+
+window.sendCodeWhatsApp = function (i) {
+  const c = (window._doneCodes || [])[i]; if (!c) return;
+  // نحوّل الرقم المصري لصيغة دولية عشان واتساب يفتح على الشخص الصح
+  let p = String(c.phone || "").replace(/\D/g, "");
+  if (p.startsWith("0")) p = "2" + p;
+  if (!p) { toast("مفيش رقم للمستلم ده", "err"); return; }
+  window.open(`https://wa.me/${p}?text=${encodeURIComponent(_codeMsg(c))}`, "_blank");
+};
+
+window.copyCode = function (i) {
+  const c = (window._doneCodes || [])[i]; if (!c) return;
+  navigator.clipboard?.writeText(c.code)
+    .then(() => toast("اتنسخ: " + c.code, "ok"))
+    .catch(() => toast("مقدرناش ننسخ — الكود: " + c.code, "err"));
+};
+
+/* بيبعت صورة الباركود نفسها — بيستخدم مشاركة النظام لو متاحة،
+   وإلا بينزّلها كصورة يبعتها بنفسه */
+window.shareCodeImage = async function (i) {
+  const c = (window._doneCodes || [])[i]; if (!c) return;
+  const cv = document.querySelector(`#qrP${i} canvas`);
+  if (!cv) { toast("الباركود لسه بيتحمّل", "err"); return; }
+  const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+  if (!blob) { toast("تعذّر تجهيز الصورة", "err"); return; }
+  const file = new File([blob], `${c.code}.png`, { type: "image/png" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: _codeMsg(c) }); return; }
+    catch (_) { /* لغى المشاركة — ننزّلها */ }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${c.code}.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("اتحفظت الصورة — ابعتها للمستلم", "ok");
+};
 function confetti() {
   const host = $("s-done");
   const colors = ["#e8192c", "#22c55e", "#f59e0b", "#3b82f6", "#fff"];
