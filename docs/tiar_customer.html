@@ -7,6 +7,7 @@
   <title>الدهشان | تطبيق العملاء</title>
 
   <link rel="manifest" href="customer-manifest.json" />
+  <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
   <link rel="apple-touch-icon" href="assets/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -3086,46 +3087,14 @@ window.addEventListener("popstate", () => {
 ══════════════════════════════════════════════════════════════ */
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () =>
-    navigator.serviceWorker.register("customer-sw.js").catch(() => {}));
+    navigator.serviceWorker.register("app-sw.js").catch(() => {}));
 }
 
-let deferredPrompt = null;
-window.addEventListener("beforeinstallprompt", e => {
-  e.preventDefault(); deferredPrompt = e;
-  // الموقع العام بيوجّه هنا بـ ?install=1 — نفتح نافذة التثبيت على طول
-  if (window._wantInstall) { window._wantInstall = false; installApp(); }
-});
-window.addEventListener("appinstalled", () => {
-  const r = $("installRow"); if (r) r.style.display = "none";
-});
-
-/* ?install=1 جاي من زرار «تحميل» في الموقع العام */
-(function () {
-  const wants = new URLSearchParams(location.search).get("install") === "1";
-  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  if (!wants || installed) return;
-  window._wantInstall = true;
-  // لو الحدث اتأخّر أو المتصفح مابيدعمهوش، نوريه الخطوات اليدوية
-  setTimeout(() => {
-    if (window._wantInstall) { window._wantInstall = false; installApp(); }
-  }, 2500);
-})();
+// شاشة التثبيت نفسها في install.js — مشتركة مع بوابة المحلات
 // لو التطبيق متثبّت ومفتوح كتطبيق، مفيش داعي لبند التثبيت
 if (matchMedia("(display-mode: standalone)").matches || navigator.standalone)
   document.addEventListener("DOMContentLoaded", () => { const r = $("installRow"); if (r) r.style.display = "none"; });
-async function installApp() {
-  if (!deferredPrompt) {
-    return openModal("تثبيت التطبيق", `<div style="font-size:13.5px;line-height:2">
-      لتثبيت التطبيق على شاشتك الرئيسية:<br />
-      <b>أندرويد / كروم:</b> افتح قائمة المتصفح ⋮ ثم "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية".<br />
-      <b>آيفون / سفاري:</b> اضغط زر المشاركة ⬆️ ثم "إضافة إلى الشاشة الرئيسية".</div>`);
-  }
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  $("installRow").style.display = "none";
-  if (outcome === "accepted") toast("تم تثبيت التطبيق ✅", "ok");
-}
+function installApp() { window.dahshanInstall(false); }
 window.installApp = installApp;
 
 /* ══════════════════════════════════════════════════════════════

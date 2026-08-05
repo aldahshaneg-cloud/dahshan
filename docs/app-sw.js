@@ -1,14 +1,22 @@
 /* ══════════════════════════════════════════════════════════════
-   Service Worker — بوابة محلات الدهشان
-   مهم: نفس المجلد فيه لوحات الإدارة والفرع والكول سنتر، فالـ SW ده
-   بيتعامل *فقط* مع ملفات بوابة المحلات ومكتباتها. أي طلب تاني بيعدّي
+   Service Worker مشترك — تطبيق العملاء + بوابة المحلات
+   ──────────────────────────────────────────────────────────────
+   مهم: التطبيقين على نفس المجلد، والمتصفح بيسمح بـ service worker
+   واحد بس لكل نطاق (scope). أول ما كان كل تطبيق يسجّل ملفه الخاص،
+   الجديد كان بيمسح القديم — فالتطبيق التاني يفضل من غير SW ومايتثبتش.
+   عشان كده بقى ملف واحد بيخدم الاتنين.
+
+   وبرضه: نفس المجلد فيه لوحات الإدارة والفرع والكول سنتر، فالـ SW ده
+   بيتعامل *فقط* مع ملفات التطبيقين ومكتباتهم. أي طلب تاني بيعدّي
    للشبكة زي ما هو من غير ما نلمسه (مفيش respondWith).
 ══════════════════════════════════════════════════════════════ */
-const CACHE = "dahshan-store-v1";
+const CACHE = "dahshan-apps-v2";
 
-/* الملفات اللي التطبيق مش هيشتغل من غيرها */
+/* الملفات اللي التطبيقين مش هيشتغلوا من غيرها */
 const SHELL = [
+  "./tiar_customer.html",
   "./tiar_store.html",
+  "./customer-manifest.json",
   "./store-manifest.json",
   "./assets/logo.png",
   "./assets/icon-192.png",
@@ -21,14 +29,22 @@ const CDN = [
   "unpkg.com/leaflet", "cdnjs.cloudflare.com/ajax/libs/qrcodejs"
 ];
 
+const OURS = ["/tiar_customer.html", "/tiar_store.html",
+              "/customer-manifest.json", "/store-manifest.json"];
+
 const isOurs = url =>
-  url.pathname.endsWith("/tiar_store.html") ||
-  url.pathname.endsWith("/store-manifest.json") ||
+  OURS.some(p => url.pathname.endsWith(p)) ||
   url.pathname.includes("/assets/") ||
   CDN.some(c => (url.host + url.pathname).includes(c));
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // addAll بتفشل كلها لو ملف واحد وقع — بنكاش كل ملف لوحده عشان
+  // ملف ناقص مايمنعش الـ SW من التنصيب ويخلّي التثبيت مايشتغلش
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", e => {
@@ -54,6 +70,6 @@ self.addEventListener("fetch", e => {
           caches.open(CACHE).then(c => c.put(e.request, res.clone()));
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match("./tiar_store.html")))
+      .catch(() => caches.match(e.request).then(r => r || caches.match("./tiar_customer.html")))
   );
 });

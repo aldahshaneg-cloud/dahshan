@@ -12,6 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
   <!-- تثبيت البوابة كتطبيق على الموبايل -->
   <link rel="manifest" href="store-manifest.json" />
+  <script src="install.js" defer></script>
   <meta name="theme-color" content="#0a0a0b" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -1536,51 +1537,17 @@
     ══════════════════════════════════════════════════════ */
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", () =>
-        navigator.serviceWorker.register("store-sw.js").catch(() => {}));
+        navigator.serviceWorker.register("app-sw.js").catch(() => {}));
     }
 
-    window._deferredPrompt = null;
-    window.addEventListener("beforeinstallprompt", e => {
-      e.preventDefault();
-      window._deferredPrompt = e;
+    // شاشة التثبيت نفسها في install.js — مشتركة مع تطبيق العملاء
+    window.installStoreApp = function () { window.dahshanInstall(false); };
+    // زرار التثبيت في صفحة الحساب بيبان لو التطبيق لسه مش متثبّت
+    document.addEventListener("DOMContentLoaded", () => {
       const b = document.getElementById("installStoreBtn");
-      if (b) b.style.display = "";
-      if (window._wantInstall) { window._wantInstall = false; window.installStoreApp(); }
+      const on = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+      if (b && !on) b.style.display = "";
     });
-    window.addEventListener("appinstalled", () => {
-      const b = document.getElementById("installStoreBtn");
-      if (b) b.style.display = "none";
-      toast("تم تثبيت التطبيق ✅", "ok");
-    });
-
-    window.installStoreApp = async function () {
-      const p = window._deferredPrompt;
-      if (!p) {
-        alert("لتثبيت التطبيق على شاشتك الرئيسية:\n\n"
-            + "أندرويد / كروم: افتح قائمة المتصفح ⋮ ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».\n\n"
-            + "آيفون / سفاري: اضغط زر المشاركة ⬆️ ثم «إضافة إلى الشاشة الرئيسية».");
-        return;
-      }
-      p.prompt();
-      const { outcome } = await p.userChoice;
-      window._deferredPrompt = null;
-      if (outcome === "accepted") {
-        const b = document.getElementById("installStoreBtn");
-        if (b) b.style.display = "none";
-      }
-    };
-
-    // ?install=1 جاي من الموقع العام
-    (function () {
-      const wants = new URLSearchParams(location.search).get("install") === "1";
-      const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-      if (!wants || installed) return;
-      window._wantInstall = true;
-      // لو الحدث اتأخّر، بعد 2.5 ثانية نوريه الخطوات اليدوية
-      setTimeout(() => {
-        if (window._wantInstall) { window._wantInstall = false; window.installStoreApp(); }
-      }, 2500);
-    })();
 
     function _codeMsg(c) {
       return `📦 شحنتك مع الدهشان\nرقم الطلب: ${c.code}\n`
