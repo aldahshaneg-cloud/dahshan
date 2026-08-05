@@ -2848,6 +2848,44 @@
       if (cur) sel.value = cur;
     }
 
+    /* ── منطقة الاستلام → الفرع المسؤول (مودال «طلب شحن جديد») ─────────
+       الكول سنتر مابيختارش الفرع بإيده. بيسمع من العميل ويختار منطقة
+       الاستلام، والفرع بيطلع منها تلقائيًا — نفس نظام تطبيق العميل
+       ونفس اللي في صفحة «أوردر جديد». */
+    function _zoneBranchOf(z) { return z ? (z.deliveryBranchId || z.branchId || "") : ""; }
+
+    function populateOrderSenderZones() {
+      const sel = document.getElementById("orderSenderZone");
+      if (!sel) return;
+      const cur = sel.value;
+      const list = (window._zonesList || []).slice().sort((a, b) =>
+        (a.areaName || a.name || "").localeCompare(b.areaName || b.name || "", "ar"));
+      sel.innerHTML = `<option value="">— اختر منطقة الاستلام —</option>` +
+        list.map(z => `<option value="${z.id}">${z.areaName || z.name || ""}</option>`).join("");
+      if (cur && list.some(z => z.id === cur)) sel.value = cur;
+    }
+
+    window.onOrderSenderZone = function () {
+      const zSel = document.getElementById("orderSenderZone");
+      const bSel = document.getElementById("orderBranchSelect");
+      const hint = document.getElementById("orderBranchHint");
+      const z    = (window._zonesList || []).find(x => x.id === (zSel ? zSel.value : ""));
+      const bId  = _zoneBranchOf(z);
+      const b    = (window._branchesList || []).find(x => x.id === bId);
+      if (bSel) {
+        bSel.innerHTML = bId
+          ? `<option value="${bId}">${b ? b.name : bId}</option>`
+          : `<option value="">— اختر منطقة الاستلام أولاً —</option>`;
+        bSel.value = bId || "";
+      }
+      if (hint) hint.innerHTML = bId
+        ? `🏢 الأوردر ده على <b style="color:var(--green)">${b ? b.name : bId}</b>` +
+          (b && b.paused ? ` <span style="color:var(--orange)">⏸️ الفرع موقوف حاليًا</span>` : "")
+        : `💡 الفرع بيتحدّد من منطقة الاستلام — زي تطبيق العميل بالظبط`;
+      // مناطق التسليم بتتقفل على مناطق الفرع اللي طلع
+      onOrderBranchChange();
+    };
+
     function onOrderBranchChange() {
       const branchId = document.getElementById("orderBranchSelect").value;
       document.querySelectorAll(".delivery-row").forEach(row => {
@@ -3034,8 +3072,11 @@
       }
       if (type === "order") {
         populateBranchSelect();
-        const branchSel = document.getElementById("orderBranchSelect");
-        branchSel.onchange = onOrderBranchChange;
+        // منطقة الاستلام هي اللي بتحدّد الفرع — الفرع نفسه للعرض بس
+        populateOrderSenderZones();
+        const zoneSel = document.getElementById("orderSenderZone");
+        if (zoneSel) { zoneSel.value = ""; zoneSel.onchange = window.onOrderSenderZone; }
+        window.onOrderSenderZone();
         initSmartSearch('senderSearchInput', 'senders', (data) => fillSenderInfo());
         window._smartSearchState['senderSearchInput'] = { selectedId: null, selectedData: null };
         document.getElementById('senderSearchInput').value = '';
@@ -3075,9 +3116,15 @@
       const senderName  = senderState?.selectedData?.name || document.getElementById("senderSearchInput").value.trim();
       const branchId    = branchSel.value;
       const branchName  = branchSel.options[branchSel.selectedIndex]?.text || "";
+      // منطقة الاستلام — منها اتحدّد الفرع
+      const senderZoneSel  = document.getElementById("orderSenderZone");
+      const senderZone     = (window._zonesList || []).find(z => z.id === (senderZoneSel ? senderZoneSel.value : ""));
+      const senderZoneId   = senderZone ? senderZone.id : "";
+      const senderZoneName = senderZone ? (senderZone.areaName || senderZone.name || "") : "";
 
       if (!senderId && !senderName) { showToast("يرجى اختيار أو إدخال العميل استلام", "error"); return; }
-      if (!branchId) { showToast("يرجى اختيار الفرع المسؤول", "error"); return; }
+      if (!senderZoneId) { showToast("اختر منطقة الاستلام — منها بيتحدّد الفرع", "error"); return; }
+      if (!branchId) { showToast("منطقة الاستلام دي مش مربوطة بفرع — كلّم الإدارة", "error"); return; }
 
       let finalSenderId = senderId;
       let finalSenderName = senderName;
@@ -3137,6 +3184,8 @@
           senderPhone  : document.getElementById("orderSenderPhone").value,
           senderPhone2 : document.getElementById("orderSenderPhone2").value,
           senderAddress: document.getElementById("orderSenderAddress").value,
+          // منطقة الاستلام — منها اتحدّد الفرع (نفس تطبيق العميل)
+          senderZoneId, senderZoneName,
           branchId, branchName, notes,
           deliveries, totalDeliveryPrice: totalPrice,
           // عهدة الطلب = مجموع عهدة طروده
@@ -3158,6 +3207,10 @@
         document.getElementById("addOrderForm").reset();
         document.getElementById("orderStorePrepaidNote").value = "";
         updateOrderPrepaidTotal();
+        // نرجّع منطقة الاستلام والفرع لحالتهم الأولى
+        const _z = document.getElementById("orderSenderZone");
+        if (_z) _z.value = "";
+        window.onOrderSenderZone();
         document.getElementById("deliveriesContainer").innerHTML = "";
         window._deliveryCount = 0;
         window._smartSearchState['senderSearchInput'] = { selectedId: null, selectedData: null };
@@ -9329,9 +9382,21 @@
         </div>
       </div>
 
-      <div class="order-section-title">🏢 الفرع المسؤول</div>
+      <div class="order-section-title">🗺️ منطقة الاستلام → الفرع المسؤول</div>
       <div class="form-grid" style="margin-bottom:16px">
-        <div class="form-group full"><label>اختر الفرع <span class="req">*</span></label><select id="orderBranchSelect" required><option value="">— اختر الفرع —</option></select></div>
+        <div class="form-group full">
+          <label>منطقة الاستلام <span class="req">*</span>
+            <span style="font-size:.72rem;color:var(--muted);font-weight:500">— اسمع من العميل واختار منطقته، والفرع بيتحدّد لوحده</span></label>
+          <select id="orderSenderZone"><option value="">— اختر منطقة الاستلام —</option></select>
+        </div>
+        <div class="form-group full">
+          <label>الفرع المسؤول <span style="font-size:.72rem;color:var(--muted);font-weight:500">(تلقائي)</span></label>
+          <select id="orderBranchSelect" disabled
+                  style="opacity:.85;cursor:not-allowed"><option value="">— اختر منطقة الاستلام أولاً —</option></select>
+          <div id="orderBranchHint" style="font-size:.74rem;color:var(--muted);margin-top:5px">
+            💡 الفرع بيتحدّد من منطقة الاستلام — زي تطبيق العميل بالظبط
+          </div>
+        </div>
       </div>
 
       <div class="order-section-title">📦 الطرود / الوجهات<button type="button" class="add-delivery-btn" onclick="addDeliveryRow()">➕ إضافة وجهة</button></div>
