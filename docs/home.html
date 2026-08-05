@@ -696,12 +696,16 @@ function stageOf(o) {
   return { stage: 0, s: s || "قيد التنفيذ" };
 }
 
-function renderOrder(o) {
+function renderOrder(o, parcelNo) {
   const { stage, s } = stageOf(o);
   const [cls, label] = PILL[s] || ["p-new", s || "—"];
-  const ds = o.deliveries || [];
+  const all = o.deliveries || [];
+  // لو اللينك جاي من باركود طرد معيّن، بنعرض الطرد ده هو بس
+  const one = parcelNo ? all.find(d => Number(d.parcelNo) === parcelNo) : null;
+  const ds = one ? [one] : all;
   const zones = [...new Set(ds.map(d => d.zoneName).filter(Boolean))].join("، ");
   const dead = (s === "ملغي" || s === "لم يتم التوصيل");
+  const shownNum = one ? `${o.orderNum}-${parcelNo}` : (o.orderNum || "—");
 
   const tl = STEPS.map((st, i) => {
     const on = !dead && i <= stage;
@@ -714,8 +718,9 @@ function renderOrder(o) {
 
   $("result").innerHTML = `
     <div class="res-head">
-      <div><div class="res-num">#${esc(o.orderNum || "—")}</div>
-        <div style="font-size:12.5px;color:var(--muted)">اتسجّلت ${fmtDate(o.createdAt)}</div></div>
+      <div><div class="res-num">#${esc(shownNum)}</div>
+        <div style="font-size:12.5px;color:var(--muted)">اتسجّلت ${fmtDate(o.createdAt)}${
+          one ? ` · طرد ${parcelNo} من ${all.length}` : ""}</div></div>
       <span class="pill ${cls}">${esc(label)}</span>
     </div>
     ${dead ? `<div class="err" style="margin-top:16px">
@@ -727,11 +732,51 @@ function renderOrder(o) {
       <div class="res-cell"><b>عدد الطرود</b><span>${ds.length || 1}</span></div>
       <div class="res-cell"><b>الفرع</b><span>${esc(o.branchName || "—")}</span></div>
     </div>
+    <a href="tiar_customer.html?install=1&t=${encodeURIComponent(shownNum)}"
+       style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:16px;
+              background:var(--red);color:#fff;text-decoration:none;padding:14px;
+              border-radius:13px;font-weight:800;font-size:14.5px">
+      📲 حمّل التطبيق وتابع كل شحناتك
+    </a>
     <div class="note">
       🔒 بنعرض حالة الشحنة بس. لأي تفاصيل تانية كلّم خدمة العملاء على
       <a href="tel:${INFO.phone}" style="color:var(--red);font-weight:800">${INFO.phone}</a>
     </div>`;
   $("result").classList.add("on");
+}
+
+/* اللينك اللي جوّه الباركود: home.html?track=CODE — بيفتح التتبّع على
+   طول من غير ما المستلم يكتب حاجة. */
+(function () {
+  const code = new URLSearchParams(location.search).get("track");
+  if (!code) return;
+  document.addEventListener("DOMContentLoaded", () => {
+    const inp = $("trackNum"); if (!inp) return;
+    inp.value = code.toUpperCase();
+    document.getElementById("track")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("trackForm").dispatchEvent(new Event("submit", { cancelable: true }));
+  });
+})();
+
+/* بيدوّر على الأوردر بالرقم. لو الرقم فيه لاحقة طرد (HAL-260805-009-2)
+   ومالقاش أوردر بالرقم كامل، بنشيل اللاحقة وندوّر على رقم الأوردر —
+   لأن الطرد بيبقى جوّه أوردر إلا لو الفرع فرّقه على طيار لوحده. */
+async function findOrderByCode(num) {
+  const tryOne = async n => {
+    const snap = await get(query(ref(db, "orders"), orderByChild("orderNum"), equalTo(n)));
+    const val = snap.val();
+    if (!val || !Object.keys(val).length) return null;
+    return Object.values(val).sort((a, b) =>
+      new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
+  };
+  let o = await tryOne(num);
+  if (o) return { order: o, parcelNo: null };
+  const m = /^(.*)-(\d+(?:\+\d+)*)$/.exec(num);
+  if (m) {
+    o = await tryOne(m[1]);
+    if (o) return { order: o, parcelNo: Number(m[2].split("+")[0]) };
+  }
+  return null;
 }
 
 $("trackForm").addEventListener("submit", async e => {
@@ -743,19 +788,15 @@ $("trackForm").addEventListener("submit", async e => {
   box.className = "on";
   box.innerHTML = `<div style="text-align:center;color:var(--muted);padding:20px">⏳ بندوّر على شحنتك…</div>`;
   try {
-    const snap = await get(query(ref(db, "orders"), orderByChild("orderNum"), equalTo(num)));
-    const val = snap.val();
-    if (!val || !Object.keys(val).length) {
+    const hit = await findOrderByCode(num);
+    if (!hit) {
       box.innerHTML = `<div class="err">
         مالقيناش شحنة بالرقم <b dir="ltr">${esc(num)}</b>.<br />
         <span style="font-weight:500;color:var(--muted);font-size:13px">
           راجع الرقم، أو كلّمنا على ${INFO.phone}</span></div>`;
       return;
     }
-    // لو الرقم اتكرر (فرعين مختلفين) بنعرض الأحدث
-    const list = Object.values(val).sort((a, b) =>
-      new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-    renderOrder(list[0]);
+    renderOrder(hit.order, hit.parcelNo);
   } catch (err) {
     box.innerHTML = `<div class="err">تعذّر الاتصال دلوقتي — جرّب تاني بعد شوية.</div>`;
     // لو الـ index مش مرفوع، فايربيز بيرمي خطأ بدل ما يرجّع نتيجة —

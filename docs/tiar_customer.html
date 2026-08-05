@@ -1443,8 +1443,44 @@ onAuthStateChanged(auth, async user => {
   $("boot").style.display = "none";
 
   if (S.profile.profileCompleted) go("home");
-  else { openSetup(); }
+  else { openSetup(); prefillFromTrackCode(); }
 });
+
+/* ?t=CODE جاي من صفحة التتبّع اللي فتحها الباركود.
+   بنستخدم بيانات الطرد نفسه (رقم المستلم واسمه وعنوانه) عشان نملا شاشة
+   التسجيل بدل ما العميل يكتبها — ده اللي بيسرّع العملية فعلاً. */
+function findParcelByCode(code) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) return null;
+  const orders = Object.entries(S._rawOrders || {}).map(([id, o]) => ({ id, ...o }));
+  // الرقم كامل الأول (ممكن يكون أوردر مفصول برقمه المركّب)
+  let o = orders.find(x => String(x.orderNum || "").toUpperCase() === c);
+  if (o) return { order: o, d: (o.deliveries || [])[0] || null };
+  // وإلا نشيل لاحقة الطرد وندوّر على رقم الأوردر
+  const m = /^(.*)-(\d+)$/.exec(c);
+  if (!m) return null;
+  o = orders.find(x => String(x.orderNum || "").toUpperCase() === m[1]);
+  if (!o) return null;
+  const no = Number(m[2]);
+  const d = (o.deliveries || []).find(x => Number(x.parcelNo) === no) || (o.deliveries || [])[0];
+  return d ? { order: o, d } : null;
+}
+
+async function prefillFromTrackCode() {
+  const code = new URLSearchParams(location.search).get("t");
+  if (!code) return;
+  // الأوردرات بتوصل من الـ listener، فبنستنى شوية لو لسه ماوصلتش
+  for (let i = 0; i < 12 && !Object.keys(S._rawOrders || {}).length; i++)
+    await new Promise(r => setTimeout(r, 250));
+  const hit = findParcelByCode(code);
+  if (!hit || !hit.d) return;
+  const d = hit.d;
+  if (d.receiverPhone && !$("sutPhone").value.trim()) $("sutPhone").value = d.receiverPhone;
+  window._foundShipment = { id: hit.order.id, order: hit.order, d };
+  lookupMyShipments();          // بيوري إن فيه شحنة على الرقم ده
+  fillFromShipment();           // وبيملا الاسم والعنوان والمنطقة
+  toast("ملينا بياناتك من الشحنة — راجعها وكمّل تسجيلك", "ok");
+}
 
 async function loadRefData() {
   const [zs, bs] = await Promise.all([get(ref(db, "zones")), get(ref(db, "branches"))]);
@@ -2955,6 +2991,13 @@ function parcelCodeOf(orderNum, d, total) {
   return (total > 1 && no) ? `${orderNum}-${no}` : orderNum;
 }
 
+/* الباركود بيشيل لينك التتبّع مش رقم مجرّد — كده لما المستلم يصوّره
+   بكاميرا الموبايل بيفتح صفحة الشحنة على طول من غير ما يكتب حاجة،
+   وبيلاقي زرار تحميل التطبيق. النص المكتوب تحته يفضل الرقم نفسه. */
+function trackUrlOf(code) {
+  return new URL("home.html?track=" + encodeURIComponent(code), location.href).href;
+}
+
 /* بيرسم الباركود لكل طرد مع زراير الإرسال للمستلم */
 function showDone(num, deliveries) {
   $("doneNum").textContent = "#" + num;
@@ -2993,7 +3036,8 @@ function showDone(num, deliveries) {
     const el = document.getElementById("qrP" + i);
     if (!el) return;
     const code = window._doneCodes[i].code;
-    try { new QRCode(el, { text: code, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
+    // الباركود = لينك التتبّع، فالتصوير بالكاميرا بيفتح الشحنة على طول
+    try { new QRCode(el, { text: trackUrlOf(code), width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
     catch (_) { el.innerHTML = `<div style="color:#111;font-weight:800;padding:20px">${esc(code)}</div>`; }
   });
 
@@ -3005,7 +3049,7 @@ function _codeMsg(c) {
   return `📦 شحنتك مع الدهشان\n`
        + `رقم الطلب: ${c.code}\n`
        + (c.zone ? `المنطقة: ${c.zone}\n` : "")
-       + `\nاعرض الباركود ده للطيار عند الاستلام.`;
+       + `\nتابع شحنتك من هنا:\n${trackUrlOf(c.code)}`;
 }
 
 window.sendCodeWhatsApp = function (i) {

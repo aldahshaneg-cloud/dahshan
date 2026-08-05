@@ -1474,6 +1474,14 @@
       return (total > 1 && no) ? `${orderNum}-${no}` : orderNum;
     }
 
+    /* الباركود بيشيل لينك التتبّع مش رقم مجرّد — كده لما المستلم يصوّره
+       بكاميرا الموبايل بيفتح صفحة الشحنة على طول من غير ما يكتب حاجة،
+       وبيلاقي زرار تحميل التطبيق. النص المكتوب تحته يفضل الرقم نفسه
+       عشان يقدر يكتبه يدوي لو حب. */
+    function trackUrlOf(code) {
+      return new URL("home.html?track=" + encodeURIComponent(code), location.href).href;
+    }
+
     window.showOrderCodes = function (orderNum, deliveries) {
       const list = Array.isArray(deliveries) && deliveries.length ? deliveries : [{}];
       window._orderCodes = list.map(d => ({
@@ -1523,7 +1531,8 @@
       window._orderCodes.forEach((c, i) => {
         const el = document.getElementById("_qr" + i);
         if (!el) return;
-        try { new QRCode(el, { text: c.code, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }); }
+        // الباركود = لينك التتبّع، فالتصوير بالكاميرا بيفتح الشحنة على طول
+        try { new QRCode(el, { text: trackUrlOf(c.code), width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }); }
         catch (_) { el.innerHTML = `<div style="color:#111;font-weight:800;padding:18px">${c.code}</div>`; }
       });
     };
@@ -1552,7 +1561,7 @@
     function _codeMsg(c) {
       return `📦 شحنتك مع الدهشان\nرقم الطلب: ${c.code}\n`
            + (c.zone ? `المنطقة: ${c.zone}\n` : "")
-           + `\nاعرض الباركود ده للطيار عند الاستلام.`;
+           + `\nتابع شحنتك من هنا:\n${trackUrlOf(c.code)}`;
     }
 
     window.sendCodeWhatsApp = function (i) {
