@@ -667,7 +667,7 @@
       document.getElementById("app").classList.add("visible");
       document.getElementById("sidebar-username").textContent = username;
       document.getElementById("sidebar-role").textContent = role || "";
-      setTimeout(() => { try { disableAutoBackupOnce().then(() => checkAutoBackup()); } catch(e) {} }, 1500);
+      setTimeout(() => { try { checkAutoBackup(); } catch(e) {} }, 1500);
       setTimeout(() => { try { loadAttendanceTimeout(); } catch(e) {} }, 2000);
       applyPagePerms(username);
     }
@@ -7114,13 +7114,47 @@
     }, 60000);
 
     /* ---------- النسخ الاحتياطي ---------- */
-    const BACKUP_NODES = ["branches","zones","pilots","users","senders","receivers","orders","cashStores","cashTransactions","custodyTransactions","attendance","expenses","pilotJoinRequests","pilotTransfers","pilotSupportRequests","settings","manualEmployees"];
+    /* ── العقد اللي بتتاخد لها نسخة ─────────────────────────────────────
+       القايمة دي كانت ناقصة 15 عقدة، منهم حاجات لو ضاعت مفيش رجوع فيها:
+       shifts (كل الورديات → مفيش حساب ساعات ولا عمولات)، payroll، customers
+       (حسابات تطبيق العملاء ومحافظهم وفلوسهم)، accounting، closings،
+       counters (عدادات أرقام الأوردرات → الأرقام تتكرر بعد الاسترجاع).
+       القايمة دلوقتي مطابقة لعقد database.rules.json كلها ما عدا storeDiag
+       (تشخيص مؤقت مالوش قيمة). أي عقدة جديدة في القواعد لازم تتضاف هنا.
+    ──────────────────────────────────────────────────────────────────── */
+    const BACKUP_NODES = [
+      // الأساسيات
+      "adminEmails","settings","branches","zones","users","pilots","customers",
+      "senders","receivers","storeContacts","manualEmployees",
+      // التشغيل
+      "orders","counters","shifts","attendance",
+      // الفلوس
+      "accounting","payroll","expenses","cashStores","cashTransactions",
+      "custodyTransactions","closings","closingBranches","pilotMonthlyCloseouts",
+      // طلبات الطيارين
+      "pilotJoinRequests","pilotTransfers","pilotSupportRequests",
+      "pilotLeaveRequests","pilotShiftRequests","pilotReturnRequests",
+      // وحدات فرعية
+      "hr","cc","rd"
+    ];
 
     window.updateLastBackupLabel = function() {
       const el = document.getElementById("lastBackupTime");
       if (!el) return;
       const last = localStorage.getItem("tiar-last-backup");
       el.textContent = last ? new Date(last).toLocaleString("ar-EG") : "—";
+
+      /* تحذير مرئي لما النسخة تبقى قديمة (أو مش موجودة أصلاً). النسخ
+         الاحتياطي هنا بيعتمد على إن حد يفتح الصفحة ويدوس، فمن غير تنبيه
+         واضح ممكن يعدّي شهور من غير أي نسخة ومحدش ياخد باله. */
+      const warn = document.getElementById("backupStaleWarn");
+      if (!warn) return;
+      const ageH = last ? (Date.now() - new Date(last).getTime()) / 3600000 : Infinity;
+      if (ageH < 48) { warn.style.display = "none"; return; }
+      warn.style.display = "block";
+      warn.textContent = last
+        ? `⚠️ آخر نسخة احتياطية على الجهاز ده بقالها ${Math.floor(ageH / 24)} يوم. لو ضاعت البيانات دلوقتي هتفقد شغل الفترة دي كلها — نزّل نسخة.`
+        : "⚠️ لسه مفيش أي نسخة احتياطية على الجهاز ده. نزّل نسخة دلوقتي.";
     };
 
     window.downloadFullBackup = async function(silent) {
@@ -7154,14 +7188,10 @@
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
 
-    async function disableAutoBackupOnce() {
-      // تعطيل النسخ الاحتياطي التلقائي مرة واحدة فورًا (بدل انتظار أول تشغيل بلا إعداد)
-      try {
-        if (localStorage.getItem("tiar-backup-force-disabled-v1")) return;
-        await set(ref(db, "settings/backupIntervalHours"), 0);
-        localStorage.setItem("tiar-backup-force-disabled-v1", "1");
-      } catch(e) {}
-    }
+    /* disableAutoBackupOnce اتشالت: كانت بتكتب backupIntervalHours = 0 في
+       القاعدة كل مرة المدير يدخل، يعني حتى لو هو اختار "كل يوم" من القايمة
+       التحت، أول دخول جاي كان بيرجّعها "معطّل" من غير ما يعرف. دلوقتي
+       الإعداد اللي هو مختاره هو اللي بيتنفّذ. */
 
     async function checkAutoBackup() {
       try {
@@ -9042,6 +9072,9 @@
             </div>
             <div style="font-size:.82rem;color:var(--muted)">آخر نسخة احتياطية على هذا الجهاز: <b id="lastBackupTime">—</b></div>
           </div>
+          <div id="backupStaleWarn" style="display:none;background:rgba(239,68,68,.12);border:1px solid var(--red);
+            color:var(--red);border-radius:9px;padding:11px 13px;font-size:.83rem;font-weight:700;
+            line-height:1.8;margin-bottom:12px"></div>
           <button class="add-btn" onclick="downloadFullBackup()">⬇️ تحميل نسخة احتياطية الآن</button>
 
           <hr style="border-color:var(--border);margin:20px 0">
