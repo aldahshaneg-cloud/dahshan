@@ -7541,27 +7541,86 @@
       } catch(e) { resultEl.innerHTML = ""; showToast("خطأ: " + e.message, "error"); }
     };
 
+    /* ── التنظيف: أرشفة إجبارية قبل الحذف ──────────────────────────────
+       الأداة دي كانت بتمسح **نهائي** من غير أي نسخة. والسجلات دي مش
+       معزولة: الأوردر المحذوف بتاعه تقفيلة وردية وعمولة طيار وقيد
+       محاسبي — فبيتمسح والتقارير القديمة تفضى بأثر رجعي.
+
+       وكانت بتمسح واحد واحد بـ await في اللوب: 20 ألف سجل = 20 ألف
+       رحلة للسيرفر، دقايق طويلة والرسالة بتقول "متقفلش الصفحة". لو
+       اتقفلت في النص، نص الحذف حصل والباقي لأ.
+
+       دلوقتي:
+         ١) نسخة JSON بتتنزّل على جهاز المدير الأول — إجباري، ولو
+            التنزيل فشل الحذف مابيبدأش
+         ٢) الحذف بالجملة (multi-path update) على دفعات — أسرع بكتير
+            وكل دفعة إما تتم كاملة أو لأ
+    ──────────────────────────────────────────────────────────────── */
     window.executeCleanup = async function() {
       const targets = window._cleanupTargets;
       if (!targets) { showToast("اضغط (معاينة عدد السجلات) أولاً", "error"); return; }
       const total = Object.values(targets).reduce((s,v) => s + v.length, 0);
       if (!total) return;
-      if (!confirm(`هل أنت متأكد من حذف ${total} سجل نهائياً؟ لا يمكن التراجع عن هذه العملية.`)) return;
+      if (!confirm(`هيتمسح ${total} سجل نهائيًا.\n\nهتتنزّل نسخة احتياطية منهم على جهازك الأول — متقفلش الصفحة لحد ما تخلص.\n\nتأكيد؟`)) return;
+
       const resultEl = document.getElementById("cleanupResult");
-      resultEl.innerHTML = "🗑️ جاري الحذف… يرجى الانتظار وعدم إغلاق الصفحة";
+      const btn = document.getElementById("cleanupExecBtn");
+      btn.disabled = true;
+
       try {
+        // ── ١) أرشفة: نجيب السجلات نفسها وننزّلها قبل ما نلمس حاجة ──
+        resultEl.innerHTML = "📦 بنجهّز نسخة احتياطية من السجلات قبل الحذف…";
+        const archive = { _meta: {
+          archivedAt: new Date().toISOString(),
+          by: window._currentUser?.username || "admin",
+          reason: "تنظيف بيانات قديمة", totalRecords: total
+        }};
+        for (const [node, ids] of Object.entries(targets)) {
+          if (!ids.length) continue;
+          const snap = await get(ref(db, node));
+          const all = snap.val() || {};
+          archive[node] = {};
+          for (const id of ids) if (all[id] !== undefined) archive[node][id] = all[id];
+        }
+
+        const d = new Date();
+        const stamp = `${window.cairoDayKey(d)}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`;
+        const blob = new Blob([JSON.stringify(archive)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `أرشيف_قبل_الحذف_${stamp}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+        // الأرشيف نزل — نتأكد إن المدير شافه قبل ما نمسح
+        if (!confirm("📥 نزّلت النسخة الاحتياطية على جهازك.\n\nاتأكد إنها موجودة في مجلد التنزيلات قبل ما تكمّل.\n\nأمسح دلوقتي؟")) {
+          resultEl.innerHTML = "اتلغى الحذف. النسخة الاحتياطية نزلت على جهازك.";
+          btn.disabled = false;
+          return;
+        }
+
+        // ── ٢) الحذف بالجملة على دفعات ──
+        resultEl.innerHTML = "🗑️ جاري الحذف…";
+        const BATCH = 400;
         let done = 0;
         for (const [node, ids] of Object.entries(targets)) {
-          for (const id of ids) {
-            await remove(ref(db, node + "/" + id));
-            done++;
+          for (let i = 0; i < ids.length; i += BATCH) {
+            const updates = {};
+            for (const id of ids.slice(i, i + BATCH)) updates[`${node}/${id}`] = null;
+            await update(ref(db), updates);
+            done += Object.keys(updates).length;
+            resultEl.innerHTML = `🗑️ اتمسح ${done} من ${total}…`;
           }
         }
-        resultEl.innerHTML = `✅ تم حذف ${done} سجل بنجاح.`;
+
+        resultEl.innerHTML = `✅ اتمسح ${done} سجل. النسخة الاحتياطية على جهازك باسم "أرشيف_قبل_الحذف_${stamp}.json".`;
         window._cleanupTargets = null;
-        document.getElementById("cleanupExecBtn").disabled = true;
-        showToast("تم تنظيف البيانات القديمة ✓", "success");
-      } catch(e) { showToast("خطأ أثناء الحذف: " + e.message, "error"); }
+        showToast("اتنضّفت البيانات القديمة ✓", "success");
+      } catch(e) {
+        resultEl.innerHTML = `<span style="color:var(--red)">وقف عند خطأ: ${ esc(e.message) }</span>`;
+        showToast("خطأ أثناء الحذف: " + e.message, "error");
+        btn.disabled = false;
+      }
     };
 
     /* ---------- استيراد بيانات من Excel ---------- */
@@ -9379,6 +9438,12 @@
             <button class="add-btn" style="background:var(--red)" onclick="executeCleanup()" id="cleanupExecBtn" disabled>🗑️ حذف البيانات المحددة</button>
           </div>
           <div id="cleanupResult" style="margin-top:12px;font-size:.85rem;color:var(--text);line-height:1.8"></div>
+          <div style="margin-top:14px;padding:11px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.24);border-radius:8px;font-size:.81rem;color:var(--muted);line-height:1.9">
+            ⚠️ <b style="color:var(--red)">اقرا ده قبل ما تمسح:</b> السجلات دي مش معزولة —
+            الأوردر المحذوف بتاعه تقفيلة وردية وعمولة طيار وقيد محاسبي، فالتقارير القديمة اللي فيه
+            هتفضى بأثر رجعي. السيستم هينزّل لك <b style="color:var(--text)">نسخة احتياطية من السجلات
+            دي على جهازك</b> قبل الحذف، فاحتفظ بيها.
+          </div>
         </div>
 
         <!-- ── استيراد بيانات من Excel ── -->
