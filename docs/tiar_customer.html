@@ -762,7 +762,7 @@ a{color:var(--red);text-decoration:none}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, push, set, get, update, remove, onValue, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { useWallet, balanceBarHtml, readWallet } from "./wallet.js";
+import { applyWalletToSavedOrder, balanceBarHtml, readWallet } from "./wallet.js";
 import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider,
          signInWithPopup, signInWithRedirect, getRedirectResult }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -3105,17 +3105,10 @@ async function submitOrder() {
       return d;
     });
 
-    /* خصم تلقائي من المحفظة — بياخد أقل قيمة بين رصيده وسعر التوصيل.
-       بعد توليد رقم الأوردر عشان الحركة تتسجّل باسمه، وقبل الحفظ عشان
-       الأوردر يتخزّن بالمبلغ المخصوم فعلًا. */
+    /* الخصم من المحفظة بقى **بعد** حفظ الأوردر (شوف applyWalletToSavedOrder
+       في wallet.js). قبل كده كان بيتخصم الأول، فلو الحفظ فشل الفلوس تروح
+       والأوردر مايتعملش ومفيش رجوع. */
     const delivTotal = deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0);
-    let walletUsed = 0;
-    try {
-      const w = await useWallet(db, "customer", S.uid, delivTotal, {
-        orderNum, by: S.profile?.displayNameAr || "العميل"
-      });
-      walletUsed = w.used;
-    } catch (e) { console.warn("wallet:", e); }
 
     const order = {
       orderNum,
@@ -3135,8 +3128,7 @@ async function submitOrder() {
       deliveries,
       // إجمالي التوصيل = مجموع أسعار كل المناطق، مش منطقة واحدة
       totalDeliveryPrice: delivTotal,
-      // اللي اتخصم من محفظة العميل، والمتبقّي اللي هيتحصّل منه فعلًا
-      ...(walletUsed ? { walletUsed, netDeliveryPrice: Math.round((delivTotal - walletUsed) * 100) / 100 } : {}),
+      // walletUsed و netDeliveryPrice بيتكتبوا بعد الحفظ لو الخصم نجح
       // إجمالي التحصيل = مجموع تحصيل الطرود
       storePrepaid: deliveries.reduce((s, d) => s + (Number(d.orderPrice) || 0), 0),
       storePrepaidNote: "",
@@ -3159,13 +3151,20 @@ async function submitOrder() {
       timeline: { created: now }
     };
 
-    await push(ref(db, "orders"), order);
+    const orderRef = await push(ref(db, "orders"), order);
+
+    // الأوردر اتحفظ — دلوقتي بس نلمس فلوس المحفظة
+    const { used: walletUsed, warning } = await applyWalletToSavedOrder(
+      db, "customer", S.uid, `orders/${orderRef.key}`, delivTotal,
+      { orderNum, by: S.profile?.displayNameAr || "العميل" }
+    );
 
     // نحفظ المستلمين للاقتراح في المرات الجاية
     // (مش في وضع الريسيت — مفيش بيانات نحفظها)
     if (!receipt) deliveries.forEach(d => saveReceiver(d, now));
 
-    if (walletUsed) toast(`اتخصم ${walletUsed} ج.م من محفظتك 👛`, "ok");
+    if (warning)         toast(warning, "err");
+    else if (walletUsed) toast(`اتخصم ${walletUsed} ج.م من محفظتك 👛`, "ok");
     showDone(orderNum, deliveries);
   } catch (e) {
     toast("تعذّر إرسال الطلب: " + (e.message || e), "err");

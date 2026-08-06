@@ -113,6 +113,60 @@ export async function useWallet(db, kind, id, orderTotal, meta = {}) {
   return { used, remaining: after };
 }
 
+/* ══════════════════════════════════════════════════════════════
+   خصم المحفظة على أوردر **بعد** ما يتحفظ
+   ──────────────────────────────────────────────────────────────
+   قبل كده كان الترتيب: اخصم الأول → احفظ الأوردر. لو الحفظ فشل
+   (النت قطع في الثانية دي)، الفلوس بتكون راحت والأوردر مش موجود،
+   ومفيش أي رجوع — زي ما تدفع في الكافيتيريا والكاشير يقع قبل ما
+   ياخد الطلب. وكمان الخطأ كان بيتبلع في console.warn.
+
+   دلوقتي:
+     ١) الأوردر بيتحفظ بالسعر الكامل (الفلوس لسه في المحفظة)
+     ٢) الخصم بيتم
+     ٣) الأوردر بيتحدّث بالمبلغ المخصوم
+
+   لو (٢) فشلت: الأوردر موجود بسعره الكامل — مفيش فلوس ضاعت.
+   لو (٣) فشلت: بنرجّع المبلغ للمحفظة فورًا (تعويض)، فالحساب يقفل
+   في كل الحالات.
+
+   بيرجّع { used, warning } — warning نص للعرض لو حاجة ما تمّتش.
+══════════════════════════════════════════════════════════════ */
+export async function applyWalletToSavedOrder(db, kind, id, orderPath, total, meta = {}) {
+  const amount = Number(total) || 0;
+  if (!id || amount <= 0) return { used: 0, warning: "" };
+
+  let used = 0;
+  try {
+    const r = await useWallet(db, kind, id, amount, meta);
+    used = r.used;
+  } catch (e) {
+    return { used: 0, warning: "الأوردر اتسجّل، بس خصم رصيد المحفظة ما تمّش — كلّم الإدارة" };
+  }
+  if (!used) return { used: 0, warning: "" };
+
+  try {
+    await update(ref(db, orderPath), {
+      walletUsed: used,
+      netDeliveryPrice: Math.round((amount - used) * 100) / 100
+    });
+    return { used, warning: "" };
+  } catch (e) {
+    // الخصم اتم بس ما اتسجّلش على الأوردر — نرجّع الفلوس بدل ما العميل
+    // يدفع السعر كامل ويكون اتخصم منه كمان
+    try {
+      await addTxn(db, kind, id, {
+        type: "credit", amount: used,
+        note: `رجوع خصم لم يُسجَّل على أوردر ${meta.orderNum || ""}`.trim(),
+        by: "النظام"
+      });
+      return { used: 0, warning: "خصم المحفظة اترجع لأن تسجيله على الأوردر ما تمّش" };
+    } catch (_) {
+      return { used, warning: "⚠️ اتخصم من محفظتك بس ما اتسجّلش على الأوردر — كلّم الإدارة فورًا" };
+    }
+  }
+}
+
 /** شريط بيوري صاحب الحساب رصيده — بيتحط في تطبيق العميل والمحل */
 export function balanceBarHtml(balance, opts = {}) {
   const b = Number(balance) || 0;

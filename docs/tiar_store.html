@@ -25,7 +25,7 @@
     import {
       getDatabase, ref, push, set, onValue, get, update, runTransaction
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { useWallet, balanceBarHtml, readWallet } from "./wallet.js";
+    import { applyWalletToSavedOrder, balanceBarHtml, readWallet } from "./wallet.js";
     import { getAuth, onAuthStateChanged, signOut, signInAnonymously }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -1429,18 +1429,11 @@
         const total          = deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0);
         const totalOrderPrice = deliveries.reduce((s, d) => s + (d.orderPrice || 0), 0);
 
-        /* خصم تلقائي من المحفظة — بياخد أقل قيمة بين رصيده وسعر التوصيل.
-           بيتعمل بعد توليد رقم الأوردر عشان الحركة تتسجّل باسمه، وقبل
-           الحفظ عشان الأوردر يتخزّن بالمبلغ المخصوم فعلًا. */
-        let walletUsed = 0;
-        try {
-          const w = await useWallet(db, "store", u.username, total, {
-            orderNum, by: u.shopName || u.username
-          });
-          walletUsed = w.used;
-        } catch (e) { console.warn("wallet:", e); }
-
-        await push(ref(db, "orders"), {
+        /* الخصم من المحفظة بقى **بعد** حفظ الأوردر (applyWalletToSavedOrder
+           في wallet.js). قبل كده كان بيتخصم الأول، فلو الحفظ فشل الفلوس
+           تروح والأوردر مايتعملش ومفيش رجوع، والخطأ كان بيتبلع في
+           console.warn اللي محدش بيفتحه. */
+        const _orderRef = await push(ref(db, "orders"), {
           orderNum,
           senderId    : null,
           senderName  : _snd.name,
@@ -1460,8 +1453,7 @@
           branchName  : (bSnap.exists() ? bSnap.val().name : null) || u.branchName,
           notes, deliveries,
           totalDeliveryPrice: total,
-          // اللي اتخصم من محفظة المحل، والمتبقّي اللي هيتحصّل منه فعلًا
-          ...(walletUsed ? { walletUsed, netDeliveryPrice: Math.round((total - walletUsed) * 100) / 100 } : {}),
+          // walletUsed و netDeliveryPrice بيتكتبوا بعد الحفظ لو الخصم نجح
           storePrepaid: totalOrderPrice,
           storePrepaidNote: "",
           status     : "قيد التنفيذ",
@@ -1472,6 +1464,12 @@
           source     : "store"
         });
 
+        // الأوردر اتحفظ — دلوقتي بس نلمس فلوس المحفظة
+        const { used: walletUsed, warning: _wWarn } = await applyWalletToSavedOrder(
+          db, "store", u.username, `orders/${_orderRef.key}`, total,
+          { orderNum, by: u.shopName || u.username }
+        );
+
         // حفظ بيانات المستلمين في جهات اتصال المحل
         for (const d of deliveries) {
           saveStoreContact(u.username, {
@@ -1481,6 +1479,7 @@
         }
 
         await _storeDiag({ step: "success", orderNum });
+        if (_wWarn) toast(_wWarn, "err");
         toast(walletUsed
           ? `✅ تمّ إرسال الطلب ${orderNum} — اتخصم ${walletUsed} ج من محفظتك`
           : `✅ تمّ إرسال الطلب ${orderNum}`, "ok");
