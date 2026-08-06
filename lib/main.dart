@@ -1219,6 +1219,73 @@ class FbAuth {
    للشجرة الكاملة لو الاستعلام المفلتر فشل، عشان مفيش تطبيق يقع في الفترة
    اللي القواعد لسه مترفعتش فيها.
 ──────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+   إصدار التطبيق والتحديث الإجباري
+   ──────────────────────────────────────────────────────────────
+   قبل كده التطبيق مكانش بيقول نسخته لحد، والسيرفر مكانش يقدر يجبره
+   يحدّث. يعني لما شكل البيانات يتغيّر، الطيارين اللي على نسخة قديمة
+   بيفضلوا شغّالين ويكتبوا بالشكل القديم — ومحدش يعرف مين فيهم.
+
+   دلوقتي:
+     • كل طيار بيبصم نسخته على سجله (pilots/{id}/appVersion) فالإدارة
+       تشوف مين لسه على نسخة قديمة
+     • الإدارة تحدّد أقل نسخة مسموحة في settings/pilotApp/minVersion،
+       واللي تحتها بيتوقف بشاشة تحديث مايقدرش يعدّيها
+
+   لو الإعداد مش موجود أو النت واقع، التطبيق بيكمّل عادي — مش هنقفل
+   على الطيارين شغلهم بسبب إعداد ناقص.
+══════════════════════════════════════════════════════════════ */
+const String kAppVersion = '1.9.2';
+
+/// بيقارن نسختين بالشكل "1.9.2". بيرجّع سالب/صفر/موجب
+int compareVersions(String a, String b) {
+  final pa = a.split('.').map((x) => int.tryParse(x.trim()) ?? 0).toList();
+  final pb = b.split('.').map((x) => int.tryParse(x.trim()) ?? 0).toList();
+  for (var i = 0; i < (pa.length > pb.length ? pa.length : pb.length); i++) {
+    final x = i < pa.length ? pa[i] : 0;
+    final y = i < pb.length ? pb[i] : 0;
+    if (x != y) return x - y;
+  }
+  return 0;
+}
+
+class AppUpdate {
+  final bool blocked;
+  final String minVersion, latestVersion, url, message;
+  const AppUpdate({this.blocked = false, this.minVersion = '', this.latestVersion = '',
+                   this.url = '', this.message = ''});
+}
+
+/// بيقرا إعداد التحديث. أي فشل = مفيش حجب (fail-open عن قصد).
+Future<AppUpdate> checkAppUpdate() async {
+  try {
+    final raw = await FB.get('settings/pilotApp');
+    if (raw is! Map) return const AppUpdate();
+    final minV = (raw['minVersion'] ?? '').toString().trim();
+    if (minV.isEmpty) return const AppUpdate();
+    return AppUpdate(
+      blocked: compareVersions(kAppVersion, minV) < 0,
+      minVersion: minV,
+      latestVersion: (raw['latestVersion'] ?? '').toString(),
+      url: (raw['updateUrl'] ?? '').toString(),
+      message: (raw['message'] ?? '').toString(),
+    );
+  } catch (_) {
+    return const AppUpdate();
+  }
+}
+
+/// بيبصم نسخة التطبيق على سجل الطيار — الإدارة تشوف مين على إيه
+Future<void> stampAppVersion(String pilotId) async {
+  if (pilotId.isEmpty) return;
+  try {
+    await FB.patch('pilots/$pilotId', {
+      'appVersion': kAppVersion,
+      'appVersionAt': DateTime.now().toUtc().toIso8601String(),
+    });
+  } catch (_) {/* مش مهم لدرجة إننا نوقف الطيار */}
+}
+
 /// خطأ برسالة جاهزة للعرض على الطيار — مش نص إنجليزي تقني
 /* التوقيت بيتكتب UTC بعلامة Z صريحة (toUtc) مش توقيت الجهاز.
    قبل كده كان toIso8601String() على وقت محلي = نص من غير أي علامة
@@ -1961,6 +2028,79 @@ class TiarApp extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════
 //  SPLASH SCREEN
 // ════════════════════════════════════════════════════════════════
+/// شاشة تحديث إجباري — مافيش منها خروج غير إن الطيار يحدّث
+class ForceUpdateScreen extends StatelessWidget {
+  final AppUpdate info;
+  const ForceUpdateScreen({super.key, required this.info});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,   // زرار الرجوع مايخرجش منها
+      child: Scaffold(
+        backgroundColor: K.bg,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.system_update, color: K.red, size: 82),
+                const SizedBox(height: 22),
+                const Text('لازم تحدّث التطبيق',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: K.white, fontSize: 23, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 14),
+                Text(
+                  info.message.isNotEmpty
+                      ? info.message
+                      : 'النسخة اللي معاك بقت قديمة ومش هتشتغل صح مع السيستم.\n'
+                        'حدّث التطبيق عشان تقدر تكمّل شغل.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: K.grey, fontSize: 14.5, height: 1.9),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: K.card2, borderRadius: BorderRadius.circular(11)),
+                  child: Text(
+                    'نسختك: $kAppVersion'
+                    '${info.latestVersion.isNotEmpty ? '   •   الجديدة: ${info.latestVersion}' : ''}',
+                    style: const TextStyle(color: K.grey, fontSize: 13, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 26),
+                if (info.url.isNotEmpty)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final u = Uri.tryParse(info.url);
+                        if (u != null) {
+                          try { await launchUrl(u, mode: LaunchMode.externalApplication); } catch (_) {}
+                        }
+                      },
+                      icon: const Icon(Icons.download),
+                      label: const Text('نزّل النسخة الجديدة'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: K.red, foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    ),
+                  )
+                else
+                  const Text('كلّم الإدارة عشان تبعتلك النسخة الجديدة',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: K.orange, fontSize: 13.5, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class SplashScreen extends StatefulWidget {
   final Map<String, String>? session;
   const SplashScreen({super.key, this.session});
@@ -1981,6 +2121,21 @@ class _SplashState extends State<SplashScreen> with SingleTickerProviderStateMix
 
     Future.delayed(const Duration(milliseconds: 2000), () async {
       if (!mounted) return;
+
+      /* فحص الإصدار قبل أي شاشة تانية. لو الإدارة حدّدت أقل نسخة
+         مسموحة والنسخة دي تحتها، بنوقف هنا. أي فشل في القراءة (نت
+         واقع، إعداد مش موجود) = بنكمّل عادي — مش هنقفل على الطيار
+         شغله بسبب إعداد ناقص. */
+      final upd = await checkAppUpdate();
+      if (!mounted) return;
+      if (upd.blocked) {
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => ForceUpdateScreen(info: upd)));
+        return;
+      }
+      // نبصم النسخة على سجل الطيار عشان الإدارة تشوف مين على إيه
+      if (widget.session != null) stampAppVersion(widget.session!['pilotId'] ?? '');
+
       if (widget.session != null) {
         var shiftActive = await ShiftService.isActive();
         // لو مفيش وردية نشطة محليًا، لازم نتأكد من السيرفر قبل ما نحكم
@@ -2358,6 +2513,7 @@ class _LoginState extends State<LoginScreen> {
       final name    = data['name']?.toString()    ?? user;
       final pilotId = data['pilotId']?.toString() ?? '';
       await Session.save(username: user, name: name, pilotId: pilotId);
+      stampAppVersion(pilotId);   // الإدارة تشوف كل طيار على أنهي نسخة
 
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(

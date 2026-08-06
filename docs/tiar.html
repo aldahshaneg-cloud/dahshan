@@ -42,6 +42,17 @@
        مثبّتة على Africa/Cairo مش على توقيت الجهاز، عشان لو ساعة أي
        كمبيوتر في الفروع مظبوطة غلط مايتغيّرش حساب اليوم.
     ──────────────────────────────────────────────────────────────── */
+    /* مقارنة نسختين بالشكل "1.9.2" — سالب يعني الأولى أقدم */
+    window._cmpVer = function (a, b) {
+      const pa = String(a||"").split(".").map(x => parseInt(x,10) || 0);
+      const pb = String(b||"").split(".").map(x => parseInt(x,10) || 0);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i]||0) - (pb[i]||0);
+        if (d) return d;
+      }
+      return 0;
+    };
+
     window.cairoParts = function (d) {
       const p = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit"
@@ -1478,6 +1489,18 @@
     };
 
 
+    /* إعدادات عامة — منها أقل نسخة مسموحة لتطبيق الطيار */
+    onValue(ref(db, "settings"), (snap) => {
+      window._settingsData = snap.val() || {};
+      const el = document.getElementById("pilotMinVersion");
+      if (el && document.activeElement !== el)
+        el.value = window._settingsData.pilotApp?.minVersion || "";
+      const el2 = document.getElementById("pilotUpdateUrl");
+      if (el2 && document.activeElement !== el2)
+        el2.value = window._settingsData.pilotApp?.updateUrl || "";
+      if (window._pilotsData) renderPilots(window._pilotsData);
+    });
+
     onValue(ref(db, "pilots"), (snapshot) => {
       const data = snapshot.val();
       const pilots = data ? Object.entries(data).map(([id, v]) => ({ id, ...v })) : [];
@@ -1771,6 +1794,16 @@
           : p.pilotStatus === "waiting" ? `<span class="status-badge status-pending">⏳ انتظار</span>`
           : p.pilotStatus === "onLeave" ? `<span class="status-badge status-cancelled">🔴 في إذن</span>`
           : `<span style="color:var(--muted);font-size:.78rem">غير نشط</span>`;
+        /* نسخة تطبيق الطيار — بتتبصم من التطبيق نفسه عند الدخول وعند كل
+           فتح. اللي مالوش نسخة يبقى لسه ما فتحش النسخة الجديدة، واللي
+           نسخته أقل من الحد الأدنى بيتصدّ بشاشة تحديث في التطبيق. */
+        const _minV = (window._settingsData?.pilotApp?.minVersion || "").trim();
+        const _pv   = (p.appVersion || "").trim();
+        const _old  = _minV && _pv && _cmpVer(_pv, _minV) < 0;
+        const verHtml = !_pv
+          ? `<span style="color:var(--muted);font-size:.75rem">— لسه ما فتحش</span>`
+          : `<span style="font-size:.78rem;font-weight:700;color:${_old ? "var(--red)" : "var(--green)"}">${ esc(_pv) }${_old ? " ⚠️ قديمة" : ""}</span>`;
+
         const canOpenShift = !p.pilotStatus && p.assignedBranchId;
         const shiftBtn = canOpenShift
           ? `<button class="add-btn" style="padding:5px 10px;font-size:.75rem" onclick="adminOpenShiftDirect('${ escJs(p.id) }')">▶️ فتح وردية</button>`
@@ -1782,7 +1815,7 @@
           : (p.pilotStatus === "waiting" || p.pilotStatus === "delivering")
           ? `<button class="del-btn" style="background:rgba(239,68,68,.13);color:var(--red);border:1px solid var(--red)" onclick="forcePilotLeave('${ escJs(p.id) }','${ escJs(p.name) }')">🛑 إيقاف/إذن</button>`
           : "";
-        return `<tr><td class="idx">${i+1}</td><td><span class="name-badge">${ esc(p.name) }</span></td><td dir="ltr">${ esc(p.phone1) }</td><td dir="ltr">${ esc(p.phone2 || "—") }</td><td>${ esc(p.cardNum) }</td><td>${ esc(p.address) }</td><td>${ esc(p.vehicleNo) }</td><td>${branchHtml}</td><td>${statusHtml}</td><td>${shiftBtn}<button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button><button class="del-btn" onclick="deletePilot('${ escJs(p.id) }')">حذف</button>${leaveBtn}</td></tr>`;
+        return `<tr><td class="idx">${i+1}</td><td><span class="name-badge">${ esc(p.name) }</span></td><td dir="ltr">${ esc(p.phone1) }</td><td dir="ltr">${ esc(p.phone2 || "—") }</td><td>${ esc(p.cardNum) }</td><td>${ esc(p.address) }</td><td>${ esc(p.vehicleNo) }</td><td>${branchHtml}</td><td>${verHtml}</td><td>${statusHtml}</td><td>${shiftBtn}<button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button><button class="del-btn" onclick="deletePilot('${ escJs(p.id) }')">حذف</button>${leaveBtn}</td></tr>`;
       }).join("");
     }
 
@@ -7356,6 +7389,36 @@
       } catch(e) { showToast("خطأ في النسخ الاحتياطي: " + e.message, "error"); }
     };
 
+    /* حفظ إعدادات نسخة تطبيق الطيار */
+    window.savePilotAppSettings = async function() {
+      const v   = document.getElementById("pilotMinVersion").value.trim();
+      const url = document.getElementById("pilotUpdateUrl").value.trim();
+      if (v && !/^\d+(\.\d+)*$/.test(v)) {
+        showToast("النسخة لازم تكون أرقام ونقط بس، زي 1.9.2", "error"); return;
+      }
+      /* تحذير صريح قبل ما نوقف طيارين شغّالين. الإعداد ده بيوقف
+         الشغل فورًا، فلازم المدير يشوف بالاسم مين هيتأثر. */
+      if (v) {
+        const affected = (window._pilotsData || [])
+          .filter(p => !p.appVersion || window._cmpVer(p.appVersion, v) < 0);
+        if (affected.length) {
+          const names = affected
+            .map(p => "• " + (p.name || p.id) + " (" + (p.appVersion || "لسه ما فتحش") + ")")
+            .join("\n");
+          if (!confirm(affected.length + " طيار هيتوقفوا عن الشغل فورًا لحد ما يحدّثوا:\n"
+                       + names + "\n\nتأكيد؟")) return;
+        }
+      }
+      try {
+        await update(ref(db, "settings/pilotApp"), {
+          minVersion: v, updateUrl: url,
+          updatedAt: new Date().toISOString(),
+          updatedBy: window._currentUser?.username || "admin"
+        });
+        showToast(v ? "اتحفظ — أقل نسخة مسموحة " + v : "اتحفظ — مفيش تحديث إجباري", "success");
+      } catch(e) { showToast("خطأ: " + e.message, "error"); }
+    };
+
     window.setBackupInterval = async function() {
       const val = Number(document.getElementById("backupInterval").value) || 0;
       try {
@@ -8486,7 +8549,7 @@
     <div class="page" id="page-pilots">
       <div class="stats"><div class="stat-card"><span class="stat-label">إجمالي الطيارين</span><span class="stat-value" id="totalCount">0</span></div></div>
       <div class="sec-header"><span class="sec-title">قائمة الطيارين</span><button class="add-btn" onclick="resetPilotModal();openModal('pilot')">➕ إضافة طيار جديد</button></div>
-      <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم</th><th>هاتف1</th><th>هاتف2</th><th>رقم البطاقة</th><th>العنوان</th><th>المركبة</th><th>الفرع</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="pilotsBody"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم</th><th>هاتف1</th><th>هاتف2</th><th>رقم البطاقة</th><th>العنوان</th><th>المركبة</th><th>الفرع</th><th>نسخة التطبيق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="pilotsBody"></tbody></table></div>
     </div>
 
     <!-- صفحة خريطة الطيارين -->
@@ -9228,6 +9291,33 @@
           </div>
           <div style="margin-top:14px;padding:10px 14px;background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.2);border-radius:8px;font-size:.8rem;color:var(--muted);line-height:1.8">
             💡 <b style="color:var(--text)">كيف يعمل؟</b> كل متصفح مفتوح على السيستم يُرسل نبضة كل دقيقة. إذا انقطعت النبضات (إغلاق متصفح، انقطاع نت، تعطل الجهاز) لأكثر من المدة المحددة، يسجّل السيستم انصراف الموظف تلقائياً عند آخر نبضة وصلت.
+          </div>
+        </div>
+
+        <!-- ── نسخة تطبيق الطيار ── -->
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px">
+          <div class="sec-title" style="margin-bottom:10px">📱 نسخة تطبيق الطيار</div>
+          <p style="color:var(--muted);font-size:.83rem;margin-bottom:14px;line-height:1.8">
+            كل طيار بيبصم نسخة تطبيقه أول ما يفتحه — تشوفها في عمود «نسخة التطبيق» في قائمة الطيارين.
+            لو حدّدت أقل نسخة مسموحة هنا، أي طيار على نسخة أقدم هيتوقف بشاشة تحديث لحد ما يحدّث.
+            <b style="color:var(--orange)">سيبها فاضية لو مش عايز تجبر حد.</b>
+          </p>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+            <div>
+              <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">أقل نسخة مسموحة</label>
+              <input id="pilotMinVersion" type="text" placeholder="مثال: 1.9.2" dir="ltr"
+                style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);width:150px" />
+            </div>
+            <div style="flex:1;min-width:240px">
+              <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رابط تنزيل النسخة الجديدة (اختياري)</label>
+              <input id="pilotUpdateUrl" type="text" placeholder="https://…" dir="ltr"
+                style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);width:100%" />
+            </div>
+            <button onclick="savePilotAppSettings()" style="background:var(--sky);color:#fff;border:none;padding:9px 22px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.87rem">💾 حفظ</button>
+          </div>
+          <div style="padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.22);border-radius:8px;font-size:.8rem;color:var(--muted);line-height:1.8">
+            ⚠️ <b style="color:var(--red)">خد بالك:</b> لو حطيت نسخة أعلى من اللي عند الطيارين، هيتوقفوا كلهم عن الشغل فورًا لحد ما يحدّثوا.
+            اتأكد إن النسخة الجديدة وصلتهم الأول.
           </div>
         </div>
 
