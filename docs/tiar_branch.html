@@ -561,6 +561,24 @@
       });
 
       // Orders: all orders, filter by branchId client-side
+      /* تجميع رسم صفحات الأوردرات في رسمة واحدة بدل رسمة لكل حدث */
+      let _brRenderQueued = false;
+      function _queueBranchRender() {
+        if (_brRenderQueued) return;
+        _brRenderQueued = true;
+        setTimeout(() => {
+          _brRenderQueued = false;
+          try {
+            renderOrdersPage();
+            renderDeliveringPage();
+            renderDeliveredPage();
+            renderUndeliveredPage();
+            renderCancelledPage();
+            updateDashboardCounts();
+          } catch (e) { console.error("branch render:", e); }
+        }, 120);
+      }
+
       const u2 = onValue(ref(db, "orders"), snap => {
         const d = snap.val();
         const all = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
@@ -578,12 +596,10 @@
         branchOrders.forEach(o => window._knownOrderIds.add(o.id));
         window._ordersData = branchOrders;
         window._isFirstLoad = false;
-        renderOrdersPage();
-        renderDeliveringPage();
-        renderDeliveredPage();
-        renderUndeliveredPage();
-        renderCancelledPage();
-        updateDashboardCounts();
+        /* الإشعارات فوق بتفضل فورية (مش المفروض تتأخر)، لكن رسم الخمس
+           صفحات بيتأجّل شوية عشان التغييرات المتلاحقة تتجمّع في رسمة
+           واحدة. تحميل جماعي لـ 10 أوردرات كان بيعمل 10 رسمات كاملة. */
+        _queueBranchRender();
       });
 
       // Zones for this branch + global list for order modal
@@ -833,6 +849,28 @@
       return max + 1;
     }
 
+    /* ── سقف صفوف الجداول المنتهية ──────────────────────────────────────
+       جداول "تم التسليم" و"ملغي" و"لم يتم التوصيل" بتكبر للأبد وبتتعاد
+       بالكامل مع كل تغيير في أي أوردر. اتقاس: عند 5000 أوردر الرسمة
+       الواحدة 216 مللي، وعند 15000 بقت 655 مللي — والشاشة بتتجمّد فيهم.
+       الترتيب بقى الأحدث الأول (كان بترتيب الإضافة يعني الأقدم فوق).
+    ──────────────────────────────────────────────────────────────────── */
+    const FINISHED_ROWS_LIMIT = 300;
+
+    function _orderTime(o) {
+      return new Date(o.deliveredAt || o.undeliveredAt || o.cancelledAt || o.createdAt || 0).getTime() || 0;
+    }
+    function capNewest(arr, limit) {
+      const s = arr.slice().sort((a,b) => _orderTime(b) - _orderTime(a));
+      return s.length <= limit ? s : s.slice(0, limit);
+    }
+    function rowsCapNote(shown, total, cols) {
+      if (shown >= total) return "";
+      return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
+        font-size:.8rem;font-weight:700;text-align:center;padding:9px">
+        بيتعرض أحدث ${shown} من إجمالي ${total} — استخدم الفلاتر فوق للوصول للأقدم</td></tr>`;
+    }
+
     /* ── مؤقّت واحد لكل الشاشة (نفس التعديل في tiar.html و tiar_callcenter.html) ──
        كل أوردر نشط وكل طيار كان بياخد setInterval خاص بيه بيدق كل ثانية،
        وكلهم كانوا بيتلغوا ويتعملوا من الأول مع كل رسمة للجدول.
@@ -1055,7 +1093,9 @@
           dtbody.innerHTML = `<tr><td colspan="10" class="empty-row">لا توجد طلبات مسلَّمة بعد</td></tr>`;
           return;
         }
-        dtbody.innerHTML = ordersArr.map((o, i) => {
+        const _total = ordersArr.length;
+        const _shown = capNewest(ordersArr, FINISHED_ROWS_LIMIT);
+        dtbody.innerHTML = rowsCapNote(_shown.length, _total, 10) + _shown.map((o, i) => {
           const delivSummary = (o.deliveries || []).map(d =>
             `<span style="display:block;font-size:.74rem;color:var(--muted)">${d.receiverName || "—"} — ${d.zoneName || "—"}</span>`
           ).join("");
@@ -1101,7 +1141,8 @@
       if (!undelivered.length) {
         utbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات غير مسلَّمة</td></tr>`;
       } else {
-        utbody.innerHTML = undelivered.map((o, i) => {
+        const _uShown = capNewest(undelivered, FINISHED_ROWS_LIMIT);
+        utbody.innerHTML = rowsCapNote(_uShown.length, undelivered.length, 9) + _uShown.map((o, i) => {
           const delivSummary = (o.deliveries || []).map(d =>
             `<span style="display:block;font-size:.74rem;color:var(--muted)">${d.receiverName || "—"} — ${d.zoneName || "—"}</span>`
           ).join("");
@@ -2621,7 +2662,8 @@
       if (!cancelled.length) {
         ctbody.innerHTML = `<tr><td colspan="7" class="empty-row">لا توجد طلبات ملغاة من الإدارة</td></tr>`;
       } else {
-        ctbody.innerHTML = cancelled.map((o, i) => {
+        const _cShown = capNewest(cancelled, FINISHED_ROWS_LIMIT);
+        ctbody.innerHTML = rowsCapNote(_cShown.length, cancelled.length, 7) + _cShown.map((o, i) => {
           const delivSummary = (o.deliveries || []).map(d =>
             `<span style="display:block;font-size:.74rem;color:var(--muted)">${d.receiverName || "—"} — ${d.zoneName || "—"}</span>`
           ).join("");

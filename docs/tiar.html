@@ -4429,8 +4429,36 @@
 
     /* ── Render orders ─────────────────────────────────────────────────── */
     window._ordersData = [];
-    onValue(ref(db, "orders"), (snapshot) => {
-      const data = snapshot.val();
+    /* ── سقف صفوف الجداول المنتهية ──────────────────────────────────────
+       جداول "تم التسليم" و"ملغي" و"لم يتم التوصيل" بتكبر للأبد وبتتعاد
+       بالكامل مع كل تغيير في أي أوردر. السقف بيخلّي تكلفة الرسم ثابتة
+       مهما كبرت القاعدة. الترتيب بقى الأحدث الأول (كان بترتيب الإضافة،
+       يعني الأقدم فوق) عشان الصفوف المعروضة تبقى هي المفيدة فعلاً.
+    ──────────────────────────────────────────────────────────────────── */
+    const FINISHED_ROWS_LIMIT = 300;
+
+    function _orderTime(o) {
+      return new Date(o.deliveredAt || o.undeliveredAt || o.cancelledAt || o.createdAt || 0).getTime() || 0;
+    }
+    function capNewest(arr, limit) {
+      if (arr.length <= limit) return arr.slice().sort((a,b) => _orderTime(b) - _orderTime(a));
+      return arr.slice().sort((a,b) => _orderTime(b) - _orderTime(a)).slice(0, limit);
+    }
+    function rowsCapNote(shown, total, cols) {
+      if (shown >= total) return "";
+      return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
+        font-size:.8rem;font-weight:700;text-align:center;padding:9px">
+        بيتعرض أحدث ${shown} من إجمالي ${total} — استخدم الفلاتر فوق للوصول للأقدم</td></tr>`;
+    }
+
+    /* ── رسم كل جداول الأوردرات ─────────────────────────────────────────
+       الدالة دي بتعيد بناء 6 جداول بالكامل بـ innerHTML. كانت متوصّلة
+       مباشرةً بـ onValue، يعني كل تغيير في أي أوردر بيعيد رسم الشاشة
+       كلها من الأول. لما تحمّل 10 أوردرات مرة واحدة، فايربيز بيبعت 10
+       أحداث ورا بعض → 10 إعادة رسم كاملة، والمستخدم بيحس بتهنيج.
+       دلوقتي التسجيل تحت بيجمّع التغييرات المتلاحقة في رسمة واحدة.
+    ──────────────────────────────────────────────────────────────────── */
+    function _renderOrdersUI(data) {
       const list = data ? Object.entries(data).map(([id,v]) => ({id,...v})) : [];
       window._ordersData = list;
       const active    = list.filter(o => o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل");
@@ -4555,7 +4583,13 @@
         // تعريف دالة الرسم القابلة لإعادة الاستخدام (تُستخدم أيضاً من فلاتر الصفحة)
         window._renderDeliveredTable = function(ordersArr) {
           if (!ordersArr.length) { dtbody.innerHTML = `<tr><td colspan="11" class="empty-row">لا توجد طلبات مسلَّمة بعد</td></tr>`; return; }
-          dtbody.innerHTML = ordersArr.map((o, i) => {
+          /* الجدول ده بيكبر للأبد. من غير سقف، بعد سنة بيبقى فيه عشرات
+             الآلاف من الصفوف وبيتعاد بناؤه بالكامل مع كل تغيير في أي
+             أوردر — ودي أكبر حاجة بتتقل مع الوقت. بنعرض الأحدث، ومين
+             عايز أقدم من كده يستخدم الفلاتر فوق. */
+          const _total = ordersArr.length;
+          const _shown = capNewest(ordersArr, FINISHED_ROWS_LIMIT);
+          dtbody.innerHTML = rowsCapNote(_shown.length, _total, 11) + _shown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${d.receiverName} — ${d.zoneName}</span>`).join("");
             return `<tr>
               <td class="idx">${i+1}</td>
@@ -4590,7 +4624,8 @@
       if (ctbody) {
         if (!cancelled.length) { ctbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات ملغاة</td></tr>`; }
         else {
-          ctbody.innerHTML = cancelled.map((o, i) => {
+          const _cShown = capNewest(cancelled, FINISHED_ROWS_LIMIT);
+          ctbody.innerHTML = rowsCapNote(_cShown.length, cancelled.length, 9) + _cShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${d.receiverName || "—"} — ${d.zoneName || ""}</span>`).join("");
             return `<tr>
               <td class="idx">${i+1}</td>
@@ -4620,7 +4655,8 @@
       if (utbody) {
         if (!undelivered.length) { utbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات غير مسلَّمة</td></tr>`; }
         else {
-          utbody.innerHTML = undelivered.map((o, i) => {
+          const _uShown = capNewest(undelivered, FINISHED_ROWS_LIMIT);
+          utbody.innerHTML = rowsCapNote(_uShown.length, undelivered.length, 9) + _uShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${d.receiverName || "—"} — ${d.zoneName || "—"}</span>`).join("");
             return `<tr>
               <td class="idx">${i+1}</td>
@@ -4644,6 +4680,23 @@
       }
 
       startOrderTimers(active);
+    }
+
+    /* تجميع التغييرات المتلاحقة في رسمة واحدة.
+       window._ordersData بيتحدّث فورًا (من غير تأجيل) عشان أي كود تاني
+       بيقرا منه — زي تأكيد التحميل — يشوف أحدث بيانات على طول. اللي
+       بيتأجّل هو الرسم بس. */
+    let _ordersRaw = null, _ordersRenderQueued = false;
+    onValue(ref(db, "orders"), (snapshot) => {
+      _ordersRaw = snapshot.val();
+      window._ordersData = _ordersRaw
+        ? Object.entries(_ordersRaw).map(([id,v]) => ({id,...v})) : [];
+      if (_ordersRenderQueued) return;
+      _ordersRenderQueued = true;
+      setTimeout(() => {
+        _ordersRenderQueued = false;
+        try { _renderOrdersUI(_ordersRaw); } catch(e) { console.error("orders render:", e); }
+      }, 120);
     });
 
     /* ── Users ──────────────────────────────────────────────────────────── */
