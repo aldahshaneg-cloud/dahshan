@@ -13,8 +13,9 @@
 /* أي تغيير في ملفات الـ SHELL (وخصوصًا الصور) لازم يرفع الرقم ده، وإلا
    المستخدم اللي مثبّت التطبيق يفضل شايف النسخة القديمة من الكاش للأبد.
    v4 = الشعار اتصغّر من 1 ميجا لـ 91 كيلو.
-   v5 = ضفنا netstatus.js للـ SHELL. */
-const CACHE = "dahshan-apps-v5";
+   v5 = ضفنا netstatus.js للـ SHELL.
+   v6 = ضفنا imgcompress.js. */
+const CACHE = "dahshan-apps-v6";
 
 /* الملفات اللي التطبيقين مش هيشتغلوا من غيرها.
    مهم: wallet.js و install.js لازم يكونوا هنا — الصفحتين بيعملوا
@@ -26,6 +27,7 @@ const SHELL = [
   "./wallet.js",
   "./install.js",
   "./netstatus.js",
+  "./imgcompress.js",
   "./customer-manifest.json",
   "./store-manifest.json",
   "./assets/logo.png",
@@ -40,7 +42,7 @@ const CDN = [
 ];
 
 const OURS = ["/tiar_customer.html", "/tiar_store.html",
-              "/wallet.js", "/install.js", "/netstatus.js",
+              "/wallet.js", "/install.js", "/netstatus.js", "/imgcompress.js",
               "/customer-manifest.json", "/store-manifest.json"];
 
 const isOurs = url =>

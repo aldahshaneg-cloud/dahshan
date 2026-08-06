@@ -118,6 +118,12 @@
       const cfg = window.CLOUDINARY;
       if (!cfg.cloudName || cfg.cloudName.startsWith("___"))
         throw new Error("إعدادات Cloudinary مش مضبوطة");
+      /* الضغط قبل الرفع — صورة الكاميرا 4 ميجا بتبقى أقل من 400 كيلو.
+         لو الضغط فشل بيرجّع الملف الأصلي والرفع بيكمّل عادي. */
+      try {
+        const { compressImage } = await import("./imgcompress.js");
+        file = await compressImage(file);
+      } catch (_) {/* نكمّل بالأصلي */}
       const fd = new FormData();
       fd.append("file", file);
       fd.append("upload_preset", cfg.uploadPreset);

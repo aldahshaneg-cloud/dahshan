@@ -2975,6 +2975,13 @@ function renderSummary() {
 
 /* ── رفع الصور على Cloudinary (نفس بوابة المحل) ──────────── */
 async function uploadImage(file) {
+  /* الضغط قبل الرفع: صورة الكاميرا 4 ميجا بتبقى أقل من 400 كيلو،
+     والعميل مسموح له 6 صور للطرد — يعني كنا بنطلب منه يرفع 24 ميجا
+     على بيانات الموبايل. لو الضغط فشل بيرجّع الملف الأصلي. */
+  try {
+    const { compressImage } = await import("./imgcompress.js");
+    file = await compressImage(file);
+  } catch (_) {/* نكمّل بالأصلي */}
   const fd = new FormData();
   fd.append("file", file);
   fd.append("upload_preset", CLOUDINARY.uploadPreset);
