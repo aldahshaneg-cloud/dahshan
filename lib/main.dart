@@ -247,12 +247,7 @@ class OrderRinger {
   static bool _audioConfigured = false;
   static Timer? _watchdog;             // مراقب يضمن استمرار النغمة
   static int  _lastCount = 1;          // عدد الطلبات المعلّقة (لعنوان الإشعار)
-  static bool _audioOk   = false;      // هل النغمة المتواصلة اشتغلت فعلاً؟
   static int  _notPlayingStreak = 0;   // كام دورة ورا بعض والمشغّل مش شغّال
-
-  /// حالة الرنين — بتتكتب في التشخيص عشان نعرف أي مسار صوت اشتغل
-  static String get status =>
-      !_ringing ? 'stopped' : (_audioOk ? 'ringing(loop)' : 'ringing(notif-sound)');
 
   /// تهيئة سياق الصوت مرة واحدة: loop + usage=alarm (يرن فوق الصامت)
   static Future<void> _ensureAudioConfig() async {
@@ -330,7 +325,6 @@ class OrderRinger {
       _notPlayingStreak++;
     }
     final audioOk = playCallOk && _notPlayingStreak < 4; // ~12ث سماح قبل الاحتياطي
-    _audioOk = audioOk;
 
     if (audioOk) {
       // النغمة المتواصلة شغّالة (أو بتحمّل) — الإشعار صامت عشان ما يبقاش
@@ -442,10 +436,6 @@ class _OrderTaskHandler extends TaskHandler {
     // ويحدّث known_order_ids (قائمة المشوفة) باستمرار وهو حي
     if (appOpen) {
       await OrderRinger.stopRinging();
-      _diagLog(pilotId, {
-        'branch': 'appOpen', 'fgFlag': fgFlag, 'fresh': fresh,
-        'known': (prefs.getStringList('known_order_ids') ?? []).length,
-      });
       return;
     }
 
@@ -471,14 +461,6 @@ class _OrderTaskHandler extends TaskHandler {
       // الطلبات اللي محتاجة رنين = المُسندة حاليًا ومش مشوفة بعد
       final pending = currentIds.difference(seen);
 
-      _diagLog(pilotId, {
-        'branch'  : 'ring',
-        'orders'  : currentIds.length,
-        'seen'    : seen.length,
-        'pending' : pending.length,
-        'ringer'  : OrderRinger.status,
-      });
-
       if (pending.isNotEmpty) {
         // إشعار ستارة واحد ثابت + نغمة loop مستمرة لحد ما الطيار يفتح
         // التطبيق (اللي بيحدّث قائمة المشوفة) — يشتغل حتى لو مقفول تمامًا
@@ -489,19 +471,10 @@ class _OrderTaskHandler extends TaskHandler {
     } catch (_) {}
   }
 
-  /// يضيف سطر لسجل تشخيص زمني في قاعدة البيانات (POST = مفتاح جديد كل مرة)
-  /// عشان نشوف تسلسل كل دورة بدل لقطة واحدة. مؤقّت — هيتشال بعد حل المشكلة.
-  void _diagLog(String pilotId, Map<String, dynamic> data) {
-    () async {
-      try {
-        data['t'] = DateTime.now().toIso8601String().substring(11, 19); // HH:MM:SS
-        await http.post(
-          Uri.parse('$_fbUrl/ringDiag/$pilotId/log.json${await FbAuth.queryParam()}'),
-          body: json.encode(data),
-        ).timeout(const Duration(seconds: 8));
-      } catch (_) {}
-    }();
-  }
+  /* سجل التشخيص (ringDiag) اتشال: كان بيكتب سطر في القاعدة كل دورة (كل 8ث
+     لكل طيار = ~10,800 سطر في اليوم للطيار الواحد) وهو أصلاً مؤقّت لتشخيص
+     مشكلة الرنين اللي اتحلّت. مكانش بيتقرا من أي شاشة ولا بيتاخد له نسخة
+     احتياطية ولا بتشمله أداة التنظيف — بيكبر بس. */
 
   /// استقبال إشارة فورية من التطبيق الرئيسي (مثلاً "الطيار فتح التطبيق")
   /// عشان نوقف الرنين في نفس اللحظة من غير ما نستنى دورة الـ 15 ثانية الجاية
@@ -1283,7 +1256,7 @@ class FB {
     }
     if (raw is! Map) return {};
     final out = <String, dynamic>{};
-    (raw as Map).forEach((k, v) {
+    raw.forEach((k, v) {
       // شرط pilotId متكرر عن قصد: في مسار الرجوع الشجرة راجعة كاملة
       if (v is Map && v['pilotId'] == pilotId) out['$k'] = v;
     });

@@ -9,10 +9,6 @@
         ".validate": "newData.isString() && newData.val().length > 3"
       }
     },
-    "ringDiag": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
     "storeDiag": {
       ".read": "auth != null",
       ".write": "auth != null"
