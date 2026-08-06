@@ -8,6 +8,33 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+  <!-- ══════════════════════════════════════════════════════════════
+       تهريب النصوص قبل حقنها في HTML
+       ──────────────────────────────────────────────────────────────
+       الشاشة بترسم بـ innerHTML وبتعرض بيانات جاية من تطبيق العميل
+       وبوابة المحل وتطبيق الطيار — نصوص بيكتبها ناس بره الشركة.
+       وقواعد فايربيز كلها "auth != null" وكل التطبيقات بتدخل مجهول،
+       فأي زائر يقدر يكتب مباشرةً في أي عقدة.
+
+       من غير تهريب: حد يسجّل اسمه <img src=x onerror="..."> وأول ما
+       الموظف يفتح الشاشة الكود يشتغل جوّه متصفحه بصلاحياته.
+  ══════════════════════════════════════════════════════════════ -->
+  <script>
+    /* للنص العادي وقيم الخصائص العادية */
+    window.esc = function (v) {
+      return String(v ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[c]);
+    };
+
+    /* لنص جوّه سترنج جافاسكريبت جوّه خاصية HTML، زي:
+           onclick="fn('${...}')"
+       هنا esc() لوحدها مش كفاية: المتصفح بيفك ترميز الخاصية قبل ما
+       الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج. */
+    window.escJs = function (v) {
+      return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+    };
+  </script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
@@ -641,7 +668,7 @@
 
     function todayKey() {
       const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      return `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }-${ esc(String(d.getDate()).padStart(2,"0")) }`;
     }
 
     async function recordCheckIn(username, role) {
@@ -915,17 +942,17 @@
         const branch = window._branchesList.find(b => b.id === p.assignedBranchId);
         return `<tr>
           <td class="idx">${start + i + 1}</td>
-          <td><span class="name-badge">${p.name}</span></td>
-          <td dir="ltr">${p.phone1 || "—"}</td>
-          <td dir="ltr">${p.phone2 || "—"}</td>
-          <td>${p.cardNum || "—"}</td>
-          <td>${p.vehicleNo || "—"}</td>
-          <td>${p.address || "—"}</td>
-          <td>${branch ? `<span style="color:var(--sky);font-size:.8rem">🏢 ${branch.name}</span>` : `<span style="color:var(--muted);font-size:.78rem">—</span>`}</td>
+          <td><span class="name-badge">${ esc(p.name) }</span></td>
+          <td dir="ltr">${ esc(p.phone1 || "—") }</td>
+          <td dir="ltr">${ esc(p.phone2 || "—") }</td>
+          <td>${ esc(p.cardNum || "—") }</td>
+          <td>${ esc(p.vehicleNo || "—") }</td>
+          <td>${ esc(p.address || "—") }</td>
+          <td>${branch ? `<span style="color:var(--sky);font-size:.8rem">🏢 ${ esc(branch.name) }</span>` : `<span style="color:var(--muted);font-size:.78rem">—</span>`}</td>
           <td>${statusBadge}</td>
           <td>
-            <button class="edit-btn" onclick="openEditPilot('${p.id}')">تعديل</button>
-            <button class="del-btn" onclick="deletePilot('${p.id}')">حذف</button>
+            <button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button>
+            <button class="del-btn" onclick="deletePilot('${ escJs(p.id) }')">حذف</button>
           </td>
         </tr>`;
       }).join("");
@@ -1020,7 +1047,7 @@
     function fillPilotBranchSelect(selectedId) {
       const sel = document.getElementById("pilotBranch");
       sel.innerHTML = `<option value="">— بلا فرع —</option>` +
-        (window._branchesList || []).map(b => `<option value="${b.id}" ${b.id === selectedId ? "selected" : ""}>${b.name}</option>`).join("");
+        (window._branchesList || []).map(b => `<option value="${ esc(b.id) }" ${ esc(b.id === selectedId ? "selected" : "") }>${ esc(b.name) }</option>`).join("");
     }
 
     window.savePilot = async function() {
@@ -1129,18 +1156,18 @@
       const page  = filtered.slice(start, start + pageSize);
 
       tbody.innerHTML = page.map((u, i) => {
-        const branchLabel = u.role === "مشرف فرع" ? `<span style="color:var(--sky);font-size:.8rem">🏢 ${u.branchName||"—"}</span>`
-          : u.role === "صاحب محل" ? `<span style="color:var(--green);font-size:.8rem">🏪 ${u.shopName||"—"}</span>`
+        const branchLabel = u.role === "مشرف فرع" ? `<span style="color:var(--sky);font-size:.8rem">🏢 ${ esc(u.branchName||"—") }</span>`
+          : u.role === "صاحب محل" ? `<span style="color:var(--green);font-size:.8rem">🏪 ${ esc(u.shopName||"—") }</span>`
           : `<span style="color:var(--muted);font-size:.78rem">—</span>`;
         return `<tr>
           <td class="idx">${start + i + 1}</td>
-          <td><span class="name-badge">${u.username}</span></td>
-          <td><span class="role-badge ${u.role==='مدير'?'role-admin':'role-user'}">${u.role||"موظف"}</span></td>
+          <td><span class="name-badge">${ esc(u.username) }</span></td>
+          <td><span class="role-badge ${ esc(u.role==='مدير'?'role-admin':'role-user') }">${ esc(u.role||"موظف") }</span></td>
           <td>${branchLabel}</td>
-          <td dir="ltr" style="letter-spacing:.1em">${"•".repeat(Math.min(u.password?.length||4,8))}</td>
+          <td dir="ltr" style="letter-spacing:.1em">${ esc("•".repeat(Math.min(u.password?.length||4,8))) }</td>
           <td>${u.username==="admin"
             ? `<span style="color:var(--muted);font-size:.78rem">محمي</span>`
-            : `<button class="edit-btn" onclick="openEditUser('${u.username}')">تعديل</button><button class="del-btn" onclick="deleteUser('${u.username}')">حذف</button>`}</td>
+            : `<button class="edit-btn" onclick="openEditUser('${ escJs(u.username) }')">تعديل</button><button class="del-btn" onclick="deleteUser('${ escJs(u.username) }')">حذف</button>`}</td>
         </tr>`;
       }).join("");
 
@@ -1184,7 +1211,7 @@
         const sel = document.getElementById("userBranch");
         if (sel) {
           sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-            (window._branchesList||[]).map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+            (window._branchesList||[]).map(b => `<option value="${ esc(b.id) }">${ esc(b.name) }</option>`).join("");
         }
       }
     };
@@ -1239,13 +1266,13 @@
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty-row">لا يوجد موظفون خارج النظام</td></tr>`; return; }
       tbody.innerHTML = list.map((e, i) => `<tr>
         <td class="idx">${i+1}</td>
-        <td><b>${e.name}</b></td>
-        <td dir="ltr">${e.phone || "—"}</td>
-        <td>${e.jobTitle || "—"}</td>
-        <td style="font-size:.8rem;color:var(--muted)">${e.notes || "—"}</td>
+        <td><b>${ esc(e.name) }</b></td>
+        <td dir="ltr">${ esc(e.phone || "—") }</td>
+        <td>${ esc(e.jobTitle || "—") }</td>
+        <td style="font-size:.8rem;color:var(--muted)">${ esc(e.notes || "—") }</td>
         <td>
-          <button class="edit-btn" onclick="openEditManualEmployee('${e.id}')">تعديل</button>
-          <button class="del-btn" onclick="deleteManualEmployee('${e.id}')">حذف</button>
+          <button class="edit-btn" onclick="openEditManualEmployee('${ escJs(e.id) }')">تعديل</button>
+          <button class="del-btn" onclick="deleteManualEmployee('${ escJs(e.id) }')">حذف</button>
         </td>
       </tr>`).join("");
       document.getElementById("statManualEmps").textContent = list.length;
@@ -1257,8 +1284,8 @@
       const list = window._manualEmployees || [];
       sel.innerHTML = `<option value="">— اختر موظف —</option>` +
         (window._usersData||[]).filter(u => u.role !== "صاحب محل")
-          .map(u => `<option value="${u.username}">${u.username} — ${u.role||""} (نظام)</option>`).join("") +
-        list.map(e => `<option value="manual_${e.id}">${e.name}${e.jobTitle ? " — "+e.jobTitle : ""} (يدوي)</option>`).join("");
+          .map(u => `<option value="${ esc(u.username) }">${ esc(u.username) } — ${ esc(u.role||"") } (نظام)</option>`).join("") +
+        list.map(e => `<option value="manual_${ esc(e.id) }">${ esc(e.name) }${ esc(e.jobTitle ? " — "+e.jobTitle : "") } (يدوي)</option>`).join("");
     }
 
     window.openAddManualEmpModal = function() {
@@ -1373,9 +1400,9 @@
 
         return `<tr>
           <td class="idx">${i+1}</td>
-          <td><b>${r.name}</b>${typeBadge}${sessLabel}</td>
-          <td>${r.role}</td>
-          <td>${r.branch}</td>
+          <td><b>${ esc(r.name) }</b>${typeBadge}${sessLabel}</td>
+          <td>${ esc(r.role) }</td>
+          <td>${ esc(r.branch) }</td>
           <td style="color:var(--green)">${firstCheckIn ? hrFmtTime(firstCheckIn) : "—"}</td>
           <td style="color:var(--orange)">${isPresent ? "لا يزال حاضراً" : (lastCheckOut ? hrFmtTime(lastCheckOut) : "—")}</td>
           <td>${statusBadge}</td>
@@ -1392,10 +1419,10 @@
       const branchName = id => (window._branchesList||[]).find(b => b.id === id)?.name || "—";
       body.innerHTML = filtered.map((u, i) => `<tr>
         <td class="idx">${i+1}</td>
-        <td><b>${u.username}</b></td>
-        <td>${u.role||"—"}</td>
-        <td>${u.branchId ? branchName(u.branchId) : "—"}</td>
-        <td>${u.username==="admin" ? `<span style="color:var(--muted);font-size:.78rem">محمي</span>` : `<button class="view-btn" onclick="openEditUser('${u.username}')">✏️ تعديل</button><button class="del-btn" onclick="deleteUser('${u.username}')">حذف</button>`}</td>
+        <td><b>${ esc(u.username) }</b></td>
+        <td>${ esc(u.role||"—") }</td>
+        <td>${ esc(u.branchId ? branchName(u.branchId) : "—") }</td>
+        <td>${u.username==="admin" ? `<span style="color:var(--muted);font-size:.78rem">محمي</span>` : `<button class="view-btn" onclick="openEditUser('${ escJs(u.username) }')">✏️ تعديل</button><button class="del-btn" onclick="deleteUser('${ escJs(u.username) }')">حذف</button>`}</td>
       </tr>`).join("");
     }
 
@@ -1405,17 +1432,17 @@
       const cur = sel.value;
       const sysOpts = (window._usersData||[])
         .filter(u => u.role !== "صاحب محل")
-        .map(u => `<option value="${u.username}">${u.username} — ${u.role||""} (نظام)</option>`);
+        .map(u => `<option value="${ esc(u.username) }">${ esc(u.username) } — ${ esc(u.role||"") } (نظام)</option>`);
       const manOpts = (window._manualEmployees||[])
-        .map(e => `<option value="manual_${e.id}">${e.name}${e.jobTitle ? " — "+e.jobTitle : ""} (يدوي)</option>`);
+        .map(e => `<option value="manual_${ esc(e.id) }">${ esc(e.name) }${ esc(e.jobTitle ? " — "+e.jobTitle : "") } (يدوي)</option>`);
       sel.innerHTML = `<option value="">— كل الموظفين —</option>` +
-        (sysOpts.length ? `<optgroup label="موظفو النظام">${sysOpts.join("")}</optgroup>` : "") +
-        (manOpts.length ? `<optgroup label="موظفون خارج النظام">${manOpts.join("")}</optgroup>` : "");
+        (sysOpts.length ? `<optgroup label="موظفو النظام">${ esc(sysOpts.join("")) }</optgroup>` : "") +
+        (manOpts.length ? `<optgroup label="موظفون خارج النظام">${ esc(manOpts.join("")) }</optgroup>` : "");
       sel.value = cur;
       const monthInput = document.getElementById("hrHistoryMonth");
       if (monthInput && !monthInput.value) {
         const d = new Date();
-        monthInput.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        monthInput.value = `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }`;
       }
     }
 
@@ -1520,15 +1547,15 @@
             : `<span style="color:var(--green);font-size:.75rem">لا يزال حاضراً</span>`;
           return `<tr>
             <td class="idx">${i+1}</td>
-            <td style="font-size:.8rem">${new Date(r.dateKey).toLocaleDateString("ar-EG",{weekday:"short",year:"numeric",month:"short",day:"numeric"})}</td>
-            <td><b>${r.username}</b>${r.entryType==="manual" ? ` <span style="font-size:.7rem;color:var(--orange)">(يدوي)</span>` : ""}</td>
-            <td>${r.role||"—"}</td>
+            <td style="font-size:.8rem">${ esc(new Date(r.dateKey).toLocaleDateString("ar-EG",{weekday:"short",year:"numeric",month:"short",day:"numeric"})) }</td>
+            <td><b>${ esc(r.username) }</b>${r.entryType==="manual" ? ` <span style="font-size:.7rem;color:var(--orange)">(يدوي)</span>` : ""}</td>
+            <td>${ esc(r.role||"—") }</td>
             <td style="color:var(--green)">${hrFmtTime(r.checkIn)}</td>
             <td style="color:var(--orange)">${checkOutLabel}</td>
-            <td>${r.checkIn ? hrFmtDur(r.checkIn, r.checkOut) : "—"}</td>
+            <td>${ esc(r.checkIn ? hrFmtDur(r.checkIn, r.checkOut) : "—") }</td>
           </tr>`;
         }).join("");
-      } catch(e) { body.innerHTML = `<tr><td colspan="7" class="empty-row">خطأ: ${e.message}</td></tr>`; }
+      } catch(e) { body.innerHTML = `<tr><td colspan="7" class="empty-row">خطأ: ${ esc(e.message) }</td></tr>`; }
     };
 
     /* ══ EXPORT HR HISTORY TO EXCEL ══ */
@@ -1574,17 +1601,17 @@
           : `<span style="background:rgba(239,68,68,.13);color:var(--red);padding:3px 10px;border-radius:20px;font-size:.78rem;font-weight:700">❌ مرفوض</span>`;
         const actionsHtml = isPending ? `
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button onclick="approveJoinRequest('${r.id}')"
+            <button onclick="approveJoinRequest('${ escJs(r.id) }')"
               style="flex:1;background:var(--green);color:#fff;border:none;padding:9px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
               ✅ قبول وإضافة للنظام
             </button>
-            <button onclick="rejectJoinRequest('${r.id}')"
+            <button onclick="rejectJoinRequest('${ escJs(r.id) }')"
               style="flex:1;background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red);padding:9px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
               ❌ رفض
             </button>
           </div>` : `
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button onclick="deleteJoinRequest('${r.id}')"
+            <button onclick="deleteJoinRequest('${ escJs(r.id) }')"
               style="background:var(--card);color:var(--muted);border:1px solid var(--border);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:.8rem">
               🗑 حذف
             </button>
@@ -1593,19 +1620,19 @@
         <div style="background:var(--card);border:1px solid ${isPending?'rgba(249,115,22,.3)':'var(--border)'};border-radius:12px;padding:18px 20px;margin-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
             <div>
-              <div style="font-size:1rem;font-weight:700;color:var(--text)">✈ ${r.name}</div>
+              <div style="font-size:1rem;font-weight:700;color:var(--text)">✈ ${ esc(r.name) }</div>
               <div style="font-size:.78rem;color:var(--muted);margin-top:3px">
-                🏢 ${r.branchName||"—"} &nbsp;|&nbsp; 📅 ${r.createdAt ? new Date(r.createdAt).toLocaleString("ar-EG") : "—"}
+                🏢 ${ esc(r.branchName||"—") } &nbsp;|&nbsp; 📅 ${ esc(r.createdAt ? new Date(r.createdAt).toLocaleString("ar-EG") : "—") }
               </div>
             </div>
             ${statusHtml}
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;font-size:.83rem">
-            <div><span style="color:var(--muted)">📱 هاتف 1:</span> <span dir="ltr">${r.phone1||"—"}</span></div>
-            ${r.phone2 ? `<div><span style="color:var(--muted)">📱 هاتف 2:</span> <span dir="ltr">${r.phone2}</span></div>` : ""}
-            <div><span style="color:var(--muted)">🪪 البطاقة:</span> <span dir="ltr">${r.cardNum||"—"}</span></div>
-            <div><span style="color:var(--muted)">🚗 المركبة:</span> ${r.vehicleNo||"—"}</div>
-            <div style="grid-column:1/-1"><span style="color:var(--muted)">📍 العنوان:</span> ${r.address||"—"}</div>
+            <div><span style="color:var(--muted)">📱 هاتف 1:</span> <span dir="ltr">${ esc(r.phone1||"—") }</span></div>
+            ${r.phone2 ? `<div><span style="color:var(--muted)">📱 هاتف 2:</span> <span dir="ltr">${ esc(r.phone2) }</span></div>` : ""}
+            <div><span style="color:var(--muted)">🪪 البطاقة:</span> <span dir="ltr">${ esc(r.cardNum||"—") }</span></div>
+            <div><span style="color:var(--muted)">🚗 المركبة:</span> ${ esc(r.vehicleNo||"—") }</div>
+            <div style="grid-column:1/-1"><span style="color:var(--muted)">📍 العنوان:</span> ${ esc(r.address||"—") }</div>
           </div>
           ${actionsHtml}
         </div>`;
@@ -1616,7 +1643,7 @@
       const req = window._joinRequestsData.find(r => r.id === reqId);
       if (!req) return;
       document.getElementById("approveReqId").value = reqId;
-      document.getElementById("approveReqName").textContent = `الطيار: ${req.name}`;
+      document.getElementById("approveReqName").textContent = `الطيار: ${ req.name }`;
       document.getElementById("approveUsername").value = "";
       document.getElementById("approvePassword").value = "";
       document.getElementById("submitApproveBtn").disabled = false;
@@ -1755,8 +1782,8 @@
       const filterBar = document.getElementById("staffFilterBar");
       if (filterBar) {
         filterBar.innerHTML = roles.map(r =>
-          `<button class="role-filter-btn ${window._staffFilter===r?"active":""}"
-            onclick="setStaffFilter('${r}')">${r} ${r==="الكل"?`(${list.length})`:""}</button>`
+          `<button class="role-filter-btn ${ esc(window._staffFilter===r?"active":"") }"
+            onclick="setStaffFilter('${r}')">${r} ${r==="الكل"?`(${ esc(list.length) })`:""}</button>`
         ).join("");
       }
 
@@ -1798,7 +1825,7 @@
         const branchName = e.branchId ? ((window._branchesList||[]).find(b=>b.id===e.branchId)?.name||"—") : (e.branchName||"—");
         const sub = e.role==="طيار" ? (e.vehicleNo||"—") :
                     e.role==="مشرف فرع" ? `🏢 ${branchName}` :
-                    e.role==="صاحب محل" ? `🏪 ${e.shopName||"—"}` :
+                    e.role==="صاحب محل" ? `🏪 ${ esc(e.shopName||"—") }` :
                     e.role==="موظف يدوي" ? (e.jobTitle||"موظف") :
                     (e.username||"—");
         // attendance today
@@ -1808,13 +1835,13 @@
         const attDot = isPresent
           ? `<span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0"></span>`
           : `<span style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>`;
-        return `<div class="staff-card" onclick="openStaffDrawer('${e.id}')">
-          <div class="staff-avatar" style="background:${cfg.avatar};color:${cfg.color};font-size:.78rem">${initial}</div>
+        return `<div class="staff-card" onclick="openStaffDrawer('${ escJs(e.id) }')">
+          <div class="staff-avatar" style="background:${ esc(cfg.avatar) };color:${ esc(cfg.color) };font-size:.78rem">${initial}</div>
           <div class="staff-info">
-            <div class="staff-name">${attDot}${e.name}</div>
+            <div class="staff-name">${attDot}${ esc(e.name) }</div>
             <div class="staff-meta">${sub}</div>
           </div>
-          <span class="staff-role-pill" style="background:${cfg.bg};color:${cfg.color}">${e.role}</span>
+          <span class="staff-role-pill" style="background:${ esc(cfg.bg) };color:${ esc(cfg.color) }">${ esc(e.role) }</span>
         </div>`;
       }).join("");
 
@@ -1854,10 +1881,10 @@
 
       // edit button per source
       const editBtn = emp.source==="pilot"
-        ? `<button class="submit-btn" style="flex:none;padding:9px 20px" onclick="closeStaffDrawer();navigateTo('pilots');openEditPilot('${emp.sourceId}')">✏️ تعديل بيانات الطيار</button>`
+        ? `<button class="submit-btn" style="flex:none;padding:9px 20px" onclick="closeStaffDrawer();navigateTo('pilots');openEditPilot('${ escJs(emp.sourceId) }')">✏️ تعديل بيانات الطيار</button>`
         : emp.source==="user"
-        ? `<button class="submit-btn" style="flex:none;padding:9px 20px" onclick="closeStaffDrawer();navigateTo('users');openEditUser('${emp.sourceId}')">✏️ تعديل بيانات المستخدم</button>`
-        : `<button class="submit-btn" style="flex:none;padding:9px 20px" onclick="closeStaffDrawer();navigateTo('manualemps');openEditManualEmployee('${emp.sourceId}')">✏️ تعديل بيانات الموظف</button>`;
+        ? `<button class="submit-btn" style="flex:none;padding:9px 20px" onclick="closeStaffDrawer();navigateTo('users');openEditUser('${ escJs(emp.sourceId) }')">✏️ تعديل بيانات المستخدم</button>`
+        : `<button class="submit-btn" style="flex:none;padding:9px 20px" onclick="closeStaffDrawer();navigateTo('manualemps');openEditManualEmployee('${ escJs(emp.sourceId) }')">✏️ تعديل بيانات الموظف</button>`;
 
       // specific fields per role
       let roleFields = "";
@@ -1866,40 +1893,40 @@
         roleFields = `
           <div class="drawer-section">
             <div class="drawer-section-title">بيانات العمل</div>
-            <div class="drawer-row"><span class="drawer-label">رقم المركبة</span><span class="drawer-val" dir="ltr">${emp.vehicleNo||"—"}</span></div>
-            <div class="drawer-row"><span class="drawer-label">رقم البطاقة</span><span class="drawer-val" dir="ltr">${emp.cardNum||"—"}</span></div>
+            <div class="drawer-row"><span class="drawer-label">رقم المركبة</span><span class="drawer-val" dir="ltr">${ esc(emp.vehicleNo||"—") }</span></div>
+            <div class="drawer-row"><span class="drawer-label">رقم البطاقة</span><span class="drawer-val" dir="ltr">${ esc(emp.cardNum||"—") }</span></div>
             <div class="drawer-row"><span class="drawer-label">الفرع</span><span class="drawer-val">${branchName}</span></div>
-            <div class="drawer-row"><span class="drawer-label">العمولة</span><span class="drawer-val">${emp.commissionValue||0} ${commLabel}</span></div>
-            <div class="drawer-row"><span class="drawer-label">الحالة</span><span class="drawer-val">${emp.pilotStatus==="waiting"?"⏳ انتظار":emp.pilotStatus==="delivering"?"🛵 توصيل":"—"}</span></div>
+            <div class="drawer-row"><span class="drawer-label">العمولة</span><span class="drawer-val">${ esc(emp.commissionValue||0) } ${commLabel}</span></div>
+            <div class="drawer-row"><span class="drawer-label">الحالة</span><span class="drawer-val">${ esc(emp.pilotStatus==="waiting"?"⏳ انتظار":emp.pilotStatus==="delivering"?"🛵 توصيل":"—") }</span></div>
           </div>
           <div class="drawer-section">
             <div class="drawer-section-title">بيانات التطبيق</div>
-            <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${emp.username||"—"}</span></div>
+            <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${ esc(emp.username||"—") }</span></div>
           </div>`;
       } else if (emp.role === "مشرف فرع") {
         roleFields = `<div class="drawer-section"><div class="drawer-section-title">الفرع</div>
           <div class="drawer-row"><span class="drawer-label">الفرع المعيّن</span><span class="drawer-val">${branchName}</span></div>
-          <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${emp.username||"—"}</span></div></div>`;
+          <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${ esc(emp.username||"—") }</span></div></div>`;
       } else if (emp.role === "صاحب محل") {
         roleFields = `<div class="drawer-section"><div class="drawer-section-title">بيانات المحل</div>
-          <div class="drawer-row"><span class="drawer-label">اسم المحل</span><span class="drawer-val">${emp.shopName||"—"}</span></div>
-          <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${emp.username||"—"}</span></div></div>`;
+          <div class="drawer-row"><span class="drawer-label">اسم المحل</span><span class="drawer-val">${ esc(emp.shopName||"—") }</span></div>
+          <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${ esc(emp.username||"—") }</span></div></div>`;
       } else if (emp.role === "موظف يدوي") {
         roleFields = `<div class="drawer-section"><div class="drawer-section-title">بيانات العمل</div>
-          <div class="drawer-row"><span class="drawer-label">المسمى الوظيفي</span><span class="drawer-val">${emp.jobTitle||"—"}</span></div>
-          <div class="drawer-row"><span class="drawer-label">ملاحظات</span><span class="drawer-val">${emp.notes||"—"}</span></div></div>`;
+          <div class="drawer-row"><span class="drawer-label">المسمى الوظيفي</span><span class="drawer-val">${ esc(emp.jobTitle||"—") }</span></div>
+          <div class="drawer-row"><span class="drawer-label">ملاحظات</span><span class="drawer-val">${ esc(emp.notes||"—") }</span></div></div>`;
       } else {
         roleFields = `<div class="drawer-section"><div class="drawer-section-title">بيانات الدخول</div>
-          <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${emp.username||"—"}</span></div></div>`;
+          <div class="drawer-row"><span class="drawer-label">اسم المستخدم</span><span class="drawer-val" dir="ltr">${ esc(emp.username||"—") }</span></div></div>`;
       }
 
       document.getElementById("staffDrawerContent").innerHTML = `
         <div class="drawer-header">
           <div style="display:flex;align-items:center;gap:12px">
-            <div class="staff-avatar" style="background:${cfg.avatar};color:${cfg.color};width:42px;height:42px;font-size:.8rem">${emp.name.slice(0,2)}</div>
+            <div class="staff-avatar" style="background:${ esc(cfg.avatar) };color:${ esc(cfg.color) };width:42px;height:42px;font-size:.8rem">${ esc(emp.name.slice(0,2)) }</div>
             <div>
-              <div style="font-size:1rem;font-weight:700">${emp.name}</div>
-              <span class="staff-role-pill" style="background:${cfg.bg};color:${cfg.color}">${emp.role}</span>
+              <div style="font-size:1rem;font-weight:700">${ esc(emp.name) }</div>
+              <span class="staff-role-pill" style="background:${ esc(cfg.bg) };color:${ esc(cfg.color) }">${ esc(emp.role) }</span>
             </div>
           </div>
           <button class="modal-close" onclick="closeStaffDrawer()">✕</button>
@@ -1912,22 +1939,22 @@
             <div class="drawer-row"><span class="drawer-label">وقت الحضور</span><span class="drawer-val" style="color:var(--green)">${firstIn?hrFmtTime(firstIn):"—"}</span></div>
             <div class="drawer-row"><span class="drawer-label">وقت الانصراف</span><span class="drawer-val" style="color:var(--orange)">${isPresent?"لا يزال حاضراً":(lastOut?hrFmtTime(lastOut):"—")}</span></div>
             <div class="drawer-row"><span class="drawer-label">إجمالي المدة</span><span class="drawer-val">${getTotalDuration(attEntry)}</span></div>
-            ${allSess.length>1?`<div class="drawer-row"><span class="drawer-label">عدد الجلسات</span><span class="drawer-val" style="color:var(--sky)">${allSess.length} جلسات</span></div>`:""}
+            ${allSess.length>1?`<div class="drawer-row"><span class="drawer-label">عدد الجلسات</span><span class="drawer-val" style="color:var(--sky)">${ esc(allSess.length) } جلسات</span></div>`:""}
           </div>
           <!-- Basic info -->
           <div class="drawer-section">
             <div class="drawer-section-title">البيانات الأساسية</div>
-            <div class="drawer-row"><span class="drawer-label">الاسم</span><span class="drawer-val">${emp.name}</span></div>
-            <div class="drawer-row"><span class="drawer-label">هاتف 1</span><span class="drawer-val" dir="ltr">${emp.phone||"—"}</span></div>
-            ${emp.phone2?`<div class="drawer-row"><span class="drawer-label">هاتف 2</span><span class="drawer-val" dir="ltr">${emp.phone2}</span></div>`:""}
-            ${emp.address?`<div class="drawer-row"><span class="drawer-label">العنوان</span><span class="drawer-val">${emp.address}</span></div>`:""}
-            <div class="drawer-row"><span class="drawer-label">تاريخ الإضافة</span><span class="drawer-val" style="font-size:.78rem">${emp.createdAt?new Date(emp.createdAt).toLocaleDateString("ar-EG"):"—"}</span></div>
+            <div class="drawer-row"><span class="drawer-label">الاسم</span><span class="drawer-val">${ esc(emp.name) }</span></div>
+            <div class="drawer-row"><span class="drawer-label">هاتف 1</span><span class="drawer-val" dir="ltr">${ esc(emp.phone||"—") }</span></div>
+            ${emp.phone2?`<div class="drawer-row"><span class="drawer-label">هاتف 2</span><span class="drawer-val" dir="ltr">${ esc(emp.phone2) }</span></div>`:""}
+            ${emp.address?`<div class="drawer-row"><span class="drawer-label">العنوان</span><span class="drawer-val">${ esc(emp.address) }</span></div>`:""}
+            <div class="drawer-row"><span class="drawer-label">تاريخ الإضافة</span><span class="drawer-val" style="font-size:.78rem">${ esc(emp.createdAt?new Date(emp.createdAt).toLocaleDateString("ar-EG"):"—") }</span></div>
           </div>
           ${roleFields}
           <!-- Actions -->
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
             ${editBtn}
-            <button class="submit-btn" style="flex:none;padding:9px 20px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.25)" onclick="openStaffFinanceSection('${emp.id}')">💰 الإدارة المالية</button>
+            <button class="submit-btn" style="flex:none;padding:9px 20px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.25)" onclick="openStaffFinanceSection('${ escJs(emp.id) }')">💰 الإدارة المالية</button>
           </div>
 
           <!-- Financial Management Section (hidden by default) -->
@@ -1938,7 +1965,7 @@
             <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
               <input type="month" id="staffFinanceMonth" 
                 style="flex:1;padding:8px 12px;border-radius:7px;border:1px solid var(--border);background:var(--night);color:var(--text);font-family:var(--font);font-size:.85rem"
-                onchange="loadStaffFinanceData('${emp.id}')" />
+                onchange="loadStaffFinanceData('${ escJs(emp.id) }')" />
             </div>
 
             <!-- Base Salary (linked to employee profile) -->
@@ -1952,7 +1979,7 @@
               <div style="font-size:.72rem;color:var(--muted);margin-top:6px">
                 ℹ️ هذا الراتب مرتبط ببيانات الموظف الأساسية ويُستخدم تلقائياً في كل التقارير
               </div>
-              <button onclick="saveStaffBaseSalary('${emp.id}')" 
+              <button onclick="saveStaffBaseSalary('${ escJs(emp.id) }')" 
                 style="margin-top:8px;width:100%;padding:8px;background:rgba(14,165,233,.15);color:var(--sky);border:1px solid rgba(14,165,233,.25);border-radius:7px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:var(--font)">
                 💾 حفظ في بيانات الموظف
               </button>
@@ -1977,7 +2004,7 @@
                 <input type="text" id="staffFinanceEntryNote" placeholder="ملاحظة (اختياري)"
                   style="padding:7px 9px;border-radius:6px;border:1px solid var(--border);background:var(--night);color:var(--text);font-family:var(--font);font-size:.82rem;grid-column:1/-1" />
               </div>
-              <button onclick="addStaffFinanceEntry('${emp.id}')"
+              <button onclick="addStaffFinanceEntry('${ escJs(emp.id) }')"
                 style="width:100%;padding:8px;background:rgba(14,165,233,.15);color:var(--sky);border:1px solid rgba(14,165,233,.25);border-radius:7px;cursor:pointer;font-size:.8rem;font-weight:700;font-family:var(--font)">
                 + إضافة القيد
               </button>
@@ -1997,7 +2024,7 @@
 
             <!-- Approve toggle -->
             <div style="display:flex;gap:8px">
-              <button id="staffFinanceApproveBtn" onclick="toggleStaffFinanceApprove('${emp.id}')"
+              <button id="staffFinanceApproveBtn" onclick="toggleStaffFinanceApprove('${ escJs(emp.id) }')"
                 style="flex:1;padding:10px;background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.25);border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:var(--font)">
                 ✅ إقرار المرتب
               </button>
@@ -2075,7 +2102,7 @@
       const monthInput = document.getElementById("staffFinanceMonth");
       if (monthInput && !monthInput.value) {
         const d = new Date();
-        monthInput.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        monthInput.value = `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }`;
       }
       window._staffFinanceMonth = monthInput?.value || new Date().toISOString().slice(0,7);
 
@@ -2175,11 +2202,11 @@
         const sign = POSITIVE_TYPES.includes(e.type) ? "+" : "-";
         return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(30,50,72,.4)">
           <div style="flex:1;min-width:0">
-            <span style="font-size:.7rem;padding:2px 8px;border-radius:10px;background:${tc.bg};color:${tc.color};font-weight:700">${tc.label}</span>
-            <span style="font-size:.75rem;color:var(--muted);margin-right:6px">${e.date||""}</span>
-            ${e.note ? `<div style="font-size:.72rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.note}</div>` : ""}
+            <span style="font-size:.7rem;padding:2px 8px;border-radius:10px;background:${ esc(tc.bg) };color:${ esc(tc.color) };font-weight:700">${ esc(tc.label) }</span>
+            <span style="font-size:.75rem;color:var(--muted);margin-right:6px">${ esc(e.date||"") }</span>
+            ${e.note ? `<div style="font-size:.72rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ esc(e.note) }</div>` : ""}
           </div>
-          <span style="font-weight:700;color:${tc.color};font-size:.85rem;white-space:nowrap">${sign}${Number(e.amount).toLocaleString("ar-EG")} ج.م</span>
+          <span style="font-weight:700;color:${ esc(tc.color) };font-size:.85rem;white-space:nowrap">${sign}${ esc(Number(e.amount).toLocaleString("ar-EG")) } ج.م</span>
           <button onclick="deleteStaffFinanceEntry('${empKey}',${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.8rem;padding:2px 4px;flex-shrink:0" title="حذف">✕</button>
         </div>`;
       }).join("");
@@ -2312,7 +2339,7 @@
 
       // fill branch selects
       const branchOpts = `<option value="">— اختر الفرع —</option>` +
-        (window._branchesList||[]).map(b=>`<option value="${b.id}">${b.name}</option>`).join("");
+        (window._branchesList||[]).map(b=>`<option value="${ esc(b.id) }">${ esc(b.name) }</option>`).join("");
       ["addStaffBranchSel","addStaffPilotBranch"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = branchOpts;
@@ -2469,7 +2496,7 @@
         const totalMins   = Math.floor((totalHrsMs%3600000)/60000);
         if (summary) {
           summary.innerHTML = `
-            <div class="att-stat"><span class="att-stat-val">${aggRows.length}</span><span class="att-stat-lbl">إجمالي السجلات</span></div>
+            <div class="att-stat"><span class="att-stat-val">${ esc(aggRows.length) }</span><span class="att-stat-lbl">إجمالي السجلات</span></div>
             <div class="att-stat"><span class="att-stat-val" style="color:var(--sky)">${totalEmps}</span><span class="att-stat-lbl">موظف</span></div>
             <div class="att-stat"><span class="att-stat-val" style="color:var(--green)">${totalDays}</span><span class="att-stat-lbl">يوم عمل</span></div>
             <div class="att-stat"><span class="att-stat-val" style="color:var(--orange)">${totalHrs}س ${totalMins}د</span><span class="att-stat-lbl">إجمالي ساعات العمل</span></div>`;
@@ -2509,10 +2536,10 @@
             </td>
             <td>
               <div style="display:flex;align-items:center;gap:8px">
-                <div style="width:32px;height:32px;border-radius:50%;background:${cfg.avatar};color:${cfg.color};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;flex-shrink:0">${emp.name.slice(0,2)}</div>
+                <div style="width:32px;height:32px;border-radius:50%;background:${ esc(cfg.avatar) };color:${ esc(cfg.color) };display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;flex-shrink:0">${ esc(emp.name.slice(0,2)) }</div>
                 <div>
-                  <div style="font-weight:600;font-size:.88rem">${emp.name}</div>
-                  <span style="font-size:.7rem;padding:2px 8px;border-radius:12px;background:${cfg.bg};color:${cfg.color}">${emp.role}</span>
+                  <div style="font-weight:600;font-size:.88rem">${ esc(emp.name) }</div>
+                  <span style="font-size:.7rem;padding:2px 8px;border-radius:12px;background:${ esc(cfg.bg) };color:${ esc(cfg.color) }">${ esc(emp.role) }</span>
                 </div>
               </div>
             </td>
@@ -2523,7 +2550,7 @@
         }).join("");
 
       } catch(e) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-row" style="color:var(--red)">خطأ: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-row" style="color:var(--red)">خطأ: ${ esc(e.message) }</td></tr>`;
       }
     };
 
@@ -2580,7 +2607,7 @@
       const monthLabel = new Date(parseInt(yr), parseInt(mo)-1, 1).toLocaleDateString("ar-EG", {month:"long", year:"numeric"});
 
       // title line — mention filter if active
-      const filterLabel = window._attFilter !== "الكل" ? ` — ${window._attFilter}` : q ? ` — بحث: ${q}` : "";
+      const filterLabel = window._attFilter !== "الكل" ? ` — ${ esc(window._attFilter) }` : q ? ` — بحث: ${q}` : "";
       const firstEmp = aggRows.length && new Set(aggRows.map(r=>r.username)).size === 1
         ? (empMap[aggRows[0].username]?.name || aggRows[0].username)
         : null;
@@ -2605,7 +2632,7 @@
       // summary row at bottom
       const totalMs  = aggRows.reduce((s,r)=>s+r.totalMs, 0);
       const th = Math.floor(totalMs/3600000), tm = Math.floor((totalMs%3600000)/60000);
-      const summaryRow = ["", "", `إجمالي: ${aggRows.length} يوم`, "", "", "", `${th}:${String(tm).padStart(2,"0")}`];
+      const summaryRow = ["", "", `إجمالي: ${ esc(aggRows.length) } يوم`, "", "", "", `${th}:${String(tm).padStart(2,"0")}`];
 
       const ws = XLSX.utils.aoa_to_sheet([
         [`تقرير الحضور والانصراف — ${monthLabel}${titleSuffix}`],
@@ -2619,7 +2646,7 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "الحضور");
       // filename: if single employee use their name
-      const fname = firstEmp ? `حضور_${firstEmp}_${monthVal}` : `حضور_${monthVal}${filterLabel ? "_"+window._attFilter : ""}`;
+      const fname = firstEmp ? `حضور_${firstEmp}_${monthVal}` : `حضور_${monthVal}${ esc(filterLabel ? "_"+window._attFilter : "") }`;
       XLSX.writeFile(wb, `${fname}.xlsx`);
       showToast("تمّ تصدير ملف Excel ✓", "success");
     };
@@ -2721,7 +2748,7 @@
       // Include manual employees
       (window._manualEmployees||[]).forEach(e => emps.push({ key:"manual_"+e.id, name:e.name, role:"موظف يدوي" }));
       sel.innerHTML = `<option value="">— اختر الموظف —</option>` +
-        emps.map(e => `<option value="${e.key}" data-name="${e.name}" data-role="${e.role}">${e.name} (${e.role})</option>`).join("");
+        emps.map(e => `<option value="${ esc(e.key) }" data-name="${ esc(e.name) }" data-role="${ esc(e.role) }">${ esc(e.name) } (${ esc(e.role) })</option>`).join("");
     }
 
     window.generateEmployeeReport = async function() {
@@ -2805,10 +2832,10 @@
             const sign = POSITIVE_TYPES.includes(e.type) ? "+" : "-";
             const isPositive = POSITIVE_TYPES.includes(e.type);
             financeDailyRows += `<tr>
-              ${idx === 0 ? `<td style="font-size:.8rem;color:var(--muted);vertical-align:top" rowspan="${dayEntries.length}">${dayName}<br><span style="font-size:.72rem">${date}</span></td>` : ""}
-              <td><span style="font-size:.72rem;padding:2px 8px;border-radius:10px;background:${tc.bg};color:${tc.color};font-weight:700">${tc.label}</span></td>
-              <td style="font-weight:700;color:${isPositive?'var(--green)':'var(--red)'};font-size:.9rem;text-align:left">${sign}${Number(e.amount).toLocaleString("ar-EG")} ج.م</td>
-              <td style="font-size:.78rem;color:var(--muted)">${e.note || "—"}</td>
+              ${idx === 0 ? `<td style="font-size:.8rem;color:var(--muted);vertical-align:top" rowspan="${ esc(dayEntries.length) }">${dayName}<br><span style="font-size:.72rem">${date}</span></td>` : ""}
+              <td><span style="font-size:.72rem;padding:2px 8px;border-radius:10px;background:${ esc(tc.bg) };color:${ esc(tc.color) };font-weight:700">${ esc(tc.label) }</span></td>
+              <td style="font-weight:700;color:${isPositive?'var(--green)':'var(--red)'};font-size:.9rem;text-align:left">${sign}${ esc(Number(e.amount).toLocaleString("ar-EG")) } ج.م</td>
+              <td style="font-size:.78rem;color:var(--muted)">${ esc(e.note || "—") }</td>
             </tr>`;
           });
         });
@@ -2822,11 +2849,11 @@
             <div style="font-size:1rem;font-weight:700;color:var(--sky)">${fmt(d.baseSalary)} ج.م</div>
           </div>
           <div style="background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.2);border-radius:8px;padding:10px">
-            <div style="font-size:.7rem;color:var(--muted);margin-bottom:3px">المستحق (${d.presentDays} يوم)</div>
+            <div style="font-size:.7rem;color:var(--muted);margin-bottom:3px">المستحق (${ esc(d.presentDays) } يوم)</div>
             <div style="font-size:1rem;font-weight:700;color:var(--sky)">${fmt(Math.round(d.baseDue))} ج.م</div>
           </div>
           ${d.extraDays > 0 ? `<div style="background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px">
-            <div style="font-size:.7rem;color:var(--muted);margin-bottom:3px">إضافي (${d.extraDays} يوم)</div>
+            <div style="font-size:.7rem;color:var(--muted);margin-bottom:3px">إضافي (${ esc(d.extraDays) } يوم)</div>
             <div style="font-size:1rem;font-weight:700;color:var(--green)">+${fmt(Math.round(d.extraAmount))} ج.م</div>
           </div>` : ""}
           ${d.bonus > 0 ? `<div style="background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px">
@@ -2852,17 +2879,17 @@
         </div>
         <div style="background:var(--card);border:2px solid var(--sky);border-radius:12px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:.85rem;color:var(--muted);font-weight:600">صافي المرتب</span>
-          <span style="font-size:1.4rem;font-weight:800;color:${d.netSalary>=0?'var(--sky)':'var(--red)'}">${fmt(d.netSalary)} ج.م</span>
+          <span style="font-size:1.4rem;font-weight:800;color:${ esc(d.netSalary>=0?'var(--sky)':'var(--red)') }">${fmt(d.netSalary)} ج.م</span>
         </div>`;
 
       // ═══════ Build everything as single HTML string ═══════
       const fullHtml = `
         <!-- Header Card -->
         <div style="display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 22px;margin-bottom:20px">
-          <div style="width:48px;height:48px;border-radius:50%;background:${cfg.avatar};color:${cfg.color};display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:800">${d.empName.slice(0,2)}</div>
+          <div style="width:48px;height:48px;border-radius:50%;background:${ esc(cfg.avatar) };color:${ esc(cfg.color) };display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:800">${ esc(d.empName.slice(0,2)) }</div>
           <div>
-            <div style="font-size:1.05rem;font-weight:700">${d.empName}</div>
-            <span style="font-size:.75rem;padding:2px 10px;border-radius:12px;background:${cfg.bg};color:${cfg.color}">${d.empRole}</span>
+            <div style="font-size:1.05rem;font-weight:700">${ esc(d.empName) }</div>
+            <span style="font-size:.75rem;padding:2px 10px;border-radius:12px;background:${ esc(cfg.bg) };color:${ esc(cfg.color) }">${ esc(d.empRole) }</span>
             <span style="font-size:.75rem;color:var(--muted);margin-right:8px">${monthLabel}</span>
           </div>
           <div style="margin-right:auto;display:flex;gap:8px">
@@ -2879,15 +2906,15 @@
             <!-- Attendance Summary -->
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
               <div style="flex:1;min-width:80px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:12px 14px;text-align:center">
-                <div style="font-size:1.3rem;font-weight:800;color:var(--green)">${d.presentDays}</div>
+                <div style="font-size:1.3rem;font-weight:800;color:var(--green)">${ esc(d.presentDays) }</div>
                 <div style="font-size:.7rem;color:var(--muted)">أيام حضور</div>
               </div>
               <div style="flex:1;min-width:80px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:12px 14px;text-align:center">
-                <div style="font-size:1.3rem;font-weight:800;color:var(--red)">${daysInMonth - d.presentDays}</div>
+                <div style="font-size:1.3rem;font-weight:800;color:var(--red)">${ esc(daysInMonth - d.presentDays) }</div>
                 <div style="font-size:.7rem;color:var(--muted)">أيام غياب</div>
               </div>
               <div style="flex:1;min-width:80px;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:10px;padding:12px 14px;text-align:center">
-                <div style="font-size:1.3rem;font-weight:800;color:var(--sky)">${d.workTarget}</div>
+                <div style="font-size:1.3rem;font-weight:800;color:var(--sky)">${ esc(d.workTarget) }</div>
                 <div style="font-size:.7rem;color:var(--muted)">أيام المتفق</div>
               </div>
               <div style="flex:1;min-width:80px;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:10px;padding:12px 14px;text-align:center">
@@ -2941,8 +2968,8 @@
 
             <!-- Status Badge -->
             <div style="margin-top:12px;text-align:center">
-              <span style="display:inline-block;padding:6px 16px;border-radius:20px;font-size:.8rem;font-weight:700;${d.payData?.status==='approved' ? 'background:rgba(34,197,94,.15);color:var(--green)' : 'background:rgba(249,115,22,.15);color:var(--orange)'}">
-                ${d.payData?.status==='approved' ? '✅ مرتب مُقرّ' : '⏳ مرتب معلق'}
+              <span style="display:inline-block;padding:6px 16px;border-radius:20px;font-size:.8rem;font-weight:700;${ esc(d.payData?.status==='approved' ? 'background:rgba(34,197,94,.15);color:var(--green)' : 'background:rgba(249,115,22,.15);color:var(--orange)') }">
+                ${ esc(d.payData?.status==='approved' ? '✅ مرتب مُقرّ' : '⏳ مرتب معلق') }
               </span>
             </div>
           </div>
@@ -2967,11 +2994,11 @@ window.exportReportExcel = function() {
           rec ? "حاضر" : "—",
           rec?.firstIn ? new Date(rec.firstIn).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}) : "—",
           rec?.lastOut ? new Date(rec.lastOut).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}) : "—",
-          rec?.totalMs > 0 ? `${Math.floor(rec.totalMs/3600000)}:${String(Math.floor((rec.totalMs%3600000)/60000)).padStart(2,"0")}` : "—"
+          rec?.totalMs > 0 ? `${ esc(Math.floor(rec.totalMs/3600000)) }:${ esc(String(Math.floor((rec.totalMs%3600000)/60000)).padStart(2,"0")) }` : "—"
         ]);
       }
       const ws = XLSX.utils.aoa_to_sheet([
-        [`تقرير ${d.empName} — ${monthLabel}`], [],
+        [`تقرير ${ esc(d.empName) } — ${monthLabel}`], [],
         ["المرتب الأساسي", d.baseSalary], ["أيام العمل المتفق عليها", d.workTarget],
         ["أيام الحضور الفعلية", d.presentDays], ["سعر اليوم", Math.round(d.dailyRate)],
         ["المستحق", Math.round(d.baseDue)],
@@ -2988,7 +3015,7 @@ window.exportReportExcel = function() {
       ws["!cols"] = [{wch:14},{wch:14},{wch:10},{wch:12},{wch:12},{wch:10}];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "التقرير");
-      XLSX.writeFile(wb, `تقرير_${d.empName}_${d.monthVal}.xlsx`);
+      XLSX.writeFile(wb, `تقرير_${ esc(d.empName) }_${ esc(d.monthVal) }.xlsx`);
       showToast("تمّ تصدير التقرير ✓", "success");
     };
 
@@ -2997,12 +3024,12 @@ window.exportReportExcel = function() {
       const [yr, mo] = d.monthVal.split("-");
       const monthLabel = new Date(parseInt(yr), parseInt(mo)-1, 1).toLocaleDateString("ar-EG", {month:"long", year:"numeric"});
       const fmt = v => v.toLocaleString("ar-EG");
-      let msg = `📊 *تقرير راتب ${d.empName}*\n`;
+      let msg = `📊 *تقرير راتب ${ esc(d.empName) }*\n`;
       msg += `📅 ${monthLabel}\n\n`;
-      msg += `✅ أيام الحضور: ${d.presentDays} يوم\n`;
+      msg += `✅ أيام الحضور: ${ esc(d.presentDays) } يوم\n`;
       msg += `💰 المرتب الأساسي: ${fmt(d.baseSalary)} ج.م\n`;
       msg += `📌 المستحق: ${fmt(Math.round(d.baseDue))} ج.م\n`;
-      if (d.extraDays > 0) msg += `➕ إضافي (${d.extraDays} يوم): ${fmt(Math.round(d.extraAmount))} ج.م\n`;
+      if (d.extraDays > 0) msg += `➕ إضافي (${ esc(d.extraDays) } يوم): ${fmt(Math.round(d.extraAmount))} ج.م\n`;
       if (d.bonus > 0) msg += `🎁 مكافآت: ${fmt(d.bonus)} ج.م\n`;
       if (d.incentive > 0) msg += `⭐ حوافز: ${fmt(d.incentive)} ج.م\n`;
       if (d.allowance > 0) msg += `📋 مستحقات: ${fmt(d.allowance)} ج.م\n`;
@@ -3065,7 +3092,7 @@ window.exportReportExcel = function() {
       if (!sel) return;
       const current = sel.value;
       sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-        window._closingBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+        window._closingBranches.map(b => `<option value="${ esc(b.id) }">${ esc(b.name) }</option>`).join("");
       if (current && window._closingBranches.some(b => b.id === current)) sel.value = current;
     }
 
@@ -3145,14 +3172,14 @@ window.exportReportExcel = function() {
           const statusColor = owing ? "var(--red)" : "var(--green)";
           const statusText = owing ? `عليه ${fmtMoney(Math.abs(t.net))}` : `له ${fmtMoney(t.net)}`;
           const initial = (emp.name || "؟").trim().charAt(0) || "؟";
-          return `<div class="staff-card" onclick="openClosingDayGrid('${emp.id}')">
+          return `<div class="staff-card" onclick="openClosingDayGrid('${ escJs(emp.id) }')">
             <div class="staff-avatar" style="background:rgba(14,165,233,.15);color:var(--sky)">${initial}</div>
             <div class="staff-info">
-              <div class="staff-name">${emp.name || "—"}</div>
-              <div class="staff-meta">${emp.servesLocation ? "🏪 " + emp.servesLocation + " · " : ""}⏱ ${t.hours} ساعة · 📦 ${t.orders} أوردر</div>
+              <div class="staff-name">${ esc(emp.name || "—") }</div>
+              <div class="staff-meta">${ esc(emp.servesLocation ? "🏪 " + emp.servesLocation + " · " : "") }⏱ ${ esc(t.hours) } ساعة · 📦 ${ esc(t.orders) } أوردر</div>
               <div class="staff-meta" style="color:${statusColor};font-weight:700;margin-top:2px">${statusText}</div>
             </div>
-            <button class="del-btn" onclick="event.stopPropagation();deleteClosingEmployeeEntry('${emp.id}')">حذف</button>
+            <button class="del-btn" onclick="event.stopPropagation();deleteClosingEmployeeEntry('${ escJs(emp.id) }')">حذف</button>
           </div>`;
         }).join("");
       }
@@ -3164,7 +3191,7 @@ window.exportReportExcel = function() {
       }, { gross: 0, deductions: 0, advances: 0, net: 0 });
 
       statsBox.innerHTML = `
-        <div class="stat-card"><div class="stat-label">عدد الموظفين</div><div class="stat-value">${list.length}</div></div>
+        <div class="stat-card"><div class="stat-label">عدد الموظفين</div><div class="stat-value">${ esc(list.length) }</div></div>
         <div class="stat-card"><div class="stat-label">إجمالي الرواتب</div><div class="stat-value">${fmtMoney(totals.gross)}</div></div>
         <div class="stat-card"><div class="stat-label">إجمالي الخصومات</div><div class="stat-value" style="color:var(--orange)">${fmtMoney(totals.deductions)}</div></div>
         <div class="stat-card"><div class="stat-label">إجمالي السلف</div><div class="stat-value" style="color:var(--red)">${fmtMoney(totals.advances)}</div></div>
@@ -3203,7 +3230,7 @@ window.exportReportExcel = function() {
       document.getElementById("closingEmpOrderRate").value = "2";
       const sel = document.getElementById("closingEmpSourceSelect");
       sel.innerHTML = `<option value="">— أدخل اسم جديد —</option>` +
-        (window._manualEmployees || []).map(e => `<option value="${e.id}">${e.name}${e.jobTitle ? " (" + e.jobTitle + ")" : ""}</option>`).join("");
+        (window._manualEmployees || []).map(e => `<option value="${ esc(e.id) }">${ esc(e.name) }${ esc(e.jobTitle ? " (" + e.jobTitle + ")" : "") }</option>`).join("");
       sel.value = "";
       document.getElementById("closingEmpModalTitle").textContent = "👥 إضافة موظف للتقفيلة";
       onClosingEmpSourceChange();
@@ -3218,7 +3245,7 @@ window.exportReportExcel = function() {
       document.getElementById("closingEmpEditId").value = empEntryId;
       const sel = document.getElementById("closingEmpSourceSelect");
       sel.innerHTML = `<option value="">— اسم مخصّص لهذه التقفيلة فقط —</option>` +
-        (window._manualEmployees || []).map(e => `<option value="${e.id}">${e.name}${e.jobTitle ? " (" + e.jobTitle + ")" : ""}</option>`).join("");
+        (window._manualEmployees || []).map(e => `<option value="${ esc(e.id) }">${ esc(e.name) }${ esc(e.jobTitle ? " (" + e.jobTitle + ")" : "") }</option>`).join("");
       sel.value = emp.manualEmpId || "";
       document.getElementById("closingEmpNewName").value = emp.name || "";
       document.getElementById("closingEmpServesLocation").value = emp.servesLocation || "";
@@ -3312,13 +3339,13 @@ window.exportReportExcel = function() {
       const emp = (window._closingEmployees || []).find(e => e.id === empEntryId);
       if (!emp) return;
       window._closingCurrentEmpId = empEntryId;
-      document.getElementById("closingDaygridTitle").textContent = `📋 تقفيلة — ${emp.name || "—"}`;
+      document.getElementById("closingDaygridTitle").textContent = `📋 تقفيلة — ${ emp.name || "—" }`;
       const expHrs = (Number(emp.expectedDays)||0) * (Number(emp.expectedHoursPerDay)||0);
       const derivedRate = expHrs > 0 ? (Number(emp.agreedSalary)||0) / expHrs : 0;
       document.getElementById("closingDaygridMeta").innerHTML =
         `💰 راتب ${fmtMoney(emp.agreedSalary||0)} / ${expHrs} ساعة متوقعة ≈ ${fmtMoney(derivedRate)} ج/ساعة
          &nbsp;·&nbsp; 📦 ${fmtMoney(emp.orderRate||0)} ج/أوردر
-         ${emp.servesLocation ? "&nbsp;·&nbsp; 🏪 " + emp.servesLocation : ""}
+         ${ esc(emp.servesLocation ? "&nbsp;·&nbsp; 🏪 " + emp.servesLocation : "") }
          <button class="edit-btn" onclick="openEditClosingEmployeeMeta('${empEntryId}')" style="margin-right:8px">تعديل البيانات</button>`;
 
       const days = emp.days || {};
@@ -3329,15 +3356,15 @@ window.exportReportExcel = function() {
         const hoursVal = rec.hours ?? 0;
         rows += `<tr data-day="${d}">
           <td class="idx">${d}</td>
-          <td><input class="dg-input dg-time" type="time" value="${rec.checkIn || ""}" onchange="saveClosingDayTime(${d},'checkIn',this.value)"/></td>
-          <td><input class="dg-input dg-time" type="time" value="${rec.checkOut || ""}" onchange="saveClosingDayTime(${d},'checkOut',this.value)"/></td>
+          <td><input class="dg-input dg-time" type="time" value="${ esc(rec.checkIn || "") }" onchange="saveClosingDayTime(${d},'checkIn',this.value)"/></td>
+          <td><input class="dg-input dg-time" type="time" value="${ esc(rec.checkOut || "") }" onchange="saveClosingDayTime(${d},'checkOut',this.value)"/></td>
           <td>
             <input type="hidden" class="dg-hours-hidden" value="${hoursVal}"/>
             <span class="dg-hours-display">${hoursVal}</span>
           </td>
-          <td><input class="dg-input" type="number" step="1" min="0" value="${rec.orders ?? ""}" onchange="saveClosingDayField(${d},'orders',this.value)"/></td>
-          <td><input class="dg-input" type="number" step="1" min="0" value="${rec.deductions ?? ""}" onchange="saveClosingDayField(${d},'deductions',this.value)"/></td>
-          <td><input class="dg-input" type="number" step="1" min="0" value="${rec.advances ?? ""}" onchange="saveClosingDayField(${d},'advances',this.value)"/></td>
+          <td><input class="dg-input" type="number" step="1" min="0" value="${ esc(rec.orders ?? "") }" onchange="saveClosingDayField(${d},'orders',this.value)"/></td>
+          <td><input class="dg-input" type="number" step="1" min="0" value="${ esc(rec.deductions ?? "") }" onchange="saveClosingDayField(${d},'deductions',this.value)"/></td>
+          <td><input class="dg-input" type="number" step="1" min="0" value="${ esc(rec.advances ?? "") }" onchange="saveClosingDayField(${d},'advances',this.value)"/></td>
           <td><input class="dg-input" type="text" value="${notesVal}" onchange="saveClosingDayField(${d},'notes',this.value)"/></td>
         </tr>`;
       }
@@ -4751,7 +4778,7 @@ window.exportReportExcel = function() {
       const el = document.getElementById("hrHistoryMonth");
       if (el && !el.value) {
         const d = new Date();
-        el.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        el.value = `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }`;
       }
     }
   }

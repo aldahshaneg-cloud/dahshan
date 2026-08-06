@@ -11,16 +11,13 @@
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
        ──────────────────────────────────────────────────────────────
-       اللوحة بترسم بـ innerHTML وبتعرض بيانات جاية من تطبيق العميل
-       وبوابة المحل وتطبيق الطيار — نصوص بيكتبها ناس بره الشركة. وقواعد
-       فايربيز كلها "auth != null" وكل التطبيقات بتدخل مجهول، فأي زائر
-       يقدر يكتب مباشرةً في أي عقدة.
+       الشاشة بترسم بـ innerHTML وبتعرض بيانات جاية من تطبيق العميل
+       وبوابة المحل وتطبيق الطيار — نصوص بيكتبها ناس بره الشركة.
+       وقواعد فايربيز كلها "auth != null" وكل التطبيقات بتدخل مجهول،
+       فأي زائر يقدر يكتب مباشرةً في أي عقدة.
 
-       من غير تهريب: عميل يسجّل اسمه <img src=x onerror="..."> وأول ما
-       المدير يفتح الشاشة الكود يشتغل جوّه متصفحه بصلاحياته.
-
-       الدوال عالمية (مش module) عشان كل بلوكات السكريبت توصلها، وقبل
-       أي كود تاني عشان تكون جاهزة وقت أول رسمة.
+       من غير تهريب: حد يسجّل اسمه <img src=x onerror="..."> وأول ما
+       الموظف يفتح الشاشة الكود يشتغل جوّه متصفحه بصلاحياته.
   ══════════════════════════════════════════════════════════════ -->
   <script>
     /* للنص العادي وقيم الخصائص العادية */
@@ -31,14 +28,13 @@
     };
 
     /* لنص جوّه سترنج جافاسكريبت جوّه خاصية HTML، زي:
-           onclick="openEditUser('${...}')"
+           onclick="fn('${...}')"
        هنا esc() لوحدها مش كفاية: المتصفح بيفك ترميز الخاصية قبل ما
        الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج. */
     window.escJs = function (v) {
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
   </script>
-
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
@@ -1362,7 +1358,7 @@
       const store = storeId ? (window._cashStoresData || []).find(s => s.id === storeId) : null;
       if (storeId && !store) { showToast("الخزنة المختارة غير موجودة", "error"); return; }
       if (store && !alreadyPaid && (Number(store.balance) || 0) < amount) {
-        if (!confirm(`رصيد «${ esc(store.name) }» هو ${ esc((Number(store.balance)||0).toFixed(2)) } ج.م وأقل من المصروف (${amount} ج.م).\n\nهل تريد المتابعة ويصبح الرصيد بالسالب؟`)) return;
+        if (!confirm(`رصيد «${store.name}» هو ${(Number(store.balance)||0).toFixed(2)} ج.م وأقل من المصروف (${amount} ج.م).\n\nهل تريد المتابعة ويصبح الرصيد بالسالب؟`)) return;
       }
 
       const btn = document.getElementById("submitExpenseBtn");
@@ -1397,7 +1393,7 @@
             createdAt: new Date().toISOString()
           });
           await update(ref(db, "expenses/" + expenseId), { cashTxnId: txnRef.key });
-          showToast(`تمّ حفظ المصروف وخصم ${amount} ج.م من ${ esc(store.name) } ✓`, "success");
+          showToast(`تمّ حفظ المصروف وخصم ${amount} ج.م من ${store.name} ✓`, "success");
         } else {
           showToast(id ? "تمّ تحديث المصروف ✓" : "تمّ إضافة المصروف ✓", "success");
         }
@@ -1439,7 +1435,7 @@
       // الخزنة ناقصة بلا سبب مسجَّل، فبنسأل صراحةً قبل ما نكمّل
       if (e?.cashTxnId) {
         if (!confirm(
-          `⚠️ المصروف ده مدفوع من «${ esc(e.cashStoreName || "خزنة") }» وخُصم من رصيدها.\n\n` +
+          `⚠️ المصروف ده مدفوع من «${e.cashStoreName || "خزنة"}» وخُصم من رصيدها.\n\n` +
           `حذفه هيسيب حركة الخزنة زي ما هي (الرصيد هيفضل ناقص) من غير مصروف مقابل.\n\n` +
           `الأفضل تعكس الحركة من سجل الخزنة الأول. تحب تكمّل الحذف؟`)) return;
       } else if (!confirm("هل تريد حذف هذا المصروف؟")) return;
@@ -1654,7 +1650,7 @@
       const allOption = `<div class="smart-search-item" onclick="selectShiftsPilot('','')" style="color:var(--sky);font-weight:700">كل الطيارين</div>`;
       const itemsHtml = results.length
         ? results.map(p => `
-            <div class="smart-search-item" onclick="selectShiftsPilot('${ escJs(p.id) }', '${(p.name || "").replace(/'/g, "\\'")}')">
+            <div class="smart-search-item" onclick="selectShiftsPilot('${ escJs(p.id) }', '${ escJs((p.name || "").replace(/'/g, "\\'")) }')">
               <div class="ssi-name">${highlightShiftsPilotMatch(p.name, q)}</div>
             </div>`).join("")
         : `<div class="smart-search-empty">لا يوجد طيار بهذا الاسم</div>`;
@@ -1815,14 +1811,14 @@
       if (!p) return;
       if (!p.assignedBranchId) { showToast("لازم الطيار يكون مضافاً لفرع الأول", "error"); return; }
       if (p.pilotStatus) { showToast("الطيار عنده وردية مفتوحة بالفعل أو في إذن", "error"); return; }
-      if (!confirm(`فتح وردية الآن لـ "${ esc(p.name) }"؟`)) return;
+      if (!confirm(`فتح وردية الآن لـ "${p.name}"؟`)) return;
       try {
         const nextNo = await getNextQueueNo(p.assignedBranchId);
         await update(ref(db, "pilots/" + pilotId), {
           pilotStatus: "waiting", queueNo: nextNo, statusSince: new Date().toISOString()
         });
         await openOrTransferShift(p, p.assignedBranchId);
-        showToast(`تمّ فتح وردية "${ esc(p.name) }" ودخل الدور مباشرة ✓`, "success");
+        showToast(`تمّ فتح وردية "${p.name}" ودخل الدور مباشرة ✓`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
 
@@ -1913,7 +1909,7 @@
         if (!p.assignedBranchId) updates.assignedBranchId = branchId;
         await update(ref(db, "pilots/" + pilotId), updates);
         await openOrTransferShift(p, branchId);
-        showToast(`تمّ فتح وردية "${ esc(p.name) }" ودخل الدور مباشرة ✓`, "success");
+        showToast(`تمّ فتح وردية "${p.name}" ودخل الدور مباشرة ✓`, "success");
         closeModal("open-shift");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
@@ -2244,7 +2240,7 @@
 
       if (p.pilotStatus === "delivering") {
         if (!activeOrders.length && !pendingSettlementOrders.length) {
-          if (!confirm(`هل تأكد أن ${ esc(p.name) } عاد؟`)) return;
+          if (!confirm(`هل تأكد أن ${p.name} عاد؟`)) return;
           const now = new Date().toISOString();
           const nextQ = await getNextQueueNo(p.assignedBranchId);
           await update(ref(db, "pilots/" + pilotId), { pilotStatus: "waiting", queueNo: nextQ, statusSince: now });
@@ -2282,7 +2278,7 @@
           };
           return;
         }
-        if (!confirm(`هل تريد إزالة ${ esc(p.name) } من اللوحة؟`)) return;
+        if (!confirm(`هل تريد إزالة ${p.name} من اللوحة؟`)) return;
         await update(ref(db, "pilots/" + pilotId), { pilotStatus: null, assignedBranchId: null, queueNo: null, statusSince: null });
         await shiftQueueAfterRemoval(p.assignedBranchId, p.queueNo);
         showToast("تمّ إزالة الطيار من اللوحة وأصبح متاحًا لأي فرع", "success");
@@ -2659,7 +2655,7 @@
       for (const cb of checked) {
         const priceInput = cb.closest(".zone-area-row").querySelector(".zone-area-price-input");
         const price = parseFloat(priceInput?.value);
-        if (isNaN(price)||price<0) { showToast(`يرجى إدخال سعر منطقة "${ esc(cb.value) }"`, "error"); return null; }
+        if (isNaN(price)||price<0) { showToast(`يرجى إدخال سعر منطقة "${cb.value}"`, "error"); return null; }
         result.push({ deliveryBranchId, deliveryBranchName, sourceBranchId, sourceBranchName, areaName: cb.value, price });
       }
       return result;
@@ -3328,9 +3324,9 @@
       if (!order) return;
       const pilot = (window._pilotsData || []).find(p => p.id === pilotId);
 
-      const reason = prompt(`سبب عدم التوصيل لطلب ${ esc(order.orderNum) }${ esc(pilot ? ' — ' + pilot.name : '') }:\n(مثال: العميل لم يردّ / العنوان غير صحيح / تم رفض الطلب)`);
+      const reason = prompt(`سبب عدم التوصيل لطلب ${order.orderNum}${pilot ? ' — ' + pilot.name : ''}:\n(مثال: العميل لم يردّ / العنوان غير صحيح / تم رفض الطلب)`);
       if (reason === null) return;
-      if (!confirm(`تأكيد: لم يتم توصيل الطلب ${ esc(order.orderNum) } وسيعود الطيار${ esc(pilot ? ' (' + pilot.name + ')' : '') } بدون تحصيل أي مبلغ. هل أنت متأكد؟`)) return;
+      if (!confirm(`تأكيد: لم يتم توصيل الطلب ${order.orderNum} وسيعود الطيار${pilot ? ' (' + pilot.name + ')' : ''} بدون تحصيل أي مبلغ. هل أنت متأكد؟`)) return;
 
       try {
         const now = new Date().toISOString();
@@ -3558,7 +3554,7 @@
             await update(ref(db, "pilots/" + pilotId), { pilotStatus: "delivering", queueNo: null, statusSince: now });
             await shiftQueueAfterRemoval(pilot.assignedBranchId, pilot.queueNo);
           }
-          showToast(`تمّ تحميل ${ esc(checkedIdxs.length) } طرد على ${ esc(pilot.name) } ✓`, "success");
+          showToast(`تمّ تحميل ${checkedIdxs.length} طرد على ${pilot.name} ✓`, "success");
           box.remove();
         } catch(e) {
           _btn.disabled = false;
@@ -3664,7 +3660,7 @@
       if (fromPilot?.id) await syncPilotStatus(fromPilot.id, now, orderId, toPilot.id);
 
       if (!newShift) {
-        showToast(`⚠️ ${ esc(toPilot.name) } مالوش وردية مفتوحة — الأوردر مش هيتحسب في تقفيلة وردية`, "error");
+        showToast(`⚠️ ${toPilot.name} مالوش وردية مفتوحة — الأوردر مش هيتحسب في تقفيلة وردية`, "error");
       }
       return now;
     }
@@ -3720,11 +3716,11 @@
         if (!newPilotId) { showToast("اختر طياراً", "error"); return; }
         const newPilot = allAvailable.find(p => p.id === newPilotId);
 
-        if (!confirm(`تأكيد نقل الطلب ${ esc(order.orderNum) } من ${ esc(currentPilot ? currentPilot.name : "—") } إلى ${ esc(newPilot.name) }؟`)) return;
+        if (!confirm(`تأكيد نقل الطلب ${order.orderNum} من ${currentPilot ? currentPilot.name : "—"} إلى ${newPilot.name}؟`)) return;
 
         try {
           await applyOrderTransfer({ order, fromPilot: currentPilot, toPilot: newPilot });
-          showToast(`تمّ نقل الطلب إلى ${ esc(newPilot.name) } ✓`, "success");
+          showToast(`تمّ نقل الطلب إلى ${newPilot.name} ✓`, "success");
           box.remove();
         } catch(e) { showToast("خطأ: " + e.message, "error"); }
       };
@@ -3835,7 +3831,7 @@
           if (pilot.pilotStatus === "waiting") {
             await shiftQueueAfterRemoval(pilot.assignedBranchId, pilot.queueNo);
           }
-          showToast(`تمّ تحميل ${ esc(selectedOrders.length) } طلب على ${ esc(pilot.name) } ✓`, "success");
+          showToast(`تمّ تحميل ${selectedOrders.length} طلب على ${pilot.name} ✓`, "success");
           box.remove();
           clearOrderSelection();
         } catch(e) { showToast("خطأ: " + e.message, "error"); btn.disabled = false; btn.textContent = "✅ تحميل الكل"; }
@@ -3865,7 +3861,7 @@
       if (!newBranchId) { showToast("اختر الفرع الصحيح", "error"); return; }
       const o = (window._ordersData || []).find(x => x.id === orderId);
       if (!o) return;
-      if (!confirm(`هل تريد نقل الطلب ${ esc(o.orderNum || "") } إلى فرع ${newBranchName}؟`)) return;
+      if (!confirm(`هل تريد نقل الطلب ${o.orderNum || ""} إلى فرع ${newBranchName}؟`)) return;
       try {
         await update(ref(db, "orders/" + orderId), {
           branchId  : newBranchId,
@@ -5418,7 +5414,7 @@
       const allOption = `<div class="smart-search-item" onclick="selectLeavePilot('','')" style="color:var(--sky);font-weight:700">كل الطيارين</div>`;
       const itemsHtml = results.length
         ? results.map(p => `
-            <div class="smart-search-item" onclick="selectLeavePilot('${ escJs(p.id) }', '${(p.name || "").replace(/'/g, "\\'")}')">
+            <div class="smart-search-item" onclick="selectLeavePilot('${ escJs(p.id) }', '${ escJs((p.name || "").replace(/'/g, "\\'")) }')">
               <div class="ssi-name">${highlightLeavePilotMatch(p.name, q)}</div>
             </div>`).join("")
         : `<div class="smart-search-empty">لا يوجد طيار بهذا الاسم</div>`;
@@ -5583,7 +5579,7 @@
     window.approveReturnRequest = async function(reqId) {
       const r = (window._returnRequestsData||[]).find(x => x.id === reqId);
       if (!r) return;
-      if (!confirm(`الموافقة على إرجاع الطلب #${ esc(r.orderNum || "") }${ esc(r.pilotName ? ' — ' + r.pilotName : '') }؟\nسيتحوّل الطلب إلى "لم يتم التوصيل" بدون تحصيل.`)) return;
+      if (!confirm(`الموافقة على إرجاع الطلب #${r.orderNum || ""}${r.pilotName ? ' — ' + r.pilotName : ''}؟\nسيتحوّل الطلب إلى "لم يتم التوصيل" بدون تحصيل.`)) return;
       try {
         const now = new Date().toISOString();
         await update(ref(db, "pilotReturnRequests/" + reqId), {
@@ -5612,7 +5608,7 @@
     window.rejectReturnRequest = async function(reqId) {
       const r = (window._returnRequestsData||[]).find(x => x.id === reqId);
       if (!r) return;
-      if (!confirm(`رفض طلب إرجاع الطلب #${ esc(r.orderNum || "") }؟`)) return;
+      if (!confirm(`رفض طلب إرجاع الطلب #${r.orderNum || ""}؟`)) return;
       try {
         const now = new Date().toISOString();
         await update(ref(db, "pilotReturnRequests/" + reqId), {
@@ -5641,13 +5637,13 @@
           queueNo: nextNo,
           statusSince: now
         });
-        showToast(`تمّت الموافقة على فتح وردية "${ esc(r.pilotName) }" — ودخل الدور تلقائيًا ✓`, "success");
+        showToast(`تمّت الموافقة على فتح وردية "${r.pilotName}" — ودخل الدور تلقائيًا ✓`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
     window.rejectShiftRequest = async function(reqId) {
       const r = (window._shiftRequestsData||[]).find(x => x.id === reqId);
       if (!r) return;
-      if (!confirm(`رفض طلب فتح وردية "${ esc(r.pilotName) }"؟`)) return;
+      if (!confirm(`رفض طلب فتح وردية "${r.pilotName}"؟`)) return;
       try {
         await update(ref(db, "pilotShiftRequests/" + reqId), {
           status: "rejected", respondedAt: new Date().toISOString(), respondedBy: window._currentUser?.username || ""
@@ -5666,13 +5662,13 @@
         await update(ref(db, "pilots/" + r.pilotId), {
           pilotStatus: "onLeave", leaveType: r.type || "rest", leaveReason: r.reason || "", breakStartedAt: now
         });
-        showToast(`تمّت الموافقة على إذن "${ esc(r.pilotName) }" ✓`, "success");
+        showToast(`تمّت الموافقة على إذن "${r.pilotName}" ✓`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
     window.rejectLeaveRequest = async function(reqId) {
       const r = (window._leaveRequestsData||[]).find(x => x.id === reqId);
       if (!r) return;
-      if (!confirm(`رفض طلب إذن "${ esc(r.pilotName) }"؟`)) return;
+      if (!confirm(`رفض طلب إذن "${r.pilotName}"؟`)) return;
       try {
         await update(ref(db, "pilotLeaveRequests/" + reqId), {
           status: "rejected", respondedAt: new Date().toISOString(), respondedBy: window._currentUser?.username || ""
@@ -5750,7 +5746,7 @@
         openShiftEndSettlementModal(shiftId, pilot, activeOrders, pendingSettlementOrders);
         return;
       }
-      if (!confirm(`هل تريد إنهاء وردية ${ esc(pilot.name) }؟`)) return;
+      if (!confirm(`هل تريد إنهاء وردية ${pilot.name}؟`)) return;
       await finalizeShiftEnd(shiftId, pilot);
     };
 
@@ -6412,7 +6408,7 @@
         `🏖️ إجازة على حسابه: ${ esc(c.unpaid||0) } يوم (−${ esc((c.unpaidDeduction||0).toFixed(2)) } ج.م)`,
         `✅ صافي المستحق: ${ esc((c.net||0).toFixed(2)) } ج.م`
       ];
-      const url = `https://wa.me/${phone}?text=${ esc(encodeURIComponent(lines.join("\n"))) }`;
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(lines.join("\n"))}`;
       window.open(url, "_blank");
     };
 
@@ -6735,7 +6731,7 @@
       const pilot  = window._pilotsData.find(p => p.id === pilotId);
       const branch = window._branchesList.find(b => b.id === toBranchId);
       if (!pilot || !branch) return;
-      if (!confirm(`نقل ${ esc(pilot.name) } مباشرة إلى ${ esc(branch.name) }؟`)) return;
+      if (!confirm(`نقل ${pilot.name} مباشرة إلى ${branch.name}؟`)) return;
       try {
         const now = new Date().toISOString();
         const fromBranchId = pilot.assignedBranchId;
@@ -6766,7 +6762,7 @@
           resolvedAt : now,
           resolvedBy : window._currentUser?.username || "admin"
         });
-        showToast(`تمّ نقل ${ esc(pilot.name) } إلى ${ esc(branch.name) } ✓`, "success");
+        showToast(`تمّ نقل ${pilot.name} إلى ${branch.name} ✓`, "success");
         pilotSel.value  = "";
         branchSel.value = "";
         document.getElementById("directMovePilotInfo").textContent = "";
@@ -6776,7 +6772,7 @@
     window.approveAdminTransfer = async function(transferId) {
       const t = window._pilotTransfersData.find(x => x.id === transferId);
       if (!t) return;
-      if (!confirm(`تأكيد نقل "${ esc(t.pilotName) }" من ${ esc(t.fromBranchName) } إلى ${ esc(t.toBranchName) }؟`)) return;
+      if (!confirm(`تأكيد نقل "${t.pilotName}" من ${t.fromBranchName} إلى ${t.toBranchName}؟`)) return;
       try {
         const now = new Date().toISOString();
         const pilot = window._pilotsData.find(p => p.id === t.pilotId);
@@ -6795,14 +6791,14 @@
           resolvedAt: now,
           resolvedBy: window._currentUser?.username || "admin"
         });
-        showToast(`تمّ نقل ${ esc(t.pilotName) } بنجاح ✓`, "success");
+        showToast(`تمّ نقل ${t.pilotName} بنجاح ✓`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
 
     window.rejectAdminTransfer = async function(transferId) {
       const t = window._pilotTransfersData.find(x => x.id === transferId);
       if (!t) return;
-      if (!confirm(`رفض طلب نقل "${ esc(t.pilotName) }"؟`)) return;
+      if (!confirm(`رفض طلب نقل "${t.pilotName}"؟`)) return;
       try {
         await update(ref(db, "pilotTransfers/" + transferId), {
           status: "rejected",
@@ -6928,7 +6924,7 @@
           pilotId: newPilotRef.key
         });
         closeModal("approve-creds");
-        showToast(`تمّ قبول "${ esc(req.name) }" وإنشاء حساب الدخول ✓`, "success");
+        showToast(`تمّ قبول "${req.name}" وإنشاء حساب الدخول ✓`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
       finally { btn.disabled = false; btn.textContent = "✅ قبول وإضافة للنظام"; }
     };
@@ -6936,13 +6932,13 @@
     window.rejectJoinRequest = async function(reqId) {
       const req = window._joinRequestsData.find(r => r.id === reqId);
       if (!req) return;
-      if (!confirm(`رفض طلب انضمام "${ esc(req.name) }"؟`)) return;
+      if (!confirm(`رفض طلب انضمام "${req.name}"؟`)) return;
       try {
         await update(ref(db, "pilotJoinRequests/" + reqId), {
           status: "rejected",
           rejectedAt: new Date().toISOString()
         });
-        showToast(`تمّ رفض طلب "${ esc(req.name) }"`, "success");
+        showToast(`تمّ رفض طلب "${req.name}"`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
 
@@ -9958,7 +9954,7 @@
       // الـ script ده مش module — فايربيز جاية من الجسر المعرَّض في الـ module
       if (b.paused) {
         await window._update(window._ref(window._db, "branches/" + id), { paused: false, failoverBranchId: null });
-        showToast(`رجع فرع ${ esc(b.name) } للشغل ✓`, "success");
+        showToast(`رجع فرع ${b.name} للشغل ✓`, "success");
       } else {
         const alt = document.getElementById("pauseAlt").value;
         if (!alt) { err.textContent = "لازم تختار الفرع البديل"; return; }
@@ -9967,7 +9963,7 @@
         if (altB?.paused) { err.textContent = "الفرع البديل موقوف هو كمان — اختار فرع شغّال"; return; }
         btn.disabled = true;
         await window._update(window._ref(window._db, "branches/" + id), { paused: true, failoverBranchId: alt });
-        showToast(`اتوقف فرع ${ esc(b.name) } — أوردراته هتروح ${ esc(altB?.name) } ✓`, "success");
+        showToast(`اتوقف فرع ${b.name} — أوردراته هتروح ${altB?.name} ✓`, "success");
       }
       closeModal("pause");
     } catch (e) { err.textContent = "تعذّر الحفظ: " + (e?.message || e); }
