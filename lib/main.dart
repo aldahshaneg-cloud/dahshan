@@ -1097,14 +1097,25 @@ class ShiftService {
   static Future<void> addOrder(String orderId) async {
     final p    = await SharedPreferences.getInstance();
     final list = p.getStringList(_keyOrderIds) ?? [];
-    if (!list.contains(orderId)) {
-      list.add(orderId);
-      await p.setStringList(_keyOrderIds, list);
-      final shiftId = p.getString(_keyShiftId) ?? '';
-      if (shiftId.isNotEmpty) {
+    if (list.contains(orderId)) return;
+
+    /* البصمة على السيرفر الأول، والإضافة المحلية بعدها.
+       الترتيب ده مش شكلي: الشرط فوق (list.contains) معناه إن الأوردر
+       بيتبصم مرة واحدة بس في العمر. فلما كنا بنضيف محليًا الأول وبعدين
+       نبصم، أي فشل شبكة لحظي كان بيخلّي الأوردر متسجّل محليًا وبدون
+       shiftId على السيرفر — ومايتحاولش تاني أبدًا. النتيجة إنه بيطلع
+       من تقفيلة الوردية، يعني عمولة الطيار عليه بتضيع.
+       دلوقتي لو البصمة فشلت مابنضيفوش محليًا، فالدورة الجاية بتعيد. */
+    final shiftId = p.getString(_keyShiftId) ?? '';
+    if (shiftId.isNotEmpty) {
+      try {
         await FB.stampOrderShift(orderId, shiftId);
+      } catch (_) {
+        return; // هيتحاول تاني في الدورة الجاية (كل 8ث)
       }
     }
+    list.add(orderId);
+    await p.setStringList(_keyOrderIds, list);
   }
 
   /// أوردرات الوردية الحالية
@@ -1208,7 +1219,41 @@ class FbAuth {
    للشجرة الكاملة لو الاستعلام المفلتر فشل، عشان مفيش تطبيق يقع في الفترة
    اللي القواعد لسه مترفعتش فيها.
 ──────────────────────────────────────────────────────────────────── */
+/// خطأ برسالة جاهزة للعرض على الطيار — مش نص إنجليزي تقني
+class FbException implements Exception {
+  final String message;
+  FbException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// رسالة فشل موحّدة لكل الشاشات — حمرا، بتفضل 8 ثواني (مش ثانيتين زي
+/// الافتراضي) عشان الطيار وهو ماشي بالموتوسيكل يلحق يقراها.
+void showErrorSnack(BuildContext context, Object e, {String? fallback}) {
+  final msg = e is FbException
+      ? e.message
+      : (fallback ?? 'حصل خطأ — العملية ما تمّتش، جرّب تاني');
+  ScaffoldMessenger.of(context).clearSnackBars();
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text('⚠️ $msg',
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+    backgroundColor: K.red,
+    duration: const Duration(seconds: 8),
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  ));
+}
+
 class FB {
+  /// ترجمة كود الرد لرسالة يفهمها الطيار
+  static String _msgFor(int code) {
+    if (code == 401 || code == 403) {
+      return 'مفيش صلاحية للحفظ — اقفل التطبيق وافتحه تاني، ولو فضلت كلّم الفرع';
+    }
+    if (code >= 500) return 'السيرفر مش راد دلوقتي — جرّب تاني بعد شوية';
+    return 'الحفظ ما تمّش (كود $code) — جرّب تاني';
+  }
+
   /// يبني رابط REST مع التوكن + فلترة سيرفرية اختيارية.
   /// قيم orderBy/equalTo لازم تكون JSON (يعني نصوص بين علامتَي تنصيص).
   static Future<Uri> _uri(String path,
@@ -1227,19 +1272,42 @@ class FB {
 
   static Future<dynamic> get(String path,
       {String? orderBy, String? equalTo, int? limitToLast}) async {
-    final res = await http
-        .get(await _uri(path,
-            orderBy: orderBy, equalTo: equalTo, limitToLast: limitToLast))
-        .timeout(const Duration(seconds: 10));
+    final http.Response res;
+    try {
+      res = await http
+          .get(await _uri(path,
+              orderBy: orderBy, equalTo: equalTo, limitToLast: limitToLast))
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      throw FbException('الشبكة بطيئة — ما قدرناش نجيب البيانات');
+    } catch (_) {
+      throw FbException('مفيش اتصال بالإنترنت');
+    }
     if (res.statusCode == 200) return json.decode(res.body);
-    throw Exception('HTTP ${res.statusCode}');
+    throw FbException(_msgFor(res.statusCode));
   }
 
+  /* ── الكتابة لازم تتأكد إنها وصلت ──────────────────────────────────
+     قبل كده رد السيرفر كان بيترمي تمامًا. لو الرد كان 401 (التوكن باظ)
+     أو 403 (القواعد رفضت) أو 500 (السيرفر واقع)، التطبيق كان بيكمّل كإن
+     كل حاجة تمام: الطيار يدوس "تم التسليم"، الشاشة تقوله ✅، والأوردر
+     يفضل "جاري التوصيل" في السيستم. الفرع يتصل بيه يسأل، وهو متأكد إنه
+     سلّم، والتقفيلة آخر اليوم غلط. دلوقتي أي فشل بيرمي FbException
+     برسالة عربية والواجهة بتوريها للطيار.
+  ──────────────────────────────────────────────────────────────────── */
   static Future<void> patch(String path, Map<String, dynamic> data) async {
-    await http.patch(
-      Uri.parse('${K.db}/$path.json${await FbAuth.queryParam()}'),
-      body: json.encode(data),
-    ).timeout(const Duration(seconds: 10));
+    final http.Response res;
+    try {
+      res = await http.patch(
+        Uri.parse('${K.db}/$path.json${await FbAuth.queryParam()}'),
+        body: json.encode(data),
+      ).timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw FbException('الشبكة بطيئة — العملية ماوصلتش للسيرفر، جرّب تاني');
+    } catch (_) {
+      throw FbException('مفيش اتصال بالإنترنت — العملية ماوصلتش، جرّب تاني');
+    }
+    if (res.statusCode != 200) throw FbException(_msgFor(res.statusCode));
   }
 
   /// أوردرات طيار واحد من السيرفر مباشرة. لو الفهرس لسه مترفعش، بنرجع
@@ -1251,7 +1319,11 @@ class FB {
     try {
       raw = await get('orders',
           orderBy: 'pilotId', equalTo: pilotId, limitToLast: limitToLast);
-    } catch (_) {
+    } on FbException catch (e) {
+      // الرجوع للشجرة الكاملة بس لما الفهرس نفسه ناقص (400). لو السبب
+      // انقطاع نت أو سيرفر واقع، إعادة المحاولة على الشجرة كلها بتضاعف
+      // الاستهلاك وهتفشل برضه — فالأحسن نرمي الخطأ زي ما هو.
+      if (!e.message.contains('400')) rethrow;
       raw = await get('orders'); // القواعد القديمة — فلترة في الموبايل
     }
     if (raw is! Map) return {};
@@ -2067,7 +2139,13 @@ class _ShiftScreenState extends State<ShiftScreen> with SingleTickerProviderStat
         branchName: '',
       );
       if (reqId.isEmpty) {
-        if (mounted) setState(() => _loading = false);
+        // الطلب ماوصلش للسيرفر. من غير الرسالة دي الطيار كان بيدوس على
+        // "فتح وردية" ومايحصلش حاجة خالص، ويفضل مستني موافقة على طلب
+        // مش موجود أصلاً.
+        if (!mounted) return;
+        setState(() => _loading = false);
+        showErrorSnack(context,
+            FbException('طلب فتح الوردية ماوصلش — اتأكد من النت وجرّب تاني'));
         return;
       }
       _reqId = reqId;
@@ -2075,8 +2153,10 @@ class _ShiftScreenState extends State<ShiftScreen> with SingleTickerProviderStat
       setState(() { _loading = false; _pending = true; });
       _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkShiftRequest());
       _checkShiftRequest();
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showErrorSnack(context, e, fallback: 'ما قدرناش نبعت الطلب — جرّب تاني');
     }
   }
 
@@ -2087,9 +2167,14 @@ class _ShiftScreenState extends State<ShiftScreen> with SingleTickerProviderStat
       final data = await FB.getShiftRequest(reqId);
       final status = (data?['status'] ?? 'pending').toString();
       if (status == 'approved') {
+        /* مهم: مابنلغيش المؤقتات قبل ما الوردية تبدأ فعلاً. قبل كده كانوا
+           بيتلغوا الأول، فلو startShift فشلت (نت) الـ catch تحت كان
+           بيبلع الخطأ والطيار يفضل محبوس في شاشة "بانتظار الموافقة"
+           للأبد من غير أي استطلاع ولا رسالة — مفيش حل غير إنه يقفل
+           التطبيق بالعافية. دلوقتي الإلغاء بيحصل بعد النجاح بس. */
+        await ShiftService.startShift(widget.pilotId, widget.name);
         _pollTimer?.cancel();
         _remoteCheckTimer?.cancel();
-        await ShiftService.startShift(widget.pilotId, widget.name);
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -2106,7 +2191,8 @@ class _ShiftScreenState extends State<ShiftScreen> with SingleTickerProviderStat
         if (mounted) setState(() { _pending = false; _reqId = null; _rejected = true; });
       }
     } catch (_) {
-      // نتجاهل أخطاء الشبكة العابرة ونحاول مرة أخرى في الدورة القادمة
+      // أخطاء الشبكة العابرة بتتجاهل — الاستطلاع لسه شغّال وهيحاول تاني
+      // في الدورة الجاية (كل 3ث)، فالوردية هتبدأ أول ما النت يرجع.
     }
   }
 
@@ -2895,7 +2981,17 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
       'إنهاء الوردية',
     );
     if (!ok) return;
-    await ShiftService.endShift(widget.pilotId);
+    /* لو الإقفال ماوصلش للسيرفر، مابنكملش. قبل كده الوردية كانت بتتقفل
+       محليًا على طول وتفضل "active" عند الإدارة والفرع — فالطيار يفتكر
+       إنه خلص، والإدارة شايفاه لسه شغّال، وساعات الوردية بتفضل بتعدّ. */
+    try {
+      await ShiftService.endShift(widget.pilotId);
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnack(context, e,
+          fallback: 'إنهاء الوردية ماوصلش للسيرفر — الوردية لسه مفتوحة، جرّب تاني');
+      return;
+    }
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -2914,7 +3010,19 @@ class _HomeState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!ok) return;
     _refreshTimer?.cancel();
     await FgService.stop();
-    await ShiftService.endShift(widget.pilotId);
+    /* هنا مابنمنعش الخروج لو الإقفال فشل — ممكن يكون في مكان مفيش فيه نت
+       خالص وهيفضل حبيس. بس بنقوله بصراحة إن الوردية لسه مفتوحة عند
+       الإدارة عشان يبلّغ الفرع بدل ما يكتشفوا في التقفيلة. */
+    try {
+      await ShiftService.endShift(widget.pilotId);
+    } catch (_) {
+      if (!mounted) return;
+      final goOn = await _confirm(context, 'الوردية ما اتقفلتش',
+          'مفيش نت، فالوردية لسه مفتوحة عند الإدارة والفرع.\n'
+          'تخرج برضه؟ لو خرجت هتحتاج تبلّغ الفرع يقفلها.',
+          K.orange, 'اخرج برضه');
+      if (!goOn) return;
+    }
     await Session.clear();
     await IncomingCallService.endAllCalls();
     if (!mounted) return;
@@ -4256,8 +4364,12 @@ class _OrderDetailState extends State<OrderDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
       Navigator.pop(context);
-    } catch (_) {
-      if (mounted) setState(() => _processing = false);
+    } catch (e) {
+      // فشل الحفظ لازم يبان. قبل كده الزرار كان بيرجع شغّال في صمت،
+      // فالطيار يفتكر إنه سلّم والأوردر لسه "جاري التوصيل" في السيستم.
+      if (!mounted) return;
+      setState(() => _processing = false);
+      showErrorSnack(context, e, fallback: 'التسليم ما اتسجّلش — جرّب تاني');
     }
   }
 
@@ -4331,8 +4443,12 @@ class _OrderDetailState extends State<OrderDetailScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
-    } catch (_) {
-      if (mounted) setState(() => _processing = false);
+    } catch (e) {
+      // الطيار لازم يعرف إن طلب الإرجاع ماوصلش، وإلا هيستنى موافقة
+      // على طلب مش موجود أصلاً
+      if (!mounted) return;
+      setState(() => _processing = false);
+      showErrorSnack(context, e, fallback: 'طلب الإرجاع ماوصلش — جرّب تاني');
     }
   }
 
