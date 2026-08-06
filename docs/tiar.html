@@ -3320,6 +3320,36 @@
     };
 
     // تحميل طلب على طيار — يدعم تعدد الطلبات وتفريق الطرود
+    /* ── حجز الأوردر لطيار بمعاملة ذرّية ────────────────────────────────
+       تلات شاشات (الإدارة والفرع والكول سنتر) فيهم نفس زرار "تحميل"
+       وبيشوفوا نفس قائمة الأوردرات. الكتابة كانت update() مباشر من غير أي
+       فحص، فلو موظفين ضغطوا في نفس الثانية الاتنين ينجحوا، وآخر واحد
+       يكتب هو اللي يفضل مسجّل — بينما موبايل الطيار الأول يكون رنّ وطلع
+       لأوردر مش بتاعه، ويكتشف عند المحل إنه اتحمّل على حد تاني.
+
+       runTransaction بيخلّي "اقرا + اتأكد + اكتب" خطوة واحدة على السيرفر،
+       مفيش بينهم فرصة تسلل. اللي بيوصل تاني بيتصدّ برسالة واضحة.
+
+       مهم: الأوردر اللي حالته "لم يتم التوصيل" ليه زرار "إعادة تحميل"
+       وده مسموح — الممنوع بس إن الأوردر يكون "جاري التوصيل" مع طيار
+       دلوقتي، وده الحالة الوحيدة اللي فيها تعارض حقيقي.
+    ──────────────────────────────────────────────────────────────────── */
+    async function claimOrderForPilot(orderId, pilotId, pilotName, now) {
+      const res = await runTransaction(ref(db, "orders/" + orderId), cur => {
+        if (!cur) return;                            // اتمسح أو لسه مش متحمّل
+        if (cur.status === "جاري التوصيل") return;   // متحمّل بالفعل → أجهض
+        return { ...cur, pilotId, pilotName, status: "جاري التوصيل", statusSince: now };
+      });
+      if (res.committed) return;
+
+      const snap = await get(ref(db, "orders/" + orderId));
+      const cur  = snap.val();
+      if (!cur) throw new Error("الأوردر ده مابقاش موجود — اعمل تحديث للصفحة");
+      if (cur.status === "جاري التوصيل")
+        throw new Error(`الأوردر ده اتحمّل على ${cur.pilotName || "طيار تاني"} من ثانية — اعمل تحديث للصفحة`);
+      throw new Error("التحميل ما تمّش — جرّب تاني");
+    }
+
     window.assignPilotToOrder = async function(orderId) {
       const order = window._ordersData.find(o => o.id === orderId);
       if (!order) return;
@@ -3416,14 +3446,21 @@
           : parcels.map((_,i) => i);
         if (checkedIdxs.length === 0) { showToast("اختر طرداً واحداً على الأقل", "error"); return; }
 
+        const _btn = this;
+        _btn.disabled = true;
         try {
           const now = new Date().toISOString();
           if (!hasMulti || checkedIdxs.length === parcels.length) {
-            await update(ref(db, "orders/" + orderId), {
-              pilotId, pilotName: pilot.name,
-              status: "جاري التوصيل", statusSince: now
-            });
+            await claimOrderForPilot(orderId, pilotId, pilot.name, now);
           } else {
+            // التفريق كمان لازم يتأكد إن الأوردر لسه متاح — من غير كده
+            // موظفين ممكن يفرّقوا نفس الأوردر في نفس اللحظة فتطلع نسختين
+            const _chk = await get(ref(db, "orders/" + orderId));
+            const _cur = _chk.val();
+            if (!_cur) throw new Error("الأوردر ده مابقاش موجود — اعمل تحديث للصفحة");
+            if (_cur.status === "جاري التوصيل")
+              throw new Error(`الأوردر ده اتحمّل على ${_cur.pilotName || "طيار تاني"} من ثانية — اعمل تحديث للصفحة`);
+
             const selectedParcels  = checkedIdxs.map(i => parcels[i]);
             const remainingParcels = parcels.filter((_,i) => !checkedIdxs.includes(i));
 
@@ -3488,7 +3525,10 @@
           }
           showToast(`تمّ تحميل ${checkedIdxs.length} طرد على ${pilot.name} ✓`, "success");
           box.remove();
-        } catch(e) { showToast("خطأ: " + e.message, "error"); }
+        } catch(e) {
+          _btn.disabled = false;
+          showToast(e.message, "error");
+        }
       };
     };
 
