@@ -450,20 +450,13 @@ class _OrderTaskHandler extends TaskHandler {
     }
 
     try {
-      final res = await http
-          .get(Uri.parse('$_fbUrl/orders.json${await FbAuth.queryParam()}'))
-          .timeout(const Duration(seconds: 10));
-      if (res.statusCode != 200) return;
+      // فلترة سيرفرية على pilotId — الدورة دي بتشتغل كل 8ث والتطبيق مقفول،
+      // فجلب شجرة الأوردرات كاملة هنا كان بيولّع باقة بيانات الطيار
+      // وبطاريته. FB.ordersOfPilot بيرجع لجلب الشجرة لو الفهرس لسه مترفعش.
+      final raw = await FB.ordersOfPilot(pilotId);
 
-      final raw = json.decode(res.body);
-      if (raw == null) return;
-
-      final currentIds = (raw as Map<String, dynamic>)
-          .entries
-          .where((e) =>
-              e.value is Map &&
-              e.value['pilotId'] == pilotId &&
-              e.value['status'] == 'جاري التوصيل')
+      final currentIds = raw.entries
+          .where((e) => e.value['status'] == 'جاري التوصيل')
           .map((e) => e.key)
           .toSet();
 
@@ -1228,9 +1221,42 @@ class FbAuth {
   }
 }
 
+/* ── فلترة الأوردرات على السيرفر بدل الموبايل ────────────────────────
+   قبل كده كل نداء كان بيجيب `orders.json` كاملة — أوردرات الشركة كلها من
+   أول يوم — والفلترة بتحصل في الموبايل. ده بيكبر كل يوم مع نمو القاعدة:
+   الاستطلاع كل 8ث × كل طيار = تحميل الشجرة كلها مئات المرات في الساعة،
+   فبيضرب في باقة بيانات الطيار وبطاريته وفي فاتورة فايربيز مع بعض.
+   دلوقتي فايربيز هو اللي بيفلتر ويبعت أوردرات الطيار بس.
+
+   شرط أساسي: `.indexOn: ["pilotId"]` على عقدة orders في
+   docs/database.rules.json. من غيره الـ REST API بيرفض الاستعلام بـ 400
+   (مش زي الـ SDK اللي بيحذّر ويكمّل) — عشان كده لازم القواعد ترفع الأول.
+   ولأن الطيارين مش بيحدّثوا التطبيق كلهم في نفس اللحظة، فيه رجوع تلقائي
+   للشجرة الكاملة لو الاستعلام المفلتر فشل، عشان مفيش تطبيق يقع في الفترة
+   اللي القواعد لسه مترفعتش فيها.
+──────────────────────────────────────────────────────────────────── */
 class FB {
-  static Future<dynamic> get(String path) async {
-    final res = await http.get(Uri.parse('${K.db}/$path.json${await FbAuth.queryParam()}'))
+  /// يبني رابط REST مع التوكن + فلترة سيرفرية اختيارية.
+  /// قيم orderBy/equalTo لازم تكون JSON (يعني نصوص بين علامتَي تنصيص).
+  static Future<Uri> _uri(String path,
+      {String? orderBy, String? equalTo, int? limitToLast}) async {
+    final params = <String, String>{};
+    if (orderBy != null) {
+      params['orderBy'] = json.encode(orderBy);
+      if (equalTo != null) params['equalTo'] = json.encode(equalTo);
+      if (limitToLast != null) params['limitToLast'] = '$limitToLast';
+    }
+    final t = await FbAuth.token();
+    if (t != null && t.isNotEmpty) params['auth'] = t;
+    return Uri.parse('${K.db}/$path.json')
+        .replace(queryParameters: params.isEmpty ? null : params);
+  }
+
+  static Future<dynamic> get(String path,
+      {String? orderBy, String? equalTo, int? limitToLast}) async {
+    final res = await http
+        .get(await _uri(path,
+            orderBy: orderBy, equalTo: equalTo, limitToLast: limitToLast))
         .timeout(const Duration(seconds: 10));
     if (res.statusCode == 200) return json.decode(res.body);
     throw Exception('HTTP ${res.statusCode}');
@@ -1243,32 +1269,45 @@ class FB {
     ).timeout(const Duration(seconds: 10));
   }
 
+  /// أوردرات طيار واحد من السيرفر مباشرة. لو الفهرس لسه مترفعش، بنرجع
+  /// للشجرة الكاملة مرة واحدة عشان الشاشة ما تفضاش قدام الطيار.
+  static Future<Map<String, dynamic>> ordersOfPilot(String pilotId,
+      {int? limitToLast}) async {
+    if (pilotId.isEmpty) return {};
+    dynamic raw;
+    try {
+      raw = await get('orders',
+          orderBy: 'pilotId', equalTo: pilotId, limitToLast: limitToLast);
+    } catch (_) {
+      raw = await get('orders'); // القواعد القديمة — فلترة في الموبايل
+    }
+    if (raw is! Map) return {};
+    final out = <String, dynamic>{};
+    (raw as Map).forEach((k, v) {
+      // شرط pilotId متكرر عن قصد: في مسار الرجوع الشجرة راجعة كاملة
+      if (v is Map && v['pilotId'] == pilotId) out['$k'] = v;
+    });
+    return out;
+  }
+
   // أوردرات الطيار النشطة
   static Future<List<OrderModel>> myActiveOrders(String pilotId) async {
-    final raw = await get('orders');
-    if (raw == null) return [];
-    return (raw as Map<String, dynamic>)
-        .entries
-        .where((e) =>
-            e.value is Map &&
-            e.value['pilotId'] == pilotId &&
-            e.value['status'] == 'جاري التوصيل')
+    final raw = await ordersOfPilot(pilotId);
+    return raw.entries
+        .where((e) => e.value['status'] == 'جاري التوصيل')
         .map((e) => OrderModel.fromMap(e.key, Map<String, dynamic>.from(e.value)))
         .toList()
       ..sort((a, b) => a.statusSince.compareTo(b.statusSince));
   }
 
-  // أوردرات الطيار المنتهية
+  // أوردرات الطيار المنتهية — الشاشة بتعرض أوردرات الوردية الحالية بس،
+  // فآخر 200 أوردر أكتر من كفاية وبتمنع إن السجل يكبر بلا حد مع الوقت
   static Future<List<OrderModel>> myCompletedOrders(String pilotId) async {
-    final raw = await get('orders');
-    if (raw == null) return [];
-    return (raw as Map<String, dynamic>)
-        .entries
+    final raw = await ordersOfPilot(pilotId, limitToLast: 200);
+    return raw.entries
         .where((e) =>
-            e.value is Map &&
-            e.value['pilotId'] == pilotId &&
-            (e.value['status'] == 'تم التسليم' ||
-             e.value['status'] == 'لم يتم التوصيل'))
+            e.value['status'] == 'تم التسليم' ||
+            e.value['status'] == 'لم يتم التوصيل')
         .map((e) => OrderModel.fromMap(e.key, Map<String, dynamic>.from(e.value)))
         .toList()
       ..sort((a, b) => b.statusSince.compareTo(a.statusSince));
@@ -3794,8 +3833,9 @@ class _AccountState extends State<AccountTab> {
   void initState() {
     super.initState();
     _load();
-    // تحديث تلقائي كل ثانية
-    _autoRefresh = Timer.periodic(const Duration(seconds: 1), (_) {
+    // إحصائيات مجمّعة (إجمالي/مسلّم/جاري) — مش رقم بيتغيّر كل ثانية، وكل
+    // دورة نداء شبكة كامل. 15ث كفاية تمامًا للشاشة دي.
+    _autoRefresh = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) _load();
     });
   }
@@ -3810,10 +3850,9 @@ class _AccountState extends State<AccountTab> {
     if (_fetching) return;
     _fetching = true;
     try {
-      final raw = await FB.get('orders');
-      if (raw == null || !mounted) return;
-      final all = (raw as Map<String, dynamic>)
-          .entries.where((e) => e.value is Map && e.value['pilotId'] == widget.pilotId).toList();
+      final raw = await FB.ordersOfPilot(widget.pilotId);
+      if (!mounted) return;
+      final all = raw.entries.toList();
       setState(() {
         _total     = all.length;
         _delivered = all.where((e) => e.value['status'] == 'تم التسليم').length;

@@ -36,7 +36,7 @@
     "orders": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["orderNum"]
+      ".indexOn": ["orderNum", "pilotId"]
     },
     "customers": {
       ".read": "auth != null",
