@@ -11,19 +11,16 @@
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
        ──────────────────────────────────────────────────────────────
-       اللوحة دي بترسم بـ innerHTML وبتعرض بيانات جاية من تطبيق العميل
-       وبوابة المحل وتطبيق الطيار — يعني نصوص أي حد بره الشركة بيكتبها.
-       وقواعد فايربيز كلها "auth != null" وكل التطبيقات بتدخل مجهول،
-       فأي زائر يقدر يكتب مباشرةً في أي عقدة.
+       اللوحة بترسم بـ innerHTML وبتعرض بيانات جاية من تطبيق العميل
+       وبوابة المحل وتطبيق الطيار — نصوص بيكتبها ناس بره الشركة. وقواعد
+       فايربيز كلها "auth != null" وكل التطبيقات بتدخل مجهول، فأي زائر
+       يقدر يكتب مباشرةً في أي عقدة.
 
-       من غير تهريب: عميل يسجّل اسمه
-           <img src=x onerror="...">
-       وأول ما المدير يفتح شاشة الأوردرات، الكود ده بيشتغل **جوّه
-       متصفحه بصلاحياته** — يقرا كل الباسوردات والمرتبات ويبعتها لبره،
-       والمدير مشافش حاجة.
+       من غير تهريب: عميل يسجّل اسمه <img src=x onerror="..."> وأول ما
+       المدير يفتح الشاشة الكود يشتغل جوّه متصفحه بصلاحياته.
 
-       الدوال هنا عالمية (مش module) عشان كل بلوكات السكريبت في الصفحة
-       توصلها، وقبل أي كود تاني عشان تكون جاهزة وقت أول رسمة.
+       الدوال عالمية (مش module) عشان كل بلوكات السكريبت توصلها، وقبل
+       أي كود تاني عشان تكون جاهزة وقت أول رسمة.
   ══════════════════════════════════════════════════════════════ -->
   <script>
     /* للنص العادي وقيم الخصائص العادية */
@@ -35,9 +32,8 @@
 
     /* لنص جوّه سترنج جافاسكريبت جوّه خاصية HTML، زي:
            onclick="openEditUser('${...}')"
-       هنا esc() لوحدها **مش كفاية**: المتصفح بيفك ترميز الخاصية قبل
-       ما الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج.
-       فبنهرّب لطبقة الجافاسكريبت الأول وبعدين لطبقة الـ HTML. */
+       هنا esc() لوحدها مش كفاية: المتصفح بيفك ترميز الخاصية قبل ما
+       الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج. */
     window.escJs = function (v) {
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
@@ -124,7 +120,7 @@
     }
     function closeModal(type) {
       if (window.closeModal) { window.closeModal(type); return; }
-      document.getElementById(`modal-${ esc(type) }`)?.classList.remove("open");
+      document.getElementById(`modal-${type}`)?.classList.remove("open");
       document.body.style.overflow = "";
     }
 
@@ -518,37 +514,37 @@
         <div class="addr-widget">
           <div class="addr-row">
             <div class="addr-field">
-              <label class="addr-label">المحافظة ${ esc(req) }</label>
-              <select class="addr-gov addr-input" id="${ esc(containerId) }-gov">
+              <label class="addr-label">المحافظة ${req}</label>
+              <select class="addr-gov addr-input" id="${containerId}-gov">
                 <option value="">— اختر —</option>
-                ${window.EG_GOVERNORATES.map(g=>`<option value="${ esc(g) }">${ esc(g) }</option>`).join('')}
+                ${window.EG_GOVERNORATES.map(g=>`<option value="${g}">${g}</option>`).join('')}
               </select>
             </div>
             <div class="addr-field">
-              <label class="addr-label">المدينة / الحي ${ esc(req) }</label>
-              <select class="addr-input" id="${ esc(containerId) }-area">
+              <label class="addr-label">المدينة / الحي ${req}</label>
+              <select class="addr-input" id="${containerId}-area">
                 <option value="">— اختر المحافظة أولاً —</option>
               </select>
             </div>
           </div>
           <div class="addr-field" style="margin-top:8px">
-            <label class="addr-label">العنوان بالتفصيل ${ esc(req) }</label>
-            <input class="addr-input" id="${ esc(containerId) }-detail"
+            <label class="addr-label">العنوان بالتفصيل ${req}</label>
+            <input class="addr-input" id="${containerId}-detail"
               placeholder="الشارع، رقم العمارة، الدور، الشقة…" type="text" />
           </div>
-          <div class="addr-preview" id="${ esc(containerId) }-preview" style="display:none"></div>
+          <div class="addr-preview" id="${containerId}-preview" style="display:none"></div>
         </div>`;
 
       // بناء الـ preview عند أي تغيير
       // أول ما المحافظة تتغيّر نملأ مدنها
-      const _govEl = document.getElementById(`${ esc(containerId) }-gov`);
+      const _govEl = document.getElementById(`${containerId}-gov`);
       if (_govEl) _govEl.addEventListener('change', () => window.fillCities(containerId));
       window.fillCities(containerId);
 
       ['gov','area','detail'].forEach(k => {
-        document.getElementById(`${ esc(containerId) }-${ esc(k) }`)
+        document.getElementById(`${containerId}-${k}`)
           .addEventListener('input', () => _updateAddrPreview(containerId));
-        document.getElementById(`${ esc(containerId) }-${ esc(k) }`)
+        document.getElementById(`${containerId}-${k}`)
           .addEventListener('change', () => _updateAddrPreview(containerId));
       });
 
@@ -558,14 +554,14 @@
 /* يملأ قائمة المدن حسب المحافظة المختارة. [keep] = نحاول نحافظ على
        القيمة الحالية (مفيدة وقت تحميل عنوان محفوظ). */
     window.fillCities = function(containerId, keep) {
-      const govSel  = document.getElementById(`${ esc(containerId) }-gov`);
-      const citySel = document.getElementById(`${ esc(containerId) }-area`);
+      const govSel  = document.getElementById(`${containerId}-gov`);
+      const citySel = document.getElementById(`${containerId}-area`);
       if (!govSel || !citySel || citySel.tagName !== 'SELECT') return;
       const gov    = govSel.value;
       const cities = (window.EG_CITIES && window.EG_CITIES[gov]) || [];
       const want   = keep !== undefined ? keep : citySel.value;
       citySel.innerHTML = gov
-        ? `<option value="">— اختر المدينة —</option>` + cities.map(c => `<option value="${ esc(c) }">${ esc(c) }</option>`).join('')
+        ? `<option value="">— اختر المدينة —</option>` + cities.map(c => `<option value="${c}">${c}</option>`).join('')
         : `<option value="">— اختر المحافظة أولاً —</option>`;
       if (want) {
         // لو القيمة مش ضمن القائمة (عنوان قديم) نضيفها عشان ما تضيعش
@@ -580,7 +576,7 @@
 
     window._updateAddrPreview = function(containerId) {
       const full = window.getAddressValue(containerId);
-      const el   = document.getElementById(`${ esc(containerId) }-preview`);
+      const el   = document.getElementById(`${containerId}-preview`);
       if (!el) return;
       if (full.trim()) {
         el.style.display = 'block';
@@ -592,9 +588,9 @@
 
     /* يُرجع نص العنوان الكامل مثل: "شارع 9 عمارة 14، المعادي، القاهرة" */
     window.getAddressValue = function(containerId) {
-      const gov    = (document.getElementById(`${ esc(containerId) }-gov`)?.value    || '').trim();
-      const area   = (document.getElementById(`${ esc(containerId) }-area`)?.value   || '').trim();
-      const detail = (document.getElementById(`${ esc(containerId) }-detail`)?.value || '').trim();
+      const gov    = (document.getElementById(`${containerId}-gov`)?.value    || '').trim();
+      const area   = (document.getElementById(`${containerId}-area`)?.value   || '').trim();
+      const detail = (document.getElementById(`${containerId}-detail`)?.value || '').trim();
       const parts  = [detail, area, gov].filter(Boolean);
       return parts.join('، ');
     };
@@ -602,9 +598,9 @@
     /* يملأ الحقول من نص محفوظ — يحاول يكشف المحافظة تلقائياً */
     window.setAddressValue = function(containerId, text) {
       if (!text) return;
-      const govSel = document.getElementById(`${ esc(containerId) }-gov`);
-      const areaSel = document.getElementById(`${ esc(containerId) }-area`);
-      const detailSel = document.getElementById(`${ esc(containerId) }-detail`);
+      const govSel = document.getElementById(`${containerId}-gov`);
+      const areaSel = document.getElementById(`${containerId}-area`);
+      const detailSel = document.getElementById(`${containerId}-detail`);
       if (!govSel) return;
 
       // حاول كشف المحافظة من النص
@@ -639,7 +635,7 @@
       try {
         const q = encodeURIComponent(address + " مصر");
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${ esc(q) }&limit=1&countrycodes=eg`,
+          `https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1&countrycodes=eg`,
           { headers: { "Accept-Language": "ar", "User-Agent": "tiar-app/1.0" } }
         );
         const data = await res.json();
@@ -772,7 +768,7 @@
         const dateKey = todayKey();
         const now = new Date().toISOString();
         // أنشئ سجل جلسة جديد في كل مرة
-        const sessRef = push(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions`));
+        const sessRef = push(ref(db, `attendance/${dateKey}/${username}/sessions`));
         await set(sessRef, { username, role: role || "", checkIn: now, checkOut: null, lastSeen: now });
         // احفظ مفتاح الجلسة محلياً لنستخدمه عند الخروج/إغلاق المتصفح
         localStorage.setItem(SESS_ATT_KEY, JSON.stringify({
@@ -791,7 +787,7 @@
         const { dateKey, username: u, sessionId } = JSON.parse(saved);
         if (!sessionId || u !== username) return;
         const now = new Date().toISOString();
-        await update(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessionId) }`), {
+        await update(ref(db, `attendance/${dateKey}/${username}/sessions/${sessionId}`), {
           checkOut: now, lastSeen: now
         });
         localStorage.removeItem(SESS_ATT_KEY);
@@ -806,7 +802,7 @@
         if (!saved || !window._currentUser?.username) return;
         const { dateKey, username, sessionId } = JSON.parse(saved);
         if (sessionId) {
-          update(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessionId) }`), {
+          update(ref(db, `attendance/${dateKey}/${username}/sessions/${sessionId}`), {
             lastSeen: new Date().toISOString()
           });
         }
@@ -825,7 +821,7 @@
         const now = new Date().toISOString();
         // استخدم sendBeacon أو XMLHttpRequest المتزامن لضمان الإرسال قبل الإغلاق
         // Firebase REST API — مباشرة بدون SDK لأن beforeunload لا ينتظر async
-        const url = `https://aldahshaneg-92f66-default-rtdb.firebaseio.com/attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessionId) }.json`;
+        const url = `https://aldahshaneg-92f66-default-rtdb.firebaseio.com/attendance/${dateKey}/${username}/sessions/${sessionId}.json`;
         const payload = JSON.stringify({ checkOut: now, lastSeen: now });
         if (navigator.sendBeacon) {
           navigator.sendBeacon(url + "?x-http-method-override=PATCH", new Blob([payload], { type: "application/json" }));
@@ -891,7 +887,7 @@
           const { dateKey, username, sessionId } = JSON.parse(saved);
           if (dateKey === todayKey() && username === window._currentUser.username && sessionId) {
             // اقرأ حالة الجلسة من Firebase
-            const sessSnap = await get(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessionId) }`));
+            const sessSnap = await get(ref(db, `attendance/${dateKey}/${username}/sessions/${sessionId}`));
             if (sessSnap.exists()) {
               const sessData = sessSnap.val();
               if (sessData.checkIn && !sessData.checkOut) {
@@ -1113,15 +1109,15 @@
         const bRevenueToday = bDeliveredToday.reduce((sum,o) => sum + (Number(o.totalDeliveryPrice) || 0), 0);
         const bPilots = pilots.filter(p => p.assignedBranchId === b.id).length;
         return `<tr>
-          <td class="idx">${ esc(i+1) }</td>
+          <td class="idx">${i+1}</td>
           <td><b>${ esc(b.name) }</b></td>
           <td style="font-size:.8rem;color:var(--muted)">${ esc(b.areas && b.areas.length ? b.areas.join('، ') : (b.area || "—")) }</td>
-          <td style="color:var(--orange);font-weight:700">${ esc(bPending) }</td>
-          <td style="color:var(--sky);font-weight:700">${ esc(bDelivering) }</td>
+          <td style="color:var(--orange);font-weight:700">${bPending}</td>
+          <td style="color:var(--sky);font-weight:700">${bDelivering}</td>
           <td style="color:var(--green);font-weight:700">${totalParcelsOf(bDeliveredToday)}</td>
-          <td>${ esc(bTodayTotal) }</td>
-          <td style="color:var(--green)">${ esc(bRevenueToday) } ج.م</td>
-          <td>${ esc(bPilots) }</td>
+          <td>${bTodayTotal}</td>
+          <td style="color:var(--green)">${bRevenueToday} ج.م</td>
+          <td>${bPilots}</td>
         </tr>`;
       }).join("");
     }
@@ -1261,14 +1257,14 @@
           const bOutgoing = bOrders.length * 2;   // رسوم تطوير: عدد الأوردرات × 2 ج.م
           const bNet      = bRevenue - bOutgoing;
           return `<tr>
-            <td class="idx">${ esc(i+1) }</td>
+            <td class="idx">${i+1}</td>
             <td><b>${ esc(b.name) }</b></td>
             <td style="text-align:center">${ esc(bOrders.length) }</td>
             <td style="text-align:center">${totalParcelsOf(bOrders)}</td>
-            <td style="color:var(--green)">${ esc(bRevenue) } ج.م</td>
-            <td style="color:var(--orange)">${ esc(bPrepaid) } ج.م</td>
-            <td style="color:var(--red);font-weight:700">${ esc(bOutgoing) } ج.م</td>
-            <td style="color:${ esc(bNet >= 0 ? 'var(--green)' : 'var(--red)') };font-weight:700">${ esc(bNet) } ج.م</td>
+            <td style="color:var(--green)">${bRevenue} ج.م</td>
+            <td style="color:var(--orange)">${bPrepaid} ج.م</td>
+            <td style="color:var(--red);font-weight:700">${bOutgoing} ج.م</td>
+            <td style="color:${bNet >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:700">${bNet} ج.م</td>
           </tr>`;
         }).join("");
       }
@@ -1290,7 +1286,7 @@
         } else {
           pilotsBody.innerHTML = rows.map((r, idx) => `
             <tr>
-              <td class="idx">${ esc(idx+1) }</td>
+              <td class="idx">${idx+1}</td>
               <td><b>${ esc(r.p.name) }</b></td>
               <td>${ esc(r.typeLabel) }</td>
               <td>${ esc(r.valLabel) }</td>
@@ -1309,11 +1305,11 @@
         expensesBody.innerHTML = sortedExpenses.map((e,i) => {
           const branchName = e.branchId ? (branches.find(b => b.id === e.branchId)?.name || "—") : "—";
           return `<tr>
-            <td class="idx">${ esc(i+1) }</td>
+            <td class="idx">${i+1}</td>
             <td>${ esc(e.date || "—") }</td>
             <td><b>${ esc(e.item || "—") }</b></td>
             <td style="color:var(--red);font-weight:700">${ esc(e.amount || 0) } ج.م</td>
-            <td>${ esc(branchName) }</td>
+            <td>${branchName}</td>
             <td>${e.cashTxnId
               ? `<span style="background:rgba(34,197,94,.14);color:var(--green);font-weight:700;padding:3px 9px;border-radius:6px;font-size:.76rem">💵 مدفوع — ${ esc(e.cashStoreName || "خزنة") }</span>`
               : `<span style="background:rgba(249,115,22,.13);color:var(--orange);font-weight:700;padding:3px 9px;border-radius:6px;font-size:.76rem">⏳ مستحق</span>`}</td>
@@ -1366,7 +1362,7 @@
       const store = storeId ? (window._cashStoresData || []).find(s => s.id === storeId) : null;
       if (storeId && !store) { showToast("الخزنة المختارة غير موجودة", "error"); return; }
       if (store && !alreadyPaid && (Number(store.balance) || 0) < amount) {
-        if (!confirm(`رصيد «${ esc(store.name) }» هو ${ esc((Number(store.balance)||0).toFixed(2)) } ج.م وأقل من المصروف (${ esc(amount) } ج.م).\n\nهل تريد المتابعة ويصبح الرصيد بالسالب؟`)) return;
+        if (!confirm(`رصيد «${ esc(store.name) }» هو ${ esc((Number(store.balance)||0).toFixed(2)) } ج.م وأقل من المصروف (${amount} ج.م).\n\nهل تريد المتابعة ويصبح الرصيد بالسالب؟`)) return;
       }
 
       const btn = document.getElementById("submitExpenseBtn");
@@ -1391,7 +1387,7 @@
           const txnRef = await push(ref(db, "cashTransactions"), {
             storeId, storeName: store.name,
             type: "out", amount,
-            reason: `مصروف — ${ esc(item) }`,
+            reason: `مصروف — ${item}`,
             notes: notes || "",
             relatedPilotId: "", relatedPilotName: "",
             branchId: branchId || store.branchId || "",
@@ -1401,7 +1397,7 @@
             createdAt: new Date().toISOString()
           });
           await update(ref(db, "expenses/" + expenseId), { cashTxnId: txnRef.key });
-          showToast(`تمّ حفظ المصروف وخصم ${ esc(amount) } ج.م من ${ esc(store.name) } ✓`, "success");
+          showToast(`تمّ حفظ المصروف وخصم ${amount} ج.م من ${ esc(store.name) } ✓`, "success");
         } else {
           showToast(id ? "تمّ تحديث المصروف ✓" : "تمّ إضافة المصروف ✓", "success");
         }
@@ -1484,7 +1480,7 @@
       if (!isFinite(ms) || ms < 0) ms = 0;
       const h = Math.floor(ms / 3600000);
       const m = Math.floor((ms % 3600000) / 60000);
-      return `${ esc(h) } س ${ esc(m) } د`;
+      return `${h} س ${m} د`;
     }
 
     /* ── فلتر الفترة (يوم / شهر / سنة / فترة مخصصة / الكل) لصفحة الورديات ──
@@ -1500,15 +1496,15 @@
       const yearNow  = now.getFullYear();
       const monthNow = String(now.getMonth() + 1).padStart(2, "0");
       if (type === "day") {
-        wrap.innerHTML = `<div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">اليوم</label><input type="date" id="shiftsDay" value="${ esc(todayStr) }" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>`;
+        wrap.innerHTML = `<div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">اليوم</label><input type="date" id="shiftsDay" value="${todayStr}" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>`;
       } else if (type === "month") {
-        wrap.innerHTML = `<div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">الشهر</label><input type="month" id="shiftsMonth" value="${ esc(yearNow) }-${ esc(monthNow) }" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>`;
+        wrap.innerHTML = `<div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">الشهر</label><input type="month" id="shiftsMonth" value="${yearNow}-${monthNow}" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>`;
       } else if (type === "year") {
-        wrap.innerHTML = `<div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">السنة</label><input type="number" id="shiftsYear" value="${ esc(yearNow) }" min="2000" max="2100" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem;width:100px"></div>`;
+        wrap.innerHTML = `<div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">السنة</label><input type="number" id="shiftsYear" value="${yearNow}" min="2000" max="2100" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem;width:100px"></div>`;
       } else if (type === "custom") {
         wrap.innerHTML = `
-          <div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ</label><input type="date" id="shiftsFrom" value="${ esc(todayStr) }" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>
-          <div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">إلى تاريخ</label><input type="date" id="shiftsTo" value="${ esc(todayStr) }" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>`;
+          <div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ</label><input type="date" id="shiftsFrom" value="${todayStr}" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>
+          <div><label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">إلى تاريخ</label><input type="date" id="shiftsTo" value="${todayStr}" onchange="renderShiftsPage()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem"></div>`;
       } else {
         wrap.innerHTML = "";
       }
@@ -1566,7 +1562,7 @@
         const branch = (window._branchesList || []).find(b => b.id === p.assignedBranchId);
         return `
           <tr>
-            <td class="idx">${ esc(i + 1) }</td>
+            <td class="idx">${i + 1}</td>
             <td><span class="name-badge">${ esc(p.name) }</span></td>
             <td dir="ltr">${ esc(p.phone1 || "—") }</td>
             <td>${ esc(branch ? branch.name : "—") }</td>
@@ -1621,13 +1617,13 @@
         const dur    = endMs - new Date(s.startedAt).getTime();
         return `
           <tr>
-            <td class="idx">${ esc(i + 1) }</td>
+            <td class="idx">${i + 1}</td>
             <td><span class="name-badge">${ esc(s.pilotName || "—") }</span></td>
-            <td style="font-size:.8rem">${ esc(fmtShiftDT(s.startedAt)) }</td>
+            <td style="font-size:.8rem">${fmtShiftDT(s.startedAt)}</td>
             <td style="font-size:.8rem">${active ? `<span style="color:var(--green);font-weight:700">جارية الآن 🟢</span>` : fmtShiftDT(s.endedAt)}</td>
-            <td style="font-size:.8rem;color:var(--muted)">${ esc(fmtShiftDuration(dur)) }</td>
+            <td style="font-size:.8rem;color:var(--muted)">${fmtShiftDuration(dur)}</td>
             <td style="font-weight:700;color:var(--sky)">${ esc(shiftOrders.length) }</td>
-            <td style="font-size:.82rem"><span style="color:var(--green)">${ esc(delivered) } تم</span> / <span style="color:var(--orange)">${ esc(undelivered) } لم يتم</span></td>
+            <td style="font-size:.82rem"><span style="color:var(--green)">${delivered} تم</span> / <span style="color:var(--orange)">${undelivered} لم يتم</span></td>
             <td><button class="view-btn" onclick="openShiftOrders('${ escJs(s.id) }')">🔍 عرض الطلبات</button>${active ? ` <button class="del-btn" onclick="adminEndPilotShift('${ escJs(s.id) }','${ escJs(s.pilotId) }')">🔴 إنهاء الوردية</button>` : ` <button class="view-btn" onclick="viewOldShiftReport('${ escJs(s.id) }')">📊 عرض التقفيلة</button>`}</td>
           </tr>`;
       }).join("");
@@ -1705,7 +1701,7 @@
       const periodEl = document.getElementById("shiftOrdersPeriod");
       if (periodEl) {
         const active = (shift?.status || "active") === "active";
-        periodEl.textContent = `من ${ fmtShiftDT(shift?.startedAt) } إلى ${ active ? "الآن (الوردية جارية)" : fmtShiftDT(shift?.endedAt) }`;
+        periodEl.textContent = `من ${fmtShiftDT(shift?.startedAt)} إلى ${ active ? "الآن (الوردية جارية)" : fmtShiftDT(shift?.endedAt) }`;
       }
 
       document.getElementById("soTotalCount").textContent       = orders.length;
@@ -1724,12 +1720,12 @@
             : "var(--muted)";
           return `
             <tr>
-              <td class="idx">${ esc(i + 1) }</td>
+              <td class="idx">${i + 1}</td>
               <td style="font-weight:700;color:var(--sky)">${ esc(o.orderNum || o.id || "—") }</td>
               <td>${ esc(o.senderName || "—") }</td>
-              <td style="color:${ esc(stColor) };font-weight:600;font-size:.8rem">${ esc(o.status || "—") }</td>
+              <td style="color:${stColor};font-weight:600;font-size:.8rem">${ esc(o.status || "—") }</td>
               <td style="color:var(--green);font-weight:600">${ esc(Number(o.totalDeliveryPrice || 0).toFixed(2)) } ج.م</td>
-              <td style="font-size:.78rem;color:var(--muted)">${ esc(fmtShiftDT(o.deliveredAt || o.undeliveredAt || o.createdAt)) }</td>
+              <td style="font-size:.78rem;color:var(--muted)">${fmtShiftDT(o.deliveredAt || o.undeliveredAt || o.createdAt)}</td>
               <td><button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
             </tr>`;
         }).join("");
@@ -1756,7 +1752,7 @@
           : (p.pilotStatus === "waiting" || p.pilotStatus === "delivering")
           ? `<button class="del-btn" style="background:rgba(239,68,68,.13);color:var(--red);border:1px solid var(--red)" onclick="forcePilotLeave('${ escJs(p.id) }','${ escJs(p.name) }')">🛑 إيقاف/إذن</button>`
           : "";
-        return `<tr><td class="idx">${ esc(i+1) }</td><td><span class="name-badge">${ esc(p.name) }</span></td><td dir="ltr">${ esc(p.phone1) }</td><td dir="ltr">${ esc(p.phone2 || "—") }</td><td>${ esc(p.cardNum) }</td><td>${ esc(p.address) }</td><td>${ esc(p.vehicleNo) }</td><td>${ esc(branchHtml) }</td><td>${ esc(statusHtml) }</td><td>${ esc(shiftBtn) }<button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button><button class="del-btn" onclick="deletePilot('${ escJs(p.id) }')">حذف</button>${ esc(leaveBtn) }</td></tr>`;
+        return `<tr><td class="idx">${i+1}</td><td><span class="name-badge">${ esc(p.name) }</span></td><td dir="ltr">${ esc(p.phone1) }</td><td dir="ltr">${ esc(p.phone2 || "—") }</td><td>${ esc(p.cardNum) }</td><td>${ esc(p.address) }</td><td>${ esc(p.vehicleNo) }</td><td>${branchHtml}</td><td>${statusHtml}</td><td>${shiftBtn}<button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button><button class="del-btn" onclick="deletePilot('${ escJs(p.id) }')">حذف</button>${leaveBtn}</td></tr>`;
       }).join("");
     }
 
@@ -1866,7 +1862,7 @@
             return `
               <div class="smart-search-item" onclick="selectOpenShiftPilot('${ escJs(p.id) }')">
                 <div class="ssi-name">${highlightOpenShiftPilotMatch(p.name || "—", q)}</div>
-                <div class="ssi-meta">🏢 ${ esc(branchLabel) }</div>
+                <div class="ssi-meta">🏢 ${branchLabel}</div>
               </div>`;
           }).join("")
         : (list.length
@@ -1948,7 +1944,7 @@
         if (!p.assignedBranchId) return "";
         const branch = window._branchesList.find(b => b.id === p.assignedBranchId);
         const bName  = branch ? branch.name : (p.branchName || "فرع");
-        return `<div class="pilot-branch-tag">🏢 ${ esc(bName) }</div>`;
+        return `<div class="pilot-branch-tag">🏢 ${bName}</div>`;
       }
 
       wEl.innerHTML = waiting.length ? waiting.map(p => `
@@ -1975,12 +1971,12 @@
           ? `<div style="background:rgba(239,68,68,.15);color:var(--red);border-radius:6px;padding:3px 8px;font-size:.75rem;font-weight:700;margin-top:4px;animation:pulseOverdue 1.5s infinite">⚠️ متأخر أكتر من 30 دقيقة — اطمئن عليه</div>`
           : "";
         return `
-        <div class="pilot-card delivering-card" style="${ esc(hasOverdue ? 'border-color:var(--red)' : '') }" onclick="completePilotDelivery('${ escJs(p.id) }')">
+        <div class="pilot-card delivering-card" style="${hasOverdue ? 'border-color:var(--red)' : ''}" onclick="completePilotDelivery('${ escJs(p.id) }')">
           <div class="pilot-card-name">🛵 ${ esc(p.name) }
             <button onclick="event.stopPropagation(); viewPilotDetails('${ escJs(p.id) }')" style="float:left;background:rgba(14,165,233,.12);color:var(--sky);border:1px solid var(--sky);border-radius:6px;padding:2px 8px;font-size:.7rem;cursor:pointer">ℹ️ تفاصيل</button>
           </div>
           <div class="pilot-card-meta">${ esc(p.vehicleNo || "") }</div>
-          ${branchBadge(p)}${ esc(ordersBadge) }${ esc(ordersDetail) }${ esc(overdueBadge) }
+          ${branchBadge(p)}${ordersBadge}${ordersDetail}${overdueBadge}
           <div class="pilot-card-timer" id="ptimer-${ esc(p.id) }">${formatElapsed(p.statusSince)}</div>
           <div class="pilot-card-hint">اضغط عند العودة</div>
         </div>`;
@@ -2051,17 +2047,17 @@
           return `
           <div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">
             <div style="font-weight:700;font-size:.88rem;color:var(--sky);margin-bottom:3px">${ esc(o.orderNum || "—") }</div>
-            <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${ esc(delivSummary) }</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${delivSummary}</div>
             <div style="display:flex;gap:8px">
               <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1px solid rgba(34,197,94,.35);border-radius:7px;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--green)">
-                <input type="radio" name="_ret_${ esc(idx) }" value="delivered" checked style="accent-color:var(--green)" /> ✅ تم التسليم
+                <input type="radio" name="_ret_${idx}" value="delivered" checked style="accent-color:var(--green)" /> ✅ تم التسليم
               </label>
               <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1px solid rgba(249,115,22,.35);border-radius:7px;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--orange)">
-                <input type="radio" name="_ret_${ esc(idx) }" value="undelivered" style="accent-color:var(--orange)" /> ↩️ لم يتم التوصيل
+                <input type="radio" name="_ret_${idx}" value="undelivered" style="accent-color:var(--orange)" /> ↩️ لم يتم التوصيل
               </label>
             </div>
-            <div class="_undelReasonWrap" id="_undelReasonWrap_${ esc(idx) }" style="display:none;margin-top:8px">
-              <input type="text" id="_undelReason_${ esc(idx) }" placeholder="سبب عدم التوصيل (مثال: العميل لم يردّ)" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:var(--font)" />
+            <div class="_undelReasonWrap" id="_undelReasonWrap_${idx}" style="display:none;margin-top:8px">
+              <input type="text" id="_undelReason_${idx}" placeholder="سبب عدم التوصيل (مثال: العميل لم يردّ)" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:var(--font)" />
             </div>
           </div>`;
         }).join("");
@@ -2071,7 +2067,7 @@
           return `
           <div style="border:1px solid rgba(34,197,94,.35);border-radius:9px;padding:10px 12px;margin-bottom:10px;background:rgba(34,197,94,.06)">
             <div style="font-weight:700;font-size:.88rem;color:var(--sky);margin-bottom:3px">${ esc(o.orderNum || "—") } <span style="color:var(--green);font-size:.75rem;font-weight:600">(✅ سلّمه الطيار من تطبيقه)</span></div>
-            <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${ esc(delivSummary) }</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${delivSummary}</div>
             <div style="font-size:.76rem;color:var(--green)">💵 تمن الأوردر: ${ esc(o.totalDeliveryPrice || 0) } ج.م</div>
           </div>`;
         }).join("");
@@ -2084,11 +2080,11 @@
           <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 32px;min-width:340px;max-width:480px;max-height:90vh;overflow-y:auto;width:100%">
             <div style="font-size:1rem;font-weight:700;margin-bottom:4px">🛵 عودة الطيار: ${ esc(p.name) }</div>
             <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">${ esc(activeOrders.length ? "حدّد حالة كل طلب يحمله الطيار:" : "") }${activeOrders.length && pendingSettlementOrders.length ? "<br>" : ""}${ esc(pendingSettlementOrders.length ? "طلبات سلّمها الطيار من تطبيقه — أكّد استلام فلوسها:" : "") }</div>
-            ${ esc(rowsHtml) }
-            ${ esc(settledRowsHtml) }
+            ${rowsHtml}
+            ${settledRowsHtml}
             <!-- قسم التحصيل -->
             <div style="border:1px solid rgba(249,115,22,.35);border-radius:9px;padding:12px 14px;margin-top:10px;background:rgba(249,115,22,.05)">
-              <div style="font-size:.88rem;font-weight:700;color:var(--orange);margin-bottom:10px">💵 تحصيل مبالغ التوصيل — الإجمالي: ${ esc(autoCollectTotal) } ج.م</div>
+              <div style="font-size:.88rem;font-weight:700;color:var(--orange);margin-bottom:10px">💵 تحصيل مبالغ التوصيل — الإجمالي: ${autoCollectTotal} ج.م</div>
               <div style="display:flex;gap:8px;margin-bottom:10px">
                 <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1px solid rgba(34,197,94,.35);border-radius:7px;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--green)">
                   <input type="radio" name="_cashCollect" value="yes" checked style="accent-color:var(--green)" /> ✅ تم التحصيل
@@ -2106,7 +2102,7 @@
                 </div>
                 <div>
                   <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">المبلغ المحصَّل (ج.م)</label>
-                  <input type="number" id="_collectAmount" min="0" step="0.01" value="${ esc(autoCollectTotal) }" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem;box-sizing:border-box" />
+                  <input type="number" id="_collectAmount" min="0" step="0.01" value="${autoCollectTotal}" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem;box-sizing:border-box" />
                 </div>
               </div>
             </div>
@@ -2125,9 +2121,9 @@
         });
 
         activeOrders.forEach((o, idx) => {
-          box.querySelectorAll(`input[name="_ret_${ esc(idx) }"]`).forEach(radio => {
+          box.querySelectorAll(`input[name="_ret_${idx}"]`).forEach(radio => {
             radio.addEventListener("change", () => {
-              const wrap = document.getElementById(`_undelReasonWrap_${ esc(idx) }`);
+              const wrap = document.getElementById(`_undelReasonWrap_${idx}`);
               if (wrap) wrap.style.display = radio.value === "undelivered" && radio.checked ? "block" : "none";
             });
           });
@@ -2147,13 +2143,13 @@
             let deliveredParcels = 0, undeliveredParcels = 0;
             for (const o of activeOrders) {
               const idx = activeOrders.indexOf(o);
-              const choice = box.querySelector(`input[name="_ret_${ esc(idx) }"]:checked`)?.value || "delivered";
+              const choice = box.querySelector(`input[name="_ret_${idx}"]:checked`)?.value || "delivered";
               if (choice === "delivered") {
                 await update(ref(db, "orders/" + o.id), { status: "تم التسليم", deliveredAt: now, pilotName: p.name });
                 deliveredCount++;
                 deliveredParcels += parcelCount(o);
               } else {
-                const reasonInput = document.getElementById(`_undelReason_${ esc(idx) }`);
+                const reasonInput = document.getElementById(`_undelReason_${idx}`);
                 const reason = (reasonInput?.value || "").trim() || "—";
                 await update(ref(db, "orders/" + o.id), { status: "لم يتم التوصيل", undeliveredAt: now, undeliveredReason: reason, pilotName: p.name });
                 undeliveredCount++;
@@ -2170,9 +2166,9 @@
             const nextQ = await getNextQueueNo(p.assignedBranchId);
             await update(ref(db, "pilots/" + pilotId), { pilotStatus: "waiting", queueNo: nextQ, statusSince: now });
             let msg = "تمّ ✓ الطيار عاد للانتظار";
-            if (deliveredParcels) msg += ` — ${ esc(deliveredParcels) } طرد مسلَّم`;
-            if (undeliveredParcels) msg += ` — ${ esc(undeliveredParcels) } طرد غير مسلَّم`;
-            if (settledCount) msg += ` — ${ esc(settledCount) } تمّت تسوية فلوسه`;
+            if (deliveredParcels) msg += ` — ${deliveredParcels} طرد مسلَّم`;
+            if (undeliveredParcels) msg += ` — ${undeliveredParcels} طرد غير مسلَّم`;
+            if (settledCount) msg += ` — ${settledCount} تمّت تسوية فلوسه`;
 
             // ── تحصيل مبالغ التوصيل ──
             const collectChoice = box.querySelector("input[name='_cashCollect']:checked")?.value || "no";
@@ -2191,14 +2187,14 @@
                     storeId, storeName: store.name,
                     type: "in", amount,
                     reason: `تحصيل توصيل — طيار: ${ esc(p.name) }`,
-                    notes: `${ esc(deliveredCount) } أوردر — ${ esc(deliveredParcels) } طرد مسلَّم`,
+                    notes: `${deliveredCount} أوردر — ${deliveredParcels} طرد مسلَّم`,
                     relatedPilotId: pilotId, relatedPilotName: p.name,
                     branchId: p.assignedBranchId || "",
                     branchName: store.branchName || "",
                     createdBy: window._currentUser?.username || "",
                     createdAt: now
                   });
-                  msg += ` — 💵 تحصيل ${ esc(amount) } ج.م`;
+                  msg += ` — 💵 تحصيل ${amount} ج.م`;
                 }
                 }
               } else if (!storeId) {
@@ -2208,7 +2204,7 @@
               await push(ref(db, "cashTransactions"), {
                 storeId: "", storeName: "", type: "pending", amount: 0,
                 reason: `تحصيل معلّق — طيار: ${ esc(p.name) }`,
-                notes: `${ esc(deliveredCount) } أوردر — ${ esc(deliveredParcels) } طرد لم يُورَّد بعد`,
+                notes: `${deliveredCount} أوردر — ${deliveredParcels} طرد لم يُورَّد بعد`,
                 relatedPilotId: pilotId, relatedPilotName: p.name,
                 branchId: p.assignedBranchId || "",
                 createdBy: window._currentUser?.username || "",
@@ -2348,7 +2344,7 @@
       }
       window.setAddressValue(prefix + 'AddrWidget', c.address || '');
       const label = collection === 'senders' ? 'استلام' : 'تسليم';
-      document.querySelector(`#modal-${ esc(type) } .modal-title`).textContent = (collection === 'senders' ? '🏪' : '📬') + ` تعديل عميل ${ label }`;
+      document.querySelector(`#modal-${type} .modal-title`).textContent = (collection === 'senders' ? '🏪' : '📬') + ` تعديل عميل ${label}`;
       document.getElementById("submit" + prefix.charAt(0).toUpperCase() + prefix.slice(1) + "Btn").textContent = "تحديث العميل";
       setEditMode(id, collection, type);
       openModal(type);
@@ -2364,7 +2360,7 @@
       const tbody = document.getElementById("sendersBody");
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا يوجد عملاء الاستلام بعد</td></tr>`; return; }
       tbody.innerHTML = list.map((c, i) => `<tr>
-        <td class="idx">${ esc(i+1) }</td>
+        <td class="idx">${i+1}</td>
         <td><span class="name-badge">${ esc(c.name) }</span></td>
         <td dir="ltr">${ esc(c.phone1) }</td>
         <td dir="ltr">${ esc(c.phone2 || "—") }</td>
@@ -2381,7 +2377,7 @@
       const tbody = document.getElementById("receiversBody");
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا يوجد عملاء التسليم بعد</td></tr>`; return; }
       tbody.innerHTML = list.map((c, i) => `<tr>
-        <td class="idx">${ esc(i+1) }</td>
+        <td class="idx">${i+1}</td>
         <td><span class="name-badge">${ esc(c.name) }</span></td>
         <td dir="ltr">${ esc(c.phone1) }</td>
         <td dir="ltr">${ esc(c.phone2 || "—") }</td>
@@ -2408,7 +2404,7 @@
       ).slice(0, 8);
       if (!hits.length) { drop.style.display = 'none'; return; }
       drop.innerHTML = hits.map(c => `
-        <div onmousedown="pickClientModal('${ escJs(type) }','${ escJs(c.id) }')"
+        <div onmousedown="pickClientModal('${type}','${ escJs(c.id) }')"
           style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px"
           onmouseover="this.style.background='rgba(14,165,233,.08)'" onmouseout="this.style.background=''">
           <div>
@@ -2462,7 +2458,7 @@
       const row = document.createElement("div");
       row.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:8px";
       row.innerHTML = `
-        <input type="text" class="branch-area-input" value="${ esc(value || '') }"
+        <input type="text" class="branch-area-input" value="${value || ''}"
           placeholder="اسم المنطقة"
           style="flex:1;padding:9px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem" />
         <button type="button" onclick="removeAreaField(this)"
@@ -2558,13 +2554,13 @@
                alt ? `الأوردرات ← <b>${ esc(alt.name) }</b>` : `<span style="color:var(--orange)">⚠️ مفيش فرع بديل</span>`}</div>`
           : `<span style="background:rgba(34,197,94,.15);color:var(--green);padding:3px 10px;border-radius:20px;font-weight:700;font-size:.78rem">✅ شغّال</span>`;
         return `<tr${ esc(b.paused ? ' style="background:rgba(232,25,44,.04)"' : '') }>
-        <td class="idx">${ esc(i+1) }</td>
+        <td class="idx">${i+1}</td>
         <td><span class="name-badge">${ esc(b.name) }</span></td>
         <td><span style="background:rgba(249,115,22,.15);color:var(--orange);padding:3px 10px;border-radius:20px;font-weight:700;font-size:.82rem;font-family:monospace;letter-spacing:.05em">${ esc(b.code || "—") }</span></td>
-        <td>${ esc(areasText) }</td>
+        <td>${areasText}</td>
         <td dir="ltr">${ esc(b.phone) }</td>
         <td>${ esc(b.manager || "—") }</td>
-        <td>${ esc(statusHtml) }</td>
+        <td>${statusHtml}</td>
         <td><button class="edit-btn" onclick="openPauseBranch('${ escJs(b.id) }')">${ esc(b.paused ? "▶️ تشغيل" : "⏸️ إيقاف") }</button><button class="edit-btn" onclick="openEditBranch('${ escJs(b.id) }')">تعديل</button><button class="del-btn" onclick="deleteBranch('${ escJs(b.id) }')">حذف</button></td>
       </tr>`;}).join("");
       populateBranchSelect();
@@ -2598,8 +2594,8 @@
         </div>` +
         branch.areas.map((area, i) => `
         <div class="zone-area-row" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <input type="checkbox" id="za_${ esc(i) }" class="zone-area-cb" value="${ esc(area) }" onchange="onZoneAreaCbChange()">
-          <label for="za_${ esc(i) }" style="flex:1;cursor:pointer;font-size:.9rem">${ esc(area) }</label>
+          <input type="checkbox" id="za_${i}" class="zone-area-cb" value="${area}" onchange="onZoneAreaCbChange()">
+          <label for="za_${i}" style="flex:1;cursor:pointer;font-size:.9rem">${area}</label>
           <input type="number" class="zone-area-price-input" placeholder="السعر" min="0" step="1"
             style="display:none;width:110px;padding:6px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
           <span class="zone-area-price-label" style="display:none;color:var(--muted);font-size:.8rem">ج.م</span>
@@ -2768,9 +2764,9 @@
           ? `<span style="background:rgba(14,165,233,.12);color:var(--sky);padding:2px 8px;border-radius:12px;font-size:.8rem">${ esc(z.sourceBranchName || '—') }</span>`
           : `<span style="background:rgba(168,85,247,.12);color:var(--purple);padding:2px 8px;border-radius:12px;font-size:.8rem">يدوي</span>`;
         return `<tr>
-          <td class="idx">${ esc(i+1) }</td>
+          <td class="idx">${i+1}</td>
           <td><span class="name-badge">${ esc(z.deliveryBranchName || z.branchName || "—") }</span></td>
-          <td>${ esc(srcLabel) }</td>
+          <td>${srcLabel}</td>
           <td><span class="name-badge" style="background:rgba(168,85,247,.12);color:var(--purple)">${ esc(z.areaName || z.name || "—") }</span></td>
           <td><span style="color:var(--green);font-weight:700">${ esc(z.price) } ج.م</span></td>
           <td><button class="edit-btn" onclick="openEditZone('${ escJs(z.id) }')">تعديل</button><button class="del-btn" onclick="deleteZone('${ escJs(z.id) }')">حذف</button></td>
@@ -2818,7 +2814,7 @@
         if (results.length === 0) {
           dropdown.innerHTML = `<div class="smart-search-empty">لا توجد نتائج</div>`;
           addNewBtn.style.display = 'flex';
-          addNewBtn.querySelector('.smart-search-addnew-text').textContent = `إضافة "${ query }" جديداً`;
+          addNewBtn.querySelector('.smart-search-addnew-text').textContent = `إضافة "${query}" جديداً`;
           showDropdown();
         } else {
           addNewBtn.style.display = 'none';
@@ -2861,23 +2857,23 @@
         if (!name) return;
         dropdown.innerHTML = `
           <div class="smart-search-quickadd">
-            <div class="ssq-title">إضافة ${ esc(listType === 'senders' ? 'استلام' : 'تسليم') } جديد</div>
-            <input type="text" class="ssq-field" id="${ esc(inputId) }-qname" value="${ esc(name) }" placeholder="الاسم" />
-            <input type="tel" class="ssq-field" id="${ esc(inputId) }-qphone1" placeholder="رقم الهاتف 1 *" dir="ltr" />
-            <input type="tel" class="ssq-field" id="${ esc(inputId) }-qphone2" placeholder="رقم الهاتف 2" dir="ltr" />
-            <div id="${ esc(inputId) }-qaddrWidget" style="margin-top:4px"></div>
+            <div class="ssq-title">إضافة ${listType === 'senders' ? 'استلام' : 'تسليم'} جديد</div>
+            <input type="text" class="ssq-field" id="${inputId}-qname" value="${name}" placeholder="الاسم" />
+            <input type="tel" class="ssq-field" id="${inputId}-qphone1" placeholder="رقم الهاتف 1 *" dir="ltr" />
+            <input type="tel" class="ssq-field" id="${inputId}-qphone2" placeholder="رقم الهاتف 2" dir="ltr" />
+            <div id="${inputId}-qaddrWidget" style="margin-top:4px"></div>
             <div class="ssq-actions">
-              <button class="ssq-save" id="${ esc(inputId) }-qsave">حفظ</button>
-              <button class="ssq-cancel" id="${ esc(inputId) }-qcancel">إلغاء</button>
+              <button class="ssq-save" id="${inputId}-qsave">حفظ</button>
+              <button class="ssq-cancel" id="${inputId}-qcancel">إلغاء</button>
             </div>
           </div>
         `;
-        window.renderAddressWidget(`${ esc(inputId) }-qaddrWidget`, { required: true });
-        document.getElementById(`${ esc(inputId) }-qsave`).addEventListener('click', async function() {
-          const qname  = document.getElementById(`${ esc(inputId) }-qname`).value.trim();
-          const qphone1= document.getElementById(`${ esc(inputId) }-qphone1`).value.trim();
-          const qphone2= document.getElementById(`${ esc(inputId) }-qphone2`).value.trim();
-          const qaddr  = window.getAddressValue(`${ esc(inputId) }-qaddrWidget`);
+        window.renderAddressWidget(`${inputId}-qaddrWidget`, { required: true });
+        document.getElementById(`${inputId}-qsave`).addEventListener('click', async function() {
+          const qname  = document.getElementById(`${inputId}-qname`).value.trim();
+          const qphone1= document.getElementById(`${inputId}-qphone1`).value.trim();
+          const qphone2= document.getElementById(`${inputId}-qphone2`).value.trim();
+          const qaddr  = window.getAddressValue(`${inputId}-qaddrWidget`);
           if (!qname || !qphone1 || !qaddr) { showToast("يرجى تعبئة الاسم والهاتف والعنوان", "error"); return; }
           try {
             const collection = listType;
@@ -2888,7 +2884,7 @@
             showToast("تمّ إضافة العميل وحفظه ✓", "success");
           } catch(e) { showToast("خطأ: " + e.message, "error"); }
         });
-        document.getElementById(`${ esc(inputId) }-qcancel`).addEventListener('click', function() { hideDropdown(); });
+        document.getElementById(`${inputId}-qcancel`).addEventListener('click', function() { hideDropdown(); });
         showDropdown();
       });
 
@@ -2943,14 +2939,14 @@
         const nMatch = row.id.match(/drow-(\d+)/);
         if (!nMatch) return;
         const n = nMatch[1];
-        const oldSel = document.getElementById(`dZone-${ esc(n) }`);
+        const oldSel = document.getElementById(`dZone-${n}`);
         if (!oldSel) return;
         const newSel = populateZoneSelect(oldSel, branchId, (zoneId, price, zoneText, el) => {
-          document.getElementById(`dPrice-${ esc(n) }`).value = (price || 0) + " ج.م";
+          document.getElementById(`dPrice-${n}`).value = (price || 0) + " ج.م";
           recalcTotalDelivery();
         });
-        newSel.id = `dZone-${ esc(n) }`;
-        document.getElementById(`dPrice-${ esc(n) }`).value = "0 ج.م";
+        newSel.id = `dZone-${n}`;
+        document.getElementById(`dPrice-${n}`).value = "0 ج.م";
         recalcTotalDelivery();
       });
     }
@@ -2977,79 +2973,79 @@
       const n   = window._deliveryCount;
       const div = document.createElement("div");
       div.className = "delivery-row";
-      div.id = `drow-${ esc(n) }`;
+      div.id = `drow-${n}`;
       div.innerHTML = `
         <div class="delivery-row-header">
-          <span class="delivery-row-num">📦 الطرد #${ esc(n) }</span>
-          <button type="button" class="remove-delivery-btn" onclick="removeDeliveryRow(${ escJs(n) })">✕ إزالة</button>
+          <span class="delivery-row-num">📦 الطرد #${n}</span>
+          <button type="button" class="remove-delivery-btn" onclick="removeDeliveryRow(${n})">✕ إزالة</button>
         </div>
         <div class="delivery-inner">
           <div class="form-group full">
             <label>اختر عميل تسليم <span class="req">*</span></label>
-            <div class="smart-search-wrapper" id="recvWrap-${ esc(n) }">
-              <input type="text" id="dRecv-${ esc(n) }" class="smart-search-input" placeholder="ابحث بالاسم أو الهاتف..." autocomplete="off" />
-              <div class="smart-search-dropdown" id="recvDrop-${ esc(n) }"></div>
-              <div class="smart-search-addnew" id="recvAddNew-${ esc(n) }" style="display:none">
+            <div class="smart-search-wrapper" id="recvWrap-${n}">
+              <input type="text" id="dRecv-${n}" class="smart-search-input" placeholder="ابحث بالاسم أو الهاتف..." autocomplete="off" />
+              <div class="smart-search-dropdown" id="recvDrop-${n}"></div>
+              <div class="smart-search-addnew" id="recvAddNew-${n}" style="display:none">
                 <span>➕</span>
                 <span class="smart-search-addnew-text"></span>
               </div>
             </div>
-            <input type="hidden" id="dRecvId-${ esc(n) }" />
+            <input type="hidden" id="dRecvId-${n}" />
           </div>
-          <div class="form-group"><label>هاتف جهة التسليم</label><input id="dPhone-${ esc(n) }" type="tel" dir="ltr" readonly /></div>
-          <div class="form-group"><label>هاتف 2</label><input id="dPhone2-${ esc(n) }" type="tel" dir="ltr" readonly /></div>
-          <div class="form-group full"><label>عنوان التسليم</label><input id="dAddr-${ esc(n) }" type="text" readonly /></div>
-          <div class="form-group full" id="recvEditBtnRow-${ esc(n) }" style="display:none">
-            <button type="button" onclick="openInlineEdit('receiver',${ escJs(n) })" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">✏️ تعديل بيانات هذا العميل</button>
+          <div class="form-group"><label>هاتف جهة التسليم</label><input id="dPhone-${n}" type="tel" dir="ltr" readonly /></div>
+          <div class="form-group"><label>هاتف 2</label><input id="dPhone2-${n}" type="tel" dir="ltr" readonly /></div>
+          <div class="form-group full"><label>عنوان التسليم</label><input id="dAddr-${n}" type="text" readonly /></div>
+          <div class="form-group full" id="recvEditBtnRow-${n}" style="display:none">
+            <button type="button" onclick="openInlineEdit('receiver',${n})" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">✏️ تعديل بيانات هذا العميل</button>
           </div>
           <div class="form-group full">
             <label>المنطقة <span class="req">*</span></label>
-            <select id="dZone-${ esc(n) }" required>
+            <select id="dZone-${n}" required>
               <option value="">— اختر المنطقة —</option>
             </select>
           </div>
           <div class="form-group">
             <label>سعر التوصيل</label>
-            <input id="dPrice-${ esc(n) }" type="text" readonly style="color:var(--green);font-weight:700;text-align:center" value="0 ج.م" />
+            <input id="dPrice-${n}" type="text" readonly style="color:var(--green);font-weight:700;text-align:center" value="0 ج.م" />
           </div>
           <div class="form-group">
             <label>💵 عهدة الطرد <span style="font-size:.72rem;color:var(--muted)">(يدفعها الطيار للمحل)</span></label>
-            <input id="dPrepaid-${ esc(n) }" type="number" min="0" step="0.5" placeholder="0.00" dir="ltr"
+            <input id="dPrepaid-${n}" type="number" min="0" step="0.5" placeholder="0.00" dir="ltr"
                    style="text-align:left" oninput="updateOrderPrepaidTotal()" />
           </div>
-          <div class="form-group full"><label>ملاحظات هذا الطرد</label><input id="dNote-${ esc(n) }" type="text" /></div>
+          <div class="form-group full"><label>ملاحظات هذا الطرد</label><input id="dNote-${n}" type="text" /></div>
         </div>`;
       document.getElementById("deliveriesContainer").appendChild(div);
 
       const rowOnSelect = (data) => {
-        const editBtn = document.getElementById(`recvEditBtnRow-${ esc(n) }`);
+        const editBtn = document.getElementById(`recvEditBtnRow-${n}`);
         if (data) {
-          document.getElementById(`dPhone-${ esc(n) }`).value   = data.phone1 || "";
-          document.getElementById(`dPhone2-${ esc(n) }`).value  = data.phone2 || "";
-          document.getElementById(`dAddr-${ esc(n) }`).value    = data.address || "";
-          document.getElementById(`dRecvId-${ esc(n) }`).value  = data.id;
+          document.getElementById(`dPhone-${n}`).value   = data.phone1 || "";
+          document.getElementById(`dPhone2-${n}`).value  = data.phone2 || "";
+          document.getElementById(`dAddr-${n}`).value    = data.address || "";
+          document.getElementById(`dRecvId-${n}`).value  = data.id;
           if (editBtn) editBtn.style.display = "";
         } else {
-          document.getElementById(`dPhone-${ esc(n) }`).value   = "";
-          document.getElementById(`dPhone2-${ esc(n) }`).value  = "";
-          document.getElementById(`dAddr-${ esc(n) }`).value    = "";
-          document.getElementById(`dRecvId-${ esc(n) }`).value  = "";
+          document.getElementById(`dPhone-${n}`).value   = "";
+          document.getElementById(`dPhone2-${n}`).value  = "";
+          document.getElementById(`dAddr-${n}`).value    = "";
+          document.getElementById(`dRecvId-${n}`).value  = "";
           if (editBtn) editBtn.style.display = "none";
         }
       };
-      initSmartSearch(`dRecv-${ esc(n) }`, 'receivers', rowOnSelect);
+      initSmartSearch(`dRecv-${n}`, 'receivers', rowOnSelect);
 
-      const zoneSel = document.getElementById(`dZone-${ esc(n) }`);
+      const zoneSel = document.getElementById(`dZone-${n}`);
       const branchId = document.getElementById("orderBranchSelect").value;
       const activeSel = populateZoneSelect(zoneSel, branchId, (zoneId, price, zoneText, el) => {
-        document.getElementById(`dPrice-${ esc(n) }`).value = (price || 0) + " ج.م";
+        document.getElementById(`dPrice-${n}`).value = (price || 0) + " ج.م";
         recalcTotalDelivery();
       });
-      activeSel.id = `dZone-${ esc(n) }`;
+      activeSel.id = `dZone-${n}`;
     };
 
     window.removeDeliveryRow = function (n) {
-      const el = document.getElementById(`drow-${ esc(n) }`);
+      const el = document.getElementById(`drow-${n}`);
       if (el) { el.remove(); recalcTotalDelivery(); updateOrderPrepaidTotal(); }
     };
 
@@ -3059,7 +3055,7 @@
         const nMatch = row.id.match(/drow-(\d+)/);
         if (!nMatch) return;
         const n = nMatch[1];
-        const priceText = document.getElementById(`dPrice-${ esc(n) }`)?.value || "0";
+        const priceText = document.getElementById(`dPrice-${n}`)?.value || "0";
         const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
         total += price;
       });
@@ -3081,7 +3077,7 @@
 
     // open modal hook
     window.openModal = function (type) {
-      document.getElementById(`modal-${ esc(type) }`).classList.add("open");
+      document.getElementById(`modal-${type}`).classList.add("open");
       document.body.style.overflow = "hidden";
       if (type === "sender") {
         // إعادة ضبط نموذج الاستلام للإضافة الجديدة (إلا لو openEditClient هو من فتحه)
@@ -3145,14 +3141,14 @@
        التاريخ بييجي من نفس مفتاح العداد بالظبط، فمستحيل رقمين يتلاقوا. */
     async function generateOrderNumber(branchId, branchCode) {
       const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      const counterRef = ref(db, `counters/${ esc(branchId) }/${ esc(dayKey) }`);
+      const counterRef = ref(db, `counters/${branchId}/${dayKey}`);
       let newCount = 1;
       await runTransaction(counterRef, (current) => {
         newCount = (current || 0) + 1;
         return newCount;
       });
       const seq = String(newCount).padStart(3, "0");
-      return `${ esc(branchCode) }-${ esc(dayKey.slice(2)) }-${ esc(seq) }`;
+      return `${branchCode}-${ esc(dayKey.slice(2)) }-${seq}`;
     }
 
     window.addOrder = async function () {
@@ -3194,17 +3190,17 @@
         const nMatch = row.id.match(/drow-(\d+)/);
         if (!nMatch) continue;
         const n = nMatch[1];
-        const recvId   = document.getElementById(`dRecvId-${ esc(n) }`).value;
-        const recvName = document.getElementById(`dRecv-${ esc(n) }`).value.trim();
-        const zoneSel  = document.getElementById(`dZone-${ esc(n) }`);
+        const recvId   = document.getElementById(`dRecvId-${n}`).value;
+        const recvName = document.getElementById(`dRecv-${n}`).value.trim();
+        const zoneSel  = document.getElementById(`dZone-${n}`);
         const zoneId   = zoneSel.value;
         const zoneName = zoneSel.options[zoneSel.selectedIndex]?.text.split(" — ")[0] || "";
-        const zonePrice= parseFloat(document.getElementById(`dPrice-${ esc(n) }`).value.replace(/[^0-9.]/g, '')) || 0;
-        const addr     = document.getElementById(`dAddr-${ esc(n) }`).value.trim();
-        const dNote    = document.getElementById(`dNote-${ esc(n) }`).value.trim();
+        const zonePrice= parseFloat(document.getElementById(`dPrice-${n}`).value.replace(/[^0-9.]/g, '')) || 0;
+        const addr     = document.getElementById(`dAddr-${n}`).value.trim();
+        const dNote    = document.getElementById(`dNote-${n}`).value.trim();
         // العهدة بتتخزّن جوّه الطرد نفسه (orderPrice) عشان تفضل معاه لو
         // الطلب اتفرّق على أكتر من طيار
-        const dPrepaid = parseFloat(document.getElementById(`dPrepaid-${ esc(n) }`)?.value) || 0;
+        const dPrepaid = parseFloat(document.getElementById(`dPrepaid-${n}`)?.value) || 0;
         if (!recvName) { showToast("يرجى إدخال اسم جهة التسليم لكل طرد", "error"); return; }
         if (!zoneId)   { showToast("يرجى اختيار المنطقة لكل طرد", "error"); return; }
         deliveries.push({
@@ -3212,8 +3208,8 @@
           parcelNo      : deliveries.length + 1,
           receiverId    : recvId || null,
           receiverName  : recvName,
-          receiverPhone : document.getElementById(`dPhone-${ esc(n) }`).value,
-          receiverPhone2: document.getElementById(`dPhone2-${ esc(n) }`).value || "",
+          receiverPhone : document.getElementById(`dPhone-${n}`).value,
+          receiverPhone2: document.getElementById(`dPhone2-${n}`).value || "",
           zoneId, zoneName, zonePrice,
           orderPrice    : dPrepaid,
           address: addr, note: dNote, status: "قيد التنفيذ"
@@ -3250,7 +3246,7 @@
           senderAddress: document.getElementById("orderSenderAddress").value,
           deliveries
         });
-        showToast(`تمّ حفظ الطلب ${ esc(orderNum) } بنجاح ✓`, "success");
+        showToast(`تمّ حفظ الطلب ${orderNum} بنجاح ✓`, "success");
         document.getElementById("addOrderForm").reset();
         document.getElementById("orderStorePrepaidNote").value = "";
         document.getElementById("deliveriesContainer").innerHTML = "";
@@ -3409,7 +3405,7 @@
         const cnt = (window._ordersData || []).filter(o => o.pilotId === p.id && o.status === "جاري التوصيل").length;
         const tag = cnt ? ` (يحمل ${totalParcelsOf((window._ordersData||[]).filter(o=>o.pilotId===p.id&&o.status==="جاري التوصيل"))} طرد)` : "";
         const icon = p.pilotStatus === "delivering" ? "🛵" : "⏳";
-        return `<option value="${ esc(p.id) }">${ esc(icon) } ${ esc(p.name) } — ${ esc(p.vehicleNo || "") }${ esc(tag) }</option>`;
+        return `<option value="${ esc(p.id) }">${icon} ${ esc(p.name) } — ${ esc(p.vehicleNo || "") }${tag}</option>`;
       }
 
       let parcelsHtml = "";
@@ -3419,7 +3415,7 @@
             <div style="font-size:.82rem;font-weight:700;color:var(--sky);margin-bottom:8px">📦 اختيار الطرود للتحميل:</div>
             ${parcels.map((d,i) => `
               <label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;font-size:.85rem">
-                <input type="checkbox" class="_parcelChk" value="${ esc(i) }" checked style="accent-color:var(--sky);width:16px;height:16px" />
+                <input type="checkbox" class="_parcelChk" value="${i}" checked style="accent-color:var(--sky);width:16px;height:16px" />
                 <span>
                   <b style="color:var(--sky)">#${ esc(d.parcelNo) }</b>
                   <b>${ esc(d.receiverName||"—") }</b> — ${ esc(d.zoneName||"—") } (${ esc(d.zonePrice||0) } ج)
@@ -3450,10 +3446,10 @@
           <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:5px">اختر الطيار:</label>
           <select id="_assignSel" style="width:100%;padding:10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.9rem">
             <option value="">— اختر الطيار —</option>
-            ${waitingPilots.length ? `<optgroup label="⏳ قائمة الانتظار">${ esc(waitingPilots.map(pilotOption).join("")) }</optgroup>` : ""}
-            ${deliveringPilots.length ? `<optgroup label="🛵 في التوصيل (تحميل إضافي)">${ esc(deliveringPilots.map(pilotOption).join("")) }</optgroup>` : ""}
+            ${waitingPilots.length ? `<optgroup label="⏳ قائمة الانتظار">${waitingPilots.map(pilotOption).join("")}</optgroup>` : ""}
+            ${deliveringPilots.length ? `<optgroup label="🛵 في التوصيل (تحميل إضافي)">${deliveringPilots.map(pilotOption).join("")}</optgroup>` : ""}
           </select>
-          ${ esc(parcelsHtml) }
+          ${parcelsHtml}
           <div style="display:flex;gap:10px;margin-top:18px">
             <button id="_assignConfirm" style="flex:1;background:var(--sky);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">✅ تحميل</button>
             <button onclick="document.getElementById('_assignBox').remove()" style="flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);padding:11px;border-radius:8px;cursor:pointer">إلغاء</button>
@@ -3470,7 +3466,7 @@
         const amt = sumPrepaid(idxs.map(i => parcels[i]));
         const amtEl = box.querySelector("#_assignPrepaidAmt");
         const bxEl  = box.querySelector("#_assignPrepaidBox");
-        if (amtEl) amtEl.textContent = `💵 ${ amt } ج.م`;
+        if (amtEl) amtEl.textContent = `💵 ${amt} ج.م`;
         if (bxEl)  bxEl.style.display = amt > 0 ? "flex" : "none";
       };
       box.querySelectorAll("._parcelChk").forEach(c => c.addEventListener("change", _refreshPrepaid));
@@ -3651,16 +3647,16 @@
       });
 
       const upd = {};
-      upd[`orders/${ esc(orderId) }/pilotId`]     = toPilot.id;
-      upd[`orders/${ esc(orderId) }/pilotName`]   = toPilot.name;
-      upd[`orders/${ esc(orderId) }/shiftId`]     = newShift?.id || null;
+      upd[`orders/${orderId}/pilotId`]     = toPilot.id;
+      upd[`orders/${orderId}/pilotName`]   = toPilot.name;
+      upd[`orders/${orderId}/shiftId`]     = newShift?.id || null;
       // statusSince مش بيتلمس — عمر الأوردر بيكمّل من أول تحميل
-      upd[`orders/${ esc(orderId) }/currentPilotSince`]   = now;
-      upd[`orders/${ esc(orderId) }/transferredFrom`]     = fromPilot?.id || null;
-      upd[`orders/${ esc(orderId) }/transferredFromName`] = fromPilot?.name || null;
-      upd[`orders/${ esc(orderId) }/transferredAt`]       = now;
-      upd[`orders/${ esc(orderId) }/transferCount`]       = history.length;
-      upd[`orders/${ esc(orderId) }/transferHistory`]     = history;
+      upd[`orders/${orderId}/currentPilotSince`]   = now;
+      upd[`orders/${orderId}/transferredFrom`]     = fromPilot?.id || null;
+      upd[`orders/${orderId}/transferredFromName`] = fromPilot?.name || null;
+      upd[`orders/${orderId}/transferredAt`]       = now;
+      upd[`orders/${orderId}/transferCount`]       = history.length;
+      upd[`orders/${orderId}/transferHistory`]     = history;
       await update(ref(db), upd);
 
       // حالة الطيارين بعد النقل — الجديد مشغول والقديم يتحرر لو فضي
@@ -3692,7 +3688,7 @@
         const cnt = (window._ordersData || []).filter(o => o.pilotId === p.id && o.status === "جاري التوصيل").length;
         const tag = cnt ? ` (يحمل ${totalParcelsOf((window._ordersData||[]).filter(o=>o.pilotId===p.id&&o.status==="جاري التوصيل"))} طرد)` : "";
         const icon = p.pilotStatus === "delivering" ? "🛵" : "⏳";
-        return `<option value="${ esc(p.id) }">${ esc(icon) } ${ esc(p.name) } — ${ esc(p.vehicleNo || "") }${ esc(tag) }</option>`;
+        return `<option value="${ esc(p.id) }">${icon} ${ esc(p.name) } — ${ esc(p.vehicleNo || "") }${tag}</option>`;
       }
 
       const box = document.createElement("div");
@@ -3709,8 +3705,8 @@
           <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:5px">اختر الطيار الجديد:</label>
           <select id="_transferSel" style="width:100%;padding:10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.9rem">
             <option value="">— اختر الطيار —</option>
-            ${waitingPilots.length ? `<optgroup label="⏳ قائمة الانتظار">${ esc(waitingPilots.map(pilotOption).join("")) }</optgroup>` : ""}
-            ${deliveringPilots.length ? `<optgroup label="🛵 في التوصيل (تحميل إضافي)">${ esc(deliveringPilots.map(pilotOption).join("")) }</optgroup>` : ""}
+            ${waitingPilots.length ? `<optgroup label="⏳ قائمة الانتظار">${waitingPilots.map(pilotOption).join("")}</optgroup>` : ""}
+            ${deliveringPilots.length ? `<optgroup label="🛵 في التوصيل (تحميل إضافي)">${deliveringPilots.map(pilotOption).join("")}</optgroup>` : ""}
           </select>
           <div style="display:flex;gap:10px;margin-top:18px">
             <button id="_transferConfirm" style="flex:1;background:var(--orange);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">🔄 نقل الطلب</button>
@@ -3778,9 +3774,9 @@
       const totalParcels   = selectedOrders.reduce((s, o) => s + (o.deliveries||[]).length, 0);
       function pilotOption(p) {
         const cnt  = (window._ordersData || []).filter(o => o.pilotId === p.id && o.status === "جاري التوصيل").length;
-        const tag  = cnt ? ` (يحمل ${ esc(cnt) } طلب)` : "";
+        const tag  = cnt ? ` (يحمل ${cnt} طلب)` : "";
         const icon = p.pilotStatus === "delivering" ? "🛵" : "⏳";
-        return `<option value="${ esc(p.id) }">${ esc(icon) } ${ esc(p.name) } — ${ esc(p.vehicleNo || "") }${ esc(tag) }</option>`;
+        return `<option value="${ esc(p.id) }">${icon} ${ esc(p.name) } — ${ esc(p.vehicleNo || "") }${tag}</option>`;
       }
       const box = document.createElement("div");
       box.id = "_bulkAssignBox";
@@ -3788,7 +3784,7 @@
       box.innerHTML = `
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 32px;min-width:340px;max-width:500px;max-height:90vh;overflow-y:auto;width:100%">
           <div style="font-size:1rem;font-weight:700;margin-bottom:4px">🛵 تحميل ${ esc(selectedOrders.length) } طلب على طيار</div>
-          <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">إجمالي الطرود: <b style="color:var(--sky)">${ esc(totalParcels) } طرد</b></div>
+          <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">إجمالي الطرود: <b style="color:var(--sky)">${totalParcels} طرد</b></div>
           <div style="background:var(--card);border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:16px;max-height:160px;overflow-y:auto">
             ${selectedOrders.map(o => `
               <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem">
@@ -3808,8 +3804,8 @@
           <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:5px">اختر الطيار:</label>
           <select id="_bulkAssignSel" style="width:100%;padding:10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.9rem">
             <option value="">— اختر الطيار —</option>
-            ${waitingPilots.length ? `<optgroup label="⏳ قائمة الانتظار">${ esc(waitingPilots.map(pilotOption).join("")) }</optgroup>` : ""}
-            ${deliveringPilots.length ? `<optgroup label="🛵 في التوصيل (تحميل إضافي)">${ esc(deliveringPilots.map(pilotOption).join("")) }</optgroup>` : ""}
+            ${waitingPilots.length ? `<optgroup label="⏳ قائمة الانتظار">${waitingPilots.map(pilotOption).join("")}</optgroup>` : ""}
+            ${deliveringPilots.length ? `<optgroup label="🛵 في التوصيل (تحميل إضافي)">${deliveringPilots.map(pilotOption).join("")}</optgroup>` : ""}
           </select>
           <div style="display:flex;gap:10px;margin-top:18px">
             <button id="_bulkConfirm" style="flex:1;background:var(--sky);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">✅ تحميل الكل</button>
@@ -3869,14 +3865,14 @@
       if (!newBranchId) { showToast("اختر الفرع الصحيح", "error"); return; }
       const o = (window._ordersData || []).find(x => x.id === orderId);
       if (!o) return;
-      if (!confirm(`هل تريد نقل الطلب ${ esc(o.orderNum || "") } إلى فرع ${ esc(newBranchName) }؟`)) return;
+      if (!confirm(`هل تريد نقل الطلب ${ esc(o.orderNum || "") } إلى فرع ${newBranchName}؟`)) return;
       try {
         await update(ref(db, "orders/" + orderId), {
           branchId  : newBranchId,
           branchName: newBranchName,
           createdAt : new Date().toISOString()
         });
-        showToast(`تمّ نقل الطلب إلى ${ esc(newBranchName) } ✓`, "success");
+        showToast(`تمّ نقل الطلب إلى ${newBranchName} ✓`, "success");
         closeModal("transfer-order");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
@@ -3945,9 +3941,9 @@
         const m = Math.floor((diff % 3600) / 60);
         const s = diff % 60;
         let parts = [];
-        if (h > 0) parts.push(`${ esc(h) } ساعة`);
-        if (m > 0) parts.push(`${ esc(m) } دقيقة`);
-        if (h === 0) parts.push(`${ esc(s) } ثانية`);
+        if (h > 0) parts.push(`${h} ساعة`);
+        if (m > 0) parts.push(`${m} دقيقة`);
+        if (h === 0) parts.push(`${s} ثانية`);
         return parts.join(" و ") || "0 ثانية";
       };
       const phoneBlock = (p1, p2) => `
@@ -3957,7 +3953,7 @@
         </div>`;
       const parcelsHtml = parcels.map((d, i) => `
         <div class="od-parcel">
-          <div class="od-parcel-num">📦 طرد ${ esc(i + 1) } من ${ esc(parcels.length) }</div>
+          <div class="od-parcel-num">📦 طرد ${i + 1} من ${ esc(parcels.length) }</div>
           <div class="od-2col">
             <div class="od-info-block">
               <span class="od-info-label">جهة التسليم</span>
@@ -3980,8 +3976,8 @@
           <div class="od-info-block" style="margin-top:8px;display:block">
             <span class="od-info-label" style="display:block;margin-bottom:6px">📷 صور الإيصال / العنوان</span>
             <div style="display:flex;flex-wrap:wrap;gap:8px">
-              ${d.images.map(u => `<a href="${ esc(u) }" target="_blank" rel="noopener" title="اضغط للتكبير">
-                <img src="${ esc(u) }" style="width:84px;height:84px;object-fit:cover;border-radius:9px;border:1px solid var(--border);display:block" />
+              ${d.images.map(u => `<a href="${u}" target="_blank" rel="noopener" title="اضغط للتكبير">
+                <img src="${u}" style="width:84px;height:84px;object-fit:cover;border-radius:9px;border:1px solid var(--border);display:block" />
               </a>`).join("")}
             </div>
           </div>` : ""}
@@ -4131,7 +4127,7 @@
                         ${s.note ? `<div style="font-size:.72rem;color:var(--muted);margin-top:2px;margin-right:27px">📝 ${ esc(s.note) }</div>` : ""}
                       </td>
                       <td style="padding:7px 4px;color:var(--text);white-space:nowrap">${fmt(s.time)}</td>
-                      <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:rgb(${ esc(s.color) })">${ esc(dur) }</td>
+                      <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:rgb(${ esc(s.color) })">${dur}</td>
                     </tr>`;
                 }).join("");
 
@@ -4162,12 +4158,12 @@
                     segs.forEach((s, i) => {
                       const pct  = secs[i] / total * 100;
                       const from = cum, to = cum + pct;
-                      gradParts.push(`rgb(${ esc(s.color) }) ${ esc(from) }% ${ esc(to) }%`);
-                      barParts.push(`<div title="${ esc(s.label) }" style="width:${ esc(pct) }%;background:rgb(${ esc(s.color) });height:100%"></div>`);
+                      gradParts.push(`rgb(${ esc(s.color) }) ${from}% ${to}%`);
+                      barParts.push(`<div title="${ esc(s.label) }" style="width:${pct}%;background:rgb(${ esc(s.color) });height:100%"></div>`);
                       legendParts.push(`
                         <div style="display:flex;justify-content:space-between;align-items:center;font-size:.76rem">
                           <span style="display:flex;align-items:center;gap:6px;color:var(--muted)"><span style="width:9px;height:9px;border-radius:50%;background:rgb(${ esc(s.color) });flex-shrink:0"></span>${ esc(s.label) }</span>
-                          <span style="font-weight:700;color:rgb(${ esc(s.color) });white-space:nowrap">${ esc(fmtDur(s.from, s.to)) } <span style="color:var(--muted);font-weight:500">(${ esc(pct.toFixed(0)) }%)</span></span>
+                          <span style="font-weight:700;color:rgb(${ esc(s.color) });white-space:nowrap">${fmtDur(s.from, s.to)} <span style="color:var(--muted);font-weight:500">(${ esc(pct.toFixed(0)) }%)</span></span>
                         </div>`);
                       cum = to;
                     });
@@ -4181,7 +4177,7 @@
                             ${ esc(legendParts.join("")) }
                             <div style="display:flex;justify-content:space-between;font-size:.78rem;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">
                               <span style="color:var(--muted)">⏱️ الإجمالي (من الفرع حتى ${ esc(o.deliveredAt ? "التسليم" : "الإرجاع") })</span>
-                              <span style="font-weight:800;color:var(--green)">${ esc(fmtDur(o.createdAt, finalTime)) }</span>
+                              <span style="font-weight:800;color:var(--green)">${fmtDur(o.createdAt, finalTime)}</span>
                             </div>
                           </div>
                         </div>
@@ -4198,9 +4194,9 @@
                         <th style="text-align:right;padding:4px;color:var(--muted);font-weight:600;font-size:.7rem">المدة</th>
                       </tr>
                     </thead>
-                    <tbody style="font-size:.8rem">${ esc(rows) }${ esc(liveRow) }</tbody>
+                    <tbody style="font-size:.8rem">${rows}${liveRow}</tbody>
                   </table>
-                  ${ esc(chart) }
+                  ${chart}
                 `;
               })()}
             </div>
@@ -4217,7 +4213,7 @@
           </div>
           <div class="od-card">
             <div class="od-card-title">📦 جهات التسليم (${ esc(parcels.length) } طرد)</div>
-            ${ esc(parcelsHtml) }
+            ${parcelsHtml}
           </div>
           ${o.notes ? `
           <div class="od-card">
@@ -4247,8 +4243,8 @@
       const h = Math.floor(diff / 3600);
       const m = Math.floor((diff % 3600) / 60);
       const s = diff % 60;
-      if (h > 0) return `${ esc(h) }:${ esc(String(m).padStart(2,'0')) }:${ esc(String(s).padStart(2,'0')) }`;
-      return `${ esc(String(m).padStart(2,'0')) }:${ esc(String(s).padStart(2,'0')) }`;
+      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     }
     /* ── مؤقّت واحد لكل الشاشة ──────────────────────────────────────────
        قبل كده كل أوردر نشط وكل طيار كان بياخد setInterval خاص بيه بيدق
@@ -4329,14 +4325,14 @@
         if (now - lastAlert >= OVERDUE_REPEAT_MS) {
           window._overdueLastAlertedAt.set(o.id, now);
           const mins = Math.floor((now - new Date(_orderDeliveryBase(o)).getTime()) / 60000);
-          const msg = `⚠️ الطلب ${ esc(o.orderNum || "—") } مع الطيار ${ esc(o.pilotName || "—") } تجاوز ${ esc(mins) } دقيقة في التوصيل — يُنصح بالاطمئنان عليه`;
+          const msg = `⚠️ الطلب ${ esc(o.orderNum || "—") } مع الطيار ${ esc(o.pilotName || "—") } تجاوز ${mins} دقيقة في التوصيل — يُنصح بالاطمئنان عليه`;
           // تنبيهان في نفس اللحظة (Toast مزدوج) عشان يبقى ملحوظ أكتر
           showToast(msg, "error");
           setTimeout(() => showToast(msg, "error"), 400);
           if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             try {
               new Notification("⏰ تأخر في التوصيل", {
-                body: `الطلب ${ esc(o.orderNum || "—") } مع الطيار ${ esc(o.pilotName || "—") } تجاوز ${ esc(mins) } دقيقة`, tag: "overdue-" + o.id
+                body: `الطلب ${ esc(o.orderNum || "—") } مع الطيار ${ esc(o.pilotName || "—") } تجاوز ${mins} دقيقة`, tag: "overdue-" + o.id
               });
             } catch(e) {}
           }
@@ -4381,7 +4377,7 @@
       // 1) أوردرات متأخرة أكتر من 30 دقيقة
       (window._ordersData || []).filter(o => o.status === "جاري التوصيل" && isOrderOverdue(o)).forEach(o => {
         const mins = Math.floor((now - new Date(_orderDeliveryBase(o)).getTime()) / 60000);
-        items.push({ color: "var(--red)", icon: "⏰", title: `الطلب ${ esc(o.orderNum || "—") } متأخر ${ esc(mins) } دقيقة`, sub: `مع الطيار: ${ esc(o.pilotName || "—") }`, page: "delivering" });
+        items.push({ color: "var(--red)", icon: "⏰", title: `الطلب ${ esc(o.orderNum || "—") } متأخر ${mins} دقيقة`, sub: `مع الطيار: ${ esc(o.pilotName || "—") }`, page: "delivering" });
       });
       // 2) طلبات انضمام معلّقة
       (window._joinRequestsData || []).filter(r => r.status === "pending").forEach(r => {
@@ -4453,7 +4449,7 @@
         const who = (o.customerName || "").trim();
         const tel = (o.customerPhone || "").trim();
         return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700;white-space:nowrap">📱 تطبيق العميل</div>${
-          who ? `<div style="font-size:.69rem;color:var(--muted);margin-top:2px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ esc(who) }${ esc(tel ? " — " + tel : "") }">${ esc(who) }</div>` : ""}`;
+          who ? `<div style="font-size:.69rem;color:var(--muted);margin-top:2px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${who}${tel ? " — " + tel : ""}">${who}</div>` : ""}`;
       }
       // طلبات قديمة بدون source — بنعرض الاسم بس لو مش معرّف خام
       if (o.addedBy) {
@@ -4461,7 +4457,7 @@
         // معرّف فايربيز = ٢٠ حرف أو أكتر من غير مسافات — مالوش معنى للمستخدم
         const isUid = raw.length >= 20 && !/\s/.test(raw);
         const label = isUid ? "مستخدم التطبيق" : raw;
-        return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(122,154,184,.12);color:var(--muted);border:1px solid rgba(122,154,184,.25);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis" title="${ esc(raw) }">👤 ${ esc(label) }</div>`;
+        return `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(122,154,184,.12);color:var(--muted);border:1px solid rgba(122,154,184,.25);border-radius:6px;padding:3px 8px;font-size:.72rem;font-weight:700;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis" title="${raw}">👤 ${label}</div>`;
       }
       return `<span style="color:var(--muted);font-size:.78rem">—</span>`;
     }
@@ -4485,9 +4481,9 @@
     }
     function rowsCapNote(shown, total, cols) {
       if (shown >= total) return "";
-      return `<tr><td colspan="${ esc(cols) }" style="background:rgba(56,189,248,.08);color:var(--sky);
+      return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
         font-size:.8rem;font-weight:700;text-align:center;padding:9px">
-        بيتعرض أحدث ${ esc(shown) } من إجمالي ${ esc(total) } — استخدم الفلاتر فوق للوصول للأقدم</td></tr>`;
+        بيتعرض أحدث ${shown} من إجمالي ${total} — استخدم الفلاتر فوق للوصول للأقدم</td></tr>`;
     }
 
     /* ── رسم كل جداول الأوردرات ─────────────────────────────────────────
@@ -4527,7 +4523,7 @@
       else {
         tbody.innerHTML = pending.map((o, i) => {
           const delivSummary = (o.deliveries || []).map((d,di) => `
-            <div style="padding:4px 0;${ esc(di>0?'border-top:1px solid var(--border);margin-top:4px':'') }">
+            <div style="padding:4px 0;${di>0?'border-top:1px solid var(--border);margin-top:4px':''}">
               <div style="font-weight:700;font-size:.83rem;color:var(--text)">${ esc(d.receiverName || "—") }</div>
               <div style="font-size:.75rem;color:var(--sky);direction:ltr;margin-top:1px">${ esc(d.receiverPhone || "") }</div>
               ${d.receiverPhone2 ? `<div style="font-size:.75rem;color:rgba(14,165,233,.8);direction:ltr;margin-top:1px">📱 ${ esc(d.receiverPhone2) }</div>` : ""}
@@ -4536,7 +4532,7 @@
             </div>`).join("");
           return `<tr id="row-${ esc(o.id) }">
             <td><input type="checkbox" class="order-chk row-chk" data-id="${ esc(o.id) }" onchange="onOrderCheckChange()"  /></td>
-            <td class="idx">${ esc(i+1) }</td>
+            <td class="idx">${i+1}</td>
             <td><b style="color:var(--sky);font-size:.9rem">${ esc(o.orderNum || "—") }</b></td>
             <td>
               <div style="font-weight:700;font-size:.85rem">${ esc(o.senderName) }</div>
@@ -4544,7 +4540,7 @@
               ${o.senderPhone2 ? `<div style="font-size:.75rem;color:var(--sky);direction:ltr">${ esc(o.senderPhone2) }</div>` : ""}
               ${o.senderAddress ? `<div style="font-size:.74rem;color:var(--muted);margin-top:2px">📍 ${ esc(o.senderAddress) }</div>` : ""}
             </td>
-            <td>${ esc(delivSummary) }</td>
+            <td>${delivSummary}</td>
             <td style="font-size:.82rem">${ esc(o.branchName || "—") }</td>
             <td><span style="color:var(--green);font-weight:700;font-size:.9rem">${ esc(o.totalDeliveryPrice || 0) } ج.م</span></td>
             <td>${o.storePrepaid ? `<span style="background:rgba(249,115,22,.15);color:var(--orange);font-weight:700;padding:3px 8px;border-radius:6px;font-size:.82rem">💵 ${ esc(o.storePrepaid) } ج.م</span>${o.storePrepaidNote ? `<div style="font-size:.7rem;color:var(--muted);margin-top:2px">${ esc(o.storePrepaidNote) }</div>` : ''}` : '<span style="color:var(--muted);font-size:.78rem">—</span>'}</td>
@@ -4573,7 +4569,7 @@
         else {
           dvtbody.innerHTML = delivering.map((o, i) => {
             const delivSummary = (o.deliveries || []).map((d,di) => `
-              <div style="padding:4px 0;${ esc(di>0?'border-top:1px solid var(--border);margin-top:4px':'') }">
+              <div style="padding:4px 0;${di>0?'border-top:1px solid var(--border);margin-top:4px':''}">
                 <div style="font-weight:700;font-size:.83rem;color:var(--text)">${ esc(d.receiverName || "—") }</div>
                 <div style="font-size:.75rem;color:var(--sky);direction:ltr;margin-top:1px">${ esc(d.receiverPhone || "") }</div>
                 ${d.receiverPhone2 ? `<div style="font-size:.75rem;color:rgba(14,165,233,.8);direction:ltr;margin-top:1px">📱 ${ esc(d.receiverPhone2) }</div>` : ""}
@@ -4581,7 +4577,7 @@
                 <div style="font-size:.75rem;color:var(--green);font-weight:700;margin-top:1px">${ esc(d.zonePrice || 0) } ج.م</div>
               </div>`).join("");
             return `<tr>
-              <td class="idx">${ esc(i+1) }</td>
+              <td class="idx">${i+1}</td>
               <td><b style="color:var(--sky);font-size:.9rem">${ esc(o.orderNum || "—") }</b></td>
               <td>
                 <div style="font-weight:700;font-size:.85rem">${ esc(o.senderName) }</div>
@@ -4589,7 +4585,7 @@
                 ${o.senderPhone2 ? `<div style="font-size:.75rem;color:var(--sky);direction:ltr">${ esc(o.senderPhone2) }</div>` : ""}
                 ${o.senderAddress ? `<div style="font-size:.74rem;color:var(--muted);margin-top:2px">📍 ${ esc(o.senderAddress) }</div>` : ""}
               </td>
-              <td>${ esc(delivSummary) }</td>
+              <td>${delivSummary}</td>
               <td style="font-size:.82rem">${ esc(o.branchName || "—") }</td>
               <td><span style="color:var(--green);font-weight:700;font-size:.9rem">${ esc(o.totalDeliveryPrice || 0) } ج.م</span></td>
               <td>${o.storePrepaid ? `<span style="background:rgba(249,115,22,.15);color:var(--orange);font-weight:700;padding:3px 8px;border-radius:6px;font-size:.82rem">💵 ${ esc(o.storePrepaid) } ج.م</span>${o.storePrepaidNote ? `<div style="font-size:.7rem;color:var(--muted);margin-top:2px">${ esc(o.storePrepaidNote) }</div>` : ''}` : '<span style="color:var(--muted);font-size:.78rem">—</span>'}</td>
@@ -4631,10 +4627,10 @@
           dtbody.innerHTML = rowsCapNote(_shown.length, _total, 11) + _shown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName) } — ${ esc(d.zoneName) }</span>`).join("");
             return `<tr>
-              <td class="idx">${ esc(i+1) }</td>
+              <td class="idx">${i+1}</td>
               <td><b style="color:var(--green)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName) }</span></td>
-              <td>${ esc(delivSummary) }</td>
+              <td>${delivSummary}</td>
               <td>${ esc(o.branchName || "—") }</td>
               <td>${ esc(o.pilotName || "—") }</td>
               <td><span style="color:var(--green);font-weight:700">${ esc(o.totalDeliveryPrice || 0) } ج.م</span></td>
@@ -4667,10 +4663,10 @@
           ctbody.innerHTML = rowsCapNote(_cShown.length, cancelled.length, 9) + _cShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName || "—") } — ${ esc(d.zoneName || "") }</span>`).join("");
             return `<tr>
-              <td class="idx">${ esc(i+1) }</td>
+              <td class="idx">${i+1}</td>
               <td><b style="color:var(--red)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName || "—") }</span></td>
-              <td>${ esc(delivSummary) }</td>
+              <td>${delivSummary}</td>
               <td>${ esc(o.branchName || "—") }</td>
               <td><span style="color:var(--green);font-weight:700">${ esc(o.totalDeliveryPrice || 0) } ج.م</span></td>
               <td style="font-size:.8rem;color:var(--red);max-width:160px;white-space:normal">${ esc(o.cancelReason || "—") }</td>
@@ -4698,10 +4694,10 @@
           utbody.innerHTML = rowsCapNote(_uShown.length, undelivered.length, 9) + _uShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName || "—") } — ${ esc(d.zoneName || "—") }</span>`).join("");
             return `<tr>
-              <td class="idx">${ esc(i+1) }</td>
+              <td class="idx">${i+1}</td>
               <td><b style="color:var(--orange)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName || "—") }</span></td>
-              <td>${ esc(delivSummary) }</td>
+              <td>${delivSummary}</td>
               <td>${ esc(o.branchName || "—") }</td>
               <td>${ esc(o.pilotName || "—") }</td>
               <td><span style="color:var(--green);font-weight:700">${ esc(o.totalDeliveryPrice || 0) } ج.م</span></td>
@@ -4903,8 +4899,8 @@
       const h = Math.floor(diff / 3600);
       const m = Math.floor((diff % 3600) / 60);
       let parts = [];
-      if (h > 0) parts.push(`${ esc(h) } ساعة`);
-      if (m > 0 || h === 0) parts.push(`${ esc(m) } دقيقة`);
+      if (h > 0) parts.push(`${h} ساعة`);
+      if (m > 0 || h === 0) parts.push(`${m} دقيقة`);
       return parts.join(" و ");
     }
     function todayKeyHR() {
@@ -4959,8 +4955,8 @@
       const h = Math.floor(totalMs / 3600000);
       const m = Math.floor((totalMs % 3600000) / 60000);
       let parts = [];
-      if (h > 0) parts.push(`${ esc(h) } ساعة`);
-      if (m > 0 || h === 0) parts.push(`${ esc(m) } دقيقة`);
+      if (h > 0) parts.push(`${h} ساعة`);
+      if (m > 0 || h === 0) parts.push(`${m} دقيقة`);
       return parts.join(" و ");
     }
 
@@ -5016,7 +5012,7 @@
           ? `<span style="font-size:.7rem;color:var(--orange);background:rgba(249,115,22,.1);padding:1px 6px;border-radius:4px;margin-right:4px">خارج النظام</span>`
           : "";
         const sessionsBadge = sessionCount > 1
-          ? `<span style="font-size:.7rem;color:var(--sky);background:rgba(14,165,233,.1);padding:1px 6px;border-radius:4px;margin-right:4px">${ esc(sessionCount) } جلسات</span>`
+          ? `<span style="font-size:.7rem;color:var(--sky);background:rgba(14,165,233,.1);padding:1px 6px;border-radius:4px;margin-right:4px">${sessionCount} جلسات</span>`
           : "";
         // أول حضور اليوم
         const firstCheckIn = r.allSessions.length ? r.allSessions.sort((a,b) => new Date(a.checkIn||0)-new Date(b.checkIn||0))[0].checkIn : null;
@@ -5024,13 +5020,13 @@
         const lastCheckOut = isPresent ? null : (r.allSessions.filter(s=>s.checkOut).sort((a,b) => new Date(b.checkOut)-new Date(a.checkOut))[0]?.checkOut || null);
 
         return `<tr>
-          <td class="idx">${ esc(i+1) }</td>
-          <td><b>${ esc(r.name) }</b>${ esc(typeBadge) }${ esc(sessionsBadge) }</td>
+          <td class="idx">${i+1}</td>
+          <td><b>${ esc(r.name) }</b>${typeBadge}${sessionsBadge}</td>
           <td>${ esc(r.role) }</td>
           <td>${ esc(r.branch) }</td>
-          <td style="color:var(--green)">${ esc(firstCheckIn ? hrFmtTime(firstCheckIn) : "—") }</td>
-          <td style="color:var(--orange)">${ esc(isPresent ? "لا يزال حاضراً" : (lastCheckOut ? hrFmtTime(lastCheckOut) : "—")) }</td>
-          <td>${ esc(statusBadge) }</td>
+          <td style="color:var(--green)">${firstCheckIn ? hrFmtTime(firstCheckIn) : "—"}</td>
+          <td style="color:var(--orange)">${isPresent ? "لا يزال حاضراً" : (lastCheckOut ? hrFmtTime(lastCheckOut) : "—")}</td>
+          <td>${statusBadge}</td>
           <td>${getTotalDuration(r.attEntry)}</td>
         </tr>`;
       }).join("");
@@ -5046,7 +5042,7 @@
       if (!filtered.length) { body.innerHTML = `<tr><td colspan="5" class="empty-row">لا يوجد موظفون</td></tr>`; return; }
       body.innerHTML = filtered.map((u, i) => `
         <tr>
-          <td class="idx">${ esc(i+1) }</td>
+          <td class="idx">${i+1}</td>
           <td><b>${ esc(u.username) }</b></td>
           <td>${ esc(u.role || "—") }</td>
           <td>${ esc(u.branchId ? branchName(u.branchId) : "—") }</td>
@@ -5135,7 +5131,7 @@
       if (!list.length) { body.innerHTML = `<tr><td colspan="5" class="empty-row">لا يوجد موظفون خارج النظام — أضف موظفاً يدوياً</td></tr>`; return; }
       body.innerHTML = list.map((e, i) => `
         <tr>
-          <td class="idx">${ esc(i+1) }</td>
+          <td class="idx">${i+1}</td>
           <td><b>${ esc(e.name) }</b></td>
           <td dir="ltr">${ esc(e.phone || "—") }</td>
           <td>${ esc(e.jobTitle || "—") }</td>
@@ -5185,7 +5181,7 @@
       const username = val;
       try {
         const emp = getAllEmployeesForAttendance().find(e => e.key === val);
-        const sessRef = push(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions`));
+        const sessRef = push(ref(db, `attendance/${dateKey}/${username}/sessions`));
         await set(sessRef, {
           username: emp?.name || username,
           role: emp?.role || "—",
@@ -5215,7 +5211,7 @@
       const username = val;
       try {
         // ابحث عن آخر جلسة مفتوحة
-        const snap = await get(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions`));
+        const snap = await get(ref(db, `attendance/${dateKey}/${username}/sessions`));
         if (!snap.exists()) {
           showToast("لا يوجد تسجيل حضور لهذا الموظف اليوم", "error"); return;
         }
@@ -5228,7 +5224,7 @@
           showToast("لا توجد جلسة مفتوحة — الموظف منصرف بالفعل", "error"); return;
         }
         const [sessKey] = openEntry;
-        await update(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessKey) }`), {
+        await update(ref(db, `attendance/${dateKey}/${username}/sessions/${sessKey}`), {
           checkOut: checkOutTime, lastSeen: checkOutTime
         });
         showToast("تمّ تسجيل الانصراف يدوياً ✓", "success");
@@ -5248,7 +5244,7 @@
         const snap = await get(ref(db, "attendance"));
         const all = snap.val() || {};
         const [year, month] = monthVal.split("-");
-        const prefix = `${ esc(year) }-${ esc(month) }`;
+        const prefix = `${year}-${month}`;
         let rows = [];
         Object.entries(all).forEach(([dateKey, dayData]) => {
           if (!dateKey.startsWith(prefix)) return;
@@ -5270,12 +5266,12 @@
             ? `${hrFmtTime(r.checkOut)}${r.autoCheckOut ? ' <span title="انصراف تلقائي (إغلاق متصفح)" style="font-size:.7rem;color:var(--muted);background:rgba(148,163,184,.12);padding:1px 5px;border-radius:4px">⚡ تلقائي</span>' : ''}`
             : '<span style="color:var(--green);font-size:.75rem">لا يزال حاضراً</span>';
           return `<tr>
-            <td class="idx">${ esc(i+1) }</td>
+            <td class="idx">${i+1}</td>
             <td style="font-size:.8rem">${ esc(new Date(r.dateKey).toLocaleDateString("ar-EG", {weekday:'short', year:'numeric', month:'short', day:'numeric'})) }</td>
             <td><b>${ esc(r.username) }</b>${r.entryType === "manual" ? " <span style='font-size:.7rem;color:var(--orange)'>(يدوي)</span>" : ""}</td>
             <td>${ esc(r.role || "—") }</td>
             <td style="color:var(--green)">${hrFmtTime(r.checkIn)}</td>
-            <td style="color:var(--orange)">${ esc(checkOutLabel) }</td>
+            <td style="color:var(--orange)">${checkOutLabel}</td>
             <td>${ esc(r.checkIn ? hrFmtDur(r.checkIn, r.checkOut) : "—") }</td>
           </tr>`;
         }).join("");
@@ -5317,11 +5313,11 @@
         const lastTxn = [...txns].filter(t => t.storeId === s.id).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""))[0];
         const lastStr = lastTxn ? new Date(lastTxn.createdAt).toLocaleString("ar-EG") : "—";
         return `<tr>
-          <td>${ esc(i+1) }</td>
+          <td>${i+1}</td>
           <td>${ esc(s.name) }</td>
           <td>${ esc(s.branchName || "—") }</td>
-          <td style="font-weight:800;color:${ esc(bal>=0?'var(--green)':'var(--red)') }">${ esc(bal.toFixed(2)) } ج.م</td>
-          <td style="font-size:.78rem;color:var(--muted)">${ esc(lastStr) }</td>
+          <td style="font-weight:800;color:${bal>=0?'var(--green)':'var(--red)'}">${ esc(bal.toFixed(2)) } ج.م</td>
+          <td style="font-size:.78rem;color:var(--muted)">${lastStr}</td>
         </tr>`;
       }).join("");
       const total = stores.reduce((s,st) => s + (Number(st.balance)||0), 0);
@@ -5503,10 +5499,10 @@
           ? `<span style="background:rgba(34,197,94,.13);color:var(--green);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">✅ مقبول</span>`
           : `<span style="background:rgba(239,68,68,.13);color:var(--red);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">❌ مرفوض</span>`;
         return `
-        <div style="background:var(--card);border:1px solid ${ esc(isPending ? 'rgba(249,115,22,.3)' : 'var(--border)') };border-radius:10px;padding:12px 14px">
+        <div style="background:var(--card);border:1px solid ${isPending ? 'rgba(249,115,22,.3)' : 'var(--border)'};border-radius:10px;padding:12px 14px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
             <div style="font-size:.86rem;font-weight:700">🕒 ${ esc(r.pilotName || "—") }</div>
-            ${ esc(statusHtml) }
+            ${statusHtml}
           </div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:4px">🏢 ${ esc(r.branchName || "—") }</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:2px">📅 ${ esc(r.requestedAt ? new Date(r.requestedAt).toLocaleString("ar-EG") : "—") }</div>
@@ -5528,10 +5524,10 @@
           ? `<span style="background:rgba(34,197,94,.13);color:var(--green);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">✅ عاد للعمل</span>`
           : `<span style="background:rgba(239,68,68,.13);color:var(--red);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">❌ مرفوض</span>`;
         return `
-        <div style="background:var(--card);border:1px solid ${ esc(isPending ? 'rgba(249,115,22,.3)' : 'var(--border)') };border-radius:10px;padding:12px 14px">
+        <div style="background:var(--card);border:1px solid ${isPending ? 'rgba(249,115,22,.3)' : 'var(--border)'};border-radius:10px;padding:12px 14px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
             <div style="font-size:.86rem;font-weight:700">${_leaveTypeLabelAr(r.type)}</div>
-            ${ esc(statusHtml) }
+            ${statusHtml}
           </div>
           <div style="font-size:.78rem;color:var(--text);margin-top:4px">✈ ${ esc(r.pilotName || "—") }</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:2px">🏢 ${ esc(r.branchName || "—") }</div>
@@ -5561,10 +5557,10 @@
             ? `<span style="background:rgba(34,197,94,.13);color:var(--green);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">✅ تم الإرجاع</span>`
             : `<span style="background:rgba(239,68,68,.13);color:var(--red);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">❌ مرفوض</span>`;
           return `
-          <div style="background:var(--card);border:1px solid ${ esc(isPending ? 'rgba(249,115,22,.3)' : 'var(--border)') };border-radius:10px;padding:12px 14px">
+          <div style="background:var(--card);border:1px solid ${isPending ? 'rgba(249,115,22,.3)' : 'var(--border)'};border-radius:10px;padding:12px 14px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
               <div style="font-size:.86rem;font-weight:700">↩️ إرجاع طلب #${ esc(r.orderNum || "—") }</div>
-              ${ esc(statusHtml) }
+              ${statusHtml}
             </div>
             <div style="font-size:.78rem;color:var(--text);margin-top:4px">✈ ${ esc(r.pilotName || "—") }</div>
             <div style="font-size:.72rem;color:var(--muted);margin-top:2px">🏢 ${ esc(r.branchName || "—") }</div>
@@ -5714,13 +5710,13 @@
     window.forcePilotLeave = async function(pilotId, pilotName) {
       const pilot = (window._pilotsData || []).find(p => p.id === pilotId);
       const branch = (window._branchesList || []).find(b => b.id === pilot?.assignedBranchId);
-      const typeInput = prompt(`فرض إذن على "${ esc(pilotName) }":\nاكتب نوع الإذن — 1: استراحة/بريك، 2: عطلة/انصراف، 3: حادث`, "1");
+      const typeInput = prompt(`فرض إذن على "${pilotName}":\nاكتب نوع الإذن — 1: استراحة/بريك، 2: عطلة/انصراف، 3: حادث`, "1");
       if (typeInput === null) return;
       const t = typeInput.trim();
       const type = t === "2" ? "dayoff" : t === "3" ? "incident" : "rest";
       const typeLabel = type === "dayoff" ? "عطلة/انصراف" : type === "incident" ? "حادث" : "استراحة/بريك";
       const reason = prompt("سبب الإيقاف/الإذن (اختياري):", "") || "";
-      if (!confirm(`تأكيد فرض إذن (${ esc(typeLabel) }) على "${ esc(pilotName) }"؟\nسيظهر عنده أنه متوقف فورًا.`)) return;
+      if (!confirm(`تأكيد فرض إذن (${typeLabel}) على "${pilotName}"؟\nسيظهر عنده أنه متوقف فورًا.`)) return;
       try {
         const now = new Date().toISOString();
         await update(ref(db, "pilots/" + pilotId), {
@@ -5734,7 +5730,7 @@
           requestedAt: now, respondedAt: now,
           respondedBy: window._currentUser?.username || "", forcedBy: "admin"
         });
-        showToast(`تمّ إيقاف "${ esc(pilotName) }" (${ esc(typeLabel) }) ✓`, "success");
+        showToast(`تمّ إيقاف "${pilotName}" (${typeLabel}) ✓`, "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
 
@@ -5770,17 +5766,17 @@
         return `
         <div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">
           <div style="font-weight:700;font-size:.88rem;color:var(--sky);margin-bottom:3px">${ esc(o.orderNum || "—") }</div>
-          <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${ esc(delivSummary) }</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${delivSummary}</div>
           <div style="display:flex;gap:8px">
             <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1px solid rgba(34,197,94,.35);border-radius:7px;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--green)">
-              <input type="radio" name="_se_${ esc(idx) }" value="delivered" checked style="accent-color:var(--green)" /> ✅ تم التسليم
+              <input type="radio" name="_se_${idx}" value="delivered" checked style="accent-color:var(--green)" /> ✅ تم التسليم
             </label>
             <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1px solid rgba(249,115,22,.35);border-radius:7px;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--orange)">
-              <input type="radio" name="_se_${ esc(idx) }" value="undelivered" style="accent-color:var(--orange)" /> ↩️ لم يتم التوصيل
+              <input type="radio" name="_se_${idx}" value="undelivered" style="accent-color:var(--orange)" /> ↩️ لم يتم التوصيل
             </label>
           </div>
-          <div class="_undelReasonWrap" id="_seUndelReasonWrap_${ esc(idx) }" style="display:none;margin-top:8px">
-            <input type="text" id="_seUndelReason_${ esc(idx) }" placeholder="سبب عدم التوصيل (مثال: العميل لم يردّ)" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:var(--font)" />
+          <div class="_undelReasonWrap" id="_seUndelReasonWrap_${idx}" style="display:none;margin-top:8px">
+            <input type="text" id="_seUndelReason_${idx}" placeholder="سبب عدم التوصيل (مثال: العميل لم يردّ)" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:var(--font)" />
           </div>
         </div>`;
       }).join("");
@@ -5790,7 +5786,7 @@
         return `
         <div style="border:1px solid rgba(34,197,94,.35);border-radius:9px;padding:10px 12px;margin-bottom:10px;background:rgba(34,197,94,.06)">
           <div style="font-weight:700;font-size:.88rem;color:var(--sky);margin-bottom:3px">${ esc(o.orderNum || "—") } <span style="color:var(--green);font-size:.75rem;font-weight:600">(✅ سلّمه الطيار من تطبيقه)</span></div>
-          <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${ esc(delivSummary) }</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">${delivSummary}</div>
           <div style="font-size:.76rem;color:var(--green)">💵 تمن الأوردر: ${ esc(o.totalDeliveryPrice || 0) } ج.م</div>
         </div>`;
       }).join("");
@@ -5802,10 +5798,10 @@
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 32px;min-width:340px;max-width:480px;max-height:90vh;overflow-y:auto;width:100%">
           <div style="font-size:1rem;font-weight:700;margin-bottom:4px">🔴 إنهاء وردية: ${ esc(pilot.name) }</div>
           <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">لازم تسوية الطلبات والفلوس قبل قفل الوردية. ${ esc(activeOrders.length ? "حدّد حالة كل طلب يحمله الطيار:" : "") }${activeOrders.length && pendingSettlementOrders.length ? "<br>" : ""}${ esc(pendingSettlementOrders.length ? "طلبات سلّمها الطيار من تطبيقه — أكّد استلام فلوسها:" : "") }</div>
-          ${ esc(rowsHtml) }
-          ${ esc(settledRowsHtml) }
+          ${rowsHtml}
+          ${settledRowsHtml}
           <div style="border:1px solid rgba(249,115,22,.35);border-radius:9px;padding:12px 14px;margin-top:10px;background:rgba(249,115,22,.05)">
-            <div style="font-size:.88rem;font-weight:700;color:var(--orange);margin-bottom:10px">💵 تحصيل مبالغ التوصيل — الإجمالي: ${ esc(autoCollectTotal) } ج.م</div>
+            <div style="font-size:.88rem;font-weight:700;color:var(--orange);margin-bottom:10px">💵 تحصيل مبالغ التوصيل — الإجمالي: ${autoCollectTotal} ج.م</div>
             <div style="display:flex;gap:8px;margin-bottom:10px">
               <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1px solid rgba(34,197,94,.35);border-radius:7px;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--green)">
                 <input type="radio" name="_seCashCollect" value="yes" checked style="accent-color:var(--green)" /> ✅ تم التحصيل
@@ -5823,7 +5819,7 @@
               </div>
               <div>
                 <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">المبلغ المحصَّل (ج.م)</label>
-                <input type="number" id="_seCollectAmount" min="0" step="0.01" value="${ esc(autoCollectTotal) }" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem;box-sizing:border-box" />
+                <input type="number" id="_seCollectAmount" min="0" step="0.01" value="${autoCollectTotal}" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem;box-sizing:border-box" />
               </div>
             </div>
           </div>
@@ -5841,9 +5837,9 @@
       });
 
       activeOrders.forEach((o, idx) => {
-        box.querySelectorAll(`input[name="_se_${ esc(idx) }"]`).forEach(radio => {
+        box.querySelectorAll(`input[name="_se_${idx}"]`).forEach(radio => {
           radio.addEventListener("change", () => {
-            const wrap = document.getElementById(`_seUndelReasonWrap_${ esc(idx) }`);
+            const wrap = document.getElementById(`_seUndelReasonWrap_${idx}`);
             if (wrap) wrap.style.display = radio.value === "undelivered" && radio.checked ? "block" : "none";
           });
         });
@@ -5861,11 +5857,11 @@
           const now = new Date().toISOString();
           for (const o of activeOrders) {
             const idx = activeOrders.indexOf(o);
-            const choice = box.querySelector(`input[name="_se_${ esc(idx) }"]:checked`)?.value || "delivered";
+            const choice = box.querySelector(`input[name="_se_${idx}"]:checked`)?.value || "delivered";
             if (choice === "delivered") {
               await update(ref(db, "orders/" + o.id), { status: "تم التسليم", deliveredAt: now, pilotName: pilot.name });
             } else {
-              const reasonInput = document.getElementById(`_seUndelReason_${ esc(idx) }`);
+              const reasonInput = document.getElementById(`_seUndelReason_${idx}`);
               const reason = (reasonInput?.value || "").trim() || "—";
               await update(ref(db, "orders/" + o.id), { status: "لم يتم التوصيل", undeliveredAt: now, undeliveredReason: reason, pilotName: pilot.name });
             }
@@ -5960,7 +5956,7 @@
       const endMs   = new Date(shift.endedAt || Date.now()).getTime();
       const durationMs = isFinite(startMs) && isFinite(endMs) ? Math.max(0, endMs - startMs) : 0;
       const typeLabel = commissionType === "fixed" ? "عمولة ثابتة لكل طلب" : "نسبة % من سعر التوصيل";
-      const valueLabel = commissionType === "fixed" ? `${ esc(commissionValue) } ج.م لكل طلب` : `${ esc(commissionValue) }%`;
+      const valueLabel = commissionType === "fixed" ? `${commissionValue} ج.م لكل طلب` : `${commissionValue}%`;
       const bonusAmount     = Number(shift.bonusAmount) || 0;
       const bonusReason     = shift.bonusReason || "";
       const deductionAmount = Number(shift.deductionAmount) || 0;
@@ -5995,12 +5991,12 @@
       const c = cur === "daily" ? "daily" : "monthly"; // الافتراضي: على الشهر
       return `<div style="margin-top:6px;font-size:.74rem;color:var(--muted);display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <span>التسوية:</span>
-        <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="${ esc(name) }" value="daily" ${ esc(c === "daily" ? "checked" : "") } onchange="recomputeShiftDue()"> 🗓️ في نفس اليوم</label>
-        <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="${ esc(name) }" value="monthly" ${ esc(c === "monthly" ? "checked" : "") } onchange="recomputeShiftDue()"> 📆 على الشهر</label>
+        <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="${name}" value="daily" ${c === "daily" ? "checked" : ""} onchange="recomputeShiftDue()"> 🗓️ في نفس اليوم</label>
+        <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="${name}" value="monthly" ${c === "monthly" ? "checked" : ""} onchange="recomputeShiftDue()"> 📆 على الشهر</label>
       </div>`;
     }
     function _srSettleVal(name) {
-      const el = document.querySelector(`input[name="${ esc(name) }"]:checked`);
+      const el = document.querySelector(`input[name="${name}"]:checked`);
       return el ? el.value : "monthly";
     }
     // يعيد حساب مستحق الوردية اليومي فورًا حسب اختيارات التسوية والمبالغ
@@ -6042,9 +6038,9 @@
           </div>
           <div class="od-card">
             <div class="od-card-title">⏱️ وقت الوردية</div>
-            <div class="od-info-block"><span class="od-info-label">بداية الوردية</span><span class="od-info-val">${ esc(fmtShiftDT(shift.startedAt)) }</span></div>
-            <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">نهاية الوردية</span><span class="od-info-val">${ esc(fmtShiftDT(shift.endedAt)) }</span></div>
-            <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">مدة الوردية</span><span class="od-info-val" style="color:var(--sky);font-weight:700">${ esc(fmtShiftDuration(data.durationMs)) }</span></div>
+            <div class="od-info-block"><span class="od-info-label">بداية الوردية</span><span class="od-info-val">${fmtShiftDT(shift.startedAt)}</span></div>
+            <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">نهاية الوردية</span><span class="od-info-val">${fmtShiftDT(shift.endedAt)}</span></div>
+            <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">مدة الوردية</span><span class="od-info-val" style="color:var(--sky);font-weight:700">${fmtShiftDuration(data.durationMs)}</span></div>
           </div>
           <div class="od-card" style="margin-top:14px">
             <div class="od-card-title">📦 عدد الطلبات خلال الوردية</div>
@@ -6163,7 +6159,7 @@
        الصافي = المرتب + العمولة + المكافآت − الخصومات − السلف − خصم أيام إجازته.
     ═══════════════════════════════════════════════════════════════ */
     function _monthKeyOf(year, month) {
-      return `${ esc(year) }-${ esc(String(month + 1).padStart(2, "0")) }`; // YYYY-MM
+      return `${year}-${String(month + 1).padStart(2, "0")}`; // YYYY-MM
     }
     function _mcNum(id) { return Number(document.getElementById(id)?.value) || 0; }
 
@@ -6254,7 +6250,7 @@
           <div class="od-header">
             <div>
               <div class="od-title">🧾 التقفيلة الشهرية</div>
-              <div class="od-num-badge">${ esc(p.name) } — ${ esc(monthLabel) }</div>
+              <div class="od-num-badge">${ esc(p.name) } — ${monthLabel}</div>
             </div>
             <button class="od-close" onclick="document.getElementById('_monthlyCloseoutBox').remove()">✕</button>
           </div>
@@ -6279,21 +6275,21 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
               <div style="flex:1;min-width:150px">
                 <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">المرتب الشهري (ج.م)</label>
-                <input type="number" step="0.01" id="mcSalary" value="${ esc(salary) }" placeholder="0" oninput="recomputeMonthlyNet()" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
+                <input type="number" step="0.01" id="mcSalary" value="${salary}" placeholder="0" oninput="recomputeMonthlyNet()" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
               </div>
               <div style="flex:1;min-width:150px">
                 <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">ساعات العمل المطلوبة/اليوم</label>
-                <input type="number" step="0.5" id="mcReqHours" value="${ esc(reqHrs) }" placeholder="مثال: 8" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
+                <input type="number" step="0.5" id="mcReqHours" value="${reqHrs}" placeholder="مثال: 8" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
               <div style="flex:1;min-width:150px">
                 <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">أيام إجازة على حساب الشركة (مدفوعة)</label>
-                <input type="number" step="1" min="0" id="mcPaidLeave" value="${ esc(paidLv) }" placeholder="0" oninput="recomputeMonthlyNet()" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
+                <input type="number" step="1" min="0" id="mcPaidLeave" value="${paidLv}" placeholder="0" oninput="recomputeMonthlyNet()" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
               </div>
               <div style="flex:1;min-width:150px">
                 <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">أيام إجازة على حساب الطيار (تُخصم)</label>
-                <input type="number" step="1" min="0" id="mcUnpaidLeave" value="${ esc(unpaidLv) }" placeholder="0" oninput="recomputeMonthlyNet()" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
+                <input type="number" step="1" min="0" id="mcUnpaidLeave" value="${unpaidLv}" placeholder="0" oninput="recomputeMonthlyNet()" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" />
               </div>
             </div>
             <div style="font-size:.72rem;color:var(--muted);margin-top:8px">💡 قيمة اليوم = المرتب ÷ ${ esc(data.daysInMonth) } يوم. خصم الإجازة = أيام على حساب الطيار × قيمة اليوم.</div>
@@ -6376,7 +6372,7 @@
         <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:20px}h2{font-size:15px;margin-top:18px;border-bottom:2px solid #333;padding-bottom:4px}.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.net{font-size:18px;font-weight:800;color:#0a7}</style>
         </head><body>
         <h1>🧾 التقفيلة الشهرية — ${ esc(data.pilot.name) }</h1>
-        <div class="row"><span>الشهر</span><span>${ esc(monthLabel) }</span></div>
+        <div class="row"><span>الشهر</span><span>${monthLabel}</span></div>
         <h2>ملخّص الشهر</h2>
         <div class="row"><span>أيام العمل</span><span>${ esc(data.workDays) } يوم (${ esc(data.shiftsCount) } وردية)</span></div>
         <div class="row"><span>إجمالي ساعات العمل</span><span>${ esc(data.totalHours.toFixed(1)) } ساعة</span></div>
@@ -6391,7 +6387,7 @@
         <div class="row"><span>إجازة على حساب الطيار</span><span>${ esc(c.unpaid||0) } يوم × ${ esc((c.dailyRate||0).toFixed(2)) } = −${ esc((c.unpaidDeduction||0).toFixed(2)) } ج.م</span></div>
         <h2>الصافي</h2>
         <div class="row net"><span>صافي المستحق</span><span>${ esc((c.net||0).toFixed(2)) } ج.م</span></div>
-        <p style="margin-top:20px;color:#888;font-size:12px">تاريخ الطباعة: ${ esc(new Date().toLocaleString("ar-EG")) }</p>
+        <p style="margin-top:20px;color:#888;font-size:12px">تاريخ الطباعة: ${new Date().toLocaleString("ar-EG")}</p>
         <script>window.print()<\/script>
         </body></html>`);
       w.document.close();
@@ -6407,7 +6403,7 @@
       const phone = phoneRaw.startsWith("0") ? "2" + phoneRaw : phoneRaw;
       const lines = [
         `🧾 التقفيلة الشهرية — ${ esc(data.pilot.name) }`,
-        `📅 الشهر: ${ esc(monthLabel) }`,
+        `📅 الشهر: ${monthLabel}`,
         `⏱️ ساعات العمل: ${ esc(data.totalHours.toFixed(1)) } ساعة (${ esc(data.workDays) } يوم)`,
         `📦 أوردرات منجزة: ${ esc(data.deliveredCount) }`,
         `💵 العمولة الكلية: ${ esc(data.totalCommission.toFixed(2)) } ج.م`,
@@ -6416,7 +6412,7 @@
         `🏖️ إجازة على حسابه: ${ esc(c.unpaid||0) } يوم (−${ esc((c.unpaidDeduction||0).toFixed(2)) } ج.م)`,
         `✅ صافي المستحق: ${ esc((c.net||0).toFixed(2)) } ج.م`
       ];
-      const url = `https://wa.me/${ esc(phone) }?text=${ esc(encodeURIComponent(lines.join("\n"))) }`;
+      const url = `https://wa.me/${phone}?text=${ esc(encodeURIComponent(lines.join("\n"))) }`;
       window.open(url, "_blank");
     };
 
@@ -6449,9 +6445,9 @@
         <h1>📊 تقرير تقفيل وردية الطيار</h1>
         <div>الطيار: <b>${ esc(pilot.name) }</b></div>
         <h2>⏱️ وقت الوردية</h2>
-        <div class="row"><span>بداية الوردية</span><span>${ esc(fmtShiftDT(shift.startedAt)) }</span></div>
-        <div class="row"><span>نهاية الوردية</span><span>${ esc(fmtShiftDT(shift.endedAt)) }</span></div>
-        <div class="row"><span>مدة الوردية</span><span>${ esc(fmtShiftDuration(data.durationMs)) }</span></div>
+        <div class="row"><span>بداية الوردية</span><span>${fmtShiftDT(shift.startedAt)}</span></div>
+        <div class="row"><span>نهاية الوردية</span><span>${fmtShiftDT(shift.endedAt)}</span></div>
+        <div class="row"><span>مدة الوردية</span><span>${fmtShiftDuration(data.durationMs)}</span></div>
         <h2>📦 عدد الطلبات</h2>
         <div class="row"><span>إجمالي عدد الطلبات</span><span>${ esc(data.shiftOrders.length) }</span></div>
         <div class="row"><span>تم التسليم</span><span>${ esc(data.delivered.length) }</span></div>
@@ -6466,7 +6462,7 @@
         <div class="row" style="font-weight:800;border-top:2px solid #444;margin-top:4px;padding-top:8px"><span>💵 الإجمالي المستحق للطيار</span><span>${ esc(data.pilotFinalDue.toFixed(2)) } ج.م</span></div>
         <h2>📋 تفاصيل الطلبات</h2>
         <table><thead><tr><th>#</th><th>رقم الأوردر</th><th>الحالة</th><th>القيمة</th><th>عمولة الطيار</th></tr></thead>
-        <tbody>${data.shiftOrders.map((o,i) => `<tr><td>${ esc(i+1) }</td><td>${ esc(o.orderNum||"—") }</td><td>${ esc(o.status||"—") }</td><td>${ esc(o.totalDeliveryPrice||0) } ج.م</td><td>${pilotCommissionFor(pilot,o).toFixed(2)} ج.م</td></tr>`).join("") || '<tr><td colspan="5">لا توجد طلبات</td></tr>'}</tbody></table>
+        <tbody>${data.shiftOrders.map((o,i) => `<tr><td>${i+1}</td><td>${ esc(o.orderNum||"—") }</td><td>${ esc(o.status||"—") }</td><td>${ esc(o.totalDeliveryPrice||0) } ج.م</td><td>${pilotCommissionFor(pilot,o).toFixed(2)} ج.م</td></tr>`).join("") || '<tr><td colspan="5">لا توجد طلبات</td></tr>'}</tbody></table>
         <script>window.onload = () => { window.print(); };<\/script>
         </body></html>`;
       const w = window.open("", "_blank");
@@ -6510,7 +6506,7 @@
       XLSX.utils.book_append_sheet(wb, ordersSheet, "طلبات الوردية");
 
       const dateStr = new Date().toISOString().slice(0,10);
-      XLSX.writeFile(wb, `تقفيل_وردية_${ esc(pilot.name) }_${ esc(dateStr) }.xlsx`);
+      XLSX.writeFile(wb, `تقفيل_وردية_${ esc(pilot.name) }_${dateStr}.xlsx`);
     };
 
     /* ── إرسال تقرير تقفيل الوردية للطيار عبر واتساب ───────────────────
@@ -6522,9 +6518,9 @@
         `📊 تقرير تقفيل وردية`,
         `👤 الطيار: ${ esc(pilot.name) }`,
         ``,
-        `⏱️ بداية الوردية: ${ esc(fmtShiftDT(shift.startedAt)) }`,
-        `⏱️ نهاية الوردية: ${ esc(fmtShiftDT(shift.endedAt)) }`,
-        `⏱️ مدة الوردية: ${ esc(fmtShiftDuration(data.durationMs)) }`,
+        `⏱️ بداية الوردية: ${fmtShiftDT(shift.startedAt)}`,
+        `⏱️ نهاية الوردية: ${fmtShiftDT(shift.endedAt)}`,
+        `⏱️ مدة الوردية: ${fmtShiftDuration(data.durationMs)}`,
         ``,
         `📦 إجمالي عدد الطلبات: ${ esc(data.shiftOrders.length) }`,
         `✅ تم التسليم: ${ esc(data.delivered.length) }`,
@@ -6558,7 +6554,7 @@
       const waNumber = _toWhatsAppNumber(pilot.phone1);
       if (!waNumber) { showToast("لا يوجد رقم هاتف مسجل لهذا الطيار", "error"); return; }
       const text = encodeURIComponent(buildShiftReportWhatsAppText(data));
-      window.open(`https://wa.me/${ esc(waNumber) }?text=${ esc(text) }`, "_blank");
+      window.open(`https://wa.me/${waNumber}?text=${text}`, "_blank");
     };
 
     /* ══════════════════════════════════════════════════════════════
@@ -6660,18 +6656,18 @@
           const rows = resolved.sort((a,b)=>(b.requestedAt||"").localeCompare(a.requestedAt||"")).map((t,i) => {
             const [lbl,cls] = t.status === "approved" ? ["✅ منفّذ","status-done"] : ["❌ مرفوض","status-cancelled"];
             return `<tr>
-              <td class="idx">${ esc(i+1) }</td>
+              <td class="idx">${i+1}</td>
               <td><span class="name-badge">${ esc(t.pilotName) }</span></td>
               <td style="font-size:.82rem">${ esc(t.fromBranchName||"—") }</td>
               <td style="font-size:.82rem;color:var(--sky)">${ esc(t.toBranchName||"—") }</td>
-              <td><span class="status-badge ${ esc(cls) }">${ esc(lbl) }</span></td>
+              <td><span class="status-badge ${cls}">${lbl}</span></td>
               <td style="font-size:.75rem;color:var(--muted)">${ esc(t.requestedAt ? new Date(t.requestedAt).toLocaleDateString("ar-EG") : "—") }</td>
             </tr>`;
           }).join("");
           html += `<details style="margin-top:12px"><summary style="cursor:pointer;font-size:.84rem;color:var(--muted);padding:8px 0">📋 السجل السابق (${ esc(resolved.length) })</summary>
           <div class="table-wrap" style="margin-top:8px"><table>
             <thead><tr><th>#</th><th>الطيار</th><th>من</th><th>إلى</th><th>الحالة</th><th>التاريخ</th></tr></thead>
-            <tbody>${ esc(rows) }</tbody>
+            <tbody>${rows}</tbody>
           </table></div></details>`;
         }
       }
@@ -6716,7 +6712,7 @@
         (window._pilotsData || []).map(p => {
           const b = window._branchesList.find(x => x.id === p.assignedBranchId);
           const bLabel = b ? ` (${ esc(b.name) })` : " (بلا فرع)";
-          return `<option value="${ esc(p.id) }" data-branch="${ esc(p.assignedBranchId||'') }">${ esc(p.name) }${ esc(bLabel) }</option>`;
+          return `<option value="${ esc(p.id) }" data-branch="${ esc(p.assignedBranchId||'') }">${ esc(p.name) }${bLabel}</option>`;
         }).join("");
       if (cur) pilotSel.value = cur;
       branchSel.innerHTML = `<option value="">— اختر الفرع —</option>` +
@@ -6850,7 +6846,7 @@
             </button>
           </div>`;
         return `
-        <div style="background:var(--card);border:1px solid ${ esc(isPending ? 'rgba(249,115,22,.3)' : 'var(--border)') };border-radius:12px;padding:18px 20px">
+        <div style="background:var(--card);border:1px solid ${isPending ? 'rgba(249,115,22,.3)' : 'var(--border)'};border-radius:12px;padding:18px 20px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
             <div>
               <div style="font-size:1rem;font-weight:700;color:var(--text)">✈ ${ esc(r.name) }</div>
@@ -6859,7 +6855,7 @@
                 &nbsp;|&nbsp; 👤 ${ esc(r.requestedBy || "—") }
               </div>
             </div>
-            ${ esc(statusHtml) }
+            ${statusHtml}
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;font-size:.83rem">
             <div><span style="color:var(--muted)">📱 هاتف 1:</span> <span dir="ltr">${ esc(r.phone1 || "—") }</span></div>
@@ -6868,7 +6864,7 @@
             <div><span style="color:var(--muted)">🚗 المركبة:</span> ${ esc(r.vehicleNo || "—") }</div>
             <div style="grid-column:1/-1"><span style="color:var(--muted)">📍 العنوان:</span> ${ esc(r.address || "—") }</div>
           </div>
-          ${ esc(actionsHtml) }
+          ${actionsHtml}
         </div>`;
       }).join("");
     }
@@ -7048,31 +7044,31 @@
           <div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">
             <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;flex-wrap:wrap">
               <b style="font-size:.8rem;color:var(--sky)">${ esc(cfg.label) }</b>
-              <button type="button" onclick="togglePagesAll('${ escJs(appKey) }',true)"
+              <button type="button" onclick="togglePagesAll('${appKey}',true)"
                 style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:6px;cursor:pointer;font-size:.7rem;font-family:inherit">تحديد الكل</button>
-              <button type="button" onclick="togglePagesAll('${ escJs(appKey) }',false)"
+              <button type="button" onclick="togglePagesAll('${appKey}',false)"
                 style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:6px;cursor:pointer;font-size:.7rem;font-family:inherit">إلغاء الكل</button>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:5px">
               ${cfg.pages.map(([key, label]) => `
                 <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer">
-                  <input type="checkbox" class="_pageChk" data-app="${ esc(appKey) }" value="${ esc(key) }" ${ esc(set.has(key) ? "checked" : "") }
+                  <input type="checkbox" class="_pageChk" data-app="${appKey}" value="${key}" ${ esc(set.has(key) ? "checked" : "") }
                          style="width:14px;height:14px;accent-color:var(--sky);cursor:pointer" />
-                  <span>${ esc(label) }</span>
+                  <span>${label}</span>
                 </label>`).join("")}
             </div>
           </div>`;
       }).join("");
     };
     window.togglePagesAll = function (appKey, on) {
-      document.querySelectorAll(`._pageChk[data-app="${ esc(appKey) }"]`).forEach(c => { c.checked = on; });
+      document.querySelectorAll(`._pageChk[data-app="${appKey}"]`).forEach(c => { c.checked = on; });
     };
     /* بيرجّع { app: [pages] } — التطبيق اللي كل صفحاته متحدّدة بيتشال
        من الماب عشان يفضل «الكل» ويستفيد من أي صفحة تتضاف بعدين */
     window.getPagePerms = function () {
       const out = {};
       for (const [appKey, cfg] of Object.entries(PAGE_PERMS)) {
-        const boxes = [...document.querySelectorAll(`._pageChk[data-app="${ esc(appKey) }"]`)];
+        const boxes = [...document.querySelectorAll(`._pageChk[data-app="${appKey}"]`)];
         if (!boxes.length) continue;
         const picked = boxes.filter(c => c.checked).map(c => c.value);
         if (picked.length === cfg.pages.length) continue;   // الكل → مفيش تخصيص
@@ -7112,7 +7108,7 @@
       if (!users.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty-row">لا يوجد مستخدمون</td></tr>`; return; }
       tbody.innerHTML = users.map((u, i) => `
         <tr>
-          <td class="idx">${ esc(i+1) }</td>
+          <td class="idx">${i+1}</td>
           <td><span class="name-badge">${ esc(u.username) }</span></td>
           <td><span class="role-badge ${ esc(u.role === 'مدير' ? 'role-admin' : 'role-user') }">${ esc(u.role || "موظف") }</span></td>
           <td>${u.role === 'مشرف فرع' ? `<span style="color:var(--sky);font-size:.82rem">🏢 ${ esc(u.branchName || '—') }</span>` : u.role === 'صاحب محل' ? `<span style="color:var(--green);font-size:.82rem">🏪 ${ esc(u.shopName || '—') } · ${ esc(u.branchName || '—') }</span>` : `<span style="color:var(--muted);font-size:.78rem">—</span>`}</td>
@@ -7122,9 +7118,9 @@
             const apps = custom ? u.allowedApps : roleDefaultApps(u.role);
             const shown = apps.filter(k => k !== "site").slice(0, 4);
             return `<div style="display:flex;flex-wrap:wrap;gap:3px">${
-              shown.map(k => `<span style="background:rgba(14,165,233,.13);color:var(--sky);font-size:.68rem;font-weight:700;padding:2px 6px;border-radius:6px">${ esc(APP_LABEL[k] || k) }</span>`).join("")
+              shown.map(k => `<span style="background:rgba(14,165,233,.13);color:var(--sky);font-size:.68rem;font-weight:700;padding:2px 6px;border-radius:6px">${APP_LABEL[k] || k}</span>`).join("")
             }${apps.filter(k => k !== "site").length > 4 ? `<span style="color:var(--muted);font-size:.68rem">+${ esc(apps.filter(k=>k!=="site").length-4) }</span>` : ""}</div>
-            <div style="font-size:.66rem;color:var(--muted);margin-top:2px">${ esc(custom ? "✏️ مخصّصة" : "حسب الدور") }</div>`;
+            <div style="font-size:.66rem;color:var(--muted);margin-top:2px">${custom ? "✏️ مخصّصة" : "حسب الدور"}</div>`;
           })()}</td>
           <td>${u.username === "admin" ? `<span style="color:var(--muted);font-size:.78rem">محمي</span>` : `<button class="edit-btn" onclick="openEditUser('${ escJs(u.username) }')">تعديل</button><button class="del-btn" onclick="deleteUser('${ escJs(u.username) }')">حذف</button>`}</td>
         </tr>
@@ -7228,7 +7224,7 @@
         if (!saved || !window._currentUser?.username) return;
         const { dateKey, username, sessionId } = JSON.parse(saved);
         if (!sessionId) return;
-        await update(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessionId) }`), {
+        await update(ref(db, `attendance/${dateKey}/${username}/sessions/${sessionId}`), {
           lastSeen: new Date().toISOString()
         });
       } catch(e) {}
@@ -7240,7 +7236,7 @@
       if (_attTimeoutMinutes <= 0) return; // ميزة معطّلة
       try {
         const dateKey = todayKey();
-        const snap = await get(ref(db, `attendance/${ esc(dateKey) }`));
+        const snap = await get(ref(db, `attendance/${dateKey}`));
         if (!snap.exists()) return;
         const now = Date.now();
         const cutoffMs = _attTimeoutMinutes * 60 * 1000;
@@ -7253,7 +7249,7 @@
             if (now - lastSeen >= cutoffMs) {
               // صمت أكثر من الحد → سجّل الانصراف عند آخر ظهور
               const checkOutTime = sess.lastSeen || new Date().toISOString();
-              await update(ref(db, `attendance/${ esc(dateKey) }/${ esc(username) }/sessions/${ esc(sessKey) }`), {
+              await update(ref(db, `attendance/${dateKey}/${username}/sessions/${sessKey}`), {
                 checkOut: checkOutTime,
                 autoCheckOut: true
               });
@@ -7321,7 +7317,7 @@
         const a = document.createElement("a");
         const d = new Date();
         const stamp = `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }-${ esc(String(d.getDate()).padStart(2,"0")) }_${ esc(String(d.getHours()).padStart(2,"0")) }-${ esc(String(d.getMinutes()).padStart(2,"0")) }`;
-        a.href = url; a.download = `Tiar_Backup_${ esc(stamp) }.json`;
+        a.href = url; a.download = `Tiar_Backup_${stamp}.json`;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
         localStorage.setItem("tiar-last-backup", new Date().toISOString());
@@ -7377,7 +7373,7 @@
             restored++;
           }
         }
-        showToast(`تم استرجاع ${ esc(restored) } مجموعة بيانات بنجاح ✓ — يفضّل إعادة تحميل الصفحة الآن`, "success");
+        showToast(`تم استرجاع ${restored} مجموعة بيانات بنجاح ✓ — يفضّل إعادة تحميل الصفحة الآن`, "success");
       } catch(e) { showToast("خطأ في الاسترجاع: " + e.message, "error"); }
     };
 
@@ -7443,10 +7439,10 @@
       try {
         const targets = await gatherCleanupTargets(cutoff);
         window._cleanupTargets = targets;
-        const lines = Object.entries(targets).filter(([,v]) => v.length).map(([k,v]) => `${ esc(CLEANUP_LABELS[k]||k) }: <b>${ esc(v.length) }</b>`);
+        const lines = Object.entries(targets).filter(([,v]) => v.length).map(([k,v]) => `${CLEANUP_LABELS[k]||k}: <b>${ esc(v.length) }</b>`);
         const total = Object.values(targets).reduce((s,v) => s + v.length, 0);
         resultEl.innerHTML = total
-          ? `سيتم حذف:<br>${ esc(lines.join(" — ")) }<br><br><b style="color:var(--red)">الإجمالي: ${ esc(total) } سجل</b>`
+          ? `سيتم حذف:<br>${ esc(lines.join(" — ")) }<br><br><b style="color:var(--red)">الإجمالي: ${total} سجل</b>`
           : `لا توجد سجلات قديمة مطابقة للشروط المحددة قبل هذا التاريخ.`;
         document.getElementById("cleanupExecBtn").disabled = total === 0;
       } catch(e) { resultEl.innerHTML = ""; showToast("خطأ: " + e.message, "error"); }
@@ -7457,7 +7453,7 @@
       if (!targets) { showToast("اضغط (معاينة عدد السجلات) أولاً", "error"); return; }
       const total = Object.values(targets).reduce((s,v) => s + v.length, 0);
       if (!total) return;
-      if (!confirm(`هل أنت متأكد من حذف ${ esc(total) } سجل نهائياً؟ لا يمكن التراجع عن هذه العملية.`)) return;
+      if (!confirm(`هل أنت متأكد من حذف ${total} سجل نهائياً؟ لا يمكن التراجع عن هذه العملية.`)) return;
       const resultEl = document.getElementById("cleanupResult");
       resultEl.innerHTML = "🗑️ جاري الحذف… يرجى الانتظار وعدم إغلاق الصفحة";
       try {
@@ -7468,7 +7464,7 @@
             done++;
           }
         }
-        resultEl.innerHTML = `✅ تم حذف ${ esc(done) } سجل بنجاح.`;
+        resultEl.innerHTML = `✅ تم حذف ${done} سجل بنجاح.`;
         window._cleanupTargets = null;
         document.getElementById("cleanupExecBtn").disabled = true;
         showToast("تم تنظيف البيانات القديمة ✓", "success");
@@ -7550,7 +7546,7 @@
       const cfg = IMPORT_CONFIGS[type];
       const hint = document.getElementById("importHint");
       if (!cfg || !hint) return;
-      hint.innerHTML = `📋 ترتيب الأعمدة في الملف: ${cfg.headers.map((h,i)=> cfg.required.includes(i) ? `<b>${ esc(h) }*</b>` : h).join(" — ")}<br>(*) حقول إلزامية. الصف الأول هو صف العناوين وسيتم تجاهله عند الرفع.`;
+      hint.innerHTML = `📋 ترتيب الأعمدة في الملف: ${cfg.headers.map((h,i)=> cfg.required.includes(i) ? `<b>${h}*</b>` : h).join(" — ")}<br>(*) حقول إلزامية. الصف الأول هو صف العناوين وسيتم تجاهله عند الرفع.`;
     };
 
     window.downloadImportTemplate = function() {
@@ -7585,7 +7581,7 @@
         for (let i = 0; i < dataRows.length; i++) {
           const row = dataRows[i].map(c => typeof c === "string" ? c.trim() : c);
           const missing = cfg.required.some(idx => String(row[idx]??"").trim() === "");
-          if (missing) { errors.push(`الصف ${ esc(i+2) }: حقول إلزامية ناقصة`); continue; }
+          if (missing) { errors.push(`الصف ${i+2}: حقول إلزامية ناقصة`); continue; }
           try {
             const obj = cfg.map(row);
             if (cfg.writeMode === "push") {
@@ -7593,14 +7589,14 @@
             } else if (cfg.writeMode === "setByKey") {
               const key = obj[cfg.keyField];
               const exists = (await get(ref(db, cfg.node + "/" + key))).exists();
-              if (exists) { errors.push(`الصف ${ esc(i+2) }: "${ esc(key) }" موجود مسبقاً وتم تخطّيه`); continue; }
+              if (exists) { errors.push(`الصف ${i+2}: "${key}" موجود مسبقاً وتم تخطّيه`); continue; }
               await set(ref(db, cfg.node + "/" + key), obj);
             }
             success++;
-          } catch(e) { errors.push(`الصف ${ esc(i+2) }: ${ esc(e.message) }`); }
+          } catch(e) { errors.push(`الصف ${i+2}: ${ esc(e.message) }`); }
         }
-        let html = `✅ تم إضافة <b>${ esc(success) }</b> من ${ esc(dataRows.length) } سجل بنجاح.`;
-        if (errors.length) html += `<br>⚠️ ${ esc(errors.length) } صف به مشاكل:<br>` + errors.slice(0,15).map(e=>`• ${ esc(e) }`).join("<br>");
+        let html = `✅ تم إضافة <b>${success}</b> من ${ esc(dataRows.length) } سجل بنجاح.`;
+        if (errors.length) html += `<br>⚠️ ${ esc(errors.length) } صف به مشاكل:<br>` + errors.slice(0,15).map(e=>`• ${e}`).join("<br>");
         resultEl.innerHTML = html;
         showToast(success ? "تم استيراد البيانات ✓" : "لم يتم إضافة أي سجل", success ? "success" : "error");
         fileInput.value = "";
@@ -9799,15 +9795,15 @@
   const PAGES = ["dashboard","pilots","joinrequests","pilotleave","transfers","clients","orders","delivering","delivered","undelivered","cancelled","shifts","shift-orders","hr","accounting","treasury","reports","pilot-orders","settings","pilotmap"];
   function navigateTo(page) {
     if (window.innerWidth <= 900) closeSidebar();
-    PAGES.forEach(p => { document.getElementById(`page-${ esc(p) }`)?.classList.remove("active"); });
-    document.getElementById(`page-${ esc(page) }`)?.classList.add("active");
+    PAGES.forEach(p => { document.getElementById(`page-${p}`)?.classList.remove("active"); });
+    document.getElementById(`page-${page}`)?.classList.add("active");
     const pilotsPanel = document.querySelector(".pilots-panel");
     if (pilotsPanel) pilotsPanel.classList.toggle("visible", page === "orders");
     const mainEl = document.getElementById("main");
     if (mainEl) mainEl.classList.toggle("with-panel", page === "orders");
     document.querySelectorAll(".nav-item").forEach(btn => {
       btn.classList.remove("active");
-      if (btn.getAttribute("onclick")?.includes(`'${ esc(page) }'`)) btn.classList.add("active");
+      if (btn.getAttribute("onclick")?.includes(`'${page}'`)) btn.classList.add("active");
     });
     if (page === "hr" && window.renderHRPage) window.renderHRPage();
     if (page === "accounting" && window.renderAccountingPage) window.renderAccountingPage();
@@ -9886,7 +9882,7 @@
     document.getElementById("expenseDate").value = `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }-${ esc(String(d.getDate()).padStart(2,"0")) }`;
   }
   function closeModal(type) {
-    document.getElementById(`modal-${ esc(type) }`).classList.remove("open");
+    document.getElementById(`modal-${type}`).classList.remove("open");
     document.body.style.overflow = "";
   }
   window.closeModal = closeModal; // تعريض للـ module scripts
@@ -10161,7 +10157,7 @@
       _ieCollection = 'senders';
       document.getElementById("inline-edit-title").textContent = "✏️ تعديل بيانات عميل الاستلام";
     } else {
-      const state = window._smartSearchState[`dRecv-${ esc(rowN) }`];
+      const state = window._smartSearchState[`dRecv-${rowN}`];
       data = state?.selectedData;
       _ieClientId = data?.id;
       _ieCollection = 'receivers';
@@ -10191,7 +10187,7 @@
     const address = window.getAddressValue('ie-addrWidget');
     if (!name) { showToast("الاسم مطلوب", "error"); return; }
     try {
-      await _upd(_getRef(_getDB(), `${ esc(_ieCollection) }/${ esc(_ieClientId) }`), { name, phone1, phone2, address });
+      await _upd(_getRef(_getDB(), `${_ieCollection}/${_ieClientId}`), { name, phone1, phone2, address });
       // تحديث الحقول في الفورم مباشرة
       if (_ieType === 'sender') {
         const state = window._smartSearchState['senderSearchInput'];
@@ -10202,12 +10198,12 @@
         document.getElementById("orderSenderAddress").value  = address;
       } else {
         const n = _ieRowN;
-        const state = window._smartSearchState[`dRecv-${ esc(n) }`];
+        const state = window._smartSearchState[`dRecv-${n}`];
         if (state?.selectedData) { state.selectedData.name = name; state.selectedData.phone1 = phone1; state.selectedData.phone2 = phone2; state.selectedData.address = address; }
-        document.getElementById(`dRecv-${ esc(n) }`).value   = name;
-        document.getElementById(`dPhone-${ esc(n) }`).value  = phone1;
-        document.getElementById(`dPhone2-${ esc(n) }`).value = phone2;
-        document.getElementById(`dAddr-${ esc(n) }`).value   = address;
+        document.getElementById(`dRecv-${n}`).value   = name;
+        document.getElementById(`dPhone-${n}`).value  = phone1;
+        document.getElementById(`dPhone2-${n}`).value = phone2;
+        document.getElementById(`dAddr-${n}`).value   = address;
       }
       showToast("تم تحديث بيانات العميل ✓", "success");
       closeInlineEdit();
@@ -10243,11 +10239,11 @@
     const yearNow  = now.getFullYear();
     const monthNow = String(now.getMonth()+1).padStart(2,"0");
     if (type === "day") {
-      wrap.innerHTML = `<div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">اليوم</label><input type="date" id="repDay" value="${ esc(todayStr) }" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>`;
+      wrap.innerHTML = `<div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">اليوم</label><input type="date" id="repDay" value="${todayStr}" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>`;
     } else if (type === "month") {
-      wrap.innerHTML = `<div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الشهر</label><input type="month" id="repMonth" value="${ esc(yearNow) }-${ esc(monthNow) }" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>`;
+      wrap.innerHTML = `<div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الشهر</label><input type="month" id="repMonth" value="${yearNow}-${monthNow}" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>`;
     } else if (type === "year") {
-      wrap.innerHTML = `<div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">السنة</label><input type="number" id="repYear" value="${ esc(yearNow) }" min="2000" max="2100" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);width:100px"></div>`;
+      wrap.innerHTML = `<div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">السنة</label><input type="number" id="repYear" value="${yearNow}" min="2000" max="2100" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);width:100px"></div>`;
     } else {
       wrap.innerHTML = `
         <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ</label><input type="date" id="repFrom" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>
@@ -10386,7 +10382,7 @@
     const branchesBody = document.getElementById("rep-branches-body");
     branchesBody.innerHTML = data.branchRows.length ? data.branchRows.map((b,i) => `
       <tr>
-        <td class="idx">${ esc(i+1) }</td>
+        <td class="idx">${i+1}</td>
         <td><b>${ esc(b.name) }</b></td>
         <td>${ esc(b.ordersCount) }</td>
         <td style="color:var(--green)">${ esc(b.revenue) } ج.م</td>
@@ -10406,7 +10402,7 @@
       const toISO   = data.to.toISOString().slice(0,10);
       return `
       <tr>
-        <td class="idx">${ esc(i+1) }</td>
+        <td class="idx">${i+1}</td>
         <td><b>${ esc(p.name) }</b></td>
         <td>${ esc(p.branchName) }</td>
         <td>${ esc(p.typeLabel) }</td>
@@ -10415,7 +10411,7 @@
         <td style="color:var(--sky);font-weight:700">${ esc(p.commission.toFixed(2)) } ج.م</td>
         <td>${ esc(p.net.toFixed(2)) } ج.م</td>
         <td>
-          <button onclick="openPilotOrdersPage('${ escJs(pilotId) }','${ escJs(p.name) }','${ escJs(fromISO) }','${ escJs(toISO) }')"
+          <button onclick="openPilotOrdersPage('${pilotId}','${ escJs(p.name) }','${fromISO}','${toISO}')"
             style="background:rgba(14,165,233,.15);color:var(--sky);border:1px solid rgba(14,165,233,.3);
                    padding:5px 12px;border-radius:7px;cursor:pointer;font-size:.79rem;font-weight:600;white-space:nowrap">
             📋 أوردرات الطيار
@@ -10456,7 +10452,7 @@
 
     const fromStr = data.from.toISOString().slice(0,10);
     const toStr   = data.to.toISOString().slice(0,10);
-    XLSX.writeFile(wb, `تقرير_${ esc(fromStr) }_${ esc(toStr) }.xlsx`);
+    XLSX.writeFile(wb, `تقرير_${fromStr}_${toStr}.xlsx`);
   };
 
   window.exportReportPDF = function() {
@@ -10465,10 +10461,10 @@
     const toStr   = data.to.toLocaleDateString("ar-EG");
 
     const branchRowsHtml = data.branchRows.map((b,i) => `
-      <tr><td>${ esc(i+1) }</td><td>${ esc(b.name) }</td><td>${ esc(b.ordersCount) }</td><td>${ esc(b.revenue) } ج.م</td><td>${ esc(b.net.toFixed(2)) } ج.م</td></tr>`).join("");
+      <tr><td>${i+1}</td><td>${ esc(b.name) }</td><td>${ esc(b.ordersCount) }</td><td>${ esc(b.revenue) } ج.م</td><td>${ esc(b.net.toFixed(2)) } ج.م</td></tr>`).join("");
 
     const pilotRowsHtml = data.pilotRows.map((p,i) => `
-      <tr><td>${ esc(i+1) }</td><td>${ esc(p.name) }</td><td>${ esc(p.branchName) }</td><td>${ esc(p.typeLabel) }</td><td>${ esc(p.ordersCount) }</td><td>${ esc(p.revenue) } ج.م</td><td>${ esc(p.commission.toFixed(2)) } ج.م</td><td>${ esc(p.net.toFixed(2)) } ج.م</td></tr>`).join("");
+      <tr><td>${i+1}</td><td>${ esc(p.name) }</td><td>${ esc(p.branchName) }</td><td>${ esc(p.typeLabel) }</td><td>${ esc(p.ordersCount) }</td><td>${ esc(p.revenue) } ج.م</td><td>${ esc(p.commission.toFixed(2)) } ج.م</td><td>${ esc(p.net.toFixed(2)) } ج.م</td></tr>`).join("");
 
     const html = `
       <html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير</title>
@@ -10485,7 +10481,7 @@
         .summary .val{font-size:1.1rem;font-weight:700;margin-top:4px}
       </style></head><body>
       <h1>📊 تقرير الأداء</h1>
-      <div>الفترة من ${ esc(fromStr) } إلى ${ esc(toStr) }</div>
+      <div>الفترة من ${fromStr} إلى ${toStr}</div>
       <div class="summary">
         <div><div class="lbl">إجمالي الطلبات</div><div class="val">${ esc(data.totalOrders) }</div></div>
         <div><div class="lbl">إجمالي الإيرادات</div><div class="val">${ esc(data.totalRevenue) } ج.م</div></div>
@@ -10528,7 +10524,7 @@
 
     // تحديث عنوان الصفحة
     const titleEl = document.getElementById("pilotOrdersTitle");
-    if (titleEl) titleEl.textContent = `📋 أوردرات الطيار: ${ pilotName || "—" }`;
+    if (titleEl) titleEl.textContent = `📋 أوردرات الطيار: ${pilotName || "—"}`;
 
     // بناء نطاق التاريخ
     const from = fromISO ? new Date(fromISO + "T00:00:00") : null;
@@ -10538,7 +10534,7 @@
     const periodEl = document.getElementById("pilotOrdersPeriod");
     if (periodEl) {
       periodEl.textContent = (from && to)
-        ? `الفترة: ${ esc(fromISO) } — ${ esc(toISO) }`
+        ? `الفترة: ${fromISO} — ${toISO}`
         : "كل الفترات";
     }
 
@@ -10616,15 +10612,15 @@
       const commission = pilot ? (window.pilotCommissionFor ? pilotCommissionFor(pilot, o) : 0) : 0;
       return `
         <tr>
-          <td class="idx">${ esc(i+1) }</td>
+          <td class="idx">${i+1}</td>
           <td style="font-weight:700;color:var(--sky)">${ esc(o.orderNum || o.id || "—") }</td>
           <td>${ esc(o.senderName || "—") }</td>
-          <td style="font-size:.8rem">${ esc(recvNames) }</td>
-          <td style="font-size:.8rem;color:var(--muted)">${ esc(recvAreas) }</td>
+          <td style="font-size:.8rem">${recvNames}</td>
+          <td style="font-size:.8rem;color:var(--muted)">${recvAreas}</td>
           <td>${ esc(branch ? branch.name : "—") }</td>
           <td style="color:var(--green);font-weight:600">${ esc(Number(o.totalDeliveryPrice || 0).toFixed(2)) } ج.م</td>
           <td style="color:var(--sky)">${ esc(commission.toFixed(2)) } ج.م</td>
-          <td style="font-size:.78rem;color:var(--muted)">${ esc(dtStr) }</td>
+          <td style="font-size:.78rem;color:var(--muted)">${dtStr}</td>
           <td><button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
         </tr>`;
     }).join("");
@@ -10746,12 +10742,12 @@
     deliveries.forEach((d, i) => {
       html += `
       <div style="margin-bottom:14px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:10px">
-        <div style="font-size:.82rem;color:var(--orange);font-weight:700;margin-bottom:10px">📦 المستلم ${ esc(i+1) }${ esc(deliveries.length>1?' من '+deliveries.length:'') }</div>
+        <div style="font-size:.82rem;color:var(--orange);font-weight:700;margin-bottom:10px">📦 المستلم ${i+1}${ esc(deliveries.length>1?' من '+deliveries.length:'') }</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الاسم</label><input id="edit-recv-name-${ esc(i) }" value="${ esc(d.receiverName||'') }" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
-          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 1</label><input id="edit-recv-phone-${ esc(i) }" value="${ esc(d.receiverPhone||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
-          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 2</label><input id="edit-recv-phone2-${ esc(i) }" value="${ esc(d.receiverPhone2||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
-          <div style="grid-column:1/-1"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">العنوان</label><div id="edit-recv-addrWidget-${ esc(i) }"></div></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الاسم</label><input id="edit-recv-name-${i}" value="${ esc(d.receiverName||'') }" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 1</label><input id="edit-recv-phone-${i}" value="${ esc(d.receiverPhone||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 2</label><input id="edit-recv-phone2-${i}" value="${ esc(d.receiverPhone2||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+          <div style="grid-column:1/-1"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">العنوان</label><div id="edit-recv-addrWidget-${i}"></div></div>
         </div>
       </div>`;
     });
@@ -10759,7 +10755,7 @@
     // تهيئة widgets بعد إدراج الـ HTML
     window.renderAddressWidget('edit-sender-addrWidget', { required: true, value: o.senderAddress || '' });
     deliveries.forEach((d, i) => {
-      window.renderAddressWidget(`edit-recv-addrWidget-${ esc(i) }`, { required: true, value: d.address || '' });
+      window.renderAddressWidget(`edit-recv-addrWidget-${i}`, { required: true, value: d.address || '' });
     });
     document.getElementById("modal-edit-order-data").style.display = "flex";
   };
@@ -10824,7 +10820,7 @@
     const bg = status === "onLeave" ? "#ef4444" : status === "delivering" ? "#3b82f6" : "#22c55e";
     return L.divIcon({
       className:"",
-      html:`<div style="background:${ esc(bg) };color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:2px solid #fff">🛵</div>`,
+      html:`<div style="background:${bg};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:2px solid #fff">🛵</div>`,
       iconSize:[40,40], iconAnchor:[20,20]
     });
   }
@@ -10833,7 +10829,7 @@
     const short = (orderNum||"").replace(/[^0-9]/g,"").slice(-4) || "—";
     return L.divIcon({
       className:"",
-      html:`<div style="background:${ esc(bg) };color:#fff;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.4);border:2px solid #fff;white-space:nowrap;direction:ltr;text-align:center;line-height:1.3">📦<br>${ esc(short) }</div>`,
+      html:`<div style="background:${bg};color:#fff;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.4);border:2px solid #fff;white-space:nowrap;direction:ltr;text-align:center;line-height:1.3">📦<br>${short}</div>`,
       iconSize:[54,44], iconAnchor:[27,22]
     });
   }
@@ -10841,7 +10837,7 @@
     const bg = status === "تم التسليم" ? "#22c55e" : status === "لم يتم التوصيل" ? "#ef4444" : "#8b5cf6";
     return L.divIcon({
       className:"",
-      html:`<div style="background:${ esc(bg) };color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.35);border:2px solid #fff">📍</div>`,
+      html:`<div style="background:${bg};color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.35);border:2px solid #fff">📍</div>`,
       iconSize:[28,28], iconAnchor:[14,28]
     });
   }
@@ -10851,7 +10847,7 @@
     const loc = p.location || {};
     const upd = loc.updatedAt ? new Date(loc.updatedAt) : null;
     const sec = upd ? Math.floor((Date.now()-upd)/1000) : null;
-    const t   = sec===null ? "—" : sec<60 ? `منذ ${ esc(sec) } ث` : sec<3600 ? `منذ ${ esc(Math.floor(sec/60)) } د` : `منذ ${ esc(Math.floor(sec/3600)) } س`;
+    const t   = sec===null ? "—" : sec<60 ? `منذ ${sec} ث` : sec<3600 ? `منذ ${ esc(Math.floor(sec/60)) } د` : `منذ ${ esc(Math.floor(sec/3600)) } س`;
     const myOrders = (window._ordersData||[]).filter(o=>o.pilotId===p.id&&o.status==="جاري التوصيل");
     const oHtml = myOrders.length
       ? myOrders.map(o=>`<div style="font-size:.78rem;color:#f97316;margin-top:3px;padding:2px 0;border-top:1px solid #f1f5f9">📦 ${ esc(o.orderNum) } — ${ esc((o.deliveries||[]).length) } طرد</div>`).join("")
@@ -10861,13 +10857,13 @@
       <div style="color:#64748b;font-size:.83rem">📱 ${ esc(p.phone1||"—") }</div>
       <div style="color:#64748b;font-size:.83rem">🚗 ${ esc(p.vehicleNo||"—") }</div>
       <div style="margin:7px 0 3px;font-weight:700;font-size:.8rem;color:#374151">الأوردرات الحالية:</div>
-      ${ esc(oHtml) }
+      ${oHtml}
       <div style="margin-top:8px;padding:4px 8px;border-radius:6px;font-size:.8rem;font-weight:600;
         background:${ esc(p.pilotStatus==="onLeave"?"#fef2f2":p.pilotStatus==="delivering"?"#eff6ff":"#f0fdf4") };
         color:${ esc(p.pilotStatus==="onLeave"?"#b91c1c":p.pilotStatus==="delivering"?"#1d4ed8":"#15803d") }">
         ${p.pilotStatus==="onLeave"?`🔴 ${_leaveTypeLabel(p.leaveType)}${ esc(p.leaveReason?" — "+p.leaveReason:"") }`:p.pilotStatus==="delivering"?"🔵 في التوصيل":"🟢 في الانتظار"}
       </div>
-      <div style="color:#94a3b8;font-size:.75rem;margin-top:5px">⏱ ${ esc(t) }</div>
+      <div style="color:#94a3b8;font-size:.75rem;margin-top:5px">⏱ ${t}</div>
     </div>`;
   }
   function _leaveTypeLabel(type) {
@@ -10889,7 +10885,7 @@
       <div style="font-size:.78rem;color:#64748b;margin-top:2px">📍 ${ esc(o.senderAddress||"—") }</div>
       ${pilot ? `<div style="font-size:.78rem;color:#f97316;margin-top:4px;font-weight:600">🛵 ${ esc(pilot.name) }</div>` : ""}
       <div style="font-size:.78rem;font-weight:700;color:#374151;margin-top:8px;margin-bottom:2px">نقاط التسليم (${ esc((o.deliveries||[]).length) }):</div>
-      ${ esc(dList) }
+      ${dList}
       <div style="margin-top:8px;padding:3px 8px;border-radius:6px;font-size:.78rem;font-weight:600;
         background:${ esc(o.status==="جاري التوصيل"?"#fff7ed":"#eff6ff") };
         color:${ esc(o.status==="جاري التوصيل"?"#c2410c":"#1d4ed8") }">${ esc(o.status) }</div>
@@ -10898,7 +10894,7 @@
 
   function _delivPopupHtml(o, d, i) {
     return `<div style="text-align:right;direction:rtl;min-width:190px">
-      <div style="font-weight:700;font-size:.88rem;color:#7c3aed;margin-bottom:4px">📍 نقطة تسليم ${ esc(i+1) }</div>
+      <div style="font-weight:700;font-size:.88rem;color:#7c3aed;margin-bottom:4px">📍 نقطة تسليم ${i+1}</div>
       <div style="font-size:.85rem;font-weight:600">${ esc(d.receiverName||"—") }</div>
       <div style="font-size:.78rem;color:#64748b">${ esc(d.receiverPhone||"") }</div>
       <div style="font-size:.78rem;color:#64748b;margin-top:2px">${ esc(d.address||"") }</div>
@@ -11019,12 +11015,12 @@
       return `<div style="background:var(--panel,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:10px 12px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
           <span style="font-weight:700;color:#3b82f6;font-size:.9rem">📦 ${ esc(o.orderNum||"—") }</span>
-          <span style="font-size:.72rem;padding:2px 8px;border-radius:12px;background:${ esc(sBg) };color:${ esc(sColor) };font-weight:600">${ esc(o.status) }</span>
+          <span style="font-size:.72rem;padding:2px 8px;border-radius:12px;background:${sBg};color:${sColor};font-weight:600">${ esc(o.status) }</span>
         </div>
         <div style="font-size:.83rem;font-weight:600;color:var(--text,#1e293b)">${ esc(o.senderName||"—") }</div>
         <div style="font-size:.75rem;color:#64748b;margin-top:1px">📍 ${ esc(o.senderAddress||"—") }</div>
         ${pilot ? `<div style="font-size:.75rem;color:#f97316;margin-top:2px;font-weight:600">🛵 ${ esc(pilot.name) }</div>` : ""}
-        <div style="font-size:.74rem;color:#64748b;margin-top:3px">${ esc((o.deliveries||[]).length) } طرد/طرود ${noGeoDeliv ? `<span style="color:#ef4444">(${ esc(noGeoDeliv) } بدون موقع)</span>` : ""}</div>
+        <div style="font-size:.74rem;color:#64748b;margin-top:3px">${ esc((o.deliveries||[]).length) } طرد/طرود ${noGeoDeliv ? `<span style="color:#ef4444">(${noGeoDeliv} بدون موقع)</span>` : ""}</div>
         <div style="display:flex;gap:6px;margin-top:8px">
           ${hasGeo
             ? `<button onclick="_flyToOrder('${ escJs(o.id) }')" style="flex:1;font-size:.75rem;padding:5px 0;background:#3b82f6;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600">🗺️ عرض</button>`
@@ -11074,7 +11070,7 @@
   async function _nominatim(q) {
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${ esc(encodeURIComponent(q)) }&limit=1&countrycodes=eg`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=eg`,
         { headers: { "Accept-Language": "ar", "User-Agent": "tiar-app/1.0" } }
       );
       const data = await res.json();
@@ -11141,15 +11137,15 @@
       const deliveringCount = allPilots.filter(p=>p.pilotStatus==="delivering").length;
       const onLeaveCount = allPilots.filter(p=>p.pilotStatus==="onLeave").length;
       el.innerHTML = `
-        <span style="background:#f0fdf4;color:#15803d;padding:3px 10px;border-radius:20px;font-size:.8rem">🟢 ${ esc(waitingCount) } متاح</span>
-        <span style="background:#eff6ff;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">🛵 ${ esc(deliveringCount) } في أوردر</span>
-        <span style="background:#fef2f2;color:#b91c1c;padding:3px 10px;border-radius:20px;font-size:.8rem">🖐️ ${ esc(onLeaveCount) } في إذن</span>
-        ${noGeo ? `<span title="الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${ esc(noGeo) } أوردر بدون موقع</span>` : ""}
-        <span style="background:#f8fafc;color:#64748b;padding:3px 10px;border-radius:20px;font-size:.8rem">🔄 ${ esc(new Date().toLocaleTimeString("ar-EG")) }</span>
+        <span style="background:#f0fdf4;color:#15803d;padding:3px 10px;border-radius:20px;font-size:.8rem">🟢 ${waitingCount} متاح</span>
+        <span style="background:#eff6ff;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">🛵 ${deliveringCount} في أوردر</span>
+        <span style="background:#fef2f2;color:#b91c1c;padding:3px 10px;border-radius:20px;font-size:.8rem">🖐️ ${onLeaveCount} في إذن</span>
+        ${noGeo ? `<span title="الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${noGeo} أوردر بدون موقع</span>` : ""}
+        <span style="background:#f8fafc;color:#64748b;padding:3px 10px;border-radius:20px;font-size:.8rem">🔄 ${new Date().toLocaleTimeString("ar-EG")}</span>
         <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">⚡ تتبع فوري</span>
         <span style="margin-right:auto;display:flex;gap:5px">
-          <button onclick="_toggleLayer('pilots')" style="font-size:.73rem;padding:2px 9px;border-radius:12px;border:1px solid #22c55e;background:${ esc(_showPilots?'#22c55e':'transparent') };color:${ esc(_showPilots?'#fff':'#22c55e') };cursor:pointer">🛵</button>
-          <button onclick="_toggleLayer('orders')" style="font-size:.73rem;padding:2px 9px;border-radius:12px;border:1px solid #3b82f6;background:${ esc(_showOrders?'#3b82f6':'transparent') };color:${ esc(_showOrders?'#fff':'#3b82f6') };cursor:pointer">📦</button>
+          <button onclick="_toggleLayer('pilots')" style="font-size:.73rem;padding:2px 9px;border-radius:12px;border:1px solid #22c55e;background:${_showPilots?'#22c55e':'transparent'};color:${_showPilots?'#fff':'#22c55e'};cursor:pointer">🛵</button>
+          <button onclick="_toggleLayer('orders')" style="font-size:.73rem;padding:2px 9px;border-radius:12px;border:1px solid #3b82f6;background:${_showOrders?'#3b82f6':'transparent'};color:${_showOrders?'#fff':'#3b82f6'};cursor:pointer">📦</button>
         </span>`;
       if (_lastPilotsSnap) {
         Object.entries(_lastPilotsSnap).forEach(([id,v])=>{
