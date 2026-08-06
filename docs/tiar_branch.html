@@ -30,6 +30,10 @@
 
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
+    /* بانر بيظهر لما النت يقطع. من غيره الزراير بتفضل عالقة على
+       "جاري الحفظ…" للأبد، لأن فايربيز بيطبّق الكتابة في طابور محلي
+       و await set() مابيرجعش خالص (شوف netstatus.js) */
+    import("./netstatus.js").then(m => m.watchConnection(db)).catch(() => {});
     const auth = getAuth(app);
 
     /* ══════════════════════════════════════════════════════════════════
