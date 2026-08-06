@@ -31,6 +31,42 @@
            onclick="fn('${...}')"
        هنا esc() لوحدها مش كفاية: المتصفح بيفك ترميز الخاصية قبل ما
        الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج. */
+    /* ── مفاتيح اليوم بتوقيت القاهرة ──────────────────────────────
+       الكود كان بيستخدم toISOString().slice(0,10) كمفتاح يوم، وده
+       تاريخ **جرينتش** مش مصر. مصر UTC+2/+3، يعني:
+         - أي أوردر بين 12 و3 الفجر بياخد تاريخ **إمبارح** في رقمه
+           وبيكمّل على عدّاد إمبارح
+         - حدود التقارير كانت بترجع يوم لورا: new Date(2026,7,6)
+           (نص الليل بمصر) toISOString بتديك 2026-08-05
+
+       مثبّتة على Africa/Cairo مش على توقيت الجهاز، عشان لو ساعة أي
+       كمبيوتر في الفروع مظبوطة غلط مايتغيّرش حساب اليوم.
+    ──────────────────────────────────────────────────────────────── */
+    window.cairoParts = function (d) {
+      const p = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit"
+      }).formatToParts(d || new Date());
+      const g = t => p.find(x => x.type === t).value;
+      return { y: g("year"), m: g("month"), d: g("day") };
+    };
+    /* 2026-08-06 */
+    window.cairoDayKey = function (d) {
+      const p = window.cairoParts(d);
+      return p.y + "-" + p.m + "-" + p.d;
+    };
+    /* 20260806 — للعدّادات وأرقام الأوردرات */
+    window.cairoDayKeyCompact = function (d) {
+      const p = window.cairoParts(d);
+      return p.y + p.m + p.d;
+    };
+    /* هل التاريخ ده النهاردة بتوقيت مصر؟ */
+    window.isCairoToday = function (iso) {
+      if (!iso) return false;
+      const t = new Date(iso);
+      if (isNaN(t)) return false;
+      return window.cairoDayKey(t) === window.cairoDayKey(new Date());
+    };
+
     window.escJs = function (v) {
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
@@ -756,8 +792,8 @@
        عند الدخول مجدداً = سجل جديد يُضاف فوق السابق
     ══════════════════════════════════════════════════════════════════════ */
     function todayKey() {
-      const d = new Date();
-      return `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }-${ esc(String(d.getDate()).padStart(2,"0")) }`;
+      // بتوقيت القاهرة مش توقيت الجهاز
+      return window.cairoDayKey();
     }
 
     // مفتاح الجلسة الحالية في localStorage لاستخدامه عند beforeunload
@@ -1054,10 +1090,8 @@
       openModal('pilot');
     };
     function isToday(iso) {
-      if (!iso) return false;
-      const d = new Date(iso);
-      const n = new Date();
-      return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+      // مقارنة بتوقيت القاهرة — كانت بتوقيت الجهاز
+      return window.isCairoToday(iso);
     }
 
     function renderDashboard() {
@@ -1478,7 +1512,7 @@
       const wrap = document.getElementById("shiftsPeriodInputs");
       if (!wrap) return;
       const now      = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
+      const todayStr = window.cairoDayKey(now);
       const yearNow  = now.getFullYear();
       const monthNow = String(now.getMonth() + 1).padStart(2, "0");
       if (type === "day") {
@@ -3159,7 +3193,7 @@
        HAL-260804-001 (كود الفرع - سنة/شهر/يوم - المسلسل).
        التاريخ بييجي من نفس مفتاح العداد بالظبط، فمستحيل رقمين يتلاقوا. */
     async function generateOrderNumber(branchId, branchCode) {
-      const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const dayKey = window.cairoDayKeyCompact();
       const counterRef = ref(db, `counters/${branchId}/${dayKey}`);
       let newCount = 1;
       await runTransaction(counterRef, (current) => {
@@ -4919,8 +4953,8 @@
       return parts.join(" و ");
     }
     function todayKeyHR() {
-      const d = new Date();
-      return `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }-${ esc(String(d.getDate()).padStart(2,"0")) }`;
+      // بتوقيت القاهرة مش توقيت الجهاز
+      return window.cairoDayKey();
     }
 
     window._hrTodayData = {};
@@ -6525,7 +6559,7 @@
       XLSX.utils.book_append_sheet(wb, summarySheet, "ملخص الوردية");
       XLSX.utils.book_append_sheet(wb, ordersSheet, "طلبات الوردية");
 
-      const dateStr = new Date().toISOString().slice(0,10);
+      const dateStr = window.cairoDayKey();
       XLSX.writeFile(wb, `تقفيل_وردية_${ esc(pilot.name) }_${dateStr}.xlsx`);
     };
 
@@ -10093,7 +10127,7 @@
     const type = document.getElementById("repPeriodType").value;
     const wrap = document.getElementById("repPeriodInputs");
     const now  = new Date();
-    const todayStr = now.toISOString().slice(0,10);
+    const todayStr = window.cairoDayKey(now);
     const yearNow  = now.getFullYear();
     const monthNow = String(now.getMonth()+1).padStart(2,"0");
     if (type === "day") {
@@ -10256,8 +10290,8 @@
       // نبحث عن الطيار في البيانات الأصلية للحصول على id
       const pilot = pilots.find(pt => pt.name === p.name);
       const pilotId = pilot ? pilot.id : "";
-      const fromISO = data.from.toISOString().slice(0,10);
-      const toISO   = data.to.toISOString().slice(0,10);
+      const fromISO = window.cairoDayKey(data.from);
+      const toISO   = window.cairoDayKey(data.to);
       return `
       <tr>
         <td class="idx">${i+1}</td>
@@ -10308,8 +10342,8 @@
     XLSX.utils.book_append_sheet(wb, branchesSheet, "الفروع");
     XLSX.utils.book_append_sheet(wb, pilotsSheet, "الطيارين");
 
-    const fromStr = data.from.toISOString().slice(0,10);
-    const toStr   = data.to.toISOString().slice(0,10);
+    const fromStr = window.cairoDayKey(data.from);
+    const toStr   = window.cairoDayKey(data.to);
     XLSX.writeFile(wb, `تقرير_${fromStr}_${toStr}.xlsx`);
   };
 
@@ -11116,14 +11150,13 @@
   const money = n => fmt(n) + " ج.م";
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const round2 = n => Math.round((Number(n)||0)*100)/100;
-  const todayStr = () => new Date().toISOString().slice(0,10);
+  const todayStr = () => window.cairoDayKey();
   const digits = s => String(s||"").replace(/\D/g,"");
   /** يوحّد ة/ه و أ/إ/آ/ا و ى/ي ويشيل التشكيل — الموظف بيكتب بسرعة أثناء المكالمة */
   const norm = s => String(s||"").toLowerCase().trim()
     .replace(/[ً-ْـ]/g,"")
     .replace(/[أإآٱ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه").replace(/\s+/g," ");
-  const toDateStr = v => { const d = new Date(v); return isNaN(d) ? "" :
-    new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+  const toDateStr = v => { const d = new Date(v); return isNaN(d) ? "" : window.cairoDayKey(d); };
   const timeOf = v => { const d = new Date(v); return isNaN(d) ? "" :
     String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
 

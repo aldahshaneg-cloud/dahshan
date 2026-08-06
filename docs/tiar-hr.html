@@ -31,6 +31,42 @@
            onclick="fn('${...}')"
        هنا esc() لوحدها مش كفاية: المتصفح بيفك ترميز الخاصية قبل ما
        الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج. */
+    /* ── مفاتيح اليوم بتوقيت القاهرة ──────────────────────────────
+       الكود كان بيستخدم toISOString().slice(0,10) كمفتاح يوم، وده
+       تاريخ **جرينتش** مش مصر. مصر UTC+2/+3، يعني:
+         - أي أوردر بين 12 و3 الفجر بياخد تاريخ **إمبارح** في رقمه
+           وبيكمّل على عدّاد إمبارح
+         - حدود التقارير كانت بترجع يوم لورا: new Date(2026,7,6)
+           (نص الليل بمصر) toISOString بتديك 2026-08-05
+
+       مثبّتة على Africa/Cairo مش على توقيت الجهاز، عشان لو ساعة أي
+       كمبيوتر في الفروع مظبوطة غلط مايتغيّرش حساب اليوم.
+    ──────────────────────────────────────────────────────────────── */
+    window.cairoParts = function (d) {
+      const p = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit"
+      }).formatToParts(d || new Date());
+      const g = t => p.find(x => x.type === t).value;
+      return { y: g("year"), m: g("month"), d: g("day") };
+    };
+    /* 2026-08-06 */
+    window.cairoDayKey = function (d) {
+      const p = window.cairoParts(d);
+      return p.y + "-" + p.m + "-" + p.d;
+    };
+    /* 20260806 — للعدّادات وأرقام الأوردرات */
+    window.cairoDayKeyCompact = function (d) {
+      const p = window.cairoParts(d);
+      return p.y + p.m + p.d;
+    };
+    /* هل التاريخ ده النهاردة بتوقيت مصر؟ */
+    window.isCairoToday = function (iso) {
+      if (!iso) return false;
+      const t = new Date(iso);
+      if (isNaN(t)) return false;
+      return window.cairoDayKey(t) === window.cairoDayKey(new Date());
+    };
+
     window.escJs = function (v) {
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
@@ -667,8 +703,8 @@
     const SESS_ATT_KEY = "tiar-hr-att-session";
 
     function todayKey() {
-      const d = new Date();
-      return `${ esc(d.getFullYear()) }-${ esc(String(d.getMonth()+1).padStart(2,"0")) }-${ esc(String(d.getDate()).padStart(2,"0")) }`;
+      // بتوقيت القاهرة مش توقيت الجهاز
+      return window.cairoDayKey();
     }
 
     async function recordCheckIn(username, role) {
@@ -2107,7 +2143,7 @@
       window._staffFinanceMonth = monthInput?.value || new Date().toISOString().slice(0,7);
 
       const dateInput = document.getElementById("staffFinanceEntryDate");
-      if (dateInput) dateInput.value = new Date().toISOString().slice(0,10);
+      if (dateInput) dateInput.value = window.cairoDayKey();
 
       section.style.display = "block";
       await loadStaffFinanceData(empId);

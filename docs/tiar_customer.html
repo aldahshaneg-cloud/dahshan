@@ -3060,8 +3060,12 @@ async function submitOrder() {
   const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
   try {
     // رقم الطلب — نفس عدّاد النظام: counters/{branchId}/{yyyymmdd}
+    /* المفتاح بتوقيت القاهرة مش جرينتش. مصر UTC+2/+3، فأي طلب بين 12
+       و3 الفجر كان بياخد تاريخ إمبارح في رقمه وبيكمّل على عدّاد إمبارح —
+       ولازم يبقى مطابق للي في لوحات الإدارة والفرع والمحل. */
     const bCode = S.branches[branchId]?.code || "CUS";
-    const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo",
+      year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
     let count = 1;
     await runTransaction(ref(db, `counters/${branchId}/${dayKey}`), cur => { count = (cur || 0) + 1; return count; });
     // التاريخ جوّه الرقم (HAL-260804-001) — العداد بيصفّر كل يوم، فمن غيره

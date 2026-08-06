@@ -983,7 +983,7 @@ class ShiftService {
 
   /// بدء وردية جديدة — تُسجَّل في Firebase عشان تظهر فورًا في لوحتَي الإدارة والفرع
   static Future<void> startShift(String pilotId, String pilotName) async {
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
     final shiftId = await FB.createShift(pilotId, pilotName, now);
     final p = await SharedPreferences.getInstance();
     await p.setBool  (_keyActive,    true);
@@ -1220,6 +1220,13 @@ class FbAuth {
    اللي القواعد لسه مترفعتش فيها.
 ──────────────────────────────────────────────────────────────────── */
 /// خطأ برسالة جاهزة للعرض على الطيار — مش نص إنجليزي تقني
+/* التوقيت بيتكتب UTC بعلامة Z صريحة (toUtc) مش توقيت الجهاز.
+   قبل كده كان toIso8601String() على وقت محلي = نص من غير أي علامة
+   منطقة زمنية. ده بيتقرا صح في المتصفح **لو** الموبايل والكمبيوتر
+   الاتنين على نفس المنطقة — بس لو ساعة موبايل الطيار مظبوطة غلط أو
+   منطقته الزمنية اتغيّرت، الوقت بيتفسّر بتوقيت جهاز اللي بيقرا فيطلع
+   غلط في حساب مدة الأوردر وساعات الوردية. بعلامة Z اللحظة محفوظة
+   مطلقة مهما كانت إعدادات أي جهاز. */
 class FbException implements Exception {
   final String message;
   FbException(this.message);
@@ -1393,7 +1400,7 @@ class FB {
   /// إقفال الوردية عند إنهائها
   static Future<void> closeShift(String shiftId) async {
     await patch('shifts/$shiftId', {
-      'endedAt': DateTime.now().toIso8601String(),
+      'endedAt': DateTime.now().toUtc().toIso8601String(),
       'status':  'ended',
     });
   }
@@ -1477,7 +1484,7 @@ class FB {
       'location': {
         'lat': lat,
         'lng': lng,
-        'updatedAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
       },
     });
   }
@@ -1499,7 +1506,7 @@ class FB {
         'branchId':    branchId,
         'branchName':  branchName,
         'status':      'pending',
-        'requestedAt': DateTime.now().toIso8601String(),
+        'requestedAt': DateTime.now().toUtc().toIso8601String(),
       }),
     ).timeout(const Duration(seconds: 10));
     if (res.statusCode == 200) {
@@ -1538,7 +1545,7 @@ class FB {
         'type':        type,
         'reason':      reason,
         'status':      'pending',
-        'requestedAt': DateTime.now().toIso8601String(),
+        'requestedAt': DateTime.now().toUtc().toIso8601String(),
       }),
     ).timeout(const Duration(seconds: 10));
     if (res.statusCode == 200) {
@@ -1560,7 +1567,7 @@ class FB {
   static Future<void> endLeave(String pilotId) async {
     final pilot = await getPilot(pilotId);
     final nextQ = await getNextQueueNo(pilot?.assignedBranchId ?? '');
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
     await patch('pilots/$pilotId', {
       'pilotStatus':    'waiting',
       'queueNo':        nextQ,
@@ -1644,14 +1651,14 @@ class FB {
   /// المرحلة 1: تسجيل استلام الطيار للطرد فعلياً من مكان الاستلام (مستقلة عن بدء الرحلة)
   static Future<void> receiveOrder(String orderId) async {
     await patch('orders/$orderId', {
-      'receivedAt': DateTime.now().toIso8601String(),
+      'receivedAt': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
   /// نفس المرحلة لكن لعدة طلبات مرة واحدة — لحالة استلام أكثر من طرد من نفس المحل في زيارة واحدة
   static Future<void> receiveOrders(List<String> orderIds) async {
     if (orderIds.isEmpty) return;
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
     final Map<String, dynamic> updates = {};
     for (final id in orderIds) {
       updates['orders/$id/receivedAt'] = now;
@@ -1663,14 +1670,14 @@ class FB {
   /// الاستلام لأي سبب (توافقاً مع بيانات قديمة)، نسجّل الاستلام في نفس اللحظة كشبكة أمان
   /// حتى لا يظهر الطلب في لوحات الإدارة/الفرع وكأنه لم يُستلم أبداً.
   static Future<void> startTrip(String orderId, {bool alreadyReceived = false}) async {
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
     final Map<String, dynamic> data = {'tripStartedAt': now};
     if (!alreadyReceived) data['receivedAt'] = now;
     await patch('orders/$orderId', data);
   }
 
   static Future<void> markDelivered(String orderId) async {
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
 
     // 1) نجيب بيانات الطلب الحالية عشان نعرف الطيار المرتبط بيه
     final orderRaw = await get('orders/$orderId');
@@ -1733,7 +1740,7 @@ class FB {
   /// نفس الحالة (status) وأسماء الحقول المستخدمة في لوحات الإدارة/الفرع/المحل
   /// حتى يظهر الطلب فورًا في تبويب "لم يتم التوصيل" وتُحدَّث حالة الطيار.
   static Future<void> markNotDelivered(String orderId, String reason) async {
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
 
     // 1) نجيب بيانات الطلب الحالية عشان نعرف الطيار المرتبط بيه
     final orderRaw = await get('orders/$orderId');
@@ -1787,7 +1794,7 @@ class FB {
     required String branchName,
     required String reason,
   }) async {
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
     final res = await http.post(
       Uri.parse('${K.db}/pilotReturnRequests.json${await FbAuth.queryParam()}'),
       body: json.encode({

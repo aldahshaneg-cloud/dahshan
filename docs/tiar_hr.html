@@ -2656,7 +2656,7 @@ window.renderReviews = function() {
       <td class="num" style="font-weight:800;font-size:.95rem">${fmt(r.total)}%</td>
       <td>${gradeBadge(r.total)}</td>
       <td style="font-size:.8rem;color:var(--muted)">${esc(r.reviewer||"—")}</td>
-      <td class="num" style="font-size:.78rem">${esc(String(r.createdAt||"").slice(0,10))}</td>
+      <td class="num" style="font-size:.78rem">${esc(r.createdAt ? new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Cairo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.createdAt)) : "")}</td>
       <td style="white-space:nowrap">
         <button class="btn-ghost btn-xs" onclick="viewReview('${r.id}')">👁️</button>
         <button class="btn-ghost btn-xs" onclick="openReviewModal('${r.id}')">✏️</button>
