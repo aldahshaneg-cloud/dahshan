@@ -4254,26 +4254,37 @@
       if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
       return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     }
+    /* ── مؤقّت واحد لكل الشاشة (نفس التعديل في tiar.html و tiar_branch.html) ──
+       كل أوردر نشط وكل طيار كان بياخد setInterval خاص بيه بيدق كل ثانية:
+       100 أوردر + 20 طيار = 120 مؤقّت، كل واحد getElementById + كتابة
+       DOM كل ثانية، وبيتعملوا من الأول مع كل رسمة للجدول.
+       دلوقتي مؤقّت واحد، وبيقف لما التبويب يبقى ورا. */
+    let _tickTargets = [];
+    let _tickTimer   = null;
+
+    function _tickElapsed() {
+      if (document.hidden) return;
+      for (let i = 0; i < _tickTargets.length; i++) {
+        const t = _tickTargets[i];
+        const e = document.getElementById(t.id);
+        if (e) e.textContent = formatElapsed(t.since);
+      }
+    }
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) _tickElapsed(); });
+
     function startOrderTimers(orders) {
-      // clear old timers
-      Object.values(window._timerIds).forEach(clearInterval);
-      window._timerIds = {};
-      orders.filter(o => o.statusSince && o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل").forEach(o => {
-        const el = () => document.getElementById("otimer-" + o.id);
-        if (!el()) return;
-        window._timerIds[o.id] = setInterval(() => {
-          const e = el();
-          if (e) e.textContent = formatElapsed(o.statusSince);
-        }, 1000);
-      });
-      // pilot timers
-      (window._pilotsData || []).filter(p => (p.pilotStatus === "delivering" || p.pilotStatus === "waiting") && p.statusSince).forEach(p => {
-        const el = () => document.getElementById("ptimer-" + p.id);
-        window._timerIds["p_" + p.id] = setInterval(() => {
-          const e = el();
-          if (e) e.textContent = formatElapsed(p.statusSince);
-        }, 1000);
-      });
+      const _t = [];
+      for (const o of orders) {
+        if (o.statusSince && o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل")
+          _t.push({ id: "otimer-" + o.id, since: o.statusSince });
+      }
+      for (const p of (window._pilotsData || [])) {
+        if ((p.pilotStatus === "delivering" || p.pilotStatus === "waiting") && p.statusSince)
+          _t.push({ id: "ptimer-" + p.id, since: p.statusSince });
+      }
+      _tickTargets = _t;
+      if (!_tickTimer) _tickTimer = setInterval(_tickElapsed, 1000);
+      _tickElapsed();   // تحديث فوري من غير انتظار الثانية الأولى
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -8042,7 +8053,9 @@
 
   <!-- الجانب الأيسر: صورة الهيرو -->
   <div class="login-hero">
-    <img class="hero-real-img" src="assets/hero.png" alt="الدهشان" />
+    <!-- loading=lazy مهم: الهيرو display:none تحت 760px، ومن غيرها المتصفح
+         بيحمّل الصورة كاملة على الموبايل وهي مش هتتشاف أصلاً -->
+    <img class="hero-real-img" src="assets/hero.jpg" alt="الدهشان" loading="lazy" decoding="async" />
     <div class="hero-features">
       <div class="hero-feature">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3L4 14h7v7l9-11h-7V3z"/></svg>

@@ -3963,7 +3963,9 @@ window.exportReportExcel = function() {
 
   <!-- الجانب الأيسر: صورة الهيرو -->
   <div class="login-hero">
-    <img class="hero-real-img" src="assets/hero.png" alt="الدهشان" />
+    <!-- loading=lazy مهم: الهيرو display:none تحت 760px، ومن غيرها المتصفح
+         بيحمّل الصورة كاملة على الموبايل وهي مش هتتشاف أصلاً -->
+    <img class="hero-real-img" src="assets/hero.jpg" alt="الدهشان" loading="lazy" decoding="async" />
     <div class="hero-features">
       <div class="hero-feature">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3L4 14h7v7l9-11h-7V3z"/></svg>

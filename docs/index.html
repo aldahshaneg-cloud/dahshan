@@ -603,7 +603,9 @@
 
     <!-- الجانب الأيسر: صورة الهيرو -->
     <div class="login-hero">
-      <img class="hero-real-img" src="assets/hero.png" alt="الدهشان" />
+      <!-- loading=lazy مهم: الهيرو display:none تحت 760px، ومن غيرها المتصفح
+         بيحمّل الصورة كاملة على الموبايل وهي مش هتتشاف أصلاً -->
+    <img class="hero-real-img" src="assets/hero.jpg" alt="الدهشان" loading="lazy" decoding="async" />
       <!-- المميزات في الأسفل -->
       <div class="hero-features">
         <div class="hero-feature">

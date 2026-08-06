@@ -341,7 +341,9 @@ a{color:var(--red);text-decoration:none}
 
 <!-- ═══ 1. شاشة البداية ═══════════════════════════════════ -->
 <section id="s-splash" class="screen">
-  <img class="sp-hero" src="assets/hero.png" alt="الدهشان" onerror="this.style.display='none'" />
+  <!-- دي أول حاجة العميل بيشوفها فبتتحمّل فورًا (من غير lazy)، بس الملف
+       اتصغّر من 2.1 ميجا لـ 200 كيلو -->
+  <img class="sp-hero" src="assets/hero.jpg" alt="الدهشان" decoding="async" onerror="this.style.display='none'" />
   <div class="sp-copy">
     <div class="sp-tag" id="spTag">توصيل أسرع.. لكل مكان</div>
     <div class="sp-sub" id="spSub">شحنتك توصل بأمان في أسرع وقت</div>
@@ -356,7 +358,7 @@ a{color:var(--red);text-decoration:none}
 <section id="s-login" class="screen" style="background:#000">
   <div class="scroll" style="padding-bottom:24px">
     <div style="position:relative;text-align:center">
-      <img src="assets/hero.png" style="width:100%;
+      <img src="assets/hero.jpg" loading="lazy" decoding="async" style="width:100%;
         mask-image:linear-gradient(180deg,#000 55%,transparent 96%);
         -webkit-mask-image:linear-gradient(180deg,#000 55%,transparent 96%)"
         alt="الدهشان" onerror="this.style.display='none'" />
