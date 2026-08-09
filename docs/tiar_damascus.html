@@ -1759,10 +1759,8 @@ function branchDayTotals(ym, branchId, day) {
    فلوس داخلة:
      • إجمالي النقدي = مجموع عمود «صافي» — اللي الطيارين سلّموه
                        بعد ما كل واحد خد نسبته
-   صافي الفرع = النقدي − إجمالي الخارج
-
-   السلف مش داخلة في المعادلة: دي دَيْن على الطيار هيتخصم من راتبه
-   آخر الشهر، فلو حسبناها هنا كانت هتتحسب مرتين.
+     • السلف                       (اللي المشرف إداها للطيارين النهارده)
+   صافي الفرع = النقدي − إجمالي الخارج ± فرق التوريد
 ══════════════════════════════════════════════════════════════ */
 /** إجمالي أوردرات كل الفروع في يوم — مش متأثّر بصلاحيات المستخدم،
     لأن رسوم التطوير بتتحسب على الشركة كلها مش على اللي المستخدم شايفه */
@@ -1785,7 +1783,9 @@ function branchDayCloseout(ym, branchId, day) {
   const devFeeOrders = dfb ? (branchId === dfb ? allBranchesOrders(ym, day) : 0) : t.o;
   const devFee  = round2(devFeeOrders * devRate());
   const pct = num(s.pct), ext = num(s.ext), exp = num(s.exp);
-  const outTotal = round2(hourPay + devFee + pct + ext + exp);
+  /* السلف اليومية داخلة في الخارج: دي فلوس فعلية خرجت من نقدية الفرع
+     النهارده (المشرف إداها للطيار من اللي حصّله). */
+  const outTotal = round2(hourPay + devFee + pct + ext + exp + t.adv);
   const cash = t.net;                                          // مجموع عمود «صافي»
 
   /* مطابقة توريد المشرف:
@@ -1793,9 +1793,7 @@ function branchDayCloseout(ym, branchId, day) {
      والسلف، واللي يفضل بيورّده للشركة. الرقم المتوقّع ده بنقارنه بالمستلم
      فعلًا عشان نكشف أي عجز أو زيادة.
      الأوفر/العجز بيدخل في «صافي الفرع»: زيادة بتزوّده وعجز بينقّصه —
-     لأن ده فلوس فعلية دخلت أو نقصت من الشركة.
-     السلف بتتشال من المعادلة لوحدها لأن الشركة هتدفع للطيار
-     (ساعات×30 − سلف) مش الراتب كامل. */
+     لأن ده فلوس فعلية دخلت أو نقصت من الشركة. */
   const expected = round2(cash - pct - ext - exp - t.adv);
   const hasRecv  = s.recv !== undefined && s.recv !== null && s.recv !== "";
   const received = num(s.recv);
@@ -1978,9 +1976,14 @@ ${can('blk.exp') ? `      <div class="sum-row">
         <input class="sv" type="text" inputmode="decimal" value="${s.exp ?? ""}"
                oninput="onSumInput('${ym}','${branchId}',${day},'exp',this.value)" />
       </div>` : ''}
+${can('blk.adv') ? `      <div class="sum-row">
+        <div class="sl">إجمالي سلف
+          <div class="sh">اللي المشرف إداه للطيارين النهارده — خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(C.adv)}</div>
+      </div>` : ''}
 ${can('blk.out') ? `      <div class="sum-row" style="background:rgba(249,115,22,.07)">
         <div class="sl">إجمالي الخارج
-          <div class="sh">ساعات + أوردرات + نسبة + خارجي + مصاريف</div></div>
+          <div class="sh">ساعات + أوردرات + نسبة + خارجي + مصاريف + سلف</div></div>
         <div class="sv" style="color:var(--orange)">${fmt(C.outTotal)}</div>
       </div>` : ''}
 
@@ -1992,15 +1995,8 @@ ${can('blk.cash') ? `      <div class="sum-row" style="background:rgba(34,197,94
 
 ${can('blk.net') ? `      <div class="sum-row grand">
         <div class="sl">صافي ${esc(branchName(branchId))}
-          <div class="sh">النقدي − إجمالي الخارج</div></div>
+          <div class="sh">النقدي − إجمالي الخارج ± فرق التوريد</div></div>
         <div class="sv" style="color:${C.net < 0 ? "var(--red)" : "var(--green)"}">${fmt(C.net)}</div>
-      </div>` : ''}
-
-${can('blk.adv') ? `      <div class="sum-row">
-        <div class="sl">إجمالي سلف
-          <div class="sh">دَيْن على الطيارين — بيتخصم من رواتبهم آخر الشهر،
-            فمش داخل في حساب الصافي</div></div>
-        <div class="sv" style="color:var(--muted)">${fmt(C.adv)}</div>
       </div>` : ''}
 
 ${can('blk.recon') ? `      <div style="border-top:1px solid var(--border)">
@@ -2453,9 +2449,10 @@ window.renderMonth = function() {
   const M = { h: 0, o: 0, hourPay: 0, devFee: 0, devFeeOrders: 0, pct: 0, ext: 0, exp: 0,
               cash: 0, adv: 0, out: 0, net: 0 };
   const perBranch = {};
-  for (const b of S.branches) perBranch[b.id] = 0;
+  // فروع المستخدم المصرّح له بيها بس — المشرف مايشوفش صافي فروع غيره
+  for (const b of allowedBranches()) perBranch[b.id] = 0;
   for (let d = 1; d <= daysInMonth(ym); d++) {
-    for (const b of S.branches) {
+    for (const b of allowedBranches()) {
       const c = branchDayCloseout(ym, b.id, d);
       perBranch[b.id] += c.net;
       if (bf && b.id !== bf) continue;
@@ -2486,20 +2483,22 @@ window.renderMonth = function() {
         <div class="sv" style="color:var(--orange)">${fmt(M.ext)}</div></div>
       <div class="sum-row"><div class="sl">مصاريف<div class="sh">خارج</div></div>
         <div class="sv" style="color:var(--orange)">${fmt(M.exp)}</div></div>
+      <div class="sum-row"><div class="sl">إجمالي سلف
+        <div class="sh">اللي اتصرف للطيارين خلال الشهر — خارج</div></div>
+        <div class="sv" style="color:var(--orange)">${fmt(M.adv)}</div></div>
       <div class="sum-row" style="background:rgba(249,115,22,.07)">
-        <div class="sl">إجمالي الخارج</div>
+        <div class="sl">إجمالي الخارج
+          <div class="sh">ساعات + أوردرات + نسبة + خارجي + مصاريف + سلف</div></div>
         <div class="sv" style="color:var(--orange)">${fmt(M.out)}</div></div>
       <div class="sum-row" style="background:rgba(34,197,94,.07)">
         <div class="sl">إجمالي النقدي<div class="sh">مجموع عمود «صافي» — داخل</div></div>
         <div class="sv" style="color:var(--green)">${fmt(M.cash)}</div></div>
-      <div class="sum-row grand"><div class="sl">الصافي<div class="sh">النقدي − إجمالي الخارج</div></div>
+      <div class="sum-row grand"><div class="sl">الصافي
+        <div class="sh">النقدي − إجمالي الخارج ± فرق التوريد</div></div>
         <div class="sv" style="color:${M.net < 0 ? "var(--red)" : "var(--green)"}">${fmt(M.net)}</div></div>
-      <div class="sum-row"><div class="sl">إجمالي سلف
-        <div class="sh">دَيْن على الطيارين — مش داخل في الصافي</div></div>
-        <div class="sv" style="color:var(--muted)">${fmt(M.adv)}</div></div>
       <div style="border-top:1px solid var(--border)">
         <div class="branch-nets">
-          ${S.branches.map(b => `<div class="bn-card">
+          ${allowedBranches().map(b => `<div class="bn-card">
             <div class="bn-name">صافي ${esc(b.name)}</div>
             <div class="bn-val" style="color:${perBranch[b.id] < 0 ? "var(--red)" : "var(--green)"}">${fmt(perBranch[b.id])}</div>
           </div>`).join("")}
@@ -3236,18 +3235,19 @@ window.exportDaily = function() {
   aoa.push(["نسبة روح دمشق", "", C.pct, "خارج"]);
   aoa.push(["الخارجي", "", C.ext, "خارج"]);
   aoa.push(["مصاريف", "", C.exp, "خارج"]);
+  aoa.push(["إجمالي سلف", "", C.adv, "خارج"]);
   aoa.push(["إجمالي الخارج", "", C.outTotal]);
   aoa.push(["إجمالي نقدي (مجموع عمود صافي)", "", C.cash, "داخل"]);
+  aoa.push(["فرق التوريد (أوفر/عجز)", "", C.hasRecv ? C.diff : ""]);
   aoa.push([`صافي ${branchName(bid)}`, "", C.net]);
-  aoa.push(["إجمالي سلف (دَيْن — خارج الحساب)", "", C.adv]);
   aoa.push([]);
   aoa.push(["مطابقة توريد المشرف"]);
   aoa.push(["المفروض يورّده", "", C.expected]);
   aoa.push(["المستلم فعلًا", "", C.hasRecv ? C.received : ""]);
   aoa.push(["الفرق", "", C.hasRecv ? C.diff : ""]);
   aoa.push([]);
-  aoa.push(["صافي الفروع", ...S.branches.map(b => b.name), "الإجمالي"]);
-  aoa.push(["", ...S.branches.map(b => A.per[b.id].net), A.all.net]);
+  aoa.push(["صافي الفروع", ...allowedBranches().map(b => b.name), "الإجمالي"]);
+  aoa.push(["", ...allowedBranches().map(b => A.per[b.id].net), A.all.net]);
   aoa.push([`إجمالي أوردرات الفروع × ${devRate()}`, A.all.o, A.all.devFee]);
   download(aoa, `تقفيل ${day}`, `تقفيل ${branchName(bid)} ${date}.xlsx`);
 };
@@ -3338,12 +3338,14 @@ const HELP = {
       <p>ده تقفيل <b>الفرع المختار</b> في اليوم ده.</p>
       <ul>
         <li><b>فلوس خارجة:</b> ساعات × ${"{hourRate}"} (رواتب مستحقة النهارده حتى لو هتتدفع آخر الشهر)
-            + أوردرات × ${"{orderRate}"} (رسوم تطوير) + نسبة روح دمشق + الخارجي + المصاريف.</li>
+            + أوردرات × ${"{orderRate}"} (رسوم تطوير) + نسبة روح دمشق + الخارجي + المصاريف
+            + <b>السلف</b> اللي المشرف إداها للطيارين.</li>
         <li><b>فلوس داخلة:</b> إجمالي النقدي = مجموع عمود «صافي» — محسوب لوحده.</li>
-        <li><b>صافي الفرع</b> = النقدي − إجمالي الخارج.</li>
-        <li><b>السلف</b> سطر معلومة بس ومش داخلة في الصافي — دي دَيْن على الطيار هيترد آخر الشهر،
-            فلو حسبناها هنا كانت هتتحسب مرتين.</li>
+        <li><b>صافي الفرع</b> = النقدي − إجمالي الخارج ± فرق التوريد (الأوفر بيزوّد والعجز بينقّص).</li>
       </ul>
+      <div class="help-warn">⚠️ السلفة بتتحسب مرتين مع بعض: مرة هنا كفلوس خرجت من نقدية اليوم،
+      ومرة في راتب الطيار آخر الشهر (بتتخصم من مستحقاته) — لأن أجر الساعات بيتحسب كامل في «الخارج».
+      لو عايز الصافي يبقى ربح محاسبي صافي بدل حركة النقدية، قولّي أرجّعها زي ما كانت.</div>
       <div class="help-sec">مطابقة توريد المشرف</div>
       <p>المشرف بيحصّل عمود «صافي» من الطيارين، ويدفع منه نسبة المطعم والخارجي والمصاريف
       والسلف، واللي يفضل بيورّده لك آخر اليوم:</p>
