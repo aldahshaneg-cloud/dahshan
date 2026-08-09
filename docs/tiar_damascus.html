@@ -1256,6 +1256,9 @@ function startListeners() {
     S.permsLoaded = true;
     applyNavPerms();
     fillBranchSelects();
+    // قائمة أسماء الطيارين في كشف الطيار لازم تتفلتر تاني بعد وصول
+    // الصلاحيات — كانت بتتبني قبلها فبتفضل شاملة كل أسماء الشركة
+    fillPilotSelect();
     ensureLanding();
     refreshCurrentPage();
   });
@@ -1518,6 +1521,15 @@ function allowedBranches() {
   if (!Array.isArray(list) || !list.length) return S.branches;
   return S.branches.filter(b => list.includes(b.id));
 }
+
+/* أسماء كشوفها مخفية عن أي حد غير الأدمن — بتظهر عادي في التقفيل اليومي
+   (عشان الإجماليات ماتبوظش) لكن كشف الطيار وكشف الشهر بتوعهم للأدمن بس */
+const HIDDEN_SHEET_NAMES = ["عبدالرحمن", "علام", "سمكه", "سمكة"];
+function pilotSheetHidden(p) {
+  if (isAdmin()) return false;
+  const n = String(p?.name || "");
+  return HIDDEN_SHEET_NAMES.some(x => n.includes(x));
+}
 function canSeeBranch(id) {
   return allowedBranches().some(b => b.id === id);
 }
@@ -1577,7 +1589,9 @@ function commitEntry(ym, pilotId, day, cur, dotId) {
 function saveCell(ym, pilotId, day, field, raw, dotId) {
   const cur = { ...entryOf(ym, pilotId, day) };
   const val = (field === "in" || field === "out") ? normalizeTime(raw)
-            : field === "note"                    ? String(raw).trim()
+            /* من غير trim — كان بيمسح المسافة وانت بتكتب فمابتعرفش
+               تكتب جملة كاملة في الملاحظات */
+            : field === "note"                    ? String(raw)
             : (raw === "" ? "" : num(raw));
   if (val === "" || val === 0 && field !== "note") delete cur[field]; else cur[field] = val;
   commitEntry(ym, pilotId, day, cur, dotId);
@@ -1778,18 +1792,21 @@ function branchDayCloseout(ym, branchId, day) {
      المشرف بيحصّل عمود «صافي» ويدفع منه نسبة المطعم والخارجي والمصاريف
      والسلف، واللي يفضل بيورّده للشركة. الرقم المتوقّع ده بنقارنه بالمستلم
      فعلًا عشان نكشف أي عجز أو زيادة.
-     ملحوظة: المطابقة دي مابتغيّرش «صافي الفرع» — السلف بتتشال من المعادلة
-     لوحدها لأن الشركة هتدفع للطيار (ساعات×30 − سلف) مش الراتب كامل. */
+     الأوفر/العجز بيدخل في «صافي الفرع»: زيادة بتزوّده وعجز بينقّصه —
+     لأن ده فلوس فعلية دخلت أو نقصت من الشركة.
+     السلف بتتشال من المعادلة لوحدها لأن الشركة هتدفع للطيار
+     (ساعات×30 − سلف) مش الراتب كامل. */
   const expected = round2(cash - pct - ext - exp - t.adv);
   const hasRecv  = s.recv !== undefined && s.recv !== null && s.recv !== "";
   const received = num(s.recv);
+  const diff     = hasRecv ? round2(received - expected) : 0;
 
   return {
     t, s, hourPay, devFee, devFeeOrders, pct, ext, exp, cash, outTotal,
-    net: round2(cash - outTotal),
+    net: round2(cash - outTotal + diff),
     adv: t.adv,
     expected, received, hasRecv,
-    diff: hasRecv ? round2(received - expected) : 0
+    diff
   };
 }
 
@@ -1847,7 +1864,8 @@ window.fillPilotSelect = function() {
   const sel = $("pilotSelect");
   if (!sel) return;
   const bf = $("pilotBranchFilter")?.value || "";
-  const list = S.pilots.filter(p => (!bf || p.branchId === bf) && canSeeBranch(p.branchId));
+  const list = S.pilots.filter(p => (!bf || p.branchId === bf) && canSeeBranch(p.branchId)
+    && !pilotSheetHidden(p));
   const prev = sel.value;
   sel.innerHTML = list.map(p =>
     `<option value="${esc(p.id)}">${esc(p.name)}${p.active === false ? " (موقوف)" : ""}</option>`).join("")
@@ -2016,8 +2034,8 @@ ${can('blk.recon') ? `      <div style="border-top:1px solid var(--border)">
           <div class="sl">الفرق
             <div class="sh">${!C.hasRecv ? "اكتب المستلم عشان تظهر المطابقة"
               : C.diff === 0 ? "التوريد مظبوط ✓"
-              : C.diff < 0 ? "عجز — المشرف ورّد أقل من المفروض"
-              : "زيادة — المشرف ورّد أكتر من المفروض"}</div></div>
+              : C.diff < 0 ? "عجز — المشرف ورّد أقل من المفروض (بيتخصم من الصافي)"
+              : "زيادة — المشرف ورّد أكتر من المفروض (بتتضاف للصافي)"}</div></div>
           <div class="sv" style="color:${
             !C.hasRecv ? "var(--muted)" : C.diff === 0 ? "var(--green)" : "var(--red)"}">${
             !C.hasRecv ? "—" : fmt(C.diff)}</div></div>
@@ -2069,7 +2087,9 @@ function cellHTML(pilotId, day, field, value, ym, dotId, isText = false, ph = ""
 
 window.onCellInput = function(ym, pilotId, day, field, value, dotId) {
   saveCell(ym, pilotId, day, field, value, dotId);
-  scheduleTotals();
+  // الملاحظات مش داخلة في أي حسبة — إعادة رسم الجدول وانت بتكتب فيها
+  // كانت بتضيّع الفوكس والمكتوب، فمنعناها ليها
+  if (field !== "note") scheduleTotals();
 };
 window.onSumInput = function(ym, branchId, day, field, value) {
   saveSummary(ym, branchId, day, field, value);
@@ -2398,7 +2418,8 @@ window.renderMonth = function() {
   watchMonth(ym);
   const bf = $("monthBranch").value || "";
 
-  const list = S.pilots.filter(p => (!bf || p.branchId === bf) && canSeeBranch(p.branchId));
+  const list = S.pilots.filter(p => (!bf || p.branchId === bf) && canSeeBranch(p.branchId)
+    && !pilotSheetHidden(p));
   const G = { h: 0, o: 0, gross: 0, hourPay: 0, leavePay: 0, adv: 0, ded: 0, defDue: 0, defLeft: 0, salary: 0, owed: 0 };
 
   const rows = list.map((p, i) => {
@@ -2682,7 +2703,9 @@ window.renderSetup = function() {
   const box = $("setupBody");
   if (!box) return;
 
-  const branchCards = S.branches.map(b => {
+  // المشرف بيشوف فروعه المصرّح له بيها بس — مش كل فروع الشركة
+  const myBranches = allowedBranches();
+  const branchCards = myBranches.map(b => {
     const all = S.pilots.filter(p => p.branchId === b.id);
     const act = all.filter(p => p.active !== false).length;
     const rows = all.length ? all.map((p, i) => {
@@ -2720,7 +2743,7 @@ window.renderSetup = function() {
     </div>`;
   }).join("");
 
-  box.innerHTML = (S.branches.length
+  box.innerHTML = (myBranches.length
     ? branchCards
     : `<div class="warn-box">مفيش فروع. اضغط <b>إضافة فرع</b>.</div>`);
 };
