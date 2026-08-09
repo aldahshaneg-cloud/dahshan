@@ -1795,11 +1795,14 @@ function branchDayCloseout(ym, branchId, day) {
 
   /* مطابقة توريد المشرف:
      المشرف بيحصّل عمود «صافي» ويدفع منه نسبة المطعم والخارجي والمصاريف
-     والسلف، واللي يفضل بيورّده للشركة. الرقم المتوقّع ده بنقارنه بالمستلم
-     فعلًا عشان نكشف أي عجز أو زيادة.
+     والسلف ورسوم التطوير (اللي بيطلّعها كاش من إيده)، واللي يفضل بيورّده
+     للشركة. الرقم المتوقّع ده بنقارنه بالمستلم فعلًا عشان نكشف عجز أو زيادة.
      الأوفر/العجز بيدخل في «صافي الفرع»: زيادة بتزوّده وعجز بينقّصه —
-     لأن ده فلوس فعلية دخلت أو نقصت من الشركة. */
-  const expected = round2(cash - pct - ext - exp - t.adv);
+     لأن ده فلوس فعلية دخلت أو نقصت من الشركة.
+     ملحوظة: رسوم التطوير بتتشال من الطرفين (مصروف في «الخارج» + كاش
+     خارج من إيد المشرف)، فبتلغي بعضها وبيبقى:
+        صافي الفرع = المستلم فعلًا + السلف − أجر الساعات */
+  const expected = round2(cash - pct - ext - exp - t.adv - devFee);
   const hasRecv  = s.recv !== undefined && s.recv !== null && s.recv !== "";
   const received = num(s.recv);
   const diff     = hasRecv ? round2(received - expected) : 0;
@@ -2021,6 +2024,11 @@ ${can('blk.recon') ? `      <div style="border-top:1px solid var(--border)">
         <div class="sum-row calc">
           <div class="sl">− السلف اللي إداها للطيارين</div>
           <div class="sv" style="color:var(--orange)">− ${fmt(C.adv)}</div></div>
+        ${C.devFee ? `<div class="sum-row calc">
+          <div class="sl">− رسوم التطوير اللي طلّعها
+            <div class="sh">${fmt(C.devFeeOrders)} أوردر × ${fmt(devRate())}${
+              devFeeBranch() ? " — أوردرات الفروع كلها" : ""}</div></div>
+          <div class="sv" style="color:var(--orange)">− ${fmt(C.devFee)}</div></div>` : ""}
         <div class="sum-row calc">
           <div class="sl">المفروض يورّده المشرف</div>
           <div class="sv" style="color:var(--blue)">${fmt(C.expected)}</div></div>
@@ -3268,6 +3276,10 @@ window.exportDaily = function() {
   aoa.push(["سلف مع الطيارين (فلوس الشركة — مش مصروف)", "", C.adv]);
   aoa.push([]);
   aoa.push(["مطابقة توريد المشرف"]);
+  aoa.push(["مجموع عمود صافي (اللي حصّله)", "", C.cash]);
+  aoa.push(["− نسبة + خارجي + مصاريف", "", C.pct + C.ext + C.exp]);
+  aoa.push(["− سلف للطيارين", "", C.adv]);
+  if (C.devFee) aoa.push(["− رسوم تطوير طلّعها", "", C.devFee]);
   aoa.push(["المفروض يورّده", "", C.expected]);
   aoa.push(["المستلم فعلًا", "", C.hasRecv ? C.received : ""]);
   aoa.push(["الفرق", "", C.hasRecv ? C.diff : ""]);
@@ -3375,9 +3387,10 @@ const HELP = {
       «المستلم من المشرف» تحت، والباقي سلف مع الطيارين هترجع آخر الشهر.</div>
       <div class="help-sec">مطابقة توريد المشرف</div>
       <p>المشرف بيحصّل عمود «صافي» من الطيارين، ويدفع منه نسبة المطعم والخارجي والمصاريف
-      والسلف، واللي يفضل بيورّده لك آخر اليوم:</p>
+      والسلف ورسوم التطوير، واللي يفضل بيورّده لك آخر اليوم:</p>
       <ul>
-        <li><b>المفروض يورّده</b> = مجموع «صافي» − النسبة − الخارجي − المصاريف − السلف. محسوب لوحده.</li>
+        <li><b>المفروض يورّده</b> = مجموع «صافي» − النسبة − الخارجي − المصاريف − السلف
+            − رسوم التطوير اللي طلّعها كاش. محسوب لوحده.</li>
         <li><b>المستلم فعلًا</b> — اكتب المبلغ اللي وصلك بالظبط.</li>
         <li><b>الفرق</b> — لو صفر يبقى التقفيلة مظبوطة. لو بالسالب يبقى فيه <b>عجز</b>.</li>
       </ul>
