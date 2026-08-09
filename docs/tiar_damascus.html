@@ -457,7 +457,7 @@
         </div>
         <div class="toolbar">
           <input type="month" class="field" id="defMonth" onchange="renderDeferred()" />
-          <button class="add-btn" onclick="openDefModal()">➕ سلفة مؤجلة</button>
+          <button class="add-btn" data-perm="act.deferred" onclick="openDefModal()">➕ سلفة مؤجلة</button>
         </div>
       </div>
       <div id="deferredBody"></div>
@@ -471,9 +471,9 @@
           <div class="sec-sub">فروع روح دمشق والطيارين اللي في كل فرع</div>
         </div>
         <div class="toolbar">
-          <button class="btn-ghost" onclick="openBranchModal()">🏢 إضافة فرع</button>
-          <button class="add-btn" onclick="openPilotModal()">➕ إضافة طيار</button>
-          <button class="btn-ghost" onclick="openBulkModal()">📋 إضافة قائمة أسماء</button>
+          <button class="btn-ghost" data-perm="act.branches" onclick="openBranchModal()">🏢 إضافة فرع</button>
+          <button class="add-btn" data-perm="act.pilots" onclick="openPilotModal()">➕ إضافة طيار</button>
+          <button class="btn-ghost" data-perm="act.pilots" onclick="openBulkModal()">📋 إضافة قائمة أسماء</button>
         </div>
       </div>
       <div id="setupBody"></div>
@@ -1118,11 +1118,11 @@ function applyNavPerms() {
   document.querySelectorAll("[onclick='window.print()']").forEach(b => {
     b.style.display = can("act.print") ? "" : "none";
   });
-  // أزرار الإضافة والتعديل
-  const gate = (sel, key) => document.querySelectorAll(sel)
-    .forEach(b => { b.style.display = can(key) ? "" : "none"; });
-  gate("#page-setup .toolbar button", "act.pilots");
-  gate("#page-deferred .toolbar button.add-btn", "act.deferred");
+  /* أزرار الإضافة والتعديل — كل زرار بيحمل صلاحيته في data-perm
+     فمافيش زرار بيتفتح لحد مالوش حق فيه (زي إضافة فرع للمشرف) */
+  document.querySelectorAll("[data-perm]").forEach(b => {
+    b.style.display = can(b.dataset.perm) ? "" : "none";
+  });
 
   /* قفل التاريخ: من غير الصلاحية دي المستخدم بيشتغل على النهارده بس.
      مانكتفيش بإخفاء الأسهم — بنقفل خانة التاريخ نفسها كمان. */
@@ -1491,7 +1491,8 @@ const PERM_GROUPS = [
     ["act.dateNav",  "التنقل بين التواريخ والشهور (من غيرها بيشتغل على النهارده بس)"],
     ["act.export",   "تصدير إكسل"],
     ["act.print",    "طباعة"],
-    ["act.pilots",   "إضافة وتعديل الفروع والطيارين"],
+    ["act.pilots",   "إضافة وتعديل الطيارين"],
+    ["act.branches", "إضافة وتعديل وحذف الفروع (للإدارة عادةً)"],
     ["act.deferred", "تسجيل وتعديل السلف المؤجلة"]
   ]}
 ];
@@ -2610,6 +2611,7 @@ window.renderDeferred = function() {
 };
 
 window.openDefModal = function(id, presetPilot) {
+  if (!permGuard("act.deferred", "تسجيل السلف المؤجلة")) return;
   window._editDef = id || null;
   const rec = id ? S.deferred.find(d => d.id === id) : null;
   $("defModalTitle").textContent = id ? "تعديل سلفة مؤجلة" : "تسجيل سلفة مؤجلة";
@@ -2644,6 +2646,7 @@ window.previewDefPlan = function() {
 };
 
 window.saveDeferred = async function() {
+  if (!permGuard("act.deferred", "حفظ السلف المؤجلة")) return;
   const pilotId = $("dfPilot").value;
   const date    = $("dfDate").value;
   const amount  = num($("dfAmount").value);
@@ -2666,6 +2669,7 @@ window.saveDeferred = async function() {
 };
 
 window.deleteDeferred = async function() {
+  if (!permGuard("act.deferred", "حذف السلف المؤجلة")) return;
   const id = window._editDef;
   if (!id) return;
   const rec = S.deferred.find(d => d.id === id);
@@ -2729,7 +2733,7 @@ window.renderSetup = function() {
       <div class="sec-header" style="margin-bottom:9px">
         <div class="sec-title" style="font-size:.98rem">🏢 ${esc(b.name)}
           <span class="badge bg-blue">${act} طيار</span></div>
-        <div class="toolbar">${!can('act.pilots') ? '' : `
+        <div class="toolbar">${!can('act.branches') ? '' : `
           <button class="btn-ghost btn-xs" onclick="openBranchModal('${esc(b.id)}')">تعديل الاسم</button>
           <button class="btn-red btn-xs" onclick="deleteBranch('${esc(b.id)}')">حذف الفرع</button>`}
         </div>
@@ -2747,7 +2751,16 @@ window.renderSetup = function() {
     : `<div class="warn-box">مفيش فروع. اضغط <b>إضافة فرع</b>.</div>`);
 };
 
+/* حارس صلاحية: حتى لو الزرار ظهر بالغلط أو اتنده من مكان تاني،
+   العملية بتترفض برسالة واضحة */
+function permGuard(key, what) {
+  if (can(key)) return true;
+  showToast(`مالكش صلاحية ${what} — كلّم الإدارة`, "error");
+  return false;
+}
+
 window.openBranchModal = function(id) {
+  if (!permGuard("act.branches", "تعديل الفروع")) return;
   window._editBranch = id || null;
   $("branchModalTitle").textContent = id ? "تعديل الفرع" : "إضافة فرع";
   $("bmName").value = id ? (S.branches.find(b => b.id === id)?.name || "") : "";
@@ -2757,6 +2770,7 @@ window.openBranchModal = function(id) {
 };
 
 window.saveBranch = async function() {
+  if (!permGuard("act.branches", "حفظ الفروع")) return;
   const name = $("bmName").value.trim();
   if (!name) { $("bmError").textContent = "اكتب اسم الفرع"; return; }
   try {
@@ -2771,6 +2785,7 @@ window.saveBranch = async function() {
 };
 
 window.deleteBranch = async function(id) {
+  if (!permGuard("act.branches", "حذف الفروع")) return;
   const n = S.pilots.filter(p => p.branchId === id).length;
   if (n) { showToast(`مينفعش تحذف الفرع وفيه ${n} طيار — انقلهم لفرع تاني الأول`, "error"); return; }
   if (!confirm(`تحذف فرع «${branchName(id)}»؟`)) return;
@@ -2779,6 +2794,7 @@ window.deleteBranch = async function(id) {
 };
 
 window.openPilotModal = function(id) {
+  if (!permGuard("act.pilots", "تعديل الطيارين")) return;
   window._editPilot = id || null;
   const p = id ? S.pilots.find(x => x.id === id) : null;
   $("pilotModalTitle").textContent = id ? "تعديل الطيار" : "إضافة طيار";
@@ -2798,6 +2814,7 @@ window.openPilotModal = function(id) {
 };
 
 window.savePilot = async function() {
+  if (!permGuard("act.pilots", "حفظ الطيارين")) return;
   const name = $("pmName").value.trim();
   const branchId = $("pmBranch").value;
   const active = $("pmActive").value === "1";
@@ -2828,6 +2845,7 @@ window.savePilot = async function() {
    فالحذف مابيحصلش ومفيش رسالة تقول ليه. */
 let _delArm = null;
 window.deletePilot = async function() {
+  if (!permGuard("act.pilots", "حذف الطيارين")) return;
   const id = window._editPilot;
   if (!id) return;
   const btn = $("pmDelete"), err = $("pmError");
@@ -2856,12 +2874,14 @@ window.deletePilot = async function() {
 };
 
 window.openBulkModal = function() {
+  if (!permGuard("act.pilots", "إضافة الطيارين")) return;
   $("bkNames").value = ""; $("bkError").textContent = "";
   openModal("bulk");
   setTimeout(() => $("bkNames").focus(), 80);
 };
 
 window.saveBulk = async function() {
+  if (!permGuard("act.pilots", "إضافة الطيارين")) return;
   const branchId = $("bkBranch").value;
   const names = $("bkNames").value.split("\n").map(s => s.trim()).filter(Boolean);
   if (!branchId) { $("bkError").textContent = "اختار الفرع"; return; }
