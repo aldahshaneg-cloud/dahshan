@@ -2065,9 +2065,9 @@ ${can('blk.branches') ? `      <div style="border-top:1px solid var(--border)">
               <div class="bn-name">صافي ${esc(b.name)}</div>
               <div class="bn-val" style="color:${A.per[b.id].net < 0 ? "var(--red)" : "var(--green)"}">${fmt(A.per[b.id].net)}</div>
             </div>`).join("")}
-          <div class="bn-card" style="border-color:var(--sky)">
-            <div class="bn-name" style="color:var(--sky)">إجمالي صافي</div>
-            <div class="bn-val" style="color:var(--sky)">${fmt(A.all.net)}</div>
+          <div class="bn-card" style="border-color:${A.all.net < 0 ? "var(--red)" : "var(--green)"}">
+            <div class="bn-name" style="color:${A.all.net < 0 ? "var(--red)" : "var(--green)"}">إجمالي صافي</div>
+            <div class="bn-val" style="color:${A.all.net < 0 ? "var(--red)" : "var(--green)"}">${fmt(A.all.net)}</div>
           </div>
         </div>
       </div>` : ''}
@@ -2517,10 +2517,13 @@ window.renderMonth = function() {
             <div class="bn-name">صافي ${esc(b.name)}</div>
             <div class="bn-val" style="color:${perBranch[b.id] < 0 ? "var(--red)" : "var(--green)"}">${fmt(perBranch[b.id])}</div>
           </div>`).join("")}
-          <div class="bn-card" style="border-color:var(--sky)">
-            <div class="bn-name" style="color:var(--sky)">إجمالي صافي</div>
-            <div class="bn-val" style="color:var(--sky)">${
-              fmt(Object.values(perBranch).reduce((a, v) => a + v, 0))}</div></div>
+          ${(() => {
+            const total = round2(Object.values(perBranch).reduce((a, v) => a + v, 0));
+            const c = total < 0 ? "var(--red)" : "var(--green)";
+            return `<div class="bn-card" style="border-color:${c}">
+            <div class="bn-name" style="color:${c}">إجمالي صافي</div>
+            <div class="bn-val" style="color:${c}">${fmt(total)}</div></div>`;
+          })()}
         </div>
       </div>
     </div>`;
