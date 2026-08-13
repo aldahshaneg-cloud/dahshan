@@ -117,6 +117,9 @@
   .bg-red { background: rgba(232,25,44,.15); color: var(--red); }
   .bg-orange { background: rgba(249,115,22,.15); color: var(--orange); }
   .bg-blue { background: rgba(59,130,246,.15); color: var(--blue); }
+  /* شارة المشرف كانت بتستخدم bg-purple وهي مش معرّفة أصلاً، فكانت
+     بتطلع بلا لون. اتعرّفت هنا مع شارة المالك (bg-orange). */
+  .bg-purple { background: rgba(168,85,247,.15); color: #a855f7; }
   .bg-muted { background: rgba(136,136,136,.13); color: var(--muted); }
 
   .info-box { background: rgba(59,130,246,.07); border: 1px solid rgba(59,130,246,.22); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
@@ -550,6 +553,9 @@
           <select id="pmJob">
             <option value="طيار">طيار</option>
             <option value="مشرف">مشرف</option>
+            <!-- «مالك» بيتشال من القائمة لأي حد غير المدير العام (شوف
+                 openPilotModal) — عشان مشرف مايقدرش يخفي حساب ولا يظهّره -->
+            <option value="مالك">مالك</option>
           </select>
         </div>
         <div class="form-group">
@@ -571,23 +577,16 @@
             <option value="0">موقوف / خرج</option>
           </select>
         </div>
-        <!-- حساب مالك — بيظهر للمدير العام بس، وهو اللي بيحدّد مين يشوفه
-             من شاشة الصلاحيات (صلاحية «رؤية حسابات المُلّاك») -->
+        <!-- شرح وظيفة «مالك» — بيظهر للمدير العام بس -->
         <div class="form-group" id="pmOwnerWrap" style="display:none">
-          <label>نوع الحساب</label>
-          <label style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;
-                        background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.28);
-                        border-radius:9px;padding:11px 13px">
-            <input type="checkbox" id="pmIsOwner" style="margin-top:3px;width:17px;height:17px" />
-            <span style="font-size:.86rem;line-height:1.8">
-              <b>حساب مالك</b>
-              <span style="display:block;font-size:.78rem;color:var(--muted,#8b93a7);margin-top:2px">
-                هيتخفي من كشف الطيار وكشف الشهر عن أي حد غير المدير العام،
-                إلا اللي تديله صلاحية «رؤية حسابات المُلّاك».
-                هيفضل ظاهر في التقفيل اليومي عشان إجمالي الفرع يفضل مطابق للنقدية.
-              </span>
-            </span>
-          </label>
+          <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.28);
+                      border-radius:9px;padding:11px 13px;font-size:.79rem;
+                      color:var(--muted,#8b93a7);line-height:1.9">
+            💡 لما تختار الوظيفة <b style="color:var(--orange,#f97316)">مالك</b>: الحساب هيتخفي من
+            <b>كشف الطيار</b> و<b>كشف الشهر</b> عن أي حد غير المدير العام، إلا اللي تديله صلاحية
+            «رؤية حسابات المُلّاك». وهيفضل ظاهر في <b>التقفيل اليومي</b> عشان إجمالي الفرع
+            يفضل مطابق للنقدية اللي المشرف بيسلّمها.
+          </div>
         </div>
       </div>
       <div class="info-box" style="margin-bottom:10px;font-size:.79rem">
@@ -1582,7 +1581,11 @@ function allowedBranches() {
    دي تتعلّم عليها العلامة. مش بتتستخدم في أي فلترة. */
 const LEGACY_OWNER_NAMES = ["عبدالرحمن", "علام", "سمكه", "سمكة"];
 
-function isOwnerPilot(p) { return p?.isOwner === true; }
+function isOwnerPilot(p) {
+  // الوظيفة هي المصدر الأساسي. isOwner متسابة للتوافق مع اللي اتحطوا
+  // بالعلامة قبل ما «مالك» تبقى وظيفة في القائمة.
+  return p?.job === "مالك" || p?.isOwner === true;
+}
 
 /** هل الحساب ده متخفي عن المستخدم الحالي؟ */
 function pilotSheetHidden(p) {
@@ -1595,15 +1598,15 @@ function pilotSheetHidden(p) {
 async function migrateLegacyOwners() {
   if (!isAdmin() || !Array.isArray(S.pilots)) return;
   const need = S.pilots.filter(p =>
-    p.isOwner === undefined &&
+    p.job !== "مالك" && p.isOwner !== true &&
     LEGACY_OWNER_NAMES.some(x => String(p.name || "").includes(x)));
   if (!need.length) return;
   try {
     const updates = {};
     // مسار فايربيز مش HTML — من غير تهريب
-    for (const p of need) updates[`${ROOT}/pilots/${p.id}/isOwner`] = true;
+    for (const p of need) updates[`${ROOT}/pilots/${p.id}/job`] = "مالك";
     await update(ref(db), updates);
-    need.forEach(p => { p.isOwner = true; });
+    need.forEach(p => { p.job = "مالك"; });
     showToast(`اتعلّم على ${need.length} حساب كـ«مالك»: ${need.map(p => p.name).join("، ")}`, "success");
   } catch (e) { console.error("migrateLegacyOwners:", e); }
 }
@@ -2827,7 +2830,7 @@ window.renderSetup = function() {
       return `<tr>
       <td class="idx" style="width:38px">${i + 1}</td>
       <td style="font-weight:600">${esc(p.name)}</td>
-      <td><span class="badge ${ esc(p.job === "مشرف" ? "bg-purple" : "bg-blue") }">${esc(p.job || "طيار")}</span></td>
+      <td><span class="badge ${ esc(p.job === "مالك" ? "bg-orange" : p.job === "مشرف" ? "bg-purple" : "bg-blue") }">${esc(p.job || "طيار")}</span></td>
       <td class="num" style="font-size:.8rem">${fmt(R.h)} / ${fmt(R.o)}
         ${custom ? `<span class="badge bg-orange" style="font-size:.65rem">خاص</span>` : ""}</td>
       <td class="num" style="font-size:.8rem">${ esc(p.leaveDays ? fmt(p.leaveDays) + " يوم" : "—") }</td>
@@ -2910,14 +2913,21 @@ window.openPilotModal = function(id) {
   $("pilotModalTitle").textContent = id ? "تعديل الطيار" : "إضافة طيار";
   $("pmName").value      = p?.name || "";
   $("pmBranch").value    = p?.branchId || S.branches[0]?.id || "";
-  $("pmJob").value       = p?.job || "طيار";
+  /* وظيفة «مالك» للمدير العام بس. لو اللي فاتح مشرف بنشيل الخيار من
+     القائمة خالص — فمايقدرش يعمل حساب مالك جديد ولا يحوّل مالك موجود
+     لطيار عادي (وده كان هيظهّر حساب مخفي). */
+  const jobSel = $("pmJob");
+  const ownerOpt = [...jobSel.options].find(o => o.value === "مالك");
+  if (ownerOpt) ownerOpt.hidden = !isAdmin();
+  jobSel.disabled = !isAdmin() && p?.job === "مالك";
+  jobSel.value = p?.job || "طيار";
+
   $("pmHourRate").value  = p?.hourRate  ?? "";
   $("pmOrderRate").value = p?.orderRate ?? "";
   $("pmLeaveDays").value = p?.leaveDays ?? "";
   $("pmActive").value = p && p.active === false ? "0" : "1";
-  // «حساب مالك» للمدير العام بس — مشرف عنده act.pilots مايشوفهاش ولا يغيّرها
+  // شرح مختصر بيظهر للمدير العام بس لما يختار «مالك»
   $("pmOwnerWrap").style.display = isAdmin() ? "" : "none";
-  $("pmIsOwner").checked = !!p?.isOwner;
   $("pmDefaultRates").textContent =
     `${fmt(S.settings.hourRate)} للساعة · ${fmt(S.settings.pilotOrderRate ?? 0)} للأوردر`;
   $("pmDelete").style.display = id ? "" : "none";
@@ -2942,9 +2952,13 @@ window.savePilot = async function() {
   if (orderRate !== null && orderRate < 0) { $("pmError").textContent = "سعر الأوردر مايصحّش يكون بالسالب"; return; }
   if (leaveDays !== null && leaveDays < 0) { $("pmError").textContent = "أيام الإجازة مايصحّش تكون بالسالب"; return; }
   const data = { name, branchId, active, job, hourRate, orderRate, leaveDays };
-  /* علامة المالك بيغيّرها المدير العام بس. لو اللي بيحفظ مش أدمن
-     مابنكتبش الحقل خالص عشان مايمسحش علامة موجودة بالغلط. */
-  if (isAdmin()) data.isOwner = $("pmIsOwner").checked;
+  /* وظيفة «مالك» بيغيّرها المدير العام بس. لو اللي بيحفظ مش أدمن
+     وكان الحساب مالك، بنرجّع وظيفته زي ما هي عشان مايظهّرش حساب مخفي
+     بالغلط (القائمة عنده متعطّلة أصلاً، وده حارس تاني على الحفظ). */
+  const _prev = window._editPilot ? S.pilots.find(x => x.id === window._editPilot) : null;
+  if (!isAdmin() && _prev?.job === "مالك") data.job = "مالك";
+  // العلامة القديمة اتحوّلت لوظيفة — بنشيلها عشان مايبقاش فيه مصدرين
+  if (isAdmin() && _prev?.isOwner) data.isOwner = null;
   try {
     if (window._editPilot) {
       await update(ref(db, `${ROOT}/pilots/${window._editPilot}`), data);
