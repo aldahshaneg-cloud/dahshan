@@ -571,6 +571,24 @@
             <option value="0">موقوف / خرج</option>
           </select>
         </div>
+        <!-- حساب مالك — بيظهر للمدير العام بس، وهو اللي بيحدّد مين يشوفه
+             من شاشة الصلاحيات (صلاحية «رؤية حسابات المُلّاك») -->
+        <div class="form-group" id="pmOwnerWrap" style="display:none">
+          <label>نوع الحساب</label>
+          <label style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;
+                        background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.28);
+                        border-radius:9px;padding:11px 13px">
+            <input type="checkbox" id="pmIsOwner" style="margin-top:3px;width:17px;height:17px" />
+            <span style="font-size:.86rem;line-height:1.8">
+              <b>حساب مالك</b>
+              <span style="display:block;font-size:.78rem;color:var(--muted,#8b93a7);margin-top:2px">
+                هيتخفي من كشف الطيار وكشف الشهر عن أي حد غير المدير العام،
+                إلا اللي تديله صلاحية «رؤية حسابات المُلّاك».
+                هيفضل ظاهر في التقفيل اليومي عشان إجمالي الفرع يفضل مطابق للنقدية.
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
       <div class="info-box" style="margin-bottom:10px;font-size:.79rem">
         <b>سعر الأوردر</b> ده عمولة الطيار — <b>خدمة الطيار</b> في التقفيل اليومي
@@ -1244,6 +1262,8 @@ function startListeners() {
   });
   onValue(ref(db, `${ROOT}/pilots`), s => {
     S.pilots = listMap(s.val()).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    // ترحيل الأسماء المخفية القديمة لعلامة isOwner — مرة واحدة بالأدمن
+    migrateLegacyOwners();
     fillPilotSelect();
     refreshCurrentPage();
   });
@@ -1338,7 +1358,7 @@ function gridRow(cols, pilotId, day, e, ym, dotId, pilot) {
     عمود «خروج» بيعرض أوقات الخروج، عمود «رجوع» بيعرض أوقات الرجوع. */
 function permCellHTML(pilotId, day, colKey, e, ym, dotId) {
   const list = permsOf(e);
-  const editable = can("act.edit");
+  const editable = canEditHere();
   const side = colKey === "bout" ? "out" : "in";
   let disp = "";
   if (list.length === 1) disp = fmtTimeAr(list[0][side]);
@@ -1486,6 +1506,10 @@ const PERM_GROUPS = [
     ["sal.leave", "الإجازة المدفوعة"],
     ["sal.def",   "قسط السلف المؤجلة"]
   ]},
+  { title: "صلاحيات خاصة (الإدارة بس)", items: [
+    ["view.owner",     "رؤية حسابات المُلّاك (المخفية عن الباقي)"],
+    ["act.editPilot",  "تعديل كشف الطيار (منفصلة عن تعديل التقفيل اليومي)"]
+  ]},
   { title: "صلاحيات عامة", items: [
     ["act.edit",     "تعديل وكتابة البيانات (من غيرها بيتفرّج بس)"],
     ["act.dateNav",  "التنقل بين التواريخ والشهور (من غيرها بيشتغل على النهارده بس)"],
@@ -1523,13 +1547,46 @@ function allowedBranches() {
   return S.branches.filter(b => list.includes(b.id));
 }
 
-/* أسماء كشوفها مخفية عن أي حد غير الأدمن — بتظهر عادي في التقفيل اليومي
-   (عشان الإجماليات ماتبوظش) لكن كشف الطيار وكشف الشهر بتوعهم للأدمن بس */
-const HIDDEN_SHEET_NAMES = ["عبدالرحمن", "علام", "سمكه", "سمكة"];
+/* ── حسابات المُلّاك ──────────────────────────────────────────────
+   كان فيه قايمة أسماء مكتوبة في الكود (عبدالرحمن، علام، سمكة) بتتخفي
+   عن أي حد غير الأدمن. المشكلة إن أي إضافة أو حذف لاسم كانت محتاجة
+   تعديل في الكود ورفعة جديدة.
+
+   دلوقتي: الطيار نفسه عليه علامة isOwner، والأدمن هو اللي بيحطها أو
+   بيشيلها من شاشة الطيارين. ومين يشوف الحسابات دي بيتحدّد بصلاحية
+   view.owner — الأدمن بيشوفها دايمًا، وأي حد تاني بس لو إداه الصلاحية.
+
+   بيظهروا عادي في التقفيل اليومي عشان إجمالي الفرع يفضل مطابق للنقدية
+   اللي المشرف بيسلّمها — الإخفاء في كشف الطيار وكشف الشهر بس.
+──────────────────────────────────────────────────────────────── */
+
+/* القايمة القديمة — متسابة **للترحيل مرة واحدة بس** لحد ما كل الأسماء
+   دي تتعلّم عليها العلامة. مش بتتستخدم في أي فلترة. */
+const LEGACY_OWNER_NAMES = ["عبدالرحمن", "علام", "سمكه", "سمكة"];
+
+function isOwnerPilot(p) { return p?.isOwner === true; }
+
+/** هل الحساب ده متخفي عن المستخدم الحالي؟ */
 function pilotSheetHidden(p) {
-  if (isAdmin()) return false;
-  const n = String(p?.name || "");
-  return HIDDEN_SHEET_NAMES.some(x => n.includes(x));
+  if (!isOwnerPilot(p)) return false;
+  return !(isAdmin() || can("view.owner"));
+}
+
+/* ترحيل الأسماء القديمة لعلامة isOwner — مرة واحدة، بالأدمن بس.
+   بيحط العلامة ومابيشيلهاش أبدًا، فالسلوك الحالي بيتحافظ عليه بالظبط. */
+async function migrateLegacyOwners() {
+  if (!isAdmin() || !Array.isArray(S.pilots)) return;
+  const need = S.pilots.filter(p =>
+    p.isOwner === undefined &&
+    LEGACY_OWNER_NAMES.some(x => String(p.name || "").includes(x)));
+  if (!need.length) return;
+  try {
+    const updates = {};
+    for (const p of need) updates[`${ROOT}/pilots/${p.id}/isOwner`] = true;
+    await update(ref(db), updates);
+    need.forEach(p => { p.isOwner = true; });
+    showToast(`اتعلّم على ${need.length} حساب كـ«مالك»: ${need.map(p => p.name).join("، ")}`, "success");
+  } catch (e) { console.error("migrateLegacyOwners:", e); }
 }
 function canSeeBranch(id) {
   return allowedBranches().some(b => b.id === id);
@@ -2074,15 +2131,26 @@ ${can('blk.branches') ? `      <div style="border-top:1px solid var(--border)">
     </div>`;
 };
 
+/* هل المستخدم يقدر يعدّل في الشاشة اللي هو واقف عليها دلوقتي؟
+   كشف الطيار له صلاحية منفصلة (act.editPilot) غير التقفيل اليومي،
+   لأن الكشف بيحسب مرتّب الطيار — فمينفعش مشرف عنده صلاحية تسجيل
+   اليوم العادي يعدّل فيه كمان. الصلاحية دي مش في إعدادات المشرف
+   الافتراضية، فلازم الأدمن يديها بإيده. */
+function canEditHere() {
+  if (!can("act.edit")) return false;
+  if (currentPage() === "pilot") return isAdmin() || can("act.editPilot");
+  return true;
+}
+
 /** خانة إدخال داخل الجدول */
 function cellHTML(pilotId, day, field, value, ym, dotId, isText = false, ph = "", isTime = false) {
   const v = value === undefined || value === null ? "" : value;
-  const ro = can("act.edit") ? "" : " readonly";     // بيتفرّج بس
+  const ro = canEditHere() ? "" : " readonly";     // بيتفرّج بس
   // خانة الوقت = عرض للقراءة بالعربي (صباحًا/مساءً) بيفتح المنتقي المخصّص
   // بالنقر — بدل input[type=time] اللي بيعرض AM/PM إنجليزي من المتصفح
   if (isTime) {
     const disp = fmtTimeAr(v);
-    const oc = can("act.edit")
+    const oc = canEditHere()
       ? `onclick="pickTimeCell('${ym}','${pilotId}',${day},'${field}','${dotId}')"` : "";
     return `<td><input class="cell-in cell-pick time-cell" type="text" readonly
       data-col="${field}" value="${esc(disp)}" placeholder="—" ${oc}
@@ -2097,6 +2165,9 @@ function cellHTML(pilotId, day, field, value, ym, dotId, isText = false, ph = ""
 }
 
 window.onCellInput = function(ym, pilotId, day, field, value, dotId) {
+  /* حارس على مسار الكتابة نفسه مش على الواجهة بس — الخانة ممكن
+     تتفتح من الكونسول أو الـreadonly يتشال من أدوات المطوّر */
+  if (!canEditHere()) return;
   saveCell(ym, pilotId, day, field, value, dotId);
   // الملاحظات مش داخلة في أي حسبة — إعادة رسم الجدول وانت بتكتب فيها
   // كانت بتضيّع الفوكس والمكتوب، فمنعناها ليها
@@ -2230,7 +2301,7 @@ window.tpClear = function() {
 
 /** فتح المنتقي لخانة حضور/انصراف في الجدول */
 window.pickTimeCell = function(ym, pilotId, day, field, dotId) {
-  if (!can("act.edit")) return;
+  if (!canEditHere()) return;
   const cur = entryOf(ym, pilotId, day)[field] || "";
   openTimePicker(cur, field === "in" ? "ساعة الحضور" : "ساعة الانصراف", v => {
     saveCell(ym, pilotId, day, field, v, dotId);
@@ -2247,7 +2318,7 @@ window.pickTimeCell = function(ym, pilotId, day, field, dotId) {
 ══════════════════════════════════════════════════════════════ */
 let _dayPermCtx = { ym: null, pilotId: null, day: null, dotId: "", list: [] };
 window.openPermModal = function(ym, pilotId, day, dotId) {
-  if (!can("act.edit")) return;
+  if (!canEditHere()) return;
   _dayPermCtx = { ym, pilotId, day, dotId, list: permsOf(entryOf(ym, pilotId, day)) };
   const p = S.pilots.find(x => x.id === pilotId);
   $("dayPermTitle").textContent = "استئذانات " + (p ? p.name : "");
@@ -2327,6 +2398,13 @@ window.renderPilot = function() {
     return;
   }
   const p = S.pilots.find(x => x.id === pid);
+  /* حارس على العرض نفسه مش على قائمة الاختيار بس: لو المستخدم كان
+     واقف على حساب مالك وبعدين اتشالت منه الصلاحية، أو الاختيار فضل
+     محفوظ من جلسة قبل كده، لازم يتصدّ هنا. */
+  if (p && pilotSheetHidden(p)) {
+    box.innerHTML = `<div class="warn-box">الحساب ده مالكش صلاحية تشوفه — اختار طيار تاني من القائمة فوق.</div>`;
+    return;
+  }
   const nd = daysInMonth(ym);
   const t = pilotMonthTotals(ym, pid);
   const today = todayStr();
@@ -2822,6 +2900,9 @@ window.openPilotModal = function(id) {
   $("pmOrderRate").value = p?.orderRate ?? "";
   $("pmLeaveDays").value = p?.leaveDays ?? "";
   $("pmActive").value = p && p.active === false ? "0" : "1";
+  // «حساب مالك» للمدير العام بس — مشرف عنده act.pilots مايشوفهاش ولا يغيّرها
+  $("pmOwnerWrap").style.display = isAdmin() ? "" : "none";
+  $("pmIsOwner").checked = !!p?.isOwner;
   $("pmDefaultRates").textContent =
     `${fmt(S.settings.hourRate)} للساعة · ${fmt(S.settings.pilotOrderRate ?? 0)} للأوردر`;
   $("pmDelete").style.display = id ? "" : "none";
@@ -2846,6 +2927,9 @@ window.savePilot = async function() {
   if (orderRate !== null && orderRate < 0) { $("pmError").textContent = "سعر الأوردر مايصحّش يكون بالسالب"; return; }
   if (leaveDays !== null && leaveDays < 0) { $("pmError").textContent = "أيام الإجازة مايصحّش تكون بالسالب"; return; }
   const data = { name, branchId, active, job, hourRate, orderRate, leaveDays };
+  /* علامة المالك بيغيّرها المدير العام بس. لو اللي بيحفظ مش أدمن
+     مابنكتبش الحقل خالص عشان مايمسحش علامة موجودة بالغلط. */
+  if (isAdmin()) data.isOwner = $("pmIsOwner").checked;
   try {
     if (window._editPilot) {
       await update(ref(db, `${ROOT}/pilots/${window._editPilot}`), data);
@@ -3144,6 +3228,13 @@ window.applyPermPreset = function(kind) {
 };
 
 window.savePerms = async function() {
+  /* حارس على الحفظ نفسه. التنقّل لشاشة الصلاحيات كان محمي بـ isAdmin،
+     لكن الدالة دي كانت مكشوفة على window — يعني أي حد يفتح الكونسول
+     يقدر يمنح نفسه أي صلاحية من غير ما يفتح الشاشة أصلاً. */
+  if (!isAdmin()) {
+    showToast("منح الصلاحيات للمدير العام بس", "error");
+    return;
+  }
   const uname = $("permUser").value;
   if (!uname) return;
   const keys = {};
