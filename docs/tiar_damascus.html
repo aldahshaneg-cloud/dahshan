@@ -910,18 +910,46 @@ function isoOf(d) {
    يعني الساعة 2ص يوم 31 = لسه يوم 30 في البرنامج.
 ══════════════════════════════════════════════════════════════ */
 function dayStartHour() {
-  const h = num(S.settings?.dayStart);
-  return h >= 0 && h <= 23 ? h : 8;
+  /* الحقل الناقص أو الفاضي لازم يرجع 8 مش 0.
+     num("") و num(undefined) بيرجّعوا صفر، وصفر بيعدّي فحص المدى
+     (h >= 0) — فالدالة كانت بترجّع 0 يعني اليوم يقلب نص الليل، وده
+     بالظبط اللي الإعداد ده معمول عشان يمنعه. لو حد سابها فاضية في
+     الإعدادات كان الموضوع هيتكسر في صمت. */
+  const raw = S.settings?.dayStart;
+  if (raw === undefined || raw === null || raw === "") return 8;
+  const h = Number(raw);
+  return Number.isFinite(h) && h >= 0 && h <= 23 ? h : 8;
 }
+
+/** الساعة الحالية بتوقيت القاهرة (0-23) — مش بتوقيت الجهاز */
+function cairoHour(d) {
+  return Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Cairo", hour: "2-digit", hour12: false
+  }).format(d || new Date()));
+}
+
+/** بينقص يوم من مفتاح تاريخ "YYYY-MM-DD" على التقويم */
+function prevDayKey(key) {
+  const [y, m, d] = String(key).split("-").map(Number);
+  const p = new Date(Date.UTC(y, m - 1, d - 1));
+  return `${p.getUTCFullYear()}-${String(p.getUTCMonth() + 1).padStart(2, "0")}-${String(p.getUTCDate()).padStart(2, "0")}`;
+}
+
+/* «النهارده» في البرنامج. الحساب كله بتوقيت القاهرة:
+   الساعة والتاريخ الاتنين — مش ساعة الجهاز مع تاريخ القاهرة.
+   لو اتخلطوا، أي كمبيوتر في فرع ساعته أو منطقته الزمنية مظبوطة غلط
+   كان ممكن يقلب اليوم في وقت غلط — وده بالظبط اللي التثبيت على
+   القاهرة معمول عشانه. ونقص اليوم بيتم على التقويم مش بطرح 24 ساعة،
+   عشان التوقيت الصيفي مايلخبطش الحسبة. */
 function todayStr() {
-  const d = new Date();
-  if (d.getHours() < dayStartHour()) d.setDate(d.getDate() - 1);
-  return isoOf(d);
+  const now = new Date();
+  const key = cairoDayKey(now);
+  return cairoHour(now) < dayStartHour() ? prevDayKey(key) : key;
 }
 /** التاريخ الميلادي الحقيقي — للمقارنة وتنبيه المستخدم */
-function realTodayStr() { return isoOf(new Date()); }
+function realTodayStr() { return cairoDayKey(new Date()); }
 /** إحنا في الساعات اللي بعد نص الليل وقبل بداية اليوم؟ */
-function beforeDayStart() { return new Date().getHours() < dayStartHour(); }
+function beforeDayStart() { return cairoHour() < dayStartHour(); }
 function monthOf(dateStr) { return String(dateStr || "").slice(0, 7); }
 function dayOf(dateStr)   { return parseInt(String(dateStr || "").slice(8, 10), 10) || 1; }
 function daysInMonth(ym) {
@@ -1967,9 +1995,12 @@ window.onDailyBranchChange = function() { renderDaily(); };
 window.shiftDay = function(delta) {
   if (!can("act.dateNav")) { showToast("مالكش صلاحية تشتغل على يوم تاني", "error"); return; }
   const el = $("dailyDate");
-  const d = new Date(el.value || todayStr());
-  d.setDate(d.getDate() + delta);
-  el.value = cairoDayKey(d);
+  /* الحساب على التقويم مباشرةً. new Date("2026-08-07") بتتقري
+     بجرينتش وبعدين setDate بتعدّ بتوقيت الجهاز — خلط بيوقع في يوم
+     غلط على أي جهاز مش مظبوط على القاهرة. */
+  const [y, m, d] = String(el.value || todayStr()).split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + delta));
+  el.value = `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`;
   renderDaily();
 };
 
