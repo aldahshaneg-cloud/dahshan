@@ -881,9 +881,27 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c =>
     ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
+/* لنص جوّه سترنج جافاسكريبت جوّه خاصية HTML، زي:
+       onclick="openPilotModal('${...}')"
+   هنا esc() لوحدها مش كفاية: المتصفح بيفك ترميز الخاصية قبل ما
+   الجافاسكريبت تتنفّذ، فـ &#39; بترجع ' وتكسر السترنج ويقدر يحقن كود. */
+function escJs(s) {
+  return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+}
+
+/* ── مفتاح اليوم بتوقيت القاهرة ─────────────────────────────────
+   مثبّت على Africa/Cairo مش على توقيت الجهاز، عشان لو ساعة أي
+   كمبيوتر في الفروع مظبوطة غلط مايتغيّرش حساب اليوم — ونفس
+   السلوك في باقي التطبيقات. */
+function cairoDayKey(d) {
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo",
+    year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d || new Date());
+  const g = t => p.find(x => x.type === t).value;
+  return `${g("year")}-${g("month")}-${g("day")}`;
+}
 /** التاريخ بالصيغة YYYY-MM-DD من كائن Date (بالتوقيت المحلي) */
 function isoOf(d) {
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return cairoDayKey(d);
 }
 /* ══════════════════════════════════════════════════════════════
    «النهارده» في البرنامج مش نص الليل — بيبدأ الساعة 8 صباحًا.
@@ -1344,8 +1362,8 @@ function visibleCols() { return GRID_COLS.filter(c => can("col." + c.k)); }
 
 /** رأس الجدول من تعريف الأعمدة */
 function gridHead(cols) {
-  return cols.map(c => `<th style="width:${c.w}px">${c.th}${c.sub
-    ? `<div style="font-weight:600;font-size:.68rem;color:var(--muted);margin-top:2px">${c.sub}</div>` : ""}</th>`).join("");
+  return cols.map(c => `<th style="width:${ esc(c.w) }px">${ esc(c.th) }${c.sub
+    ? `<div style="font-weight:600;font-size:.68rem;color:var(--muted);margin-top:2px">${ esc(c.sub) }</div>` : ""}</th>`).join("");
 }
 /** خانات صف واحد */
 function gridRow(cols, pilotId, day, e, ym, dotId, pilot) {
@@ -1371,7 +1389,7 @@ function permCellHTML(pilotId, day, colKey, e, ym, dotId) {
 /** خانات سطر الإجمالي */
 function gridFoot(cols, t) {
   return cols.map(c => c.total
-    ? `<td class="num" style="padding:11px 13px${c.green ? ";color:var(--green)" : ""}">${fmt(t[c.k])}</td>`
+    ? `<td class="num" style="padding:11px 13px${ esc(c.green ? ";color:var(--green)" : "") }">${fmt(t[c.k])}</td>`
     : `<td></td>`).join("");
 }
 
@@ -1428,7 +1446,7 @@ function to12h(hhmm) {
 function fmtTimeAr(hhmm) {
   const t = to12h(hhmm);
   if (!t) return "";
-  return `${t.h12}:${String(t.mm).padStart(2, "0")} ${t.mer === "am" ? "صباحًا" : "مساءً"}`;
+  return `${ esc(t.h12) }:${ esc(String(t.mm).padStart(2, "0")) } ${ esc(t.mer === "am" ? "صباحًا" : "مساءً") }`;
 }
 
 /** دقايق الاستئذان في نص اليوم — مجموع كل الفترات، بتتشال من ساعات الشغل */
@@ -1582,6 +1600,7 @@ async function migrateLegacyOwners() {
   if (!need.length) return;
   try {
     const updates = {};
+    // مسار فايربيز مش HTML — من غير تهريب
     for (const p of need) updates[`${ROOT}/pilots/${p.id}/isOwner`] = true;
     await update(ref(db), updates);
     need.forEach(p => { p.isOwner = true; });
@@ -1931,7 +1950,7 @@ window.fillPilotSelect = function() {
     && !pilotSheetHidden(p));
   const prev = sel.value;
   sel.innerHTML = list.map(p =>
-    `<option value="${esc(p.id)}">${esc(p.name)}${p.active === false ? " (موقوف)" : ""}</option>`).join("")
+    `<option value="${esc(p.id)}">${esc(p.name)}${ esc(p.active === false ? " (موقوف)" : "") }</option>`).join("")
     || `<option value="">— مفيش طيارين —</option>`;
   if (prev && list.some(p => p.id === prev)) sel.value = prev;
   if (currentPage() === "pilot") renderPilot();
@@ -1947,7 +1966,7 @@ window.shiftDay = function(delta) {
   const el = $("dailyDate");
   const d = new Date(el.value || todayStr());
   d.setDate(d.getDate() + delta);
-  el.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  el.value = cairoDayKey(d);
   renderDaily();
 };
 
@@ -1979,7 +1998,7 @@ window.renderDaily = function() {
       <td class="lbl" style="min-width:150px;font-weight:600">${esc(p.name)}</td>
       ${gridRow(cols, p.id, day, e, ym, "dailyDot", p)}
     </tr>`;
-  }).join("") : `<tr><td colspan="${cols.length + 2}" class="empty-row">مفيش طيارين في الفرع ده</td></tr>`;
+  }).join("") : `<tr><td colspan="${ esc(cols.length + 2) }" class="empty-row">مفيش طيارين في الفرع ده</td></tr>`;
 
   // بعد نص الليل وقبل بداية اليوم — نوضّح إننا لسه على ورقة إمبارح
   const nightNote = (beforeDayStart() && date === todayStr()) ? `
@@ -2001,7 +2020,7 @@ window.renderDaily = function() {
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr class="total-row">
-          <td colspan="2" style="padding:11px 13px">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${t.count} طيار شغّال)</span></td>
+          <td colspan="2" style="padding:11px 13px">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${ esc(t.count) } طيار شغّال)</span></td>
           ${gridFoot(cols, t)}
         </tr></tfoot>
       </table>
@@ -2028,17 +2047,17 @@ ${/* السطر ده بيظهر في الفرع المتحمّل للرسوم ب
 ${can('blk.pct') ? `      <div class="sum-row">
         <div class="sl">نسبة روح دمشق
           <div class="sh">اللي بياخدها المطعم — خارج</div></div>
-        <input class="sv" type="text" inputmode="decimal" value="${s.pct ?? ""}"
+        <input class="sv" type="text" inputmode="decimal" value="${ esc(s.pct ?? "") }"
                oninput="onSumInput('${ym}','${branchId}',${day},'pct',this.value)" />
       </div>` : ''}
 ${can('blk.ext') ? `      <div class="sum-row">
         <div class="sl">الخارجي<div class="sh">خارج</div></div>
-        <input class="sv" type="text" inputmode="decimal" value="${s.ext ?? ""}"
+        <input class="sv" type="text" inputmode="decimal" value="${ esc(s.ext ?? "") }"
                oninput="onSumInput('${ym}','${branchId}',${day},'ext',this.value)" />
       </div>` : ''}
 ${can('blk.exp') ? `      <div class="sum-row">
         <div class="sl">مصاريف<div class="sh">خارج</div></div>
-        <input class="sv" type="text" inputmode="decimal" value="${s.exp ?? ""}"
+        <input class="sv" type="text" inputmode="decimal" value="${ esc(s.exp ?? "") }"
                oninput="onSumInput('${ym}','${branchId}',${day},'exp',this.value)" />
       </div>` : ''}
 ${can('blk.out') ? `      <div class="sum-row" style="background:rgba(249,115,22,.07)">
@@ -2093,20 +2112,17 @@ ${can('blk.recon') ? `      <div style="border-top:1px solid var(--border)">
         <div class="sum-row">
           <div class="sl">المستلم فعلًا من المشرف
             <div class="sh">اكتب المبلغ اللي وصلك بالظبط</div></div>
-          <input class="sv" type="text" inputmode="decimal" value="${s.recv ?? ""}"
+          <input class="sv" type="text" inputmode="decimal" value="${ esc(s.recv ?? "") }"
                  placeholder="${fmt(C.expected)}"
                  oninput="onSumInput('${ym}','${branchId}',${day},'recv',this.value)" /></div>
 
-        <div class="sum-row" style="background:${
-          !C.hasRecv ? "transparent" : C.diff === 0 ? "rgba(34,197,94,.08)" : "rgba(232,25,44,.08)"}">
+        <div class="sum-row" style="background:${ esc(!C.hasRecv ? "transparent" : C.diff === 0 ? "rgba(34,197,94,.08)" : "rgba(232,25,44,.08)") }">
           <div class="sl">الفرق
             <div class="sh">${!C.hasRecv ? "اكتب المستلم عشان تظهر المطابقة"
               : C.diff === 0 ? "التوريد مظبوط ✓"
               : C.diff < 0 ? "عجز — المشرف ورّد أقل من المفروض (بيتخصم من الصافي)"
               : "زيادة — المشرف ورّد أكتر من المفروض (بتتضاف للصافي)"}</div></div>
-          <div class="sv" style="color:${
-            !C.hasRecv ? "var(--muted)" : C.diff === 0 ? "var(--green)" : "var(--red)"}">${
-            !C.hasRecv ? "—" : fmt(C.diff)}</div></div>
+          <div class="sv" style="color:${ esc(!C.hasRecv ? "var(--muted)" : C.diff === 0 ? "var(--green)" : "var(--red)") }">${ esc(!C.hasRecv ? "—" : fmt(C.diff)) }</div></div>
       </div>` : ''}
 
 ${can('blk.branches') ? `      <div style="border-top:1px solid var(--border)">
@@ -2344,14 +2360,14 @@ function renderDayPermRows() {
     <div class="perm-row">
       <div class="perm-row-idx">${i + 1}</div>
       <div class="perm-row-times">
-        <button type="button" class="tp-btn${pr.out ? "" : " empty"}" onclick="dayPermPick(${i},'out')">
+        <button type="button" class="tp-btn${ esc(pr.out ? "" : " empty") }" onclick="dayPermPick(${i},'out')">
           <span class="tp-btn-lbl">خروج</span>
-          <span class="tp-btn-val">${pr.out ? esc(fmtTimeAr(pr.out)) : "—"}</span>
+          <span class="tp-btn-val">${ esc(pr.out ? esc(fmtTimeAr(pr.out)) : "—") }</span>
         </button>
         <span class="perm-arrow">←</span>
-        <button type="button" class="tp-btn${pr.in ? "" : " empty"}" onclick="dayPermPick(${i},'in')">
+        <button type="button" class="tp-btn${ esc(pr.in ? "" : " empty") }" onclick="dayPermPick(${i},'in')">
           <span class="tp-btn-lbl">رجوع</span>
-          <span class="tp-btn-val">${pr.in ? esc(fmtTimeAr(pr.in)) : "—"}</span>
+          <span class="tp-btn-val">${ esc(pr.in ? esc(fmtTimeAr(pr.in)) : "—") }</span>
         </button>
       </div>
       <button type="button" class="perm-del" onclick="dayPermDel(${i})" title="حذف الفترة">🗑️</button>
@@ -2434,7 +2450,7 @@ window.renderPilot = function() {
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr class="total-row">
-          <td colspan="2" style="padding:11px 13px">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${t.worked} يوم شغل)</span></td>
+          <td colspan="2" style="padding:11px 13px">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${ esc(t.worked) } يوم شغل)</span></td>
           ${gridFoot(cols, t)}
         </tr></tfoot>
       </table>
@@ -2444,16 +2460,15 @@ ${can('sal.block') ? `    <div class="sum-block">
       <div class="sum-head">حساب الراتب</div>
       <div class="sum-row calc">
         <div class="sl">عدد ساعات العمل × ${fmt(t.rate.h)}
-          <div class="sh">${fmt(t.h)} ساعة${t.leaveCap > 0 ? "" : " — دي كل مستحقاته من الشركة"}${
+          <div class="sh">${fmt(t.h)} ساعة${ esc(t.leaveCap > 0 ? "" : " — دي كل مستحقاته من الشركة") }${
             num(p?.hourRate) > 0 ? " · سعر خاص بالطيار ده" : ""}</div></div>
         <div class="sv" style="color:var(--green)">${fmt(t.hourPay)}</div>
       </div>
       ${t.leaveCap > 0 && can('sal.leave') ? `
       <div class="sum-row calc">
         <div class="sl">إجازة مدفوعة
-          <div class="sh">${t.leaveDays} يوم × ${fmt(t.shiftHours)} ساعة × ${fmt(t.rate.h)}
-            &nbsp;·&nbsp; غاب ${t.absent} يوم من ${t.counted}، ورصيده ${t.leaveCap} يوم${
-            t.absent > t.leaveCap ? " (الزيادة بدون أجر)" : ""}${
+          <div class="sh">${ esc(t.leaveDays) } يوم × ${fmt(t.shiftHours)} ساعة × ${fmt(t.rate.h)}
+            &nbsp;·&nbsp; غاب ${ esc(t.absent) } يوم من ${ esc(t.counted) }، ورصيده ${ esc(t.leaveCap) } يوم${ esc(t.absent > t.leaveCap ? " (الزيادة بدون أجر)" : "") }${
             t.leaveLeft > 0 ? ` · باقي ${fmt(t.leaveLeft)} يوم` : ""}</div></div>
         <div class="sv" style="color:var(--green)">+ ${fmt(t.leavePay)}</div>
       </div>
@@ -2473,11 +2488,11 @@ ${can('sal.block') ? `    <div class="sum-block">
       <div class="sum-row">
         <div class="sl">قسط سلفة مؤجلة
           <div class="sh">سلفة ${fmt(it.rec.amount)} بتاريخ ${esc(it.rec.date || "—")}
-            ${it.rec.note ? "· " + esc(it.rec.note) : ""}
+            ${ esc(it.rec.note ? "· " + esc(it.rec.note) : "") }
             &nbsp;·&nbsp; الباقي بعد الشهر ده <b>${fmt(it.after)}</b></div></div>
-        <input class="sv" type="text" inputmode="decimal" value="${it.rec.paid?.[ym] ?? ""}"
+        <input class="sv" type="text" inputmode="decimal" value="${ esc(it.rec.paid?.[ym] ?? "") }"
                placeholder="${fmt(it.due)}" style="color:var(--orange)"
-               oninput="onDefInput('${esc(it.rec.id)}','${ym}',this.value)" />
+               oninput="onDefInput('${escJs(it.rec.id)}','${ym}',this.value)" />
       </div>`).join("")}
       ${t.defLeft > 0 && can('sal.def') ? `
       <div class="sum-row calc">
@@ -2490,7 +2505,7 @@ ${can('sal.block') ? `    <div class="sum-block">
       </div>
     </div>` : ''}
     ${!can('act.deferred') ? '' : `<div style="margin-top:14px">
-      <button class="btn-ghost" onclick="openDefModal(null,'${esc(pid)}')">➕ تسجيل سلفة مؤجلة لـ${esc(p?.name || "")}</button>
+      <button class="btn-ghost" onclick="openDefModal(null,'${escJs(pid)}')">➕ تسجيل سلفة مؤجلة لـ${esc(p?.name || "")}</button>
       <button class="btn-ghost" onclick="navigateTo('deferred')">📋 كل السلف المؤجلة</button>
     </div>`}`;
 };
@@ -2525,16 +2540,16 @@ window.renderMonth = function() {
       <td class="num">${fmt(t.worked)}</td>
       <td class="num">${fmt(t.o)}</td>
       <td class="num">${fmt(t.hourPay)}</td>
-      <td class="num" style="color:var(--green)">${t.leavePay ? fmt(t.leavePay) : "—"}${
-        t.leaveCap ? `<div style="font-size:.68rem;color:var(--muted)">${t.leaveDays}/${t.leaveCap} يوم</div>` : ""}</td>
+      <td class="num" style="color:var(--green)">${ esc(t.leavePay ? fmt(t.leavePay) : "—") }${
+        t.leaveCap ? `<div style="font-size:.68rem;color:var(--muted)">${ esc(t.leaveDays) }/${ esc(t.leaveCap) } يوم</div>` : ""}</td>
       <td class="num" style="color:var(--orange)">${fmt(t.adv)}</td>
       <td class="num" style="color:var(--orange)">${fmt(t.ded)}</td>
-      <td class="num" style="color:var(--orange)">${t.defDue ? fmt(t.defDue) : "—"}${
+      <td class="num" style="color:var(--orange)">${ esc(t.defDue ? fmt(t.defDue) : "—") }${
         t.defLeft > 0 ? `<div style="font-size:.68rem;color:var(--muted)">باقي ${fmt(t.defLeft)}</div>` : ""}</td>
       <td class="num" style="font-weight:800;color:${owes ? "var(--red)" : "var(--green)"}">
         ${owes ? "عليه " : ""}${fmt(Math.abs(t.salary))}</td>
       <td>${!can('page.pilot') ? '' :
-        `<button class="btn-ghost btn-xs" onclick="openPilotSheet('${esc(p.id)}')">كشف</button>`}</td>
+        `<button class="btn-ghost btn-xs" onclick="openPilotSheet('${escJs(p.id)}')">كشف</button>`}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="13" class="empty-row">مفيش طيارين</td></tr>`;
 
@@ -2619,7 +2634,7 @@ window.renderMonth = function() {
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr class="total-row">
-          <td colspan="3" style="padding:12px 13px">الإجمالي — ${list.length} طيار</td>
+          <td colspan="3" style="padding:12px 13px">الإجمالي — ${ esc(list.length) } طيار</td>
           <td class="num">${fmt(G.h)}</td><td></td><td class="num">${fmt(G.o)}</td>
           <td class="num">${fmt(G.hourPay)}</td>
           <td class="num" style="color:var(--green)">${fmt(G.leavePay)}</td>
@@ -2666,7 +2681,7 @@ window.renderDeferred = function() {
       <td class="num">${fmt(rec.amount)}</td>
       <td class="num">${fmt(rec.monthly)}</td>
       <td style="font-size:.8rem;color:var(--muted)">${esc(rec.startMonth || "—")}</td>
-      <td class="num" style="color:var(--orange)">${c.started ? fmt(c.due) : "—"}</td>
+      <td class="num" style="color:var(--orange)">${ esc(c.started ? fmt(c.due) : "—") }</td>
       <td class="num">${fmt(paid)}</td>
       <td class="num" style="font-weight:800;color:${done ? "var(--green)" : "var(--sky)"}">${fmt(c.after)}</td>
       <td>${done ? `<span class="badge bg-green">اتسدّدت</span>`
@@ -2674,7 +2689,7 @@ window.renderDeferred = function() {
            : `<span class="badge bg-orange">بتتقسّط</span>`}</td>
       <td style="font-size:.8rem;color:var(--muted)">${esc(rec.note || "")}</td>
       <td>${!can('act.deferred') ? '' :
-        `<button class="btn-ghost btn-xs" onclick="openDefModal('${esc(rec.id)}')">تعديل</button>`}</td>
+        `<button class="btn-ghost btn-xs" onclick="openDefModal('${escJs(rec.id)}')">تعديل</button>`}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="12" class="empty-row">مفيش سلف مؤجلة</td></tr>`;
 
@@ -2694,7 +2709,7 @@ window.renderDeferred = function() {
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr class="total-row">
-          <td colspan="3" style="padding:12px 13px">الإجمالي — ${S.deferred.length} سلفة</td>
+          <td colspan="3" style="padding:12px 13px">الإجمالي — ${ esc(S.deferred.length) } سلفة</td>
           <td class="num">${fmt(G.amount)}</td><td></td><td></td>
           <td class="num" style="color:var(--orange)">${fmt(G.due)}</td>
           <td class="num">${fmt(G.amount - G.left)}</td>
@@ -2812,15 +2827,15 @@ window.renderSetup = function() {
       return `<tr>
       <td class="idx" style="width:38px">${i + 1}</td>
       <td style="font-weight:600">${esc(p.name)}</td>
-      <td><span class="badge ${p.job === "مشرف" ? "bg-purple" : "bg-blue"}">${esc(p.job || "طيار")}</span></td>
+      <td><span class="badge ${ esc(p.job === "مشرف" ? "bg-purple" : "bg-blue") }">${esc(p.job || "طيار")}</span></td>
       <td class="num" style="font-size:.8rem">${fmt(R.h)} / ${fmt(R.o)}
         ${custom ? `<span class="badge bg-orange" style="font-size:.65rem">خاص</span>` : ""}</td>
-      <td class="num" style="font-size:.8rem">${p.leaveDays ? fmt(p.leaveDays) + " يوم" : "—"}</td>
+      <td class="num" style="font-size:.8rem">${ esc(p.leaveDays ? fmt(p.leaveDays) + " يوم" : "—") }</td>
       <td>${p.active === false
         ? `<span class="badge bg-muted">موقوف</span>`
         : `<span class="badge bg-green">شغّال</span>`}</td>
       <td style="text-align:left">${!can('act.pilots') ? '' :
-        `<button class="btn-ghost btn-xs" onclick="openPilotModal('${esc(p.id)}')">تعديل</button>`}
+        `<button class="btn-ghost btn-xs" onclick="openPilotModal('${escJs(p.id)}')">تعديل</button>`}
       </td>
     </tr>`; }).join("") : `<tr><td colspan="7" class="empty-row" style="padding:20px">مفيش طيارين — اضغط «إضافة قائمة أسماء»</td></tr>`;
 
@@ -2829,8 +2844,8 @@ window.renderSetup = function() {
         <div class="sec-title" style="font-size:.98rem">🏢 ${esc(b.name)}
           <span class="badge bg-blue">${act} طيار</span></div>
         <div class="toolbar">${!can('act.branches') ? '' : `
-          <button class="btn-ghost btn-xs" onclick="openBranchModal('${esc(b.id)}')">تعديل الاسم</button>
-          <button class="btn-red btn-xs" onclick="deleteBranch('${esc(b.id)}')">حذف الفرع</button>`}
+          <button class="btn-ghost btn-xs" onclick="openBranchModal('${escJs(b.id)}')">تعديل الاسم</button>
+          <button class="btn-red btn-xs" onclick="deleteBranch('${escJs(b.id)}')">حذف الفرع</button>`}
         </div>
       </div>
       <div class="table-wrap"><table>
@@ -3038,11 +3053,11 @@ window.renderPerms = function() {
     return `<div class="perm-group">
       <div class="perm-head">
         <label class="perm-check">
-          <input type="checkbox" ${on === g.items.length ? "checked" : ""}
-                 onchange="togglePermGroup('${esc(g.title)}',this.checked)" />
+          <input type="checkbox" ${ esc(on === g.items.length ? "checked" : "") }
+                 onchange="togglePermGroup('${escJs(g.title)}',this.checked)" />
           <span>${esc(g.title)}</span>
         </label>
-        <span class="badge ${on ? "bg-green" : "bg-muted"}">${on} / ${g.items.length}</span>
+        <span class="badge ${on ? "bg-green" : "bg-muted"}">${on} / ${ esc(g.items.length) }</span>
       </div>
       <div class="perm-items">
         ${g.items.map(([k, label]) => `
@@ -3068,7 +3083,7 @@ window.renderPerms = function() {
               person ? ` · ${esc(branchName(person.branchId))}` : ""}</div>
           </div>
         </div>
-        <button class="btn-ghost btn-xs" onclick="openAccountModal('${esc(uname)}')">تعديل الحساب</button>
+        <button class="btn-ghost btn-xs" onclick="openAccountModal('${escJs(uname)}')">تعديل الحساب</button>
       </div>
       ${!person && acc?.pilotId === undefined ? `
       <div style="padding:11px 16px;font-size:.79rem;color:var(--muted)">
@@ -3084,13 +3099,12 @@ window.renderPerms = function() {
     <div class="perm-group">
       <div class="perm-head">
         <label class="perm-check" style="cursor:default"><span>الفروع المسموحة</span></label>
-        <span class="badge ${branches.length ? "bg-blue" : "bg-green"}">${
-          branches.length ? branches.length + " فرع" : "كل الفروع"}</span>
+        <span class="badge ${ esc(branches.length ? "bg-blue" : "bg-green") }">${ esc(branches.length ? branches.length + " فرع" : "كل الفروع") }</span>
       </div>
       <div class="perm-items">
         ${S.branches.map(b => `
           <label class="perm-check">
-            <input type="checkbox" data-branch="${esc(b.id)}" ${branches.includes(b.id) ? "checked" : ""}
+            <input type="checkbox" data-branch="${esc(b.id)}" ${ esc(branches.includes(b.id) ? "checked" : "") }
                    onchange="markPermsDirty()" />
             <span>${esc(b.name)}</span>
           </label>`).join("")}
@@ -3123,8 +3137,7 @@ window.openAccountModal = function(username) {
   const people = [...S.pilots].sort((a, b) =>
     (b.job === "مشرف") - (a.job === "مشرف") || (a.order ?? 0) - (b.order ?? 0));
   $("acPerson").innerHTML = people.map(p =>
-    `<option value="${esc(p.id)}">${esc(p.name)} — ${esc(branchName(p.branchId))}${
-      p.job === "مشرف" ? " (مشرف)" : ""}</option>`).join("")
+    `<option value="${esc(p.id)}">${esc(p.name)} — ${esc(branchName(p.branchId))}${ esc(p.job === "مشرف" ? " (مشرف)" : "") }</option>`).join("")
     || `<option value="">— مفيش أسماء —</option>`;
 
   $("acPerson").value = u?.pilotId || people.find(p => p.job === "مشرف")?.id || people[0]?.id || "";
@@ -3168,7 +3181,7 @@ window.saveAccount = async function() {
     err.textContent = "اسم المستخدم ده مستخدم قبل كده"; return;
   }
   const taken = S.users.find(u => u.pilotId === pilotId && u.username !== window._editAcc);
-  if (taken) { err.textContent = `${person.name} عنده حساب بالفعل (${taken.username})`; return; }
+  if (taken) { err.textContent = `${ person.name } عنده حساب بالفعل (${ taken.username })`; return; }
 
   try {
     await update(ref(db, `users/${username}`), {
@@ -3279,8 +3292,7 @@ window.renderSettings = function() {
             خالص. «كل فرع لوحده» = كل فرع بيتحاسب على أوردراته هو.</div></div>
         <select class="sv" id="setDevBranch" style="min-width:180px;text-align:right;direction:rtl">
           <option value="">كل فرع لوحده</option>
-          ${S.branches.map(b => `<option value="${esc(b.id)}"${
-            S.settings.devFeeBranchId === b.id ? " selected" : ""}>${esc(b.name)}</option>`).join("")}
+          ${S.branches.map(b => `<option value="${esc(b.id)}"${ esc(S.settings.devFeeBranchId === b.id ? " selected" : "") }>${esc(b.name)}</option>`).join("")}
         </select>
       </div>
       <div class="sum-row">
@@ -3356,7 +3368,7 @@ window.exportDaily = function() {
   aoa.push(["الإجمالي", "", "", "", "", t.h, t.o, t.svc, t.psvc, t.net, t.adv, t.ded, ""]);
   aoa.push([]);
   aoa.push([`تقفيل يومي ${day} — ${branchName(bid)}`]);
-  aoa.push([`عدد ساعات العمل × ${S.settings.hourRate}`, C.t.h, C.hourPay, "خارج"]);
+  aoa.push([`عدد ساعات العمل × ${ esc(S.settings.hourRate) }`, C.t.h, C.hourPay, "خارج"]);
   if (!devFeeBranch() || bid === devFeeBranch())
     aoa.push([`رسوم التطوير × ${devRate()}${devFeeBranch() ? " (كل الفروع)" : ""}`,
               C.devFeeOrders, C.devFee, "خارج"]);
@@ -3390,7 +3402,7 @@ window.exportPilot = function() {
   const p = S.pilots.find(x => x.id === pid);
   const t = pilotMonthTotals(ym, pid);
   const aoa = [
-    [`${p.name} — ${branchName(p.branchId)} — ${monthLabel(ym)}`],
+    [`${ esc(p.name) } — ${branchName(p.branchId)} — ${monthLabel(ym)}`],
     ["اليوم", "ساعة الحضور", "خروج مؤقت", "رجوع", "ساعة الانصراف", "عدد ساعات العمل", "عدد الأوردرات", "إجمالي الخدمة", "خدمة الطيار", "صافي الخدمة", "خصومات", "سلف", "ملاحظات"]
   ];
   for (let d = 1; d <= daysInMonth(ym); d++) {
@@ -3399,15 +3411,15 @@ window.exportPilot = function() {
   }
   aoa.push(["الإجمالي", "", "", "", "", t.h, t.o, t.svc, t.psvc, t.net, t.ded, t.adv, ""]);
   aoa.push([]);
-  aoa.push([`عدد ساعات العمل × ${t.rate.h}`, t.hourPay]);
-  if (t.leaveCap) aoa.push([`إجازة مدفوعة (${t.leaveDays} يوم × ${t.shiftHours} ساعة)`, t.leavePay]);
+  aoa.push([`عدد ساعات العمل × ${ esc(t.rate.h) }`, t.hourPay]);
+  if (t.leaveCap) aoa.push([`إجازة مدفوعة (${ esc(t.leaveDays) } يوم × ${ esc(t.shiftHours) } ساعة)`, t.leavePay]);
   aoa.push(["إجمالي المستحق", t.gross]);
   aoa.push(["إجمالي سلف", t.adv]);
   aoa.push(["إجمالي خصومات", t.ded]);
   if (t.defDue) aoa.push(["قسط سلفة مؤجلة", t.defDue]);
   if (t.defLeft) aoa.push(["باقي السلف المؤجلة", t.defLeft]);
   aoa.push([t.salary < 0 ? "عليه" : "صافي الراتب", Math.abs(t.salary)]);
-  download(aoa, p.name, `${p.name} ${ym}.xlsx`);
+  download(aoa, p.name, `${ esc(p.name) } ${ym}.xlsx`);
 };
 
 window.exportMonth = function() {
@@ -3643,7 +3655,7 @@ window.openHelp = function() {
   const page = currentPage();
   const h = HELP[page] || { title: "دليل الاستخدام", what: "مفيش شرح متاح للشاشة دي.", body: "" };
   $("helpTitle").textContent = h.title;
-  $("helpBody").innerHTML = `<div class="help-what">${h.what}</div>` +
+  $("helpBody").innerHTML = `<div class="help-what">${ esc(h.what) }</div>` +
     String(h.body || "")
       .replace(/\{hourRate\}/g, fmt(S.settings.hourRate))
       .replace(/\{orderRate\}/g, fmt(S.settings.orderRate));
