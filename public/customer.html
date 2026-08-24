@@ -11,7 +11,7 @@
        regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
        نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
        ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
-  <meta name="app-version" content="1.5.0" />
+  <meta name="app-version" content="1.6.0" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -560,21 +560,14 @@ a{color:var(--red);text-decoration:none}
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
           <span class="bub" style="width:26px;height:26px;border-radius:50%;background:var(--red);
             display:grid;place-items:center;font-size:12px;font-weight:800">1</span>
-          <b style="font-size:15px" id="sndStepTitle">بيانات المُرسِل</b>
+          <b style="font-size:15px">بيانات المُرسِل</b>
         </div>
 
-        <!-- 🔴 صاحب الحساب ممكن يكون الراسل أو المستقبل. قبل كده بياناته
-             المحفوظة كانت بتتحط في خانات المُرسِل على طول، فاللي بيطلب حاجة
-             **تيجي له** كان لازم يمسحها ويكتب بيانات الراسل بإيده، وبعدين
-             يكتب بياناته هو تاني في خانة المستلم. -->
-        <span class="lbl" style="margin-bottom:7px">إنت في الطلب ده</span>
-        <div class="chips" id="roleBox" style="margin-bottom:11px">
-          <div class="chip on" data-r="sender">📤 أنا الراسل</div>
-          <div class="chip" data-r="receiver">📥 أنا المستلم</div>
-        </div>
-        <div id="roleHint" style="font-size:12px;color:var(--muted);line-height:1.75;
-             margin:0 0 14px;padding:9px 11px;border-radius:10px;
-             background:rgba(232,25,44,.07);border:1px solid rgba(232,25,44,.2)"></div>
+        <!-- 🔴 الخانات دي بتفضل **فاضية** عن قصد. صاحب الحساب مش دايمًا هو
+             الراسل — ساعات بيطلب حاجة تيجي له، فبياناته بتبقى في خانة
+             المستلم مش هنا. التعبئة التلقائية كانت بتفرض عليه إنه الراسل
+             وتخلّيه يمسح بياناته كل مرة. اللي عايز بياناته هنا بيدوس
+             «عناوينك المحفوظة» تحت — دي اختيار مش إجبار. -->
         <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم منه الطيار الشحنة — غالبًا اسمك أو اسم محلك."><div class="fi">👤</div><div class="fb">
           <b>الاسم</b><input id="sndName" placeholder="اسم المُرسِل" /></div></div>
         <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت الاستلام. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
@@ -3003,14 +2996,17 @@ function startNewOrder() {
      الإدخال لما الحقل يبقى بنفس الاسم — فالعميل كان بيلاقي بيانات مستلم
      الطلب اللي فات. الاسم المتغيّر بيكسر المطابقة دي. */
   S.formNonce = Math.random().toString(36).slice(2, 8);
-  S.draft = { kind: "طرد", pieces: 1, role: "sender",
+  S.draft = { kind: "طرد", pieces: 1,
               sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
               receivers: [blankReceiver()] };
 
-  $("sndName").value  = S.profile.displayNameAr || "";
-  $("sndPhone").value = S.profile.phone1 || "";
-  renderAddr("sndAddrW", { value: S.profile.address || "" });
-  fillZoneSelect($("sndZone"), { selected: S.profile.defaultZoneId });
+  /* 🔴 فاضية عن قصد — شوف التعليق في خطوة ١. المنطقة مش بتتعبّى كمان
+     لأنها منطقة **الاستلام**، ولو صاحب الحساب هو المستلم بتبقى منطقة
+     الراسل مش منطقته هو. */
+  $("sndName").value  = "";
+  $("sndPhone").value = "";
+  renderAddr("sndAddrW", { value: "" });
+  fillZoneSelect($("sndZone"), {});
   $("sndZone").onchange = onSenderZone;
   onSenderZone();
   $("sndPinState").style.display = S.draft.sndLat ? "block" : "none";
@@ -3020,10 +3016,6 @@ function startNewOrder() {
   $("rcvNoData").onchange = onReceiverMode;
   onReceiverMode();                 // بيرسم بلوكات المستلمين جوّه
 
-  // مفتاح الدور — بعد onReceiverMode لأن applyOrderRole بتلمس بلوك المستلم
-  document.querySelectorAll("#roleBox .chip").forEach(c =>
-    c.onclick = () => setOrderRole(c.dataset.r));
-  applyOrderRole();
 
   $("odCodTotal").value = 0; $("odNote").value = "";
   $("odPieces").textContent = 1;
@@ -3409,61 +3401,6 @@ function updateRcvTotal() {
 }
 window.updateRcvTotal = updateRcvTotal;
 
-/* دور صاحب الحساب في الطلب — "sender" (الافتراضي) أو "receiver".
-   بيغيّر **مكان** بياناته المحفوظة بس؛ شكل الطلب اللي بيروح للسيرفر واحد
-   في الحالتين (المُرسِل والمستلم دايمًا في نفس الحقول). */
-function applyOrderRole() {
-  if (!S.draft) return;
-  const meSender = (S.draft.role || "sender") === "sender";
-  const p = S.profile || {};
-
-  const t = $("sndStepTitle");
-  if (t) t.textContent = meSender ? "بيانات المُرسِل" : "بيانات الراسل ليك";
-  const h = $("roleHint");
-  if (h) h.innerHTML = meSender
-    ? "بياناتك المحفوظة هتتحط في خانة <b>المُرسِل</b> — الطيار هييجي لك يستلم."
-    : "اكتب بيانات <b>الراسل</b> هنا (اللي الطيار هيروح له يستلم منه)، وبياناتك انت اتحطّت في خانة المستلم.";
-
-  document.querySelectorAll("#roleBox .chip").forEach(c =>
-    c.classList.toggle("on", c.dataset.r === (S.draft.role || "sender")));
-
-  // «عناوينك المحفوظة» مالهاش لازمة لما بيانات الراسل مش بتاعتك
-  const sv = $("sndSaved"); if (sv) sv.style.display = meSender ? "" : "none";
-
-  if (meSender) {
-    if (!$("sndName").value.trim())  $("sndName").value  = p.displayNameAr || "";
-    if (!$("sndPhone").value.trim()) $("sndPhone").value = p.phone1 || "";
-    if (!getAddr("sndAddrW").trim()) renderAddr("sndAddrW", { value: p.address || "" });
-    const z = $("sndZone");
-    if (z && !z.value && p.defaultZoneId != null) { z.value = String(p.defaultZoneId); onSenderZone(); }
-    return;
-  }
-
-  /* بياناته بتروح للمستلم. بنفضّي خانات الراسل **بس لو كانت لسه بياناته هو**
-     — لو كان كاتب بيانات راسل تاني مانمسحهاش عليه. */
-  if ($("sndName").value.trim()  === (p.displayNameAr || "")) $("sndName").value  = "";
-  if ($("sndPhone").value.trim() === (p.phone1 || ""))        $("sndPhone").value = "";
-  if (getAddr("sndAddrW").trim() === (p.address || ""))       renderAddr("sndAddrW", { value: "" });
-
-  readReceiverBlocks();
-  const r = (S.draft.receivers || [])[0];
-  if (r && !r.name && !r.phone) {
-    r.name    = p.displayNameAr || "";
-    r.phone   = p.phone1 || "";
-    r.phone2  = p.phone2 || "";
-    r.address = p.address || "";
-    if (p.defaultZoneId != null) r.zoneId = String(p.defaultZoneId);
-    r.lat = p.lat ?? null; r.lng = p.lng ?? null;
-    renderReceiverBlocks();
-  }
-}
-
-window.setOrderRole = function (r) {
-  if (!S.draft || S.draft.role === r) return;
-  S.draft.role = r;
-  applyOrderRole();
-};
-
 function drawKinds() {
   $("kindBox").innerHTML = KINDS.map(k =>
     `<div class="kind ${S.draft.kind === k ? "on" : ""}" data-v="${k}">
@@ -3487,12 +3424,37 @@ window.bumpPieces = bumpPieces;
 
 /* اختيار سريع من العناوين المحفوظة / المستلمين السابقين */
 function renderSavedPicks() {
-  if (S.addresses.length) {
-    $("sndSaved").innerHTML = `<span class="lbl">أو اختر من عناوينك</span>
-      <div class="chips">${S.addresses.map(a =>
+  /* الشرط كان S.addresses.length — يعني شيب «بياناتي» مكانش بيظهر أصلًا
+     للعميل اللي مالوش عناوين محفوظة، وهو أكتر واحد محتاجه. */
+  if (true) {
+    /* «بياناتي» شيب أول القايمة — الخانات بقت فاضية عن قصد (صاحب الحساب
+       مش دايمًا هو الراسل)، فده بيرجّع بياناته بضغطة بدل ما يكتبها كل مرة. */
+    $("sndSaved").innerHTML = `<span class="lbl">أو املا بضغطة</span>
+      <div class="chips">
+        <div class="chip" data-me="1">👤 بياناتي</div>
+        ${S.addresses.map(a =>
         `<div class="chip" data-id="${esc(a.id)}">${esc(a.label)}</div>`).join("")}</div>`;
     $("sndSaved").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      // شيب «بياناتي» — الاسم والتليفون والعنوان والمنطقة من الملف الشخصي
+      if (c.dataset.me) {
+        const p = S.profile || {};
+        $("sndName").value  = p.displayNameAr || "";
+        $("sndPhone").value = p.phone1 || "";
+        setAddr("sndAddrW", p.address || "");
+        $("sndZone").value = p.defaultZoneId != null ? String(p.defaultZoneId) : ""; onSenderZone();
+        S.draft.sndLat = p.lat ?? null; S.draft.sndLng = p.lng ?? null;
+        showMiniMap("sndMap", p.lat, p.lng);
+        const pb = $("sndPinState");
+        if (pb) { pb.style.display = p.lat ? "block" : "none";
+                  pb.innerHTML = p.lat ? "✅ نقطة الاستلام من بياناتك المحفوظة" : ""; }
+        toast("اتملت بياناتك", "ok");
+        return;
+      }
       const a = S.addresses.find(x => String(x.id) === c.dataset.id); if (!a) return;
+      /* العنوان المحفوظ بياخد اسم ورقم صاحب الحساب معاه — العناوين دي
+         بتاعته هو، فاللي بيستلم منها هو أو حد عنده. */
+      if (!$("sndName").value.trim())  $("sndName").value  = S.profile?.displayNameAr || "";
+      if (!$("sndPhone").value.trim()) $("sndPhone").value = S.profile?.phone1 || "";
       setAddr("sndAddrW", a.fullAddress);
       $("sndZone").value = a.zoneId != null ? String(a.zoneId) : ""; onSenderZone();
       S.draft.sndLat = a.lat ?? null; S.draft.sndLng = a.lng ?? null;
@@ -3737,10 +3699,9 @@ async function submitOrder() {
     const res = await api.post("/api/customer/orders", {
       senderName  : $("sndName").value.trim(),
       senderPhone : $("sndPhone").value.trim(),
-      /* الرقم التاني بتاع صاحب الحساب بيتبعت **بس** لو هو الراسل فعلًا —
-         قبل كده كان بيتبعت حتى لما الراسل شخص تاني، فالطيار كان ممكن يتصل
-         برقم مالوش علاقة بمكان الاستلام. */
-      senderPhone2: (S.draft.role || "sender") === "sender" ? (S.profile.phone2 || "") : "",
+      /* مابقاش بيتبعت رقم صاحب الحساب هنا: الراسل ممكن يكون شخص تاني
+         خالص، والطيار كان هيتصل برقم مالوش علاقة بمكان الاستلام. */
+      senderPhone2: "",
       senderAddress: getAddr("sndAddrW"),
       senderLat: S.draft.sndLat ?? null, senderLng: S.draft.sndLng ?? null,
       // نفس دور geoSender القديم: العميل حدّد النقطة بنفسه فالخرايط تعتمدها
