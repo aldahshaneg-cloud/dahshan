@@ -1680,6 +1680,7 @@ CREATE TABLE `store_contacts` (
   `phone` varchar(20) NOT NULL,
   `phone2` varchar(20) DEFAULT NULL,
   `address` varchar(190) DEFAULT NULL,
+  `zone_id` bigint(20) unsigned DEFAULT NULL COMMENT 'منطقة التسليم المعتادة للعميل ده — بتتعبّى تلقائيًا لما المحل يختاره من الدفتر',
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),

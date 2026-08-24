@@ -484,9 +484,9 @@
     /* ══════════════════════════════════════════════════════
        NAVIGATION
     ══════════════════════════════════════════════════════ */
-    const PAGES = ["home", "new-order", "my-orders", "profile"];
+    const PAGES = ["home", "new-order", "my-orders", "reports", "profile"];
     const PAGE_TITLES = { "home": "الرئيسية", "new-order": "طلب جديد",
-                          "my-orders": "طلباتي", "profile": "حسابي" };
+                          "my-orders": "طلباتي", "reports": "تقاريري", "profile": "حسابي" };
 
     window.navigateTo = function (page) {
       PAGES.forEach(p => {
@@ -501,6 +501,7 @@
       if (page === "my-orders")  renderOrders();
       if (page === "home")       renderHome();
       if (page === "profile")    renderStoreSettings();
+        if (page === "reports")    renderReports();
     };
 
     /* ══════════════════════════════════════════════════════
@@ -536,7 +537,7 @@
     //   1) /api/store-contacts  -- خاص بالمحل فقط (autocomplete)
     //   2) /api/receivers       -- نسخة للإدارة والفروع (السيرفر بيمنع
     //                              التكرار بنفس الرقم phone1 بنفسه)
-    async function saveStoreContact(username, { name, phone, phone2, address }) {
+    async function saveStoreContact(username, { name, phone, phone2, address, zoneId }) {
       if (!name || !phone) return;
 
       // 1) دفتر المحل — مفيش endpoint تعديل، فبنضيف الجديد بس
@@ -544,7 +545,8 @@
       if (!existing) {
         try {
           await api.post("/api/store-contacts", {
-            name, phone, phone2: phone2 || "", address: address || ""
+            name, phone, phone2: phone2 || "", address: address || "",
+            zoneId: zoneId || null
           });
         } catch (e) { console.warn("store contact save:", e?.message || e); }
       }
@@ -681,6 +683,7 @@
       refreshBadge();
       if (window._currentPage === "my-orders") renderOrders();
       if (window._currentPage === "home")      renderHome();
+      if (window._currentPage === "reports")   renderReports();
     }
 
     /** «عرض المزيد» — بيجيب الدفعة اللي بعدها بـoffset */
@@ -1243,10 +1246,26 @@
     };
     window.closePinMap = function() { document.getElementById("pinMapOverlay").style.display = "none"; };
 
+    /* opts.simple = العنوان بالتفصيل بس من غير محافظة/مدينة.
+       بيتستعمل في بيانات المستلم: منطقة التسليم هي اللي بتحدد الفرع والسعر
+       فعلًا، والمحافظة/المدينة كانوا تكرار بيطوّل الفورم على المحل اللي
+       بيسجّل عشرات الشحنات في اليوم. بيانات **الاستلام** بتفضل بالمحافظة
+       والمدينة زي ما هي — دي بتتكتب مرة واحدة في ملف المحل. */
     window.renderAddressWidget = function(containerId, opts = {}) {
       const el = document.getElementById(containerId);
       if (!el) return;
       const req = opts.required ? '<span style="color:#f87171">*</span>' : '';
+      if (opts.simple) {
+        el.innerHTML = `
+      <div class="addr-widget">
+        <div class="addr-field">
+          <label class="addr-label">عنوان التسليم ${req}</label>
+          <input class="addr-input" id="${containerId}-detail"
+                 placeholder="الشارع، رقم العمارة، الدور، الشقة…" type="text" />
+        </div>
+      </div>`;
+        return;
+      }
       el.innerHTML = `
         <div class="addr-widget">
           <div class="addr-row">
@@ -1330,7 +1349,10 @@
       const govSel    = document.getElementById(`${containerId}-gov`);
       const areaSel   = document.getElementById(`${containerId}-area`);
       const detailSel = document.getElementById(`${containerId}-detail`);
-      if (!govSel) return;
+        /* الوضع المبسّط (بيانات المستلم): مفيش محافظة/مدينة — النص كله بيروح
+           لخانة التفصيل. من غير الشرط ده الدالة كانت بتخرج من غير ما تملّي
+           حاجة، فاختيار عميل من الدفتر كان بيسيب خانة العنوان فاضية. */
+        if (!govSel) { if (detailSel) detailSel.value = text; return; }
       let remaining = text, foundGov = '';
       for (const g of window.EG_GOVERNORATES) {
         if (text.includes(g)) {
@@ -1421,7 +1443,7 @@
           <div class="img-strip" id="rImgs-${n}"></div>
         </div>`;
       $("delivContainer").appendChild(div);
-      window.renderAddressWidget(`rAddrWidget-${n}`, { required: false });
+      window.renderAddressWidget(`rAddrWidget-${n}`, { required: false, simple: true });
       window.renderGeoPicker(`rGeoBox-${n}`, `r${n}`, "نقطة التسليم");
       // نبدأ من محافظة/مدينة المحل — أغلب التوصيلات في نفس المنطقة، فالمحل
       // ما يضطرش يختارهم مع كل طرد. التفاصيل تفضل فاضية عشان عنوان العميل.
@@ -2036,7 +2058,8 @@
         for (const d of deliveries) {
           saveStoreContact(u.username, {
             name: d.receiverName, phone: d.receiverPhone,
-            phone2: d.receiverPhone2, address: d.address
+            phone2: d.receiverPhone2, address: d.address,
+            zoneId: d.zoneId          // عشان المرة الجاية تتعبّى لوحدها
           }).catch(() => {});
         }
 
@@ -2379,7 +2402,114 @@
       if (window._currentPage === "home") renderHome();
     }
 
-    window.renderHome = function () {
+    /* التقارير — فترات جاهزة، والحساب كله من نفس الأوردرات اللي في الكاش. */
+window._repRange = "30";   // 7 | 30 | 90 | all
+
+window.setRepRange = function (r) { window._repRange = r; renderReports(); };
+
+window.renderReports = function () {
+  const el = $("reportsBody"); if (!el) return;
+  const all = window._ordersData || [];
+  const days = window._repRange === "all" ? null : Number(window._repRange);
+  const since = days ? Date.now() - days * 864e5 : 0;
+  const os = days ? all.filter(o => new Date(o.createdAt || 0).getTime() >= since) : all;
+
+  const st = x => os.filter(o => o.status === x);
+  const delivered = st("تم التسليم");
+  const cancelled = st("ملغي");
+  const failed    = st("لم يتم التوصيل");
+  const live      = os.filter(o => !["تم التسليم", "ملغي", "لم يتم التوصيل"].includes(o.status));
+  const parcels   = os.reduce((a, o) => a + ((o.deliveries || []).length || 1), 0);
+  /* «المبيعات» = مبالغ التحصيل على الشحنات **المتسلّمة** بس — دي الفلوس
+     اللي اتحصّلت فعلًا. الشحنة الجارية لسه مش مبيعات، والملغية مش مبيعات. */
+  const sales     = delivered.reduce((a, o) => a + (Number(o.storePrepaid) || 0), 0);
+  const shipping  = delivered.reduce((a, o) => a + (Number(o.totalDeliveryPrice) || 0), 0);
+  const rate      = os.length ? Math.round(delivered.length / os.length * 100) : 0;
+
+  // متوسط زمن التسليم بالساعات — من الإنشاء للتسليم
+  const spans = delivered
+    .filter(o => o.createdAt && o.deliveredAt)
+    .map(o => (new Date(o.deliveredAt) - new Date(o.createdAt)) / 36e5)
+    .filter(h => h >= 0 && h < 24 * 30);
+  const avgH = spans.length ? (spans.reduce((a, b) => a + b, 0) / spans.length) : null;
+
+  // أكتر المناطق — من الطرود مش الشحنات (الشحنة ممكن تكون لأكتر من منطقة)
+  const zoneCount = {};
+  os.forEach(o => (o.deliveries || []).forEach(d => {
+    const z = (d.zoneName || "").trim(); if (z) zoneCount[z] = (zoneCount[z] || 0) + 1;
+  }));
+  const topZones = Object.entries(zoneCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const money = v => (Math.round(v) || 0).toLocaleString("ar-EG");
+  const card = (label, val, color, sub) => `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:13px;padding:13px;text-align:center">
+      <div style="font-size:1.3rem;font-weight:900;color:${color}">${val}</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-top:2px">${label}</div>
+      ${sub ? `<div style="font-size:.66rem;color:var(--muted);margin-top:3px;opacity:.75">${sub}</div>` : ""}
+    </div>`;
+
+  const chip = (r, t) => `<button onclick="setRepRange('${r}')" style="flex:1;padding:9px;border-radius:10px;
+      border:1px solid ${window._repRange === r ? "var(--sky)" : "var(--border)"};cursor:pointer;font-family:inherit;
+      background:${window._repRange === r ? "var(--sky)" : "var(--card)"};
+      color:${window._repRange === r ? "#fff" : "var(--text)"};font-size:.8rem;font-weight:700">${t}</button>`;
+
+  setHtml(el, `
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      ${chip("7", "٧ أيام")}${chip("30", "شهر")}${chip("90", "٣ شهور")}${chip("all", "الكل")}
+    </div>
+
+    <div style="font-size:.85rem;font-weight:800;margin-bottom:9px">📦 الشحنات</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin-bottom:16px">
+      ${card("إجمالي الشحنات", os.length, "var(--text)")}
+      ${card("عدد الطرود", parcels, "var(--text)")}
+      ${card("جارية", live.length, "var(--orng)")}
+      ${card("تم التسليم", delivered.length, "var(--green)")}
+      ${card("لم تكتمل", cancelled.length + failed.length, "var(--muted)", `${cancelled.length} ملغي · ${failed.length} لم يوصل`)}
+      ${card("نسبة النجاح", rate + "%", rate >= 80 ? "var(--green)" : rate >= 50 ? "var(--orng)" : "var(--red)")}
+    </div>
+
+    <div style="font-size:.85rem;font-weight:800;margin-bottom:9px">💰 الفلوس</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+      ${card("مبيعات محصّلة", money(sales) + " ج", "var(--green)", "من الشحنات المتسلّمة")}
+      ${card("مصاريف الشحن", money(shipping) + " ج", "var(--orng)", "على الشحنات المتسلّمة")}
+      ${card("متوسط الشحنة", delivered.length ? money(sales / delivered.length) + " ج" : "—", "var(--sky)")}
+    </div>
+
+    <div style="font-size:.85rem;font-weight:800;margin-bottom:9px">⚙️ التشغيل</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:.83rem;color:var(--muted)">متوسط وقت التسليم</span>
+        <b style="font-size:.86rem">${avgH === null ? "—" : avgH < 24 ? avgH.toFixed(1) + " ساعة" : (avgH / 24).toFixed(1) + " يوم"}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:.83rem;color:var(--muted)">متوسط الطرود في الشحنة</span>
+        <b style="font-size:.86rem">${os.length ? (parcels / os.length).toFixed(1) : "—"}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0">
+        <span style="font-size:.83rem;color:var(--muted)">أكتر يوم شحنات</span>
+        <b style="font-size:.86rem">${(() => {
+          const byDay = {};
+          os.forEach(o => { const d = new Date(o.createdAt || 0).toLocaleDateString("ar-EG"); byDay[d] = (byDay[d] || 0) + 1; });
+          const top = Object.entries(byDay).sort((a, b) => b[1] - a[1])[0];
+          return top ? esc(top[0]) + " (" + top[1] + ")" : "—";
+        })()}</b></div>
+    </div>
+
+    <div style="font-size:.85rem;font-weight:800;margin-bottom:9px">📍 أكتر مناطق بتشحن ليها</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px;margin-bottom:14px">
+      ${topZones.length ? topZones.map(([z, c]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:.84rem">${esc(z)}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:${Math.round(c / topZones[0][1] * 70)}px;height:6px;border-radius:3px;background:var(--sky)"></div>
+            <b style="font-size:.82rem;min-width:22px;text-align:left">${c}</b></div>
+        </div>`).join("") : `<div style="font-size:.8rem;color:var(--muted);text-align:center">لسه مفيش شحنات</div>`}
+    </div>
+
+    <div style="font-size:.7rem;color:var(--muted);text-align:center;line-height:1.8;padding-bottom:10px">
+      الأرقام محسوبة من آخر ١٠٠٠ شحنة في حسابك · بتتحدّث لوحدها مع كل شحنة جديدة
+    </div>`);
+};
+
+window.renderHome = function () {
       const el = $("homeBody"); if (!el) return;
       const u = window._currentUser || {};
       const w = window._wallet || { balance: 0, txns: [] };
@@ -2593,6 +2723,13 @@
       set(`rPhone-${n}`, c.phone);
       set(`rPhone2-${n}`, c.phone2 || "");
       if (window.setAddressValue) window.setAddressValue(`rAddrWidget-${n}`, c.address || "");
+      /* منطقة التسليم من الدفتر — كان المحل بيعيد اختيارها لنفس العميل مع
+         كل شحنة. change لازم يتبعت بالإيد: القيمة اتحطّت برمجيًا فالحدث
+         مابيطلعش لوحده، والسعر والفرع بيتحسبوا من المنطقة. */
+      if (c.zoneId) {
+        const zEl = document.getElementById(`rZone-${n}`);
+        if (zEl) { zEl.value = String(c.zoneId); zEl.dispatchEvent(new Event("change")); }
+      }
       hideDropdown(n, 0);
       // الاختيار من الدفتر بيحط الرقم برمجيًا فمفيش input event — بنشغّل بحث الثقة يدويًا
       document.getElementById(`rPhone-${n}`)?.dispatchEvent(new Event("input"));
@@ -3639,6 +3776,16 @@
 
   <!-- ── PAGE: My Orders ── -->
   <!-- ── PAGE: Home ── -->
+  <!-- ═══ التقارير الدورية ═══════════════════════════════════════════
+       بتتحسب **محليًا** من window._ordersData اللي المستطلع جايبه أصلًا —
+       مفيش مسار API جديد. السبب: البيانات كلها موجودة في المتصفح، وأي
+       مسار تقارير جديد كان هيعيد نفس الحساب على السيرفر ويكسر بوابة
+       route:coverage من غير أي مكسب. الكاش مسقوف بآخر ١٠٠٠ شحنة
+       (نفس سقف المستطلع) وده مكتوب صريح تحت الأرقام. -->
+  <div class="page" id="page-reports">
+    <div id="reportsBody"></div>
+  </div>
+
   <div class="page" id="page-home">
     <div id="homeBody"></div>
   </div>
@@ -3798,6 +3945,10 @@
       <span class="ni">📋</span>
       <span>طلباتي</span>
       <span class="nav-badge" id="orders-badge"></span>
+    </button>
+    <button class="nav-btn" data-page="reports" onclick="navigateTo('reports')">
+      <span class="ni">📊</span>
+      <span>تقاريري</span>
     </button>
     <button class="nav-btn" data-page="profile" onclick="navigateTo('profile')">
       <span class="ni">👤</span>

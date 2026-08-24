@@ -1256,13 +1256,18 @@ class EntitiesController
         }
 
         DB::insert(
-            'INSERT INTO store_contacts (store_username, name, phone, phone2, address, created_at) VALUES (?,?,?,?,?,?)',
+            /* zone_id اتضاف 2026-08-24: المحل كان بيعيد اختيار منطقة التسليم
+               لنفس العميل مع كل شحنة رغم إن الدفتر فيه بياناته. القيمة
+               اختيارية — الدفتر القديم كله NULL والواجهة بتتعامل معاه عادي. */
+            'INSERT INTO store_contacts (store_username, name, phone, phone2, address, zone_id, created_at)
+             VALUES (?,?,?,?,?,?,?)',
             [
                 $owner,
                 $name,
                 $phone,
                 trim((string) ($b['phone2'] ?? '')) ?: null,
                 trim((string) ($b['address'] ?? '')) ?: null,
+                ((int) ($b['zoneId'] ?? 0)) ?: null,
                 WireTime::nowDb(),
             ]
         );

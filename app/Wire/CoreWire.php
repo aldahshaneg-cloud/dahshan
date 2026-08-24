@@ -211,6 +211,8 @@ final class CoreWire
             'phone'     => $r['phone'],
             'phone2'    => $r['phone2'] ?? null,
             'address'   => $r['address'] ?? null,
+            // منطقة التسليم المعتادة — بتتعبّى تلقائيًا لما المحل يختار العميل
+            'zoneId'    => isset($r['zone_id']) && $r['zone_id'] !== null ? (int) $r['zone_id'] : null,
             'createdAt' => WireTime::toWire($r['created_at'] ?? null),
         ];
     }
