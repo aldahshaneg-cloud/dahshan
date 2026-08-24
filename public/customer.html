@@ -634,12 +634,12 @@ a{color:var(--red);text-decoration:none}
         </div>
         <span class="lbl">نوع الطلب</span>
         <div class="kinds" id="kindBox" data-tip="نوع الشحنة — بيساعد الطيار يجهّز نفسه (وثيقة صغيرة ولا كرتونة كبيرة)."></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <!-- كان عمودين (التحصيل + قيمة البضاعة). قيمة البضاعة اتشالت بطلب صاحب
+           النظام فبقى عمود واحد — من غير كده كان هيفضل نص الصف فاضي. -->
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px">
           <div data-tip="مجموع مبالغ التحصيل المكتوبة على الطرود في الخطوة اللي فاتت. التحصيل بقى لكل طرد لوحده."><span class="lbl">إجمالي التحصيل (ج.م)</span>
             <input id="odCodTotal" type="text" value="0" readonly
                    style="color:var(--red);font-weight:800" /></div>
-          <div data-tip="قيمة البضاعة نفسها — بتستخدم للتأمين وتقدير التعويض لو حصل تلف. مش بتتحصّل من المستلم."><span class="lbl">قيمة البضاعة (ج.م)</span>
-            <input id="odValue" type="number" inputmode="decimal" min="0" value="0" /></div>
         </div>
         <span class="lbl" style="margin-top:14px;display:none">طريقة الدفع</span>
         <div class="chips" id="payBox" style="display:none" data-tip="«كاش» = سعر التوصيل يتدفع عند التسليم. «مدفوع مسبقًا» = اتدفع قبل كده."></div>
@@ -2949,7 +2949,7 @@ function startNewOrder() {
   $("rcvNoData").onchange = onReceiverMode;
   onReceiverMode();                 // بيرسم بلوكات المستلمين جوّه
 
-  $("odCodTotal").value = 0; $("odValue").value = 0; $("odNote").value = "";
+  $("odCodTotal").value = 0; $("odNote").value = "";
   $("odPieces").textContent = 1;
   drawKinds();
   renderSavedPicks();
@@ -3624,7 +3624,10 @@ async function submitOrder() {
          عشان عقد الـAPI مايتغيّرش والتقارير القديمة تفضل متسقة. */
       paymentMethod: "كاش",
       piecesCount: S.draft.pieces,
-      goodsValue: parseFloat($("odValue").value) || 0
+      /* قيمة البضاعة اتشالت من الفورم (طلب صاحب النظام) — بتتبعت صفر عشان
+         عقد الـAPI مايتغيّرش والأوردرات القديمة اللي فيها قيمة تفضل تتعرض
+         زي ما هي في التفاصيل والتقارير. */
+      goodsValue: 0
     });
     const saved = res.order;
     mergeOrders([saved]);
