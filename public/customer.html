@@ -6,6 +6,12 @@
   <meta name="theme-color" content="#0a0a0b" />
   <title>الدهشان | تطبيق العملاء</title>
 
+  <!-- 🔴 النسخة هنا مش جوه الجافاسكربت عن قصد: فحص التحديث بيجيب الملف ده
+       من السيرفر ويقرا منه النسخة بمحلّل HTML. لو كانت ثابت JS كنا هنحتاج
+       regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
+       نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
+       ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
+  <meta name="app-version" content="1.4.0" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -764,6 +770,8 @@ a{color:var(--red);text-decoration:none}
     <div class="menu-row" id="pushRow" onclick="enablePush()">
       <div class="mi">📢</div><b>تفعيل الإشعارات الفورية</b><span class="ch" id="pushState">‹</span></div>
     <div class="menu-row" onclick="openSupport()"><div class="mi">💬</div><b>الدعم والمساعدة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="doAppUpdate()"><div class="mi">🔄</div>
+      <b>تحديث التطبيق</b><span class="ch">‹</span></div>
     <div class="menu-row" onclick="openAbout()"><div class="mi">ℹ️</div><b>عن التطبيق</b><span class="ch">‹</span></div>
     <button class="btn" style="margin-top:20px" onclick="doLogout()">⏻ تسجيل الخروج</button>
   </div>
@@ -2838,11 +2846,61 @@ const openSupport = () => openModal("الدعم والمساعدة", `
       ? `<div style="font-size:12.5px;color:var(--muted);margin-top:12px">
            أرقام الدعم لسه ماتسجّلتش — كلّم الفرع</div>` : ""}
   </div>`);
+/* نسخة التطبيق الشغّالة دلوقتي — من الـmeta في <head>. */
+const APP_VERSION =
+  document.querySelector('meta[name="app-version"]')?.content || "—";
+
+/* بيجيب customer.html من السيرفر ويقرا نسخته. cache:"reload" بيتخطّى كاش
+   المتصفح **وكاش الـservice worker** — من غيره ممكن نقارن النسخة بنفسها. */
+async function latestVersion() {
+  const res = await fetch("customer.html?_v=" + Date.now(), { cache: "reload" });
+  const txt = await res.text();
+  const doc = new DOMParser().parseFromString(txt, "text/html");
+  return doc.querySelector('meta[name="app-version"]')?.content || null;
+}
+
+/* فحص التحديث — بيتنده من صف القايمة ومن حوار «عن التطبيق».
+   لو فيه نسخة أحدث: بنجبر الـservice worker يجيب نسخته كمان (وإلا ممكن
+   يفضل مخدّم الشِل القديم) وبعدين نعيد التحميل مرة واحدة. */
+async function doAppUpdate(btnId) {
+  const btn = btnId ? document.getElementById(btnId) : null;
+  const old = btn ? btn.textContent : "";
+  if (btn) { btn.textContent = "بنشوف…"; btn.disabled = true; }
+  try {
+    const latest = await latestVersion();
+    if (latest && latest !== APP_VERSION) {
+      if (btn) btn.textContent = "بننزّل " + latest + "…";
+      toast("فيه نسخة جديدة — بنحدّث", "ok");
+      if ("serviceWorker" in navigator) {
+        try {
+          const rs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(rs.map(r => r.update().catch(() => {})));
+        } catch (_) {}
+      }
+      setTimeout(() => location.reload(), 700);
+      return;
+    }
+    toast("إنت على أحدث نسخة (" + APP_VERSION + ") ✓", "ok");
+  } catch (_) {
+    toast("مفيش نت — جرّب تاني", "err");
+  }
+  if (btn) { btn.textContent = old; btn.disabled = false; }
+}
+window.doAppUpdate = doAppUpdate;
+
 const openAbout = () => openModal("عن التطبيق", `
   <div style="text-align:center;padding:10px 0">
     <img src="assets/logo.png" style="width:170px" alt="" />
     <div style="font-size:13px;color:var(--muted);margin-top:14px;line-height:1.9">
-      تطبيق عملاء الدهشان<br />توصيل أسرع.. لكل مكان<br />الإصدار 1.0.0</div>
+      تطبيق عملاء الدهشان<br />توصيل أسرع.. لكل مكان</div>
+    <div style="margin-top:16px;padding:13px;border:1px solid var(--line);border-radius:12px">
+      <div style="font-size:12.5px;color:var(--muted)">النسخة الحالية</div>
+      <b style="font-size:20px;direction:ltr;display:block;margin-top:3px">${esc(APP_VERSION)}</b>
+      <button class="btn ghost sm" id="_updBtn" style="margin-top:13px;width:100%"
+              onclick="doAppUpdate('_updBtn')">🔄 فحص التحديثات</button>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.8">
+        التطبيق بيحدّث نفسه لوحده أول ما تفتحه ومعاك نت — الزرار ده لو حابب تتأكد بنفسك</div>
+    </div>
   </div>`);
 window.openSupport = openSupport; window.openAbout = openAbout;
 
