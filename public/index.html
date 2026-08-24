@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#08080a" />
+<title>الدهشان | توصيل أسرع.. لكل مكان</title>
+<meta name="description" content="الدهشان لخدمات التوصيل السريع — تتبّع شحنتك لحظيًا، خدمة توصيل للمحلات والأفراد، وتغطية تشمل المنصورة وطنطا ودمياط والعبور." />
+
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<meta property="og:title" content="الدهشان | توصيل أسرع.. لكل مكان" />
+<meta property="og:description" content="تتبّع شحنتك لحظيًا واعرف مكانها في أي وقت." />
+<meta property="og:image" content="assets/logo.png" />
+<meta property="og:type" content="website" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+
+<!-- نظام التصميم الموحّد — بيتشارك مع صفحات الموقع الجديدة.
+     متحطوط قبل الـstyle المضمّن عن قصد: المضمّن يفضل الحاكم فالشكل مايتغيّرش. -->
+<link rel="stylesheet" href="assets/css/site.css" />
+<style>
+/* ══════════════════════════════════════════════════════════════
+   الدهشان — الموقع العام
+   الهوية مأخوذة من اللوجو: أسود عميق + أحمر قاني + أبيض،
+   وخطوط سرعة مائلة كعنصر بصري متكرر.
+══════════════════════════════════════════════════════════════ */
+:root{
+  --ink:#08080a; --ink2:#0f0f12; --card:#141417; --line:#232329;
+  --red:#e8192c; --red-d:#8e0f1c; --red-l:#ff2d42;
+  --txt:#ffffff; --muted:#8e8e97;
+  --green:#22c55e; --orange:#f59e0b; --blue:#3b82f6;
+  --r:16px; --wrap:1140px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--txt);font-family:'Tajawal',system-ui,sans-serif;
+  overflow-x:hidden;line-height:1.7}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font-family:inherit;color:inherit;font-size:inherit}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 20px}
+
+/* ── خطوط السرعة (موتيف اللوجو) ─────────────────────────── */
+.speed{position:absolute;inset:0;overflow:hidden;pointer-events:none;opacity:.5}
+.speed i{position:absolute;height:2px;border-radius:2px;
+  background:linear-gradient(270deg,transparent,var(--red),transparent);
+  transform:skewX(-24deg);animation:dash linear infinite}
+@keyframes dash{from{transform:translateX(-120%) skewX(-24deg)}
+                to{transform:translateX(320%) skewX(-24deg)}}
+@media (prefers-reduced-motion:reduce){.speed i{animation:none;opacity:.35}}
+
+/* ── الهيدر ─────────────────────────────────────────────── */
+header{position:sticky;top:0;z-index:80;background:rgba(8,8,10,.86);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;gap:16px;height:66px}
+.nav .logo{height:40px;width:auto;flex:none}
+.nav nav{margin-inline-start:auto;display:flex;gap:26px;align-items:center}
+.nav nav a{font-size:14.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.nav nav a:hover{color:var(--txt)}
+.nav .cta{background:var(--red);color:#fff;padding:9px 18px;border-radius:11px;
+  font-weight:800;font-size:14px}
+.nav .cta:hover{background:var(--red-d)}
+.burger{display:none;margin-inline-start:auto;width:42px;height:42px;border-radius:11px;
+  background:var(--card);border:1px solid var(--line);cursor:pointer;font-size:18px}
+/* رقم خدمة العملاء في الهيدر — ظاهر من غير ما حد ينزل لآخر الصفحة */
+.nav .hdr-tel{display:flex;align-items:center;gap:9px;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;padding:7px 13px}
+.nav .hdr-tel:hover{border-color:rgba(232,25,44,.5)}
+.nav .hdr-tel .ic{font-size:17px}
+.nav .hdr-tel small{display:block;font-size:10.5px;color:var(--muted);font-weight:700;line-height:1.2}
+.nav .hdr-tel b{display:block;font-size:15px;font-weight:900;color:var(--txt);direction:ltr;line-height:1.3}
+@media(max-width:860px){
+  .nav .hdr-tel{margin:12px 20px 0;justify-content:center;padding:12px;width:auto}
+  .nav .hdr-tel small{display:inline;margin-inline-end:6px}
+  .nav .hdr-tel b{display:inline}
+}
+@media(max-width:860px){
+  .nav nav{position:fixed;inset:66px 0 auto;flex-direction:column;gap:0;
+    background:var(--ink2);border-bottom:1px solid var(--line);
+    padding:8px 0 14px;display:none}
+  .nav nav.open{display:flex}
+  .nav nav a{width:100%;padding:14px 22px;font-size:16px;border-bottom:1px solid var(--line)}
+  .nav .cta{margin:12px 20px 0;text-align:center;border-radius:12px;padding:13px}
+  .burger{display:grid;place-items:center}
+}
+
+/* ── الهيرو ─────────────────────────────────────────────── */
+.hero{position:relative;padding:54px 0 64px;overflow:hidden;
+  background:
+    radial-gradient(1000px 460px at 78% -8%,rgba(232,25,44,.20),transparent 62%),
+    radial-gradient(760px 400px at 12% 8%,rgba(142,15,28,.16),transparent 60%),
+    var(--ink)}
+.hero-in{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr .95fr;
+  gap:44px;align-items:center}
+.hero h1{font-size:clamp(30px,5.2vw,52px);font-weight:900;line-height:1.22;letter-spacing:-.5px}
+.hero h1 span{color:var(--red)}
+.hero p.lead{color:#c8c8d0;font-size:clamp(15px,2.1vw,18px);margin-top:14px;max-width:520px}
+.hero-logo{filter:drop-shadow(0 18px 44px rgba(232,25,44,.34));
+  max-width:300px;margin-top:26px;align-self:start}
+.hero-badges{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.hero-badges span{background:rgba(255,255,255,.05);border:1px solid var(--line);
+  padding:8px 15px;border-radius:999px;font-size:13px;font-weight:700}
+@media(max-width:860px){
+  .hero{padding:34px 0 44px}
+  .hero-in{grid-template-columns:1fr;gap:26px;text-align:center}
+  .hero p.lead{margin-inline:auto}
+  .hero-badges{justify-content:center}
+  /* أصغر بكتير على الموبايل: 320 كانت بتاخد نص الشاشة وتدفن التتبّع */
+  .hero-logo{max-width:190px;margin:2px auto 0}
+}
+
+/* ── صندوق التتبّع ──────────────────────────────────────── */
+.track-card{background:linear-gradient(150deg,#17171b,#0d0d10);
+  border:1px solid var(--line);border-radius:22px;padding:26px;
+  box-shadow:0 26px 70px rgba(0,0,0,.6);position:relative;overflow:hidden}
+.track-card::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--red),var(--red-d))}
+.track-card h2{font-size:20px;font-weight:900;display:flex;align-items:center;gap:9px}
+.track-card .hint{color:var(--muted);font-size:13.5px;margin:6px 0 16px}
+.track-form{display:flex;gap:10px}
+.track-form input{flex:1;min-width:0;background:#08080a;border:1.5px solid var(--line);
+  border-radius:13px;padding:15px 17px;font-size:16px;font-weight:700;outline:none;
+  direction:ltr;text-align:center;letter-spacing:1.5px;transition:border-color .2s}
+.track-form input:focus{border-color:var(--red)}
+.track-form input::placeholder{letter-spacing:normal;font-weight:500;color:#54545e}
+.track-form button{background:var(--red);color:#fff;border:none;border-radius:13px;
+  padding:0 26px;font-weight:800;font-size:15.5px;cursor:pointer;white-space:nowrap}
+.track-form button:hover{background:var(--red-d)}
+.track-form button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:520px){.track-form{flex-direction:column}.track-form button{padding:15px}}
+
+/* ── نتيجة التتبّع ──────────────────────────────────────── */
+#result{margin-top:18px;display:none}
+#result.on{display:block;animation:rise .32s ease}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.res-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.res-num{font-size:21px;font-weight:900;direction:ltr}
+.pill{padding:6px 15px;border-radius:999px;font-size:13px;font-weight:800;white-space:nowrap}
+.p-new{background:rgba(59,130,246,.16);color:#7fb0ff}
+.p-way{background:rgba(245,158,11,.16);color:var(--orange)}
+.p-done{background:rgba(34,197,94,.16);color:var(--green)}
+.p-fail{background:rgba(232,25,44,.16);color:#ff6b78}
+.p-cancel{background:rgba(142,142,151,.16);color:var(--muted)}
+.tl{padding:20px 0 6px}
+.tl-row{display:flex;gap:14px;position:relative;padding-bottom:22px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row .dot{width:15px;height:15px;border-radius:50%;background:#26262e;flex:none;
+  margin-top:3px;z-index:2;transition:.3s}
+.tl-row.on .dot{background:var(--red);box-shadow:0 0 0 5px rgba(232,25,44,.16)}
+.tl-row.now .dot{animation:pulse 1.7s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 5px rgba(232,25,44,.16)}
+                 50%{box-shadow:0 0 0 11px rgba(232,25,44,.04)}}
+.tl-row::before{content:"";position:absolute;inset-inline-start:7px;top:18px;bottom:0;
+  width:1.5px;background:#26262e}
+.tl-row:last-child::before{display:none}
+.tl-row.on::before{background:var(--red)}
+.tl-row b{font-size:14.5px;display:block}
+.tl-row.off b{color:var(--muted);font-weight:500}
+.tl-row span{font-size:12px;color:var(--muted)}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;
+  margin-top:8px;padding-top:16px;border-top:1px solid var(--line)}
+.res-cell{background:#0b0b0e;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.res-cell b{display:block;font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:3px}
+.res-cell span{font-size:14.5px;font-weight:700}
+.note{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.22);
+  border-radius:12px;padding:12px 15px;font-size:12.5px;color:#a8a8b2;margin-top:14px;line-height:1.8}
+.err{background:rgba(232,25,44,.08);border:1px solid rgba(232,25,44,.3);border-radius:13px;
+  padding:16px;font-size:14px;font-weight:600;text-align:center}
+
+/* ── أقسام عامة ─────────────────────────────────────────── */
+section{padding:66px 0;position:relative}
+section.alt{background:var(--ink2)}
+.sec-top{text-align:center;max-width:640px;margin:0 auto 40px}
+.kicker{color:var(--red);font-weight:900;font-size:13px;letter-spacing:2.4px;
+  text-transform:uppercase;margin-bottom:10px}
+.sec-top h2{font-size:clamp(24px,3.6vw,34px);font-weight:900;line-height:1.3}
+.sec-top p{color:var(--muted);margin-top:12px;font-size:15.5px}
+
+.grid{display:grid;gap:18px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:26px 22px;transition:.25s}
+.tile:hover{border-color:rgba(232,25,44,.45);transform:translateY(-4px)}
+.tile .ico{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;
+  font-size:24px;background:rgba(232,25,44,.12);color:var(--red);margin-bottom:15px}
+.tile h3{font-size:17.5px;font-weight:800;margin-bottom:8px}
+.tile p{color:var(--muted);font-size:14px}
+
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px}
+.stat{text-align:center;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:24px 14px}
+.stat b{display:block;font-size:34px;font-weight:900;color:var(--red);line-height:1}
+.stat span{font-size:13.5px;color:var(--muted);margin-top:6px;display:block}
+
+/* ── مناطق التغطية ──────────────────────────────────────── */
+.zones{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.zone{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:11px 19px;font-size:14.5px;font-weight:700}
+.zone small{color:var(--red);font-weight:800;margin-inline-start:6px}
+.zones-more{margin-top:18px;text-align:center}
+.zones-more button{background:transparent;color:var(--red);border:1.5px solid rgba(232,25,44,.45);
+  border-radius:12px;padding:12px 26px;font-weight:800;font-size:14.5px;cursor:pointer;
+  font-family:inherit;transition:.2s}
+.zones-more button:hover{background:rgba(232,25,44,.1)}
+
+/* ── نافذة كل المناطق ───────────────────────────────────── */
+#zonesModal{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.75);
+  display:none;align-items:center;justify-content:center;padding:18px}
+#zonesModal.on{display:flex;animation:rise .25s ease}
+#zonesModal .zm-box{background:var(--card);border:1px solid var(--line);border-radius:20px;
+  width:100%;max-width:640px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+#zonesModal .zm-hd{display:flex;align-items:center;gap:12px;padding:20px 22px;
+  border-bottom:1px solid var(--line)}
+#zonesModal .zm-hd h3{font-size:18px;font-weight:900;flex:1}
+#zonesModal .zm-x{background:transparent;border:1px solid var(--line);color:var(--muted);
+  width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:16px;line-height:1}
+#zonesModal .zm-search{padding:14px 22px 0}
+#zonesModal .zm-search input{width:100%;background:#08080a;border:1.5px solid var(--line);
+  border-radius:12px;padding:13px 15px;font-size:15px;font-weight:600;outline:none;
+  color:inherit;font-family:inherit}
+#zonesModal .zm-search input:focus{border-color:var(--red)}
+#zonesModal .zm-body{padding:16px 22px 22px;overflow:auto}
+#zonesModal .zm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:9px}
+#zonesModal .zm-item{background:#08080a;border:1px solid var(--line);border-radius:11px;
+  padding:11px 14px;font-size:14px;font-weight:700;display:flex;align-items:center;
+  justify-content:space-between;gap:8px}
+#zonesModal .zm-item small{color:var(--red);font-weight:800;white-space:nowrap}
+#zonesModal .zm-empty{text-align:center;color:var(--muted);padding:26px;font-size:14px}
+
+/* ── التطبيقات ──────────────────────────────────────────── */
+.app-card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+  padding:28px 22px;text-align:center;transition:.25s;display:flex;flex-direction:column}
+.app-card:hover{border-color:rgba(232,25,44,.45);transform:translateY(-4px)}
+.app-card .ic{width:66px;height:66px;border-radius:20px;display:grid;place-items:center;
+  font-size:31px;background:rgba(232,25,44,.12);color:var(--red);margin:0 auto 16px}
+.app-card h3{font-size:18.5px;font-weight:800;margin-bottom:7px}
+.app-card p{color:var(--muted);font-size:14px;flex:1;margin-bottom:18px}
+.app-card .go{background:var(--red);color:#fff;border-radius:12px;padding:13px;
+  font-weight:800;font-size:14.5px;display:block}
+.app-card .go:hover{background:var(--red-d)}
+.app-card .soon{background:var(--card);border:1px solid var(--line);color:var(--muted);
+  border-radius:12px;padding:13px;font-weight:700;font-size:14px}
+
+/* ── الشركاء ────────────────────────────────────────────── */
+.p-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.p-item{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px;text-align:center;transition:.25s}
+.p-item:hover{border-color:rgba(232,25,44,.4);transform:translateY(-3px)}
+.p-item .lg{height:78px;background:#fff;border-radius:12px;display:grid;place-items:center;
+  overflow:hidden;margin-bottom:13px;padding:8px}
+.p-item .lg img{max-height:62px;width:auto;object-fit:contain}
+.p-item .lg.none{background:#1a1a1f;color:#4d4d56;font-size:28px}
+.p-item b{display:block;font-size:15px;font-weight:800;margin-bottom:4px}
+.p-item span{font-size:12.5px;color:var(--muted);display:block;line-height:1.65}
+
+/* ── الانضمام ───────────────────────────────────────────── */
+.tabs{display:flex;gap:10px;justify-content:center;margin-bottom:26px;flex-wrap:wrap}
+.tab{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:12px 26px;font-weight:800;font-size:14.5px;cursor:pointer}
+.tab.on{background:var(--red);border-color:var(--red);color:#fff}
+.pane{display:none;max-width:660px;margin:0 auto}
+.pane.on{display:block}
+.f-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.f{display:flex;flex-direction:column;gap:7px}
+.f.full{grid-column:1/-1}
+.f label{font-size:13px;color:var(--muted);font-weight:700}
+.f input,.f select,.f textarea{background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:13px 15px;outline:none;width:100%;transition:border-color .2s}
+.f input:focus,.f select:focus,.f textarea:focus{border-color:var(--red)}
+.f select{appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%238e8e97' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:left 15px center;padding-left:38px}
+.btn-main{width:100%;background:var(--red);color:#fff;border:none;border-radius:13px;
+  padding:16px;font-weight:800;font-size:16px;cursor:pointer;margin-top:6px}
+.btn-main:hover{background:var(--red-d)}
+.btn-main:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:640px){.f-grid{grid-template-columns:1fr}}
+.msg{border-radius:12px;padding:14px;font-size:14px;font-weight:700;text-align:center;
+  margin-top:14px;display:none}
+.msg.on{display:block}
+.msg.ok{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35);color:var(--green)}
+.msg.bad{background:rgba(232,25,44,.1);border:1px solid rgba(232,25,44,.35);color:#ff6b78}
+
+/* ── تواصل + فوتر ───────────────────────────────────────── */
+.contact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.cc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:24px;text-align:center}
+.cc .ico{font-size:28px;margin-bottom:10px}
+.cc b{display:block;font-size:15.5px;margin-bottom:5px}
+.cc a,.cc span{color:var(--muted);font-size:14px;direction:ltr;display:inline-block}
+.cc a:hover{color:var(--red)}
+footer{background:#050506;border-top:1px solid var(--line);padding:38px 0 26px;text-align:center}
+footer img{height:52px;margin:0 auto 14px;opacity:.92}
+footer .links{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+footer .links a{font-size:13.5px;color:var(--muted);font-weight:700}
+footer .links a:hover{color:var(--red)}
+footer .legal{display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap;
+  margin-bottom:12px;color:var(--muted);font-size:13px;font-weight:600}
+footer .legal b{color:#c9c9d2;font-weight:800;margin-inline-start:4px}
+footer .legal i{width:4px;height:4px;border-radius:50%;background:#3a3a44;display:inline-block}
+@media(max-width:520px){footer .legal i{display:none}
+  footer .legal{flex-direction:column;gap:6px}}
+footer .cr{color:#4d4d56;font-size:12.5px}
+
+/* واتساب عائم */
+.wa{position:fixed;inset-inline-end:18px;bottom:calc(18px + var(--safe-b));z-index:70;
+  width:56px;height:56px;border-radius:50%;background:#25d366;display:grid;place-items:center;
+  box-shadow:0 8px 26px rgba(37,211,102,.42)}
+.wa svg{width:30px;height:30px;fill:#fff}
+.wa:hover{transform:scale(1.07)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ الهيدر ═══════════ -->
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="nav__brand" href="#top" aria-label="الدهشان — الرئيسية">
+      <img class="nav__logo" src="assets/logo.png" alt="الدهشان لخدمات التوصيل" />
+    </a>
+
+    <div class="nav__menu">
+      <a class="nav__link" href="#track">تتبّع شحنتك</a>
+      <a class="nav__link" href="services.html">خدماتنا</a>
+      <a class="nav__link" href="pricing.html">الأسعار والمناطق</a>
+      <a class="nav__link" href="about.html">من نحن</a>
+      <a class="nav__link" href="faq.html">أسئلة شائعة</a>
+      <a class="nav__link" href="contact.html">تواصل معنا</a>
+    </div>
+
+    <a class="nav__cta" href="#track">تتبّع شحنتك</a>
+
+    <button class="burger" id="burger" type="button" aria-label="فتح القائمة"
+            aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════ درج الموبايل ═══════════ -->
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true"
+       aria-label="القائمة الرئيسية" aria-hidden="true">
+  <div class="drawer__head">
+    <a class="nav__brand" href="#top">
+      <img class="nav__logo" src="assets/logo.png" alt="الدهشان" />
+    </a>
+    <button class="drawer__close" id="drawerClose" type="button" aria-label="إغلاق القائمة">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7l-1.4-1.4L9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3 1.4 1.4Z"/></svg>
+    </button>
+  </div>
+
+  <nav class="drawer__nav" aria-label="القائمة الرئيسية">
+    <a class="drawer__link" href="#top">
+      <span class="drawer__icon"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 3 2 11h3v9h6v-6h2v6h6v-9h3L12 3Z"/></svg></span>
+      <span>الرئيسية</span>
+    </a>
+    <a class="drawer__link" href="services.html">
+      <span class="drawer__icon"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 2 3 6.5v11L12 22l9-4.5v-11L12 2Zm0 2.2 6.4 3.2L12 10.6 5.6 7.4 12 4.2ZM5 9.2l6 3v7.3l-6-3V9.2Zm8 10.3v-7.3l6-3v7.3l-6 3Z"/></svg></span>
+      <span>خدماتنا</span>
+    </a>
+    <a class="drawer__link" href="pricing.html">
+      <span class="drawer__icon"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm.9 15.2v1.3h-1.7v-1.3c-1.5-.2-2.7-1.1-2.9-2.7h1.8c.1.8.7 1.3 1.9 1.3 1.1 0 1.7-.5 1.7-1.2 0-.6-.4-1-1.8-1.4-2-.5-3.2-1.2-3.2-2.8 0-1.5 1.1-2.4 2.5-2.6V6.5h1.7v1.3c1.5.3 2.4 1.3 2.5 2.6h-1.8c-.1-.7-.6-1.2-1.6-1.2-1 0-1.6.5-1.6 1.1 0 .6.5.9 1.9 1.3 2 .5 3.1 1.3 3.1 2.9 0 1.5-1.1 2.5-2.5 2.7Z"/></svg></span>
+      <span>الأسعار والمناطق</span>
+    </a>
+    <a class="drawer__link" href="about.html">
+      <span class="drawer__icon"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-8 1.7-8 5v3h16v-3c0-3.3-4.7-5-8-5Zm8.5-2a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm.5 2c-.7 0-1.5.1-2.2.3 1.6 1.2 2.7 2.8 2.7 4.7v3h5v-3c0-3.3-4-5-5.5-5Z"/></svg></span>
+      <span>من نحن</span>
+    </a>
+    <a class="drawer__link" href="faq.html">
+      <span class="drawer__icon"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-6h2v6Zm0-8h-2V7h2v2Z"/></svg></span>
+      <span>أسئلة شائعة</span>
+    </a>
+    <a class="drawer__link" href="contact.html">
+      <span class="drawer__icon"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6.6 10.8a15.6 15.6 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.4c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.2 2.2Z"/></svg></span>
+      <span>تواصل معنا</span>
+    </a>
+  </nav>
+
+  <div class="drawer__cta">
+    <a class="btn btn--primary btn--block" href="#track">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 4.5A2.5 2.5 0 1 1 12 11a2.5 2.5 0 0 1 0-4.5Z"/></svg>
+      تتبّع شحنتك
+    </a>
+    <a class="btn btn--soft btn--block" href="customer.html?install=1">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M7 1h10a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2Zm0 4v14h10V5H7Zm5 15.2a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
+      حمّل التطبيق
+    </a>
+  </div>
+
+  <div class="drawer__foot">الدهشان لخدمات التوصيل — توصيل أسرع.. لكل مكان</div>
+</aside>
+
+<script>
+/* درج الموبايل + تعليم الصفحة الحالية تلقائيًا.
+   الكود ده نفسه في كل الصفحات — مفيش أي تعديل لكل صفحة على حدة. */
+(function () {
+  var burger  = document.getElementById('burger'),
+      drawer  = document.getElementById('drawer'),
+      overlay = document.getElementById('drawerOverlay'),
+      closeBt = document.getElementById('drawerClose');
+
+  function setDrawer(open) {
+    if (!drawer || !overlay || !burger) return;
+    drawer.classList.toggle('is-open', open);
+    overlay.classList.toggle('is-open', open);
+    drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.classList.toggle('drawer-open', open);
+  }
+  if (burger)  burger.addEventListener('click',  function () { setDrawer(true);  });
+  if (overlay) overlay.addEventListener('click', function () { setDrawer(false); });
+  if (closeBt) closeBt.addEventListener('click', function () { setDrawer(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setDrawer(false); });
+  Array.prototype.forEach.call(document.querySelectorAll('.drawer__link'), function (a) {
+    a.addEventListener('click', function () { setDrawer(false); });
+  });
+
+  /* الرابط الحالي بيتعلّم من اسم الملف في المسار */
+  var file = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  Array.prototype.forEach.call(document.querySelectorAll('.nav__link,.drawer__link'), function (a) {
+    var href = (a.getAttribute('href') || '').split('#')[0].split('?')[0].toLowerCase();
+    if (href && href === file) { a.classList.add('is-active'); a.setAttribute('aria-current', 'page'); }
+  });
+})();
+</script>
+
+<!-- ═══════════ الهيرو + التتبّع ═══════════ -->
+<div class="hero">
+  <div class="speed" id="speed"></div>
+  <div class="wrap hero-in">
+    <div>
+      <h1 id="heroTitle">توصيل <span>أسرع</span>..<br />لكل مكان</h1>
+      <p class="lead" id="heroSub">
+        شحنتك تتسلّم بأمان وفي أسرع وقت — مع تتبّع لحظي يخلّيك عارف
+        هي فين في كل خطوة، من لحظة الاستلام لحد باب المستلم.
+      </p>
+      <div class="hero-badges">
+        <span data-cms="home.hero.badge.1">⚡ توصيل في نفس اليوم</span>
+        <span data-cms="home.hero.badge.2">📍 تتبّع لحظي</span>
+        <span data-cms="home.hero.badge.3">🛡️ تأمين على الشحنة</span>
+      </div>
+    </div>
+
+    <div class="track-card" id="track">
+      <h2 data-cms="home.track.title">📦 تتبّع شحنتك</h2>
+      <div class="hint" data-cms="home.track.hint">اكتب رقم الشحنة المكتوب على الإيصال أو اللي وصلك من المُرسِل</div>
+      <form class="track-form" id="trackForm">
+        <input id="trackNum" placeholder="مثال: MNS-001" autocomplete="off" spellcheck="false" />
+        <button type="submit" id="trackBtn" data-cms="home.track.btn">تتبّع</button>
+      </form>
+      <div id="result"></div>
+    </div>
+
+    <!-- اللوجو عنصر مستقل في الشبكة عن قصد. كان جوه عمود النص، فعلى الموبايل
+         كان بيتحط قبل صندوق التتبّع ويدفنه تحت شاشتين. دلوقتي الترتيب على
+         الموبايل: نص ← تتبّع ← لوجو. والديسكتوب ما اتغيّرش ولا بيكسل. -->
+    <img class="hero-logo" src="assets/logo.png" alt="الدهشان لخدمات التوصيل" />
+  </div>
+</div>
+
+<!-- ═══════════ 4 خطوات ويصلك الطلب ═══════════
+     منقول بالحرف من الموقع القديم (index.php). الشكل مبني بالكامل على
+     .steps/.step/.step__num الموجودين أصلًا في site.css — مفيش CSS جديد.
+     مكانه هنا عن قصد: أول سؤال بعد الهيرو هو «طيب بيمشي إزاي؟». -->
+<section class="alt" id="how">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.how.kicker">كيف نعمل</div>
+      <h2 data-cms="home.how.title">4 خطوات ويصلك الطلب</h2>
+      <p data-cms="home.how.lead">عملية بسيطة وواضحة من لحظة طلبك حتى استلام الشحنة.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step__num">١</div>
+        <h3 data-cms="home.how.steps.1.title">اطلب</h3>
+        <p data-cms="home.how.steps.1.desc">تواصل معنا على واتساب أو بالاتصال، وحدّد عنوان الاستلام والتسليم.</p>
+      </div>
+      <div class="step">
+        <div class="step__num">٢</div>
+        <h3 data-cms="home.how.steps.2.title">نحدد السعر</h3>
+        <p data-cms="home.how.steps.2.desc">نخبرك بسعر التوصيل والوقت المتوقع قبل تأكيد الطلب — بدون مفاجآت.</p>
+      </div>
+      <div class="step">
+        <div class="step__num">٣</div>
+        <h3 data-cms="home.how.steps.3.title">المندوب في الطريق</h3>
+        <p data-cms="home.how.steps.3.desc">نرسل أقرب مندوب متاح ونعطيك رقم تتبع لمتابعة الطلب خطوة بخطوة.</p>
+      </div>
+      <div class="step">
+        <div class="step__num">٤</div>
+        <h3 data-cms="home.how.steps.4.title">التسليم</h3>
+        <p data-cms="home.how.steps.4.desc">يصل الطلب لبابك، ويتم التحصيل نقداً أو حسب الاتفاق المسبق.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ خدماتنا ═══════════ -->
+<section id="services">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.services.kicker">خدماتنا</div>
+      <h2 data-cms="home.services.title">كل اللي محتاجه لتوصيل شحناتك</h2>
+      <p data-cms="home.services.lead">سواء إنت صاحب محل بتشحن كل يوم، أو بتبعت طرد لمرة واحدة — عندنا الخدمة اللي تناسبك.</p>
+    </div>
+    <div class="grid g3">
+      <div class="tile"><div class="ico">🛵</div>
+        <h3 data-cms="home.services.items.1.title">توصيل سريع</h3>
+        <p data-cms="home.services.items.1.desc">استلام من عندك وتسليم للمستلم في نفس اليوم داخل نطاق التغطية.</p></div>
+      <div class="tile"><div class="ico">🏪</div>
+        <h3 data-cms="home.services.items.2.title">خدمة المحلات</h3>
+        <p data-cms="home.services.items.2.desc">بوابة خاصة لمحلك تسجّل منها شحناتك وتتابع تحصيلاتك وتقفيلاتك أول بأول.</p></div>
+      <div class="tile"><div class="ico">💰</div>
+        <h3 data-cms="home.services.items.3.title">تحصيل نقدي</h3>
+        <p data-cms="home.services.items.3.desc">بنحصّل تمن البضاعة من المستلم ونورّده لك بتقفيلة واضحة.</p></div>
+      <div class="tile"><div class="ico">📍</div>
+        <h3 data-cms="home.services.items.4.title">تتبّع لحظي</h3>
+        <p data-cms="home.services.items.4.desc">اعرف شحنتك فين في أي وقت — إنت والمستلم — من غير ما تكلّم حد.</p></div>
+      <div class="tile"><div class="ico">📦</div>
+        <h3 data-cms="home.services.items.5.title">أكتر من مستلم</h3>
+        <p data-cms="home.services.items.5.desc">ابعت أكتر من طرد لأكتر من عنوان في طلب واحد وبرحلة واحدة.</p></div>
+      <div class="tile"><div class="ico">🔄</div>
+        <h3 data-cms="home.services.items.6.title">مرتجعات</h3>
+        <p data-cms="home.services.items.6.desc">لو المستلم رفض الشحنة، بنرجّعها لك بإجراء واضح ومسجّل.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ليه الدهشان ═══════════ -->
+<section class="alt">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.why.kicker">ليه الدهشان</div>
+      <h2 data-cms="home.why.title">شغل منظّم.. مش مجرد توصيل</h2>
+    </div>
+    <div class="stat-row" id="stats">
+      <div class="stat"><b id="stBranches">4</b><span data-cms="home.why.stats.1.label">فروع</span></div>
+      <div class="stat"><b id="stZones">—</b><span data-cms="home.why.stats.2.label">منطقة تغطية</span></div>
+      <div class="stat"><b>24/7</b><span data-cms="home.why.stats.3.label">متابعة ودعم</span></div>
+      <div class="stat"><b>100%</b><span data-cms="home.why.stats.4.label">شحنات مؤمّنة</span></div>
+    </div>
+    <div class="grid g4" style="margin-top:20px">
+      <div class="tile"><div class="ico">⚡</div><h3 data-cms="home.why.items.1.title">سرعة</h3>
+        <p data-cms="home.why.items.1.desc">شبكة طيارين موزّعة على الفروع، والأقرب هو اللي بيستلم شحنتك.</p></div>
+      <div class="tile"><div class="ico">🛡️</div><h3 data-cms="home.why.items.2.title">أمان</h3>
+        <p data-cms="home.why.items.2.desc">كل شحنة مسجّلة باسم طيار محدّد ومتابعة خطوة بخطوة.</p></div>
+      <div class="tile"><div class="ico">🧾</div><h3 data-cms="home.why.items.3.title">شفافية</h3>
+        <p data-cms="home.why.items.3.desc">تقفيلات وتحصيلات واضحة بالأرقام، من غير مفاجآت.</p></div>
+      <div class="tile"><div class="ico">🎧</div><h3 data-cms="home.why.items.4.title">دعم</h3>
+        <p data-cms="home.why.items.4.desc">فريق خدمة عملاء بيرد عليك ويحل مشكلتك بسرعة.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ مناطق التغطية ═══════════ -->
+<section id="coverage">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.coverage.kicker">التغطية</div>
+      <h2 data-cms="home.coverage.title">بنوصل فين؟</h2>
+      <p data-cms="home.coverage.lead">بنغطي المناطق دي حاليًا — وبنوسّع باستمرار. لو منطقتك مش موجودة كلّمنا.</p>
+    </div>
+    <div class="zones" id="zones">
+      <div class="zone">جاري تحميل المناطق…</div>
+    </div>
+    <!-- بيبان بس لو فيه مناطق أكتر من اللي معروض -->
+    <div class="zones-more" id="zonesMore" style="display:none">
+      <button type="button" onclick="openZones()">إظهار المزيد <span id="zonesMoreCount"></span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ كل مناطق التغطية ═══════════ -->
+<div id="zonesModal" onclick="if(event.target===this) closeZones()">
+  <div class="zm-box">
+    <div class="zm-hd">
+      <h3 data-cms="home.coverage.modal.title">🗺️ مناطق التغطية</h3>
+      <button class="zm-x" onclick="closeZones()" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="zm-search">
+      <input id="zonesSearch" placeholder="دوّر على منطقتك…" autocomplete="off" oninput="filterZones()" />
+    </div>
+    <div class="zm-body"><div class="zm-grid" id="zonesAll"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════ التطبيقات ═══════════ -->
+<section class="alt" id="apps">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.apps.kicker">التطبيقات</div>
+      <h2 data-cms="home.apps.title">حمّل تطبيق الدهشان</h2>
+      <p data-cms="home.apps.lead">كل واحد وليه تطبيقه — العميل، الطيار، وصاحب المحل.</p>
+    </div>
+    <div class="grid g3" id="appsGrid"></div>
+
+    <!-- ── دليل التثبيت (PWA) — منقول من الموقع القديم (index.php) ──────
+         التطبيق يعمل من المتصفح، فالزائر محتاج يعرف يثبّته إزاي. حطّيناه
+         جوّه نفس قسم التطبيقات عشان الخطوات تيجي بعد أزرار التحميل مباشرة.
+         مبني على .tile/.ico/.note الموجودين — مفيش CSS جديد اتضاف. -->
+    <div class="sec-top" style="margin-top:52px">
+      <div class="kicker" data-cms="home.install.kicker">التثبيت</div>
+      <h2 data-cms="home.install.title">ثبّته على موبايلك في 3 خطوات</h2>
+      <p data-cms="home.install.lead">يعمل من المتصفح مباشرة — بدون تحميل من متجر التطبيقات.</p>
+    </div>
+
+    <div class="grid g3">
+      <div class="tile"><div class="ico" style="font-weight:900">1</div>
+        <h3 data-cms="home.install.steps.1.title">افتح التطبيق</h3>
+        <p data-cms="home.install.steps.1.desc">اضغط زر «افتح التطبيق» وسجّل الدخول بحساب Google.</p></div>
+
+      <div class="tile"><div class="ico" style="font-weight:900">2</div>
+        <h3 data-cms="home.install.steps.2.title">اضغط قائمة المتصفح</h3>
+        <p data-cms="home.install.steps.2.desc" data-cms-html>
+          <strong>أندرويد:</strong> النقاط الثلاث ⋮ ← «تثبيت التطبيق» أو «Add to Home screen».<br />
+          <strong>آيفون:</strong> زر المشاركة ⬆️ ← «إضافة إلى الشاشة الرئيسية».
+        </p></div>
+
+      <div class="tile"><div class="ico" style="font-weight:900">3</div>
+        <h3 data-cms="home.install.steps.3.title">افتحه من الشاشة الرئيسية</h3>
+        <p data-cms="home.install.steps.3.desc">هتلاقي أيقونة الدهشان مع تطبيقاتك — ويفتح مباشرة بدون تسجيل دخول.</p></div>
+    </div>
+
+    <div class="note" style="max-width:560px;margin-inline:auto;text-align:center">
+      🛡️ <span data-cms="home.install.note">بياناتك محمية، ولا نطلب منك أي كلمة مرور.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ انضم إلينا ═══════════ -->
+<section class="alt" id="join">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.join.kicker">انضم إلينا</div>
+      <h2 data-cms="home.join.title">اشتغل معانا</h2>
+      <p data-cms="home.join.lead">سواء عندك محل عايز تبعت منه شحناتك، أو عندك موتوسيكل وعايز تشتغل طيار.</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-p="pilot" data-cms="home.join.tab.pilot">🛵 انضم كطيار</div>
+      <div class="tab" data-p="store" data-cms="home.join.tab.store">🏪 سجّل محلك</div>
+    </div>
+
+    <!-- طيار: بيتسجّل فعليًا في النظام -->
+    <div class="pane on" id="pane-pilot">
+      <form id="pilotForm">
+        <div class="f-grid">
+          <div class="f"><label data-cms="home.join.pilot.f.name">الاسم بالكامل *</label>
+            <input id="pName" placeholder="الاسم زي البطاقة" required /></div>
+          <div class="f"><label data-cms="home.join.pilot.f.phone1">رقم الهاتف *</label>
+            <input id="pPhone1" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" required /></div>
+          <div class="f"><label data-cms="home.join.pilot.f.phone2">رقم إضافي</label>
+            <input id="pPhone2" type="tel" inputmode="tel" placeholder="اختياري" /></div>
+          <div class="f"><label data-cms="home.join.pilot.f.card">الرقم القومي</label>
+            <input id="pCard" inputmode="numeric" placeholder="14 رقم" /></div>
+          <div class="f"><label data-cms="home.join.pilot.f.vehicle">رقم الموتوسيكل *</label>
+            <input id="pVehicle" placeholder="لوحة الموتوسيكل" required /></div>
+          <div class="f" style="display:none"><label>الفرع</label>
+            <select id="pBranch"><option value="">—</option></select></div>
+          <div class="f full"><label data-cms="home.join.pilot.f.address">العنوان *</label>
+            <input id="pAddress" placeholder="المنطقة والشارع" required /></div>
+        </div>
+        <button class="btn-main" type="submit" id="pBtn" data-cms="home.join.pilot.submit">إرسال الطلب</button>
+        <div class="msg" id="pMsg"></div>
+      </form>
+    </div>
+
+    <!-- محل: تواصل مباشر -->
+    <div class="pane" id="pane-store">
+      <div class="tile" style="text-align:center">
+        <div class="ico" style="margin:0 auto 15px">🏪</div>
+        <h3 data-cms="home.join.store.title">سجّل محلك مع الدهشان</h3>
+        <p style="margin-bottom:18px" data-cms="home.join.store.desc">
+          كلّمنا وهنظبّطلك بوابة خاصة بمحلك تسجّل منها شحناتك وتتابع تحصيلاتك،
+          ونتفق على الأسعار حسب حجم شغلك.
+        </p>
+        <a class="btn-main" id="storeWa" style="display:block;text-decoration:none"
+           target="_blank" rel="noopener" data-cms="home.join.store.wa">💬 كلّمنا على واتساب</a>
+        <a class="btn-main" id="storeTel" style="display:block;background:var(--card);
+           border:1px solid var(--line);margin-top:10px;text-decoration:none"
+           data-cms="home.join.store.tel">📞 اتصل بينا</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ الشركاء والعملاء ═══════════ -->
+<section id="partners" style="display:none">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.partners.kicker">شركاؤنا</div>
+      <!-- العنوان ده بيتكتب من الجافاسكربت (s.hero.partnersTitle) — سايبينه
+           بلا data-cms عشان مايبقاش ليه مصدرين متعارضين. -->
+      <h2 id="partnersTitle">شركاء النجاح</h2>
+      <p data-cms="home.partners.lead">الجهات اللي بنوصّل طلباتها كل يوم — وبنفتخر بثقتهم فينا.</p>
+    </div>
+    <div class="p-grid" id="partnersGrid"></div>
+  </div>
+</section>
+
+<!-- ═══════════ تواصل ═══════════ -->
+<section id="contact">
+  <div class="wrap">
+    <div class="sec-top">
+      <div class="kicker" data-cms="home.contact.kicker">تواصل</div>
+      <h2 data-cms="home.contact.title">احنا هنا لو محتاج حاجة</h2>
+    </div>
+    <!-- العناوين بس اللي قابلة للتحرير — القيم نفسها (تليفون/واتساب/بريد/مواعيد)
+         بتيجي من إعدادات الموقع عن طريق applyInfo، فمالهاش data-cms. -->
+    <div class="contact-grid">
+      <div class="cc"><div class="ico">📞</div><b data-cms="home.contact.card.tel">اتصل بينا</b>
+        <a id="cTel" dir="ltr">—</a></div>
+      <div class="cc"><div class="ico">💬</div><b data-cms="home.contact.card.wa">واتساب</b>
+        <a id="cWa" target="_blank" rel="noopener" dir="ltr">—</a></div>
+      <div class="cc"><div class="ico">✉️</div><b data-cms="home.contact.card.mail">البريد</b>
+        <a id="cMail" dir="ltr">—</a></div>
+      <div class="cc"><div class="ico">🕒</div><b data-cms="home.contact.card.hours">مواعيد العمل</b>
+        <span id="cHours">—</span></div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="wrap site-footer__grid">
+
+    <div>
+      <img class="site-footer__logo" src="assets/logo.png" alt="الدهشان لخدمات التوصيل" />
+      <p class="site-footer__about">
+        الدهشان لخدمات التوصيل السريع — بنستلم شحنتك ونوصّلها بأمان وفي وقتها،
+        مع تتبّع لحظي وتحصيل نقدي وتقفيلات واضحة بالأرقام.
+      </p>
+      <div class="socials">
+        <a href="contact.html" id="ftWa" aria-label="واتساب"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.3 14c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1a11 11 0 0 1-4.6-3.2c-1-1.2-1.6-2.5-1.5-3.4 0-.9.6-1.6 1-1.9.2-.2.5-.2.7-.2h.5c.2 0 .4 0 .5.4l.7 1.7c0 .2 0 .3-.1.5l-.4.5c-.1.2-.2.3 0 .5.4.7 1 1.3 1.6 1.8.5.4 1 .6 1.3.7.2.1.4 0 .5-.1l.7-.8c.2-.2.3-.1.5 0l1.6.8c.2.1.3.2.3.3 0 .2 0 .8-.3 1.3Z"/></svg></a>
+        <a href="contact.html" id="ftTel" aria-label="اتصل بينا"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6.6 10.8a15.6 15.6 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.4c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.2 2.2Z"/></svg></a>
+        <a href="customer.html?install=1" aria-label="تطبيق العملاء"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M7 1h10a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2Zm0 4v14h10V5H7Zm5 15.2a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg></a>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="site-footer__title">روابط سريعة</h2>
+      <div class="site-footer__links">
+        <a class="site-footer__link" href="index.html">الرئيسية</a>
+        <a class="site-footer__link" href="services.html">خدماتنا</a>
+        <a class="site-footer__link" href="pricing.html">الأسعار والمناطق</a>
+        <a class="site-footer__link" href="about.html">من نحن</a>
+        <a class="site-footer__link" href="faq.html">الأسئلة الشائعة</a>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="site-footer__title">خدمات وتطبيقات</h2>
+      <div class="site-footer__links">
+        <a class="site-footer__link" href="index.html#track">تتبّع شحنة</a>
+        <a class="site-footer__link" href="customer.html?install=1">تطبيق العملاء</a>
+        <a class="site-footer__link" href="store.html">برنامج المحلات</a>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="site-footer__title">الشركة</h2>
+      <div class="site-footer__links">
+        <a class="site-footer__link" href="contact.html">تواصل معنا</a>
+        <a class="site-footer__link" href="index.html#join">انضم إلينا</a>
+        <a class="site-footer__link" href="privacy.html">سياسة الخصوصية</a>
+        <a class="site-footer__link" href="terms.html">الشروط والأحكام</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="site-footer__bottom">
+    <div class="wrap">
+      <div class="legal">
+        <span>سجل تجاري رقم <b dir="ltr" data-site-info="crNumber">165501</b></span>
+        <i></i>
+        <span>بطاقة ضريبية رقم <b dir="ltr" data-site-info="taxNumber">637-469-782</b></span>
+      </div>
+      <div class="cr">© <span id="yr">2026</span> الدهشان لخدمات التوصيل — جميع الحقوق محفوظة</div>
+    </div>
+  </div>
+</footer>
+
+<a class="wa" id="waFab" target="_blank" rel="noopener" aria-label="واتساب">
+  <svg viewBox="0 0 24 24"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.65-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Z"/></svg>
+</a>
+
+<script src="assets/js/api.js"></script>
+<script>
+/* الموقع العام — REST بالكامل، بدون فايربيز:
+   المحتوى من /api/settings/site و /api/partners، التغطية من /api/public/coverage،
+   التتبّع من /api/track/{num}، وطلب الانضمام لـ /api/public/join-request. */
+const FALLBACK = { phone:"01000000000", whatsapp:"201000000000", email:"info@aldahshan.com", hours:"يوميًا من 9 ص إلى 11 م" };
+const INFO = { ...FALLBACK };
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+$("yr").textContent = new Date().getFullYear();
+
+/* 🔴 القيم دي معناها «لسه ما اتحطّتش» مش «دي بياناتنا».
+   عرض رقم وهمي **أوحش من عدم عرض حاجة**: الزبون بيتصل، مايردّش عليه حد،
+   ويستنتج إن الشركة مش شغّالة. الكارت بيختفي كامل لحد ما بيانات حقيقية
+   تتحط من لوحة تحكم الموقع. (اتكشفت 2026-08-20 والموقع كان بيعرضها فعلًا.) */
+const PLACEHOLDER = {
+  phone:    ["01000000000"],
+  whatsapp: ["201000000000"],
+  email:    ["info@aldahshan.com", "info@dahshan-delivery.com"],
+};
+const real = (k, v) => {
+  const t = String(v ?? "").trim();
+  return (!t || PLACEHOLDER[k].includes(t)) ? "" : t;
+};
+/* بيخفي الكارت اللي جوّه العنصر — مش العنصر لوحده — عشان مايفضلش
+   عنوان بلا محتوى (📞 اتصل بينا وتحتها فراغ). */
+const setLink = (id, text, href) => {
+  const el = $(id); if (!el) return;
+  const card = el.closest(".cc") || el;
+  if (!text) { card.style.display = "none"; return; }
+  card.style.display = "";
+  el.textContent = text;
+  if (href) el.href = href;
+};
+
+function applyInfo() {
+  const tel  = real("phone",    INFO.phone);
+  const wnum = real("whatsapp", INFO.whatsapp);
+  const mail = real("email",    INFO.email);
+  const wa   = wnum ? `https://wa.me/${wnum}` : "";
+
+  setLink("cTel",  tel,           tel  ? "tel:" + tel      : "");
+  setLink("cWa",   wnum ? "+" + wnum : "", wa);
+  setLink("cMail", mail,          mail ? "mailto:" + mail  : "");
+  $("cHours").textContent = INFO.hours;   // المواعيد افتراضي مقبول، مش وسيلة تواصل
+
+  /* زرار تليفون الهيدر اتشال مع توحيد التنقل مع باقي الصفحات — الرقم
+     لسه ظاهر في قسم التواصل والفوتر. الحارس ده عشان لو رجع يشتغل لوحده،
+     ولو مرجعش مايكسرش applyInfo (اللي بيحط كل بيانات التواصل). */
+  const hdr = $("hdrTel"), hdrNum = $("hdrTelNum");
+  if (hdr) {
+    hdr.style.display = tel ? "" : "none";
+    if (tel) { if (hdrNum) hdrNum.textContent = tel; hdr.href = "tel:" + tel; }
+  }
+
+  // زرار واتساب العائم بيختفي لو مفيش رقم — زرار بيفتح محادثة ميتة أسوأ من غيابه
+  const fab = $("waFab");
+  if (fab) { fab.style.display = wa ? "" : "none"; if (wa) fab.href = wa; }
+
+  const sWa = $("storeWa");
+  if (sWa) {
+    if (wa) { sWa.style.display = "block"; sWa.href = wa + "?text=" + encodeURIComponent("السلام عليكم، عايز أسجّل محلي مع الدهشان"); }
+    else { sWa.style.display = "none"; }
+  }
+  const sTel = $("storeTel");
+  if (sTel) {
+    if (tel) { sTel.style.display = "block"; sTel.href = "tel:" + tel; }
+    else { sTel.style.display = "none"; }
+  }
+}
+applyInfo();
+
+const HERO_DEF = { title: $("heroTitle").innerHTML, sub: $("heroSub").textContent };
+const APP_DEF = {
+  customer: { icon:"📱", name:"تطبيق العملاء", def:"customer.html", desc:"سجّل طلبك، تابعه لحظيًا، واحفظ عناوينك ومستلمينك.", label:"تحميل التطبيق" },
+  /* الافتراضي بقى رابط الـAPK المرفوع على السيرفر — كان فاضي فالكارت
+     كان بيعرض «قريبًا». لوحة تحكم الموقع لسه بتقدر تدهسه (نفس منطق
+     باقي النظام: افتراضي في الكود + تحكّم من اللوحة). */
+  pilot   : { icon:"🛵", name:"تطبيق الطيار",  def:"downloads/dahshan-pilot-latest.apk", desc:"للطيارين: استلام الطلبات، الخريطة، والورديات.", label:"تحميل التطبيق" },
+  store   : { icon:"🏪", name:"برنامج المحلات", def:"store.html", desc:"لأصحاب المحلات: سجّل شحناتك وتابع تحصيلاتك وتقفيلاتك.", label:"تحميل التطبيق" }
+};
+function withInstallFlag(url, key) {
+  if (key !== "customer" && key !== "store") return url;
+  if (!url || /^https?:/i.test(url)) return url;
+  if (/[?&]install=1/.test(url)) return url;
+  return url + (url.includes("?") ? "&" : "?") + "install=1";
+}
+function renderApps(cfg) {
+  $("appsGrid").innerHTML = Object.entries(APP_DEF).map(([k, d]) => {
+    const v = cfg?.[k] || {};
+    if (v.on === false) return "";
+    const url = withInstallFlag((v.url || d.def || "").trim(), k);
+    const label = (v.label || d.label).trim();
+    return `<div class="app-card"><div class="ic">${d.icon}</div><h3>${esc(d.name)}</h3><p>${esc(d.desc)}</p>${
+      url ? `<a class="go" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ""}>${esc(label)}</a>` : `<div class="soon">قريبًا</div>`}</div>`;
+  }).join("");
+}
+function renderPartners(list, title) {
+  const arr = (list || []).slice().sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+  const sec = $("partners");
+  if (!arr.length) { sec.style.display = "none"; return; }
+  sec.style.display = "";
+  if (title) $("partnersTitle").textContent = title;
+  $("partnersGrid").innerHTML = arr.map(p => {
+    const inner = `<div class="lg ${p.logo ? "" : "none"}">${p.logo ? `<img src="${esc(p.logo)}" alt="${esc(p.name || "")}" loading="lazy" />` : "🏢"}</div><b>${esc(p.name || "—")}</b>${p.desc ? `<span>${esc(p.desc)}</span>` : ""}`;
+    const safe = /^https:\/\//i.test(p.url || "") ? p.url : "";
+    return safe ? `<a class="p-item" href="${esc(safe)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="p-item">${inner}</div>`;
+  }).join("");
+}
+
+/* محتوى الموقع — GET /api/settings/site (info/apps/hero) + GET /api/partners */
+(async () => {
+  try {
+    const [siteRes, partRes] = await Promise.all([
+      API.get("/api/settings/site").catch(() => ({})),
+      API.get("/api/partners").catch(() => ({ items: [] })),
+    ]);
+    const s = (siteRes.site && siteRes.site.site) || {};   // المحتوى تحت مفتاح site
+    Object.assign(INFO, FALLBACK);
+    for (const k of ["phone", "whatsapp", "email", "hours"]) if (s.info?.[k]) INFO[k] = s.info[k];
+    applyInfo();
+    renderApps(s.apps);
+    renderPartners(partRes.items, s.hero?.partnersTitle);
+    const t = (s.hero?.title || "").trim(), sb = (s.hero?.sub || "").trim();
+    if (t) $("heroTitle").textContent = t; else $("heroTitle").innerHTML = HERO_DEF.title;
+    $("heroSub").textContent = sb || HERO_DEF.sub;
+  } catch (e) { console.warn("site content:", e); }
+})();
+
+/* ── القائمة على الموبايل ── */
+/* القايمة القديمة (#menu) اتشالت لصالح الدرج المشترك — سكربته جوه
+   ماركب الهيدر نفسه، فمفيش حاجة تتعمل هنا. */
+
+/* ── خطوط السرعة ── */
+(() => {
+  const box = $("speed");
+  for (let i = 0; i < 14; i++) {
+    const el = document.createElement("i");
+    el.style.top = (Math.random() * 100) + "%";
+    el.style.width = (60 + Math.random() * 190) + "px";
+    el.style.animationDuration = (2.6 + Math.random() * 3.6) + "s";
+    el.style.animationDelay = (-Math.random() * 5) + "s";
+    el.style.opacity = .18 + Math.random() * .5;
+    box.appendChild(el);
+  }
+})();
+
+/* ══ تتبّع الشحنة — GET /api/track/{num} (بيانات مقنّعة من السيرفر) ══ */
+const STEPS = [
+  { label: "تم استلام الطلب", hint: "سجّلنا شحنتك ووصلت للفرع" },
+  { label: "جاري التوصيل",    hint: "الطيار في الطريق للمستلم" },
+  { label: "تم التسليم",      hint: "وصلت للمستلم بنجاح" }
+];
+const PILL = {
+  "قيد التنفيذ":["p-new","قيد التنفيذ"], "جاري التوصيل":["p-way","جاري التوصيل"],
+  "تم التسليم":["p-done","تم التسليم"], "لم يتم التوصيل":["p-fail","لم يتم التوصيل"], "ملغي":["p-cancel","ملغي"]
+};
+const fmtDate = iso => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d) ? "—" : d.toLocaleDateString("ar-EG", { day:"numeric", month:"long", year:"numeric" }); };
+
+function stageOf(status) {
+  if (status === "ملغي") return -1;
+  if (status === "تم التسليم") return 2;
+  if (status === "لم يتم التوصيل") return 1;
+  if (status === "جاري التوصيل") return 1;
+  return 0;
+}
+function renderTrack(d) {
+  const status = d.status || "قيد التنفيذ";
+  const [cls, label] = PILL[status] || ["p-new", status || "—"];
+  const stage = stageOf(status);
+  const dead = (status === "ملغي" || status === "لم يتم التوصيل");
+  const ps = d.parcels || [];
+  const zones = [...new Set(ps.map(p => p.zoneName).filter(x => x && x !== "—"))].join("، ");
+  const tl = STEPS.map((st, i) => {
+    const on = !dead && i <= stage;
+    const now = !dead && i === stage && stage < 2;
+    return `<div class="tl-row ${on ? "on" : "off"} ${now ? "now" : ""}"><div class="dot"></div><div><b>${st.label}</b><span>${on ? st.hint : "لسه ما تمّتش"}</span></div></div>`;
+  }).join("");
+  $("result").innerHTML = `
+    <div class="res-head"><div><div class="res-num">#${esc(d.orderNum)}</div>
+      <div style="font-size:12.5px;color:var(--muted)">اتسجّلت ${fmtDate(d.createdAt)}</div></div>
+      <span class="pill ${cls}">${esc(label)}</span></div>
+    ${dead ? `<div class="err" style="margin-top:16px">${status === "ملغي" ? "الشحنة دي اتلغت." : "المحاولة الأخيرة للتسليم ماتمّتش — كلّمنا ونظبّطها."}</div>` : `<div class="tl">${tl}</div>`}
+    <div class="res-grid">
+      <div class="res-cell"><b>المستلم</b><span>${esc(ps[0]?.receiverName || "—")}</span></div>
+      <div class="res-cell"><b>منطقة التسليم</b><span>${esc(zones || "—")}</span></div>
+      <div class="res-cell"><b>عدد الطرود</b><span>${ps.length || 1}</span></div>
+      <div class="res-cell"><b>الفرع</b><span>${esc(d.branch || "—")}</span></div>
+    </div>
+    <a href="customer.html?install=1&t=${encodeURIComponent(d.orderNum)}" style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:16px;background:var(--red);color:#fff;text-decoration:none;padding:14px;border-radius:13px;font-weight:800;font-size:14.5px">📲 حمّل التطبيق وتابع كل شحناتك</a>
+    <div class="note">🔒 بنعرض حالة الشحنة بس. لأي تفاصيل تانية كلّم خدمة العملاء على <a href="tel:${INFO.phone}" style="color:var(--red);font-weight:800">${INFO.phone}</a></div>`;
+  $("result").classList.add("on");
+}
+
+/* لينك الباركود: https://aldahshan.cloud/?track=CODE — الصفحة دي نفسها */
+(function () {
+  const code = new URLSearchParams(location.search).get("track");
+  if (!code) return;
+  document.addEventListener("DOMContentLoaded", () => {
+    const inp = $("trackNum"); if (!inp) return;
+    inp.value = code.toUpperCase();
+    $("track")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("trackForm").dispatchEvent(new Event("submit", { cancelable: true }));
+  });
+})();
+
+$("trackForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const num = $("trackNum").value.trim().toUpperCase();
+  const box = $("result"), btn = $("trackBtn");
+  if (!num) return;
+  /* بنمسك النص الحالي مش نص ثابت — لو لوحة تحكم الموقع غيّرت اسم الزر
+     (data-cms="home.track.btn") مايرجعش للنص القديم بعد أول بحث. */
+  const btnLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = "…";
+  box.className = "on";
+  box.innerHTML = `<div style="text-align:center;color:var(--muted);padding:20px">⏳ بندوّر على شحنتك…</div>`;
+  try {
+    const d = await API.get("/api/track/" + encodeURIComponent(num));
+    if (!d.found) {
+      box.innerHTML = `<div class="err">مالقيناش شحنة بالرقم <b dir="ltr">${esc(num)}</b>.<br /><span style="font-weight:500;color:var(--muted);font-size:13px">راجع الرقم، أو كلّمنا على ${INFO.phone}</span></div>`;
+      return;
+    }
+    renderTrack(d);
+  } catch (err) {
+    box.innerHTML = `<div class="err">تعذّر الاتصال دلوقتي — جرّب تاني بعد شوية.</div>`;
+    console.error(err);
+  } finally { btn.disabled = false; btn.textContent = btnLabel; }
+});
+
+/* ══ نافذة كل المناطق ══ */
+function renderAllZones(q) {
+  const grid = $("zonesAll"); if (!grid) return;
+  const term = String(q || "").trim().toLowerCase();
+  const list = (window._siteZones || []).filter(z => !term || z.name.toLowerCase().includes(term));
+  grid.innerHTML = list.length
+    ? list.map(z => `<div class="zm-item"><span>${esc(z.name)}</span>${z.price ? `<small>${z.price} ج.م</small>` : ""}</div>`).join("")
+    : `<div class="zm-empty">مالقيناش منطقة بالاسم ده — كلّمنا على ${INFO.phone} ونشوفها لك</div>`;
+}
+window.filterZones = () => renderAllZones($("zonesSearch").value);
+window.openZones = () => { $("zonesSearch").value = ""; renderAllZones(); $("zonesModal").classList.add("on"); document.body.style.overflow = "hidden"; setTimeout(() => $("zonesSearch").focus(), 80); };
+window.closeZones = () => { $("zonesModal").classList.remove("on"); document.body.style.overflow = ""; };
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("zonesModal")?.classList.contains("on")) closeZones(); });
+
+/* ══ المناطق والفروع — GET /api/public/coverage ══ */
+(async () => {
+  try {
+    const c = await API.get("/api/public/coverage");
+    const zones = c.zones || [];
+    const box = $("zones"), ZONES_SHOWN = 5;
+    if (zones.length) {
+      const list = zones.map(z => ({ name: z.name, price: z.price || 0 })).sort((a, b) => a.name.localeCompare(b.name, "ar"));
+      window._siteZones = list;
+      box.innerHTML = list.slice(0, ZONES_SHOWN).map(z => `<div class="zone">${esc(z.name)}${z.price ? `<small>${z.price} ج.م</small>` : ""}</div>`).join("");
+      if (list.length > ZONES_SHOWN) { $("zonesMoreCount").textContent = `(+${list.length - ZONES_SHOWN})`; $("zonesMore").style.display = ""; }
+      renderAllZones();
+    } else {
+      box.innerHTML = `<div class="zone">كلّمنا نقولك بنغطي منطقتك ولا لأ 📞</div>`;
+    }
+    $("stZones").textContent = zones.length || "—";
+    if (c.branchCount) $("stBranches").textContent = c.branchCount;
+  } catch (e) { console.warn("coverage:", e); }
+})();
+
+/* ══ تبويبات الانضمام ══ */
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+  document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "pane-" + t.dataset.p));
+});
+
+const validPhone = p => /^0?1[0-9]{9}$/.test(String(p || "").replace(/[\s-]/g, ""));
+const say = (el, txt, ok) => { el.className = "msg on " + (ok ? "ok" : "bad"); el.textContent = txt; };
+
+/* ══ طلب انضمام طيار — POST /api/public/join-request (الفرع بيحدده الإدارة عند القبول) ══ */
+$("pilotForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const msg = $("pMsg"), btn = $("pBtn");
+  const btnLabel = btn.textContent;   // نفس السبب: نحافظ على نص اللوحة لو اتغيّر
+  const name = $("pName").value.trim(), phone1 = $("pPhone1").value.trim();
+  const vehicleNo = $("pVehicle").value.trim(), address = $("pAddress").value.trim();
+  if (!name)               return say(msg, "اكتب اسمك بالكامل", false);
+  if (!validPhone(phone1)) return say(msg, "رقم الهاتف غير صحيح — لازم 11 رقم يبدأ بـ 01", false);
+  if (!vehicleNo)          return say(msg, "اكتب رقم الموتوسيكل", false);
+  if (!address)            return say(msg, "اكتب عنوانك", false);
+  btn.disabled = true; btn.textContent = "⏳ بنبعت طلبك…";
+  try {
+    await API.post("/api/public/join-request", {
+      name, phone1,
+      phone2: $("pPhone2").value.trim(),
+      cardNum: $("pCard").value.trim(),
+      vehicleNo, address
+    }, { quiet401: true });
+    $("pilotForm").reset();
+    say(msg, "✅ وصلنا طلبك! هنراجعه ونكلّمك على رقمك خلال يومين.", true);
+  } catch (err) {
+    say(msg, "تعذّر إرسال الطلب — جرّب تاني أو كلّمنا على " + INFO.phone, false);
+    console.error(err);
+  } finally { btn.disabled = false; btn.textContent = btnLabel; }
+});
+</script>
+
+<!-- نصوص الصفحة القابلة للتحرير (data-cms) — بيتحمّل مؤجّل فبيشتغل بعد
+     السكربت اللي فوق، والقيم المحفوظة بتدهس الافتراضي المكتوب في الـHTML. -->
+<script src="assets/js/site-cms.js" defer></script>
+
+</body>
+</html>

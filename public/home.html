@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الدهشان | نظام إدارة التوصيل</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --sky:    #e8192c;
+      --sky-d:  #b91c1c;
+      --night:  #0a0a0a;
+      --panel:  #111111;
+      --card:   #1a1a1a;
+      --border: #2a2a2a;
+      --text:   #f0f0f0;
+      --muted:  #888888;
+      --green:  #22c55e;
+      --orange: #f97316;
+      --purple: #a855f7;
+      --red:    #e8192c;
+      --radius: 14px;
+      --font:   'Cairo', 'Segoe UI', system-ui, sans-serif;
+    }
+    :root.light {
+      --sky:    #d1172a;
+      --sky-d:  #a30f20;
+      --night:  #eff2f5;
+      --panel:  #ffffff;
+      --card:   #ffffff;
+      --border: #dfe3e7;
+      --text:   #111b21;
+      --muted:  #667781;
+      --green:  #15803d;
+      --orange: #c2410c;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: #080808;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background .25s, color .2s;
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232,25,44,.06) 0%, transparent 60%);
+    }
+
+    /* ══════════════════════════════════════════
+       LOGIN SCREEN — تصميم الدهشان
+    ══════════════════════════════════════════ */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: row-reverse;
+      overflow: hidden;
+    }
+    #login-screen.hidden { display: none; }
+
+    /* ── الجانب الأيسر: صورة الدراجة الحقيقية ── */
+    .login-hero {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #0a0000;
+    }
+    .hero-real-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+    }
+    /* تدرج خفيف فوق الصورة لتحسين قراءة النص */
+    .login-hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,.1) 0%,
+        rgba(0,0,0,.0) 40%,
+        rgba(0,0,0,.0) 70%,
+        rgba(0,0,0,.65) 100%
+      );
+      pointer-events: none;
+    }
+    /* المميزات في الأسفل */
+    .hero-features {
+      position: absolute;
+      bottom: 4%;
+      left: 0; right: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      gap: clamp(16px, 4vw, 48px);
+      padding: 0 24px;
+    }
+    .hero-feature {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,.9);
+      font-size: clamp(.65rem, 1.2vw, .82rem);
+      font-weight: 700;
+      text-align: center;
+      text-shadow: 0 1px 4px rgba(0,0,0,.8);
+    }
+    .hero-feature svg {
+      width: 24px; height: 24px;
+      color: #e8192c;
+      filter: drop-shadow(0 0 4px rgba(232,25,44,.6));
+    }
+
+    /* ── الجانب الأيمن: فورم الدخول ── */
+    .login-panel {
+      width: min(100%, 480px);
+      background: #111111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 24px;
+      position: relative;
+      overflow-y: auto;
+    }
+
+    /* البطاقة الداخلية العائمة */
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: #1c1c1e;
+      border-radius: 20px;
+      padding: 32px 32px 24px;
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+    }
+
+    /* شعار الدهشان في أعلى الكارد */
+    .login-logo-svg {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .dahshan-logo-img {
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* عنوان الفورم */
+    .login-form-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: #e8192c;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .login-form-sub {
+      font-size: .82rem;
+      color: #555;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    /* حقول الإدخال */
+    .lf-input-wrap {
+      width: 100%;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .lf-input-wrap > svg {
+      position: absolute;
+      right: 14px;
+      top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px;
+      color: #555;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .lf-input-wrap .eye-toggle {
+      position: absolute;
+      left: 14px;
+      top: 50%; transform: translateY(-50%);
+      background: none; border: none;
+      cursor: pointer;
+      color: #555;
+      padding: 0;
+      display: flex; align-items: center;
+      z-index: 1;
+    }
+    .lf-input-wrap .eye-toggle:hover { color: #e8192c; }
+    .lf-input {
+      width: 100%;
+      background: #252527;
+      border: 1.5px solid #2e2e30;
+      border-radius: 10px;
+      padding: 13px 44px 13px 44px;
+      font-family: var(--font);
+      font-size: .92rem;
+      color: #d0d0d0;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      direction: rtl;
+      text-align: right;
+    }
+    .lf-input::placeholder { color: #555; direction: rtl; }
+    .lf-input:focus {
+      border-color: #e8192c;
+      box-shadow: 0 0 0 3px rgba(232,25,44,.1);
+    }
+    /* سطر تذكرني + نسيت */
+    .lf-remember-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      font-size: .82rem;
+    }
+    .lf-remember {
+      display: flex; align-items: center; gap: 7px;
+      color: #888; cursor: pointer; user-select: none;
+    }
+    .lf-remember input[type=checkbox] {
+      width: 16px; height: 16px;
+      accent-color: #e8192c;
+      cursor: pointer;
+    }
+    .lf-forgot { color: #e8192c; text-decoration: none; font-weight: 700; font-size: .8rem; }
+    .lf-forgot:hover { text-decoration: underline; }
+    /* زر تسجيل الدخول الرئيسي */
+    .lf-btn-main {
+      width: 100%;
+      padding: 14px 18px;
+      background: #e8192c;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 1rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background .2s, transform .15s, box-shadow .2s;
+      box-shadow: 0 6px 24px rgba(232,25,44,.35);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      letter-spacing: .5px;
+    }
+    .lf-btn-main:hover { background: #c9151f; transform: translateY(-1px); box-shadow: 0 10px 30px rgba(232,25,44,.45); }
+    .lf-btn-main:active { transform: translateY(0); }
+    .lf-btn-main:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+    .lf-btn-main .btn-arrow {
+      width: 36px; height: 36px;
+      background: rgba(0,0,0,.25);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .lf-btn-main .btn-text { flex: 1; text-align: center; }
+    /* فاصل أو */
+    .lf-or {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      color: #3a3a3a;
+      font-size: .8rem;
+    }
+    .lf-or::before, .lf-or::after {
+      content: '';
+      flex: 1; height: 1px;
+      background: #2a2a2a;
+    }
+    /* زر مدير فرع */
+    .lf-btn-secondary {
+      width: 100%;
+      padding: 13px 18px;
+      background: transparent;
+      border: 1.5px solid #2e2e30;
+      border-radius: 10px;
+      color: #999;
+      font-family: var(--font);
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color .2s, color .2s, background .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .lf-btn-secondary:hover { border-color: #e8192c; color: #e8192c; background: rgba(232,25,44,.04); }
+    /* خطأ */
+    .login-error {
+      min-height: 18px;
+      margin-top: 10px;
+      font-size: .82rem;
+      color: #e8192c;
+      text-align: center;
+      font-weight: 700;
+      width: 100%;
+    }
+    /* فوتر الفورم */
+    .login-panel-footer {
+      margin-top: 20px;
+      font-size: .7rem;
+      color: #383838;
+      text-align: center;
+    }
+    /* استجابة موبايل */
+    @media (max-width: 760px) {
+      #login-screen { flex-direction: column; }
+      .login-hero { display: none; }
+      .login-panel { width: 100%; height: 100%; padding: 24px 16px; }
+    }
+
+    /* ══════════════════════════════════════════
+       MAIN APP (hidden until login)
+    ══════════════════════════════════════════ */
+    #main-app {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+    }
+    #main-app.visible { display: flex; }
+
+    /* ── Top bar ───────────────────────────────────────────── */
+    .topbar {
+      background: #0d0d0d;
+      border-bottom: 1px solid #1e1e1e;
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      transition: background .25s, border-color .25s;
+      box-shadow: 0 2px 20px rgba(0,0,0,.5);
+    }
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+    .brand-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #e8192c, #7f1d1d);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 12px rgba(232,25,44,.35);
+    }
+    .brand-name {
+      font-size: 1.3rem;
+      font-weight: 900;
+      color: var(--text);
+      letter-spacing: -.5px;
+    }
+    .brand-name span { color: var(--sky); }
+
+    .topbar-actions { display: flex; align-items: center; gap: 12px; }
+
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 7px 14px;
+      font-size: .82rem;
+      color: var(--text);
+    }
+    .user-badge .role-tag {
+      background: rgba(232,25,44,.15);
+      color: var(--sky);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: .75rem;
+      font-weight: 700;
+      border: 1px solid rgba(232,25,44,.2);
+    }
+
+    .theme-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: .82rem;
+      display: flex; align-items: center; gap: 6px;
+      transition: background .2s, color .2s;
+    }
+    .theme-btn:hover { background: var(--card); color: var(--text); }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid rgba(239,68,68,.35);
+      color: var(--red);
+      border-radius: 8px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: .82rem;
+      display: flex; align-items: center; gap: 6px;
+      transition: background .2s;
+    }
+    .logout-btn:hover { background: rgba(239,68,68,.1); }
+
+    /* ── Main ──────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      padding: 40px 32px 60px;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* ── App grid — بطاقات صغيرة ──────────────────────────── */
+    .apps-section-title {
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: #e8192c;
+      margin: 0 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .apps-section-title::after {
+      content: '';
+      flex: 1; height: 1px;
+      background: linear-gradient(90deg, #2a2a2a, transparent);
+    }
+
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 14px;
+    }
+
+    .app-card {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 14px;
+      padding: 20px 12px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--text);
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .app-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #e8192c, transparent);
+      opacity: 0;
+      transition: opacity .2s;
+    }
+    .app-card:not(.locked):hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 28px rgba(0,0,0,.4), 0 0 0 1px #e8192c;
+      border-color: #e8192c;
+    }
+    .app-card:not(.locked):hover::before { opacity: 1; }
+    .app-card:not(.locked):active { transform: translateY(-2px); }
+
+    .app-card.blue, .app-card.green, .app-card.orange { --ac: #e8192c; }
+    .app-card.purple { --ac: #a855f7; }
+
+    /* بطاقة نسخة قديمة — باهتة ومعلَّمة بوضوح حتى لا تُستخدم بالخطأ */
+    .app-card.legacy {
+      --ac: #888888;
+      opacity: .55;
+      border-style: dashed;
+    }
+    .app-card.legacy:not(.locked):hover { opacity: 1; }
+    .legacy-tag {
+      margin-top: 6px;
+      font-size: .68rem;
+      font-weight: 700;
+      color: #888888;
+      background: rgba(136,136,136,.14);
+      border: 1px solid rgba(136,136,136,.28);
+      border-radius: 20px;
+      padding: 2px 10px;
+    }
+
+    .app-card.locked {
+      cursor: not-allowed;
+      filter: grayscale(1);
+      opacity: .35;
+    }
+    .app-card.locked::after {
+      content: '🔒';
+      position: absolute;
+      top: 8px; left: 8px;
+      font-size: .75rem;
+      opacity: .6;
+    }
+
+    /* «قريبًا» ≠ «مقفول». المقفول معناه مالكش صلاحية — ده بيتغيّر بالصلاحيات.
+       «قريبًا» معناه الوحدة **لسه ما اتبنتش**، فمفيش صلاحية بتفتحها. */
+    .app-card.soon {
+      cursor: not-allowed;
+      filter: grayscale(1);
+      opacity: .4;
+      border-style: dashed;
+    }
+    .app-card.soon::after {
+      content: 'قريبًا';
+      position: absolute;
+      top: 8px; left: 8px;
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.5);
+      color: #fff;
+      opacity: .85;
+    }
+
+    .app-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(232,25,44,.08);
+      border: 1.5px solid rgba(232,25,44,.18);
+      transition: background .2s, transform .2s, box-shadow .2s;
+      flex-shrink: 0;
+    }
+    .app-card:not(.locked):hover .app-icon {
+      background: rgba(232,25,44,.16);
+      transform: scale(1.08);
+      box-shadow: 0 4px 16px rgba(232,25,44,.22);
+    }
+    .app-icon svg { width: 26px; height: 26px; }
+
+    .app-name {
+      font-size: .82rem;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.3;
+      color: var(--text);
+    }
+    .app-desc { display: none; }
+      line-height: 1.5;
+    }
+
+    /* ── Divider ───────────────────────────────────────────── */
+    .section-label {
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: #e8192c;
+      margin: 32px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-label::before {
+      content: '';
+      width: 16px; height: 2px;
+      background: #e8192c;
+      border-radius: 2px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1; height: 1px;
+      background: linear-gradient(90deg, #2a2a2a, transparent);
+    }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--muted);
+      font-size: .75rem;
+      border-top: 1px solid #1a1a1a;
+    }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .topbar { padding: 0 16px; }
+      .main   { padding: 32px 16px 60px; }
+      .apps-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      .app-card  { padding: 24px 14px 18px; }
+      .app-icon  { width: 56px; height: 56px; border-radius: 14px; }
+      .app-icon svg { width: 28px; height: 28px; }
+      .page-header h1 { font-size: 1.4rem; }
+      .user-badge .uname { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       LOGIN SCREEN — الدهشان
+  ══════════════════════════════════════════════════════════════ -->
+  <div id="login-screen">
+
+    <!-- الجانب الأيسر: صورة الهيرو -->
+    <div class="login-hero">
+      <!-- loading=lazy مهم: الهيرو display:none تحت 760px، ومن غيرها المتصفح
+         بيحمّل الصورة كاملة على الموبايل وهي مش هتتشاف أصلاً -->
+    <img class="hero-real-img" src="assets/hero.jpg" alt="الدهشان" loading="lazy" decoding="async" />
+      <!-- المميزات في الأسفل -->
+      <div class="hero-features">
+        <div class="hero-feature">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3L4 14h7v7l9-11h-7V3z"/></svg>
+          <span>سرعة في<br>التوصيل</span>
+        </div>
+        <div class="hero-feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+          <span>أمان في<br>التعامل</span>
+        </div>
+        <div class="hero-feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.63 19.79 19.79 0 01.1 2.18 2 2 0 012.18 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.62-.62a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+          </svg>
+          <span>دعم على مدار<br>الساعة</span>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- الجانب الأيمن: فورم الدخول -->
+    <div class="login-panel">
+      <div class="login-card">
+
+        <!-- شعار الدهشان الأصلي -->
+        <div class="login-logo-svg">
+          <img src="assets/logo.png" alt="الدهشان" style="width:220px;height:auto;object-fit:contain;" />
+        </div>
+
+        <div class="login-form-title">تسجيل الدخول</div>
+        <div class="login-form-sub">مرحباً بك، الرجاء تسجيل الدخول للمتابعة</div>
+
+        <!-- تسجيل الدخول بحساب جوجل (الإدارة فقط) -->
+        <button class="lf-btn-main" id="googleBtn" onclick="window.doGoogleLogin()">
+          <span class="btn-text">تسجيل الدخول بحساب جوجل</span>
+          <span class="btn-arrow">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path fill="#fff" d="M21.35 11.1H12v2.98h5.35c-.23 1.4-1.65 4.1-5.35 4.1-3.22 0-5.85-2.66-5.85-5.94S8.78 6.3 12 6.3c1.83 0 3.06.78 3.76 1.45l2.56-2.47C16.68 3.72 14.53 2.8 12 2.8 6.98 2.8 2.9 6.88 2.9 11.9S6.98 21 12 21c5.2 0 8.65-3.66 8.65-8.8 0-.59-.06-1.04-.15-1.5z"/>
+            </svg>
+          </span>
+        </button>
+
+        <div class="login-error" id="loginError"></div>
+
+        <div class="lf-or">أو باسم المستخدم</div>
+
+        <!-- دخول باسم المستخدم — الصلاحيات بتتقرا من users/{username}/allowedApps
+             اللي المدير بيظبطها من لوحة الإدارة، فكل واحد بيشوف تطبيقاته بس -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input id="uUser" type="text" dir="ltr" placeholder="اسم المستخدم" autocomplete="username"
+                 style="width:100%;padding:13px 15px;border-radius:12px;border:1px solid #2a2b33;
+                        background:#15161c;color:#e8e8ef;font-size:.92rem;font-family:inherit" />
+          <input id="uPass" type="password" dir="ltr" placeholder="كلمة المرور" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter') window.doUserLogin()"
+                 style="width:100%;padding:13px 15px;border-radius:12px;border:1px solid #2a2b33;
+                        background:#15161c;color:#e8e8ef;font-size:.92rem;font-family:inherit" />
+          <button class="lf-btn-main" id="userLoginBtn" onclick="window.doUserLogin()">
+            <span class="btn-text">دخول</span>
+          </button>
+        </div>
+
+        <div style="font-size:.76rem;color:#8b93a7;text-align:center;line-height:1.8;margin-top:14px">
+          الإدارة بتدخل بحساب جوجل. باقي المستخدمين بيدخلوا باسم المستخدم،
+          وكل واحد بيشوف التطبيقات المسموح له بيها بس.
+        </div>
+
+        <!-- مدخل العملاء — ده تطبيق عام مش محتاج صلاحية، فبيبان للكل قبل الدخول -->
+        <a href="tiar_customer.html" style="display:flex;align-items:center;gap:12px;margin-top:18px;
+           padding:14px 16px;border-radius:14px;text-decoration:none;
+           background:linear-gradient(90deg,rgba(232,25,44,.16),rgba(232,25,44,.05));
+           border:1px solid rgba(232,25,44,.35)">
+          <span style="font-size:1.5rem">🛵</span>
+          <span style="flex:1;text-align:right">
+            <b style="display:block;color:#fff;font-size:.92rem">عميل؟ اطلب توصيلك من هنا</b>
+            <span style="font-size:.74rem;color:#8b93a7">تطبيق العملاء — دخول بحساب جوجل</span>
+          </span>
+          <span style="color:#e8192c;font-size:1.2rem">‹</span>
+        </a>
+
+        <div class="login-panel-footer">جميع الحقوق محفوظة © 2024 الدهشان</div>
+      </div><!-- .login-card -->
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       MAIN APP
+  ══════════════════════════════════════════════════════════════ -->
+  <div id="main-app">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <a class="topbar-brand" href="#">
+        <img src="assets/logo.png" alt="الدهشان" style="height:44px;width:auto;object-fit:contain;display:block;filter:drop-shadow(0 0 8px rgba(232,25,44,0.4));" />
+      </a>
+      <div class="topbar-actions">
+        <div class="user-badge">
+          <span>👤</span>
+          <span class="uname" id="topbar-username">—</span>
+          <span class="role-tag" id="topbar-role">—</span>
+        </div>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
+          <span id="themeIcon">☀️</span>
+          <span id="themeLabel">النهاري</span>
+        </button>
+        <button class="logout-btn" onclick="window.doLogout()">
+          <span>🚪</span> خروج
+        </button>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="main">
+      <div class="section-label">التطبيقات</div>
+
+      <div class="apps-grid" id="appsGrid">
+
+        <!-- Admin -->
+        <div class="app-card blue" id="card-admin" onclick="openApp('admin')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="3" width="13" height="13" rx="3" fill="#e8192c" opacity=".9"/>
+              <rect x="20" y="3" width="13" height="13" rx="3" fill="#e8192c" opacity=".5"/>
+              <rect x="3" y="20" width="13" height="13" rx="3" fill="#e8192c" opacity=".5"/>
+              <rect x="20" y="20" width="13" height="13" rx="3" fill="#e8192c" opacity=".9"/>
+            </svg>
+          </div>
+          <div class="app-name">لوحة الإدارة</div>
+        </div>
+
+        <!-- Branch -->
+        <div class="app-card green" id="card-branch" onclick="openApp('branch')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 4L32 12V24L18 32L4 24V12L18 4Z" fill="#e8192c" opacity=".15" stroke="#e8192c" stroke-width="1.5"/>
+              <circle cx="18" cy="18" r="5" fill="#e8192c"/>
+              <circle cx="18" cy="7"  r="2.5" fill="#e8192c" opacity=".7"/>
+              <circle cx="29" cy="13" r="2.5" fill="#e8192c" opacity=".7"/>
+              <circle cx="29" cy="23" r="2.5" fill="#e8192c" opacity=".7"/>
+              <circle cx="18" cy="29" r="2.5" fill="#e8192c" opacity=".7"/>
+              <circle cx="7"  cy="23" r="2.5" fill="#e8192c" opacity=".7"/>
+              <circle cx="7"  cy="13" r="2.5" fill="#e8192c" opacity=".7"/>
+            </svg>
+          </div>
+          <div class="app-name">تطبيق الفروع</div>
+        </div>
+
+        <!-- Store -->
+        <div class="app-card orange" id="card-store" onclick="openApp('store')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 10H32L29 26H7L4 10Z" fill="#e8192c" opacity=".15" stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M4 10L7 5H29L32 10" stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+              <circle cx="12" cy="30" r="2.5" fill="#e8192c"/>
+              <circle cx="24" cy="30" r="2.5" fill="#e8192c"/>
+              <line x1="13" y1="15" x2="13" y2="22" stroke="#e8192c" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="18" y1="15" x2="18" y2="22" stroke="#e8192c" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="23" y1="15" x2="23" y2="22" stroke="#e8192c" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="app-name">بوابة المحلات</div>
+        </div>
+
+        <!-- HR -->
+        <div class="app-card blue" id="card-hr" onclick="openApp('hr')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="14" cy="12" r="5" fill="#e8192c" opacity=".9"/>
+              <path d="M5 30c0-5 4-8 9-8s9 3 9 8" stroke="#e8192c" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+              <circle cx="26" cy="14" r="3.5" fill="#e8192c" opacity=".5"/>
+              <path d="M22 30c0-4 2.5-6.5 6-6.5s6 2.5 6 6.5" stroke="#e8192c" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".6"/>
+            </svg>
+          </div>
+          <div class="app-name">الموارد البشرية</div>
+        </div>
+
+        <!-- Accounts -->
+        <div class="app-card purple" id="card-accounts" onclick="openApp('accounts')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="6" y="3" width="24" height="30" rx="3" fill="#e8192c" opacity=".12" stroke="#e8192c" stroke-width="1.5"/>
+              <line x1="11" y1="11" x2="25" y2="11" stroke="#e8192c" stroke-width="1.6" stroke-linecap="round"/>
+              <line x1="11" y1="17" x2="25" y2="17" stroke="#e8192c" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+              <line x1="11" y1="23" x2="19" y2="23" stroke="#e8192c" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+              <circle cx="24" cy="25" r="5" fill="#e8192c"/>
+              <path d="M22 25h4M24 23v4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="app-name">النظام المحاسبي</div>
+        </div>
+
+        <!-- Call Center -->
+        <div class="app-card blue" id="card-callcenter" onclick="openApp('callcenter')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 6h5l2.5 6-3 2a15 15 0 0 0 8.5 8.5l2-3 6 2.5v5c0 1.1-.9 2-2 2C15.6 29 7 20.4 7 8c0-1.1.9-2 2-2z"
+                    fill="#e8192c" opacity=".9"/>
+              <path d="M22 5a9 9 0 0 1 9 9" stroke="#e8192c" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".6"/>
+              <path d="M22 10a4 4 0 0 1 4 4" stroke="#e8192c" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".6"/>
+            </svg>
+          </div>
+          <div class="app-name">الكول سنتر</div>
+        </div>
+
+        <!-- روح دمشق -->
+        <div class="app-card orange" id="card-damascus" onclick="openApp('damascus')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="5" y="6" width="26" height="24" rx="3" fill="#e8192c" opacity=".12" stroke="#e8192c" stroke-width="1.5"/>
+              <line x1="5" y1="13" x2="31" y2="13" stroke="#e8192c" stroke-width="1.5"/>
+              <line x1="14" y1="13" x2="14" y2="30" stroke="#e8192c" stroke-width="1.2" opacity=".6"/>
+              <line x1="23" y1="13" x2="23" y2="30" stroke="#e8192c" stroke-width="1.2" opacity=".6"/>
+              <line x1="5" y1="21" x2="31" y2="21" stroke="#e8192c" stroke-width="1.2" opacity=".6"/>
+              <circle cx="27" cy="9.5" r="1.6" fill="#e8192c"/>
+            </svg>
+          </div>
+          <div class="app-name">تقفيل روح دمشق</div>
+        </div>
+
+        <!-- تطبيق العملاء — التطبيق العام اللي العميل بيطلب منه -->
+        <div class="app-card green" id="card-customer" onclick="openApp('customer')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="10" y="3" width="16" height="30" rx="3.5" fill="#e8192c" opacity=".12" stroke="#e8192c" stroke-width="1.5"/>
+              <line x1="15" y1="7" x2="21" y2="7" stroke="#e8192c" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="18" cy="29" r="1.6" fill="#e8192c"/>
+              <path d="M13 13H23L21.8 22H14.2L13 13Z" fill="#e8192c" opacity=".6"/>
+              <path d="M15.5 13V11.5C15.5 10.1 16.6 9 18 9C19.4 9 20.5 10.1 20.5 11.5V13"
+                    stroke="#e8192c" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="app-name">تطبيق العملاء</div>
+        </div>
+
+        <div class="app-card green" id="card-customers" onclick="openApp('customers')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="14" cy="13" r="4.5" fill="#e8192c" opacity=".18" stroke="#e8192c" stroke-width="1.5"/>
+              <path d="M6 28c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="#e8192c" stroke-width="1.5"
+                    fill="#e8192c" fill-opacity=".08" stroke-linecap="round"/>
+              <circle cx="25" cy="15" r="3.2" fill="#e8192c" opacity=".35"/>
+              <path d="M21.5 27c0-3.3 2.2-5.4 5.5-5.4 2.2 0 4 1 4 3.4" stroke="#e8192c"
+                    stroke-width="1.3" fill="none" stroke-linecap="round" opacity=".6"/>
+            </svg>
+          </div>
+          <div class="app-name">إدارة العملاء</div>
+        </div>
+
+        <!-- إدارة المحلات -->
+        <div class="app-card" id="card-storesadmin" onclick="openApp('storesadmin')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 14h22v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V14z" fill="#e8192c" fill-opacity=".14"
+                    stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M6 9.5h24l1.4 4.5H4.6L6 9.5z" fill="#e8192c" fill-opacity=".3" stroke="#e8192c"
+                    stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M15 30v-7h6v7" stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="app-name">إدارة المحلات</div>
+        </div>
+
+        <!-- إدارة الطيارين — لوحة مشرف الطيارين (تشغيل الأسطول بلا فلوس) -->
+        <div class="app-card blue" id="card-pilotsadmin" onclick="openApp('pilotsadmin')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="9" cy="26" r="4.5" stroke="#e8192c" stroke-width="1.5"
+                      fill="#e8192c" fill-opacity=".12"/>
+              <circle cx="27" cy="26" r="4.5" stroke="#e8192c" stroke-width="1.5"
+                      fill="#e8192c" fill-opacity=".12"/>
+              <path d="M9 26h9l6-11h4" stroke="#e8192c" stroke-width="1.6"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M21 15h6l1.6 7" stroke="#e8192c" stroke-width="1.6"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="24" cy="8" r="3.2" fill="#e8192c" opacity=".9"/>
+              <path d="M19.5 9.5h5.5" stroke="#e8192c" stroke-width="1.4" stroke-linecap="round" opacity=".5"/>
+            </svg>
+          </div>
+          <div class="app-name">إدارة الطيارين</div>
+        </div>
+
+        <!-- إدارة التقييمات -->
+        <div class="app-card" id="card-perf" onclick="openApp('perf')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 5.5l3.6 7.3 8.1 1.2-5.85 5.7 1.38 8.05L18 24.95l-7.23 3.8 1.38-8.05L6.3 14l8.1-1.2L18 5.5z"
+                    fill="#e8192c" fill-opacity=".22" stroke="#e8192c" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="app-name">إدارة التقييمات</div>
+        </div>
+
+        <div class="app-card" id="card-site" onclick="openApp('site')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="18" cy="18" r="12.5" stroke="#e8192c" stroke-width="1.5"
+                      fill="#e8192c" fill-opacity=".08"/>
+              <ellipse cx="18" cy="18" rx="5.2" ry="12.5" stroke="#e8192c" stroke-width="1.3" fill="none"/>
+              <line x1="5.5" y1="18" x2="30.5" y2="18" stroke="#e8192c" stroke-width="1.3"/>
+              <line x1="8" y1="11.5" x2="28" y2="11.5" stroke="#e8192c" stroke-width="1.1" opacity=".7"/>
+              <line x1="8" y1="24.5" x2="28" y2="24.5" stroke="#e8192c" stroke-width="1.1" opacity=".7"/>
+            </svg>
+          </div>
+          <div class="app-name">الموقع العام</div>
+        </div>
+
+        <div class="app-card" id="card-siteadmin" onclick="openApp('siteadmin')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="5" y="7" width="26" height="20" rx="3" stroke="#e8192c" stroke-width="1.5"
+                    fill="#e8192c" fill-opacity=".08"/>
+              <line x1="5" y1="13" x2="31" y2="13" stroke="#e8192c" stroke-width="1.4"/>
+              <circle cx="8.8" cy="10" r="1" fill="#e8192c"/><circle cx="12" cy="10" r="1" fill="#e8192c"/>
+              <circle cx="18" cy="20" r="3.4" stroke="#e8192c" stroke-width="1.4" fill="none"/>
+              <path d="M18 15.4v-1.2M18 25.8v-1.2M22.6 20h1.2M12.2 20h1.2" stroke="#e8192c"
+                    stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="app-name">لوحة تحكم الموقع</div>
+        </div>
+
+        <!-- HR (النسخة القديمة) — مؤقتة لحد التأكد من الجديد -->
+        <div class="app-card legacy" id="card-hrOld" onclick="openApp('hrOld')">
+          <div class="app-icon">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="14" cy="12" r="5" fill="#888888" opacity=".8"/>
+              <path d="M5 30c0-5 4-8 9-8s9 3 9 8" stroke="#888888" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+              <circle cx="26" cy="14" r="3.5" fill="#888888" opacity=".5"/>
+              <path d="M22 30c0-4 2.5-6.5 6-6.5s6 2.5 6 6.5" stroke="#888888" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".6"/>
+            </svg>
+          </div>
+          <div class="app-name">الموارد البشرية</div>
+          <div class="legacy-tag">النسخة القديمة</div>
+        </div>
+
+      </div>
+    </main>
+
+    <footer>© 2024 الدهشان — نظام إدارة التوصيل</footer>
+  </div>
+
+  <!-- Firebase -->
+  <script src="assets/js/constants.js"></script>
+  <script src="assets/js/api.js"></script>
+  <!-- بوابة الدخول — REST: /api/login (جلسة) + دخول جوجل للإدارة عبر /api/admin/google-login -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    // Firebase Auth بس (لدخول جوجل للإدارة) — مفيش Realtime Database خالص
+    const app  = initializeApp({
+      apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+      authDomain: "aldahshaneg-92f66.firebaseapp.com",
+      projectId: "aldahshaneg-92f66",
+    });
+    const auth = getAuth(app);
+
+    /* ── الجلسة والواجهة ─────────────────────────────────────── */
+    function applySession(data) {
+      window._indexUser = data;
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("main-app").classList.add("visible");
+      document.getElementById("topbar-username").textContent = data.displayName || data.name || data.username;
+      document.getElementById("topbar-role").textContent = data.role || "";
+      const welcome = document.getElementById("welcome-name");
+      if (welcome) welcome.textContent = data.displayName || data.name || data.username;
+      renderAppCards(data.allowedApps || []);
+    }
+
+    /* من رد الـ API (فيه role نصّي إنجليزي + allowedApps) لجلسة الواجهة */
+    function sessionFromApi(u) {
+      const roleAr = { admin:"مدير عام", branch:"مشرف فرع", store:"صاحب محل",
+        callcenter:"كول سنتر", accountant:"محاسب", hr:"موارد بشرية",
+        pilot_supervisor:"مشرف الطيارين" };
+      return {
+        username:    u.username,
+        displayName: u.name || u.shopName || u.username,
+        name:        u.name || "",
+        role:        roleAr[u.role] || u.role || "موظف",
+        branchId:    u.branch_id ?? u.branchId ?? "",
+        allowedApps: u.allowedApps || [],
+      };
+    }
+
+    /* ── وحدات لسه ما اتبنتش ─────────────────────────────────────
+       الأربعة دول بيتصرّحوا في allowedApps (شوف AuthController: أي أدمن
+       بياخد hr و accounts، و perf بيتضاف تلقائيًا) — بس **مفيش ملفات
+       ليهم في public/**. النتيجة كانت أربع كروت شغّالة بتودّي 404.
+
+       اتكشفت وقت مراجعة الروابط بعد أول نشر (2026-08-20) بفحص كل هدف
+       .html مذكور في اللوحات على السيرفر الحي: الأربعة دول بس اللي 404،
+       والباقي إما ملف موجود أو تحويل 301 شغّال.
+
+       لما أي وحدة منهم تتبني: شيل مفتاحها من هنا وضيف ملفها في urls تحت.
+       مقصود إن ده المكان الوحيد اللي بيتعدّل. */
+    const APPS_NOT_BUILT = ["hr", "hrOld", "accounts", "perf"];
+
+    /* ── رسم الكروت — تعتيم غير المصرّح ────────────────────────
+       ⚠️ كل سطر اشتقاق تحت بيوسّع الصلاحية، فأي مفتاح جديد لازم يتحط في
+       الطرف **المشتَق** بس مايتحطش في الشرط. مثال محسوب: `pilotsadmin`
+       بيتضاف للأدمن (اللي أصلًا شايف كل حاجة) وخلاص — ومابنشتقش منه أي
+       تطبيق تاني، عشان مشرف الطيارين مايرثش لوحة الإدارة أو الحسابات أو
+       التقارير من غير قصد. اللي عنده pilotsadmin بس بيشوف كارته + الموقع
+       العام (السطر الأخير للكل) ولا حاجة غير كده. */
+    function renderAppCards(allowedApps) {
+      if (allowedApps.includes("hr") && !allowedApps.includes("hrOld")) allowedApps = [...allowedApps, "hrOld"];
+      if (allowedApps.includes("accounts") && !allowedApps.includes("damascus")) allowedApps = [...allowedApps, "damascus"];
+      if ((allowedApps.includes("admin") || allowedApps.includes("callcenter")) && !allowedApps.includes("customer")) allowedApps = [...allowedApps, "customer"];
+      if (allowedApps.includes("admin")) {
+        for (const k of ["customers","siteadmin","perf","storesadmin","pilotsadmin"]) if (!allowedApps.includes(k)) allowedApps = [...allowedApps, k];
+      }
+      if (allowedApps.includes("hr") && !allowedApps.includes("perf")) allowedApps = [...allowedApps, "perf"];
+      if (!allowedApps.includes("site")) allowedApps = [...allowedApps, "site"];   // الموقع العام للكل
+
+      const ids = ["admin","branch","store","hr","hrOld","accounts","callcenter","damascus",
+        "customer","customers","perf","storesadmin","pilotsadmin","site","siteadmin"];
+      for (const appKey of ids) {
+        const card = document.getElementById("card-" + appKey);
+        if (!card) continue;
+        card.classList.remove("locked", "soon");
+        if (APPS_NOT_BUILT.includes(appKey)) {
+          // الوحدة مش موجودة — «قريبًا» بغض النظر عن الصلاحية
+          card.classList.add("soon");
+          card.style.pointerEvents = "none";
+        } else if (allowedApps.includes(appKey)) {
+          card.style.pointerEvents = "";
+        } else {
+          card.classList.add("locked");
+          card.style.pointerEvents = "none";
+        }
+      }
+    }
+
+    /* ── فتح التطبيق (الجلسة مشتركة على نفس الدومين — passthrough تلقائي) ── */
+    window.openApp = function(appKey) {
+      const user = window._indexUser;
+      if (!user) return;
+      // pointerEvents مش كفاية لوحده — الدالة دي عامة على window
+      if (APPS_NOT_BUILT.includes(appKey)) return;
+      const allowed = user.allowedApps || [];
+      const ok = allowed.includes(appKey)
+        || (appKey === "hrOld"    && allowed.includes("hr"))
+        || (appKey === "damascus" && allowed.includes("accounts"))
+        || (appKey === "customer" && (allowed.includes("admin") || allowed.includes("callcenter")))
+        || (["customers","siteadmin","perf","storesadmin","pilotsadmin"].includes(appKey) && allowed.includes("admin"))
+        || (appKey === "perf" && allowed.includes("hr"))
+        || appKey === "site";
+      if (!ok) return;
+      // أسماء الملفات الجديدة في public/
+      const urls = {
+        admin:"tiar.html", branch:"branch.html", store:"store.html",
+        callcenter:"callcenter.html", damascus:"tiar_damascus.html",
+        customer:"customer.html", customers:"customers.html",
+        storesadmin:"stores.html", pilotsadmin:"pilots.html",
+        site:"https://aldahshan.cloud/", siteadmin:"site-admin.html"
+      };
+      if (urls[appKey]) window.location.href = urls[appKey];
+    };
+
+    /* ── دخول باسم المستخدم → POST /api/login (جلسة كوكي للدومين كله) ── */
+    window.doUserLogin = async function() {
+      const err = document.getElementById("loginError");
+      const btn = document.getElementById("userLoginBtn");
+      const bTxt = btn?.querySelector(".btn-text");
+      const username = (document.getElementById("uUser").value || "").trim();
+      const password = document.getElementById("uPass").value || "";
+      err.textContent = "";
+      if (!username || !password) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
+      if (btn) btn.disabled = true;
+      if (bTxt) bTxt.textContent = "جاري التحقق…";
+      try {
+        await API.login(username, password);
+        // /api/me بيرجّع اليوزر كامل بـ allowedApps (رد الدخول نفسه مش بيحملها)
+        const me = await API.me();
+        applySession(sessionFromApi(me.user));
+        document.getElementById("uPass").value = "";
+      } catch (e) {
+        err.textContent = e.message || "اسم المستخدم أو كلمة المرور غير صحيحة";
+        document.getElementById("uPass").value = "";
+      } finally {
+        if (btn) btn.disabled = false;
+        if (bTxt) bTxt.textContent = "دخول";
+      }
+    };
+
+    /* ── دخول جوجل للإدارة → التحقق سيرفر-سايد في /api/admin/google-login ── */
+    window.doGoogleLogin = async function() {
+      const err = document.getElementById("loginError");
+      const btn = document.getElementById("googleBtn");
+      const btnText = btn?.querySelector(".btn-text");
+      err.textContent = "";
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.textContent = "جاري التحقق…";
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        const cred = await signInWithPopup(auth, provider);
+        const idToken = await cred.user.getIdToken();
+        const res = await API.post("/api/admin/google-login", { idToken }, { quiet401: true });
+        try { await signOut(auth); } catch (e) {}   // مش محتاجين جلسة فايربيز بعد كده
+        applySession(sessionFromApi(res.user));
+      } catch (e) {
+        if (e?.code === "auth/popup-closed-by-user" || e?.code === "auth/cancelled-popup-request")
+          err.textContent = "تم إلغاء تسجيل الدخول";
+        else if (e?.code === "auth/unauthorized-domain")
+          err.textContent = "الدومين ده مش مصرّح في Firebase → Authentication → Authorized domains";
+        else
+          err.textContent = e.message || "تعذّر تسجيل الدخول";
+      } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = "تسجيل الدخول بحساب جوجل";
+      }
+    };
+
+    /* ── خروج ── */
+    window.doLogout = async function() {
+      window._indexUser = null;
+      try { await API.logout(); } catch (e) {}
+      try { await signOut(auth); } catch (e) {}
+      document.getElementById("main-app").classList.remove("visible");
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("loginError").textContent = "";
+    };
+
+    /* ── استعادة الجلسة عند فتح الصفحة (جلسة السيرفر هي المرجع) ── */
+    (async function restore() {
+      try {
+        const d = await API.me();
+        if (d.user && d.user.role) applySession(sessionFromApi(d.user));
+      } catch (e) { /* مفيش جلسة — تفضل شاشة الدخول */ }
+    })();
+  </script>
+
+  <!-- Theme (non-module) -->
+  <script>
+    const THEME_KEY = "tiar-index-theme";
+    function applyTheme(mode) {
+      if (mode === "light") {
+        document.documentElement.classList.add("light");
+        document.getElementById("themeIcon").textContent  = "🌙";
+        document.getElementById("themeLabel").textContent = "الليلي";
+      } else {
+        document.documentElement.classList.remove("light");
+        document.getElementById("themeIcon").textContent  = "☀️";
+        document.getElementById("themeLabel").textContent = "النهاري";
+      }
+    }
+    function toggleTheme() {
+      const isLight = document.documentElement.classList.contains("light");
+      const next = isLight ? "dark" : "light";
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    }
+    applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+  </script>
+
+</body>
+</html>

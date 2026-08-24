@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>الدهشان | إدارة المحلات</title>
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="manifest" href="stores-manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="الدهشان" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
+  --line:#e9edef; --line2:#d1d7db;
+  --txt:#111b21; --muted:#667781;
+  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  --green:#15803d; --green-soft:rgba(21,128,61,.1);
+  --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
+  --blue:#1d4ed8;
+  --font:'Cairo',system-ui,sans-serif; --hd:60px;
+}
+:root.dark{
+  --bg:#0b141a; --panel:#111b21; --hover:#182229; --active:#2a3942;
+  --line:#222d34; --line2:#2a3942;
+  --txt:#e9edef; --muted:#8696a0;
+  --brand:#e8192c; --brand-d:#b91c1c; --brand-soft:rgba(232,25,44,.14);
+  --green:#22c55e; --green-soft:rgba(34,197,94,.14);
+  --orange:#f97316; --orange-soft:rgba(249,115,22,.14);
+  --blue:#60a5fa;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);height:100vh;overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;color:inherit}
+
+#gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:60;padding:20px}
+.gate-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 26px;
+  width:100%;max-width:360px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.gate-box img{height:48px;margin-bottom:14px}
+.gate-box h1{font-size:17px;font-weight:800;margin-bottom:4px}
+.gate-box p{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+.gate-box input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;font-size:14px;margin-bottom:9px;outline:none}
+.gate-box input:focus{border-color:var(--brand)}
+.gbtn{width:100%;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;
+  font-weight:800;font-size:14.5px;cursor:pointer}
+#gateErr{color:var(--brand);font-size:12.5px;margin-top:9px;min-height:17px}
+
+#app{display:none;height:100vh;flex-direction:column}
+#app.on{display:flex}
+.topbar{height:var(--hd);flex:none;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:0 16px}
+.topbar img{height:30px}
+.topbar .ttl{font-size:16px;font-weight:800}
+.topbar .sp{margin-inline-start:auto;display:flex;align-items:center;gap:10px}
+.ico{width:36px;height:36px;border-radius:50%;border:none;background:none;cursor:pointer;
+  font-size:16px;color:var(--muted)}
+.ico:hover{background:var(--hover)}
+.me b{font-size:13px;display:block;line-height:1.3}
+.me span{font-size:11px;color:var(--muted)}
+.me{display:flex;align-items:center;gap:8px}
+.av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:14px}
+.main{flex:1;display:flex;min-height:0;min-width:0}
+
+.side{width:380px;flex:none;background:var(--panel);border-inline-start:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.side-top{padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
+.search{display:flex;align-items:center;gap:9px;background:var(--bg);border-radius:9px;padding:8px 13px}
+.search input{background:none;border:none;outline:none;flex:1;font-size:14px;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.chip{padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:none;
+  font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.addBtn{width:100%;margin-top:9px;background:var(--brand);color:#fff;border:none;border-radius:9px;
+  padding:10px;font-weight:800;font-size:13px;cursor:pointer}
+.list{flex:1;overflow-y:auto;min-height:0}
+.row{display:flex;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line);
+  align-items:center}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--active)}
+.r-av{width:46px;height:46px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:17px;flex:none}
+.r-b{flex:1;min-width:0}
+.r-1{display:flex;align-items:baseline;gap:8px}
+.r-1 b{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.r-2{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12.5px;color:var(--muted)}
+.tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.t-block{background:var(--brand-soft);color:var(--brand)}
+.t-ok{background:var(--green-soft);color:var(--green)}
+.t-warn{background:var(--orange-soft);color:var(--orange)}
+.empty{padding:60px 24px;text-align:center;color:var(--muted);font-size:14px}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.pane-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.pane-empty i{font-size:64px;font-style:normal;display:block;margin-bottom:16px;opacity:.35}
+.pane-hd{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;
+  display:flex;align-items:center;gap:14px;flex:none;flex-wrap:wrap;min-width:0}
+.p-av{width:52px;height:52px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.pane-hd h2{font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pane-hd .sub{font-size:12.5px;color:var(--muted)}
+.pane-body{flex:1;overflow-y:auto;padding:18px 20px}
+.back{display:none}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px;text-align:center}
+.kpi b{font-size:20px;font-weight:900;display:block}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:12px}
+.card-h{font-size:13.5px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.card-h .n{background:var(--brand-soft);color:var(--brand);border-radius:99px;padding:1px 8px;font-size:11px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;
+  border-bottom:1px solid var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:700;text-align:end}
+.kv .v.ltr{direction:ltr}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{border:1px solid var(--line2);background:var(--panel);color:var(--txt);border-radius:9px;
+  padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.danger{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.btn.ok{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.warnbox{background:var(--brand-soft);border:1px solid var(--brand);border-radius:11px;
+  padding:12px 14px;font-size:13px;margin-bottom:14px}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:none;
+  align-items:flex-end;justify-content:center}
+.modal.on{display:flex}
+.sheet{background:var(--panel);width:100%;max-width:460px;border-radius:16px 16px 0 0;
+  max-height:88vh;display:flex;flex-direction:column}
+@media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
+.sheet-h{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
+.sheet-b{padding:18px 20px;overflow-y:auto}
+.sheet-b input,.sheet-b textarea,.sheet-b select{width:100%;background:var(--bg);
+  border:1px solid var(--line2);border-radius:10px;padding:11px 13px;font-size:13.5px;
+  outline:none;margin-top:10px;resize:none}
+.sheet-b label{font-size:12px;color:var(--muted);font-weight:700;display:block;margin-top:12px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+  background:var(--txt);color:var(--bg);border-radius:9px;padding:11px 20px;
+  font-size:13.5px;font-weight:700;display:none}
+#toast.on{display:block}
+@media(max-width:820px){
+  .side{width:100%;border:none}
+  .main.detail .side{display:none}
+  .main:not(.detail) .pane{display:none}
+  .back{display:block}
+  .me b,.me span{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <h1>🏪 إدارة المحلات</h1>
+    <p>إضافة المحلات والتحكم في حساباتها ومحافظها</p>
+    <input id="gUser" placeholder="اسم المستخدم" dir="ltr" autocomplete="username" />
+    <input id="gPass" type="password" placeholder="كلمة المرور" dir="ltr" autocomplete="current-password" />
+    <button class="gbtn" onclick="doLogin()">دخول</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <div class="ttl">🏪 إدارة المحلات</div>
+    <div class="sp">
+      <button class="ico" id="themeBtn" title="الوضع الليلي">🌙</button>
+      <button class="ico" onclick="location.href='home.html'" title="البوابة">🏠</button>
+      <div class="me"><div class="av" id="meAv">A</div>
+        <div><b id="meName">—</b><span id="meRole">—</span></div></div>
+      <button class="ico" onclick="doLogout()" title="خروج" style="color:var(--brand)">⏻</button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="side">
+      <div class="side-top">
+        <div class="search">🔍<input id="q" placeholder="ابحث باسم المحل أو الرقم…" oninput="renderList()" /></div>
+        <div class="chips" id="chips"></div>
+        <button class="addBtn" onclick="openAdd()">➕ إضافة محل جديد</button>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="pane" id="pane">
+      <div class="pane-empty"><div><i>🏪</i>اختار محل من اللستة عشان تشوف بياناته<br />وتتحكم في حسابه ومحفظته</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet">
+  <div class="sheet-h" id="mTitle">—</div>
+  <div class="sheet-b" id="mBody"></div>
+</div></div>
+<div id="toast"></div>
+
+
+<script src="assets/js/constants.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/trust-admin.js"></script>
+<script>
+/* اتحول من Firebase لـ REST API — الجلسة كوكي PHP والبيانات بالاستطلاع */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const money = v => (Number(v) || 0).toLocaleString("ar-EG");
+const toast = m => { const t = $("toast"); t.textContent = m; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 2600); };
+const nameOf = s => (s.shopName || s.username || "").trim() || "محل بدون اسم";
+const initial = s => nameOf(s)[0] || "؟";
+const fmtFull = d => d ? new Date(d).toLocaleString("ar-EG") : "—";
+const readWallet = w => ({ balance: Number((w && w.balance) || 0) });
+
+if (localStorage.getItem("stores-theme") === "dark") document.documentElement.classList.add("dark");
+const syncTheme = () => $("themeBtn").textContent =
+  document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+syncTheme();
+$("themeBtn").onclick = () => {
+  const d = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("stores-theme", d ? "dark" : "light"); syncTheme();
+};
+
+/* ── الدخول — جلسة السيرفر هي المرجع ─────────────────── */
+let ME = null;
+window._onSessionExpired = () => { ME = null; location.reload(); };
+
+function applySession(u) {
+  ME = { username: u.username, role: u.role };
+  $("gate").style.display = "none"; $("app").classList.add("on");
+  $("meName").textContent = u.username; $("meRole").textContent = "إدارة";
+  $("meAv").textContent = (u.username || "A")[0];
+  start();
+}
+window.doLogin = async function () {
+  const u = $("gUser").value.trim(), p = $("gPass").value, err = $("gateErr");
+  err.textContent = "";
+  if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
+  try {
+    const res = await API.login(u, p);
+    if (res.user.role !== "admin") {
+      /* مفيش logout هنا عن قصد: الجلسة كوكي واحد على الدومين كله، فالـlogout
+         مابيلغيش «محاولة الدخول» دي — بيقتل جلسة نفس اليوزر في كل تاباته
+         التانية (لوحة الفرع/المحل) ويطرده من شغله المفتوح. وسيبان الجلسة
+         مش خطر: الصفحة مابتناديش applySession للدور الغلط، والسيرفر أصلًا
+         بيرفض مسارات الإدارة لغير الأدمن. */
+      err.textContent = "الصفحة دي للإدارة بس"; return;
+    }
+    applySession(res.user);
+  } catch (e) { err.textContent = e.message || "اسم المستخدم أو كلمة المرور غير صحيحة"; }
+};
+window.doLogout = async () => { try { await API.logout(); } catch (e) {} location.reload(); };
+(async function () {
+  try {
+    const d = await API.me();
+    if (d.user && d.user.role === "admin") applySession(d.user);
+  } catch (e) {}
+})();
+
+/* ── البيانات — Pollers بدل onValue ──────────────────── */
+const S = { stores: [], orders: [], zones: [], branches: {}, wallets: {}, sel: null, filter: "all",
+            /* أرقام مجمّعة مضبوطة من /api/orders/stats — { username: {orders, delivery, prepaid, byStatus} } */
+            stats: {},
+            /* منظومة الثقة — كاش لكل محل بالـ username: {rep, items, phone} / {err} / {loading} */
+            trust: {},
+            /* محل اتضاف لسه ومستني قايمة /api/users توصل عشان نفتحه */
+            pendingOpen: null };
+let _started = false;
+/* بصمة آخر HTML اتكتب — الاستطلاع بينده refresh على كل نبضة حتى لو مفيش
+   تغيير، والكتابة بتهدّ .pane-body وترجّع السكرول لفوق وسط قراية المستخدم.
+   بنقارن الأول ومنكتبش إلا لو المحتوى اتغيّر فعلًا. */
+let _listSig = "", _paneSig = "";
+
+function start() {
+  if (_started) return; _started = true;
+  new API.Poller("/api/users", { interval: 15000, useSince: false, onChange: d => {
+    S.stores = (d.items || [])
+      .filter(u => (u.role || "").trim() === "صاحب محل")
+      .map(u => ({ ...u, wallet: { balance: (S.wallets[u.id] || 0) } }))
+      .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "ar"));
+    refresh();
+  }});
+  new API.Poller("/api/wallets", { interval: 15000, useSince: false, params: { ownerType: "store" }, onChange: d => {
+    S.wallets = {};
+    (d.items || []).forEach(w => { S.wallets[w.ownerId] = w.balance; });
+    S.stores = S.stores.map(s => ({ ...s, wallet: { balance: (S.wallets[s.id] || 0) } }));
+    refresh();
+  }});
+  /* limit صريح: من غيره السيرفر بيرجّع آخر 300 أوردر في الشركة كلها (أقل من
+     يوم شغل)، وكل أرقام المحل بتتحسب من العيّنة المبتورة دي فتبان غلط.
+     1000 هو السقف اللي السيرفر بيقبله — بس ده **تخفيف مش حل**: النافذة لسه
+     «آخر N أوردر في الشركة» مش «أوردرات المحل ده»، و/api/orders مافيهوش
+     فلتر addedBy للأدمن (الفلاتر المتاحة: branchId/status/pilotId/shiftId/
+     moneySettled/from/to/q). يعني محل شحناته كلها أقدم من آخر 1000 أوردر
+     لسه هيبان بأرقام ناقصة لحد ما يتضاف الفلتر في api/routes/orders.php.
+
+     الفاصل رجع 8 ثواني — قرار موثّق في commit 054a39a («الأوردرات = 8
+     ثواني») والصفحة دي مابتكتبش أوردرات خالص، فـpokeAll مابيغطّيش الحالة
+     دي وكل شحنة جديدة كانت هتتأخر لحد دقيقة. وuseSince سايبينه على
+     الافتراضي (true) زي customers.html و callcenter.html بالظبط: الرد
+     الكامل ~1.2 ميجا ولو نزل كل 8 ثواني بيبقى نص جيجا في الساعة لكل تاب،
+     وبالـsince بيرجّع {changed:false} لما مفيش جديد. بس ساعة التغيير الرد
+     بيبقى **المتغيّر بس**، فلازم ندمج في كاش بالمعرّف بدل ما نستبدل
+     S.orders (الاستبدال كان هيمسح باقي التاريخ). الدمج آمن لأن الأوردرات
+     مافيش عليها حذف فعلي في الـAPI، وبنخزّن أوردرات المحلات بس عشان
+     الكاش مايكبرش على الفاضي. */
+  const _ordersById = new Map();
+  new API.Poller("/api/orders", { interval: 8000, params: { limit: 1000 }, onChange: d => {
+    (d.items || []).forEach(o => { if (o.source === "store") _ordersById.set(o.id, o); });
+    S.orders = [..._ordersById.values()];
+    refresh();
+  }});
+  /* الأرقام المضبوطة لكل محل — تجميع على السيرفر في استعلام واحد.
+     ده اللي بيحل مشكلة «الأرقام محسوبة من آخر 1000 أوردر في الشركة»:
+     مستطلع /api/orders فوق لسه بيجيب صفوف الأوردرات للعرض، لكن العدادات
+     والمبالغ بقت جاية من هنا كاملة. 30 ثانية كفاية — دي أرقام تراكمية
+     مش شاشة حيّة، والاستعلام تجميعي على كل الجدول. */
+  new API.Poller("/api/orders/stats", {
+    interval: 30000, useSince: false, params: { groupBy: "addedBy" },
+    onChange: d => { S.stats = d.stats || {}; refresh(); }
+  });
+  new API.Poller("/api/zones", { interval: 60000, useSince: false, onChange: d => {
+    S.zones = (d.items || []); refresh();
+  }});
+  new API.Poller("/api/branches", { interval: 60000, useSince: false, onChange: d => {
+    S.branches = {};
+    (d.items || []).forEach(b => { S.branches[b.id] = b; });
+    refresh();
+  }});
+}
+
+const ordersOf = u => S.orders.filter(o => o.source === "store" && o.addedBy === u);
+
+/* أرقام المحل. المصدر المعتمد هو /api/orders/stats (تجميع على كل الجدول).
+   الحساب من S.orders سايبينه كاحتياطي للحظات الأولى قبل ما الإحصائيات
+   توصل — بس هو تقريبي لأن S.orders نافذة مش التاريخ كله.
+   التصنيفات هنا مطابقة حرفيًا للي كانت الواجهة بتحسبه قبل كده. */
+const _DONE_AR = "تم التسليم", _CANCEL_AR = ["ملغي", "لم يتم التوصيل"];
+function statOf(u) {
+  const s = S.stats[u];
+  if (s) {
+    const bs = s.byStatus || {};
+    const total = Number(s.orders) || 0;
+    const done  = Number(bs[_DONE_AR]) || 0;
+    const canc  = _CANCEL_AR.reduce((a, k) => a + (Number(bs[k]) || 0), 0);
+    return { orders: total, done, cancelled: canc, live: total - done - canc,
+             delivery: Number(s.delivery) || 0, prepaid: Number(s.prepaid) || 0, exact: true };
+  }
+  const os = ordersOf(u);
+  return {
+    orders: os.length,
+    done:      os.filter(o => o.status === _DONE_AR).length,
+    cancelled: os.filter(o => _CANCEL_AR.includes(o.status)).length,
+    live:      os.filter(o => o.status !== _DONE_AR && !_CANCEL_AR.includes(o.status)).length,
+    delivery:  os.reduce((a, o) => a + (Number(o.totalDeliveryPrice) || 0), 0),
+    prepaid:   os.reduce((a, o) => a + (Number(o.storePrepaid) || 0), 0),
+    exact: false,
+  };
+}
+
+const FILTERS = [
+  { k: "all",     t: "الكل" },
+  { k: "active",  t: "نشِطة" },
+  { k: "blocked", t: "موقوفة" },
+  { k: "credit",  t: "لها رصيد" },
+  { k: "top",     t: "الأكتر شحنًا" },
+];
+
+window.setFilter = k => { S.filter = k; refresh(); };
+/* الكلاس بيتحط **قبل** renderPane مش بعده: لو المحل اتشال بين آخر رسم
+   والدوسة، renderPane بيشيل detail بنفسه — ولو حطّيناه بعده كنا هنرجّعه
+   على طول ونحبس الأدمن على الموبايل في رسالة من غير زرار رجوع. */
+window.openStore = u => { S.pendingOpen = null; S.sel = u;
+  $("main").classList.add("detail");
+  renderList(); renderPane();
+  loadTrust(u); };   // السمعة بتتحمّل مرة عند الاختيار (مش مع كل استطلاع)
+window.backToList = () => $("main").classList.remove("detail");
+
+function filtered() {
+  const q = ($("q").value || "").trim().toLowerCase();
+  let list = S.stores.slice();
+  if (S.filter === "active")  list = list.filter(s => !s.blocked);
+  if (S.filter === "blocked") list = list.filter(s => s.blocked);
+  if (S.filter === "credit")  list = list.filter(s => readWallet(s.wallet).balance > 0);
+  if (S.filter === "top")     list = list.sort((a, b) => statOf(b.username).orders - statOf(a.username).orders);
+  if (q) list = list.filter(s =>
+    nameOf(s).toLowerCase().includes(q) ||
+    String(s.username).toLowerCase().includes(q) ||
+    String(s.shopPhone || "").includes(q));
+  return list;
+}
+
+window.renderList = function () {
+  const list = filtered(), box = $("list");
+  const html = !list.length
+    ? `<div class="empty"><i>🏪</i>مفيش محلات هنا${
+        S.stores.length ? "" : "<br /><span style='font-size:12.5px'>ابدأ بإضافة محل من الزرار فوق</span>"}</div>`
+    : list.map(s => {
+        const os = statOf(s.username), w = readWallet(s.wallet);
+        return `<div class="row ${S.sel === s.username ? "on" : ""}" onclick="openStore('${esc(s.username)}')">
+      <div class="r-av">${esc(initial(s))}</div>
+      <div class="r-b">
+        <div class="r-1"><b>${esc(nameOf(s))}</b>${
+          s.blocked ? `<span class="tag t-block">موقوف</span>`
+          : w.balance > 0 ? `<span class="tag t-ok">${money(w.balance)} ج</span>` : ""}</div>
+        <div class="r-2"><span dir="ltr">${esc(s.shopPhone || s.username)}</span>
+          · ${os.orders} شحنة</div>
+      </div></div>`;
+      }).join("");
+  if (_listSig === html) return;      // نفس المحتوى → متكتبش عشان السكرول مايتصفّرش
+  /* وحتى لما يكون فيه تغيير حقيقي (محل جديد، رصيد اتغيّر، شحنة اتسلّمت)،
+     الكتابة على #list — وهو نفسه حاوية التمرير — بتصفّر الـscrollTop.
+     فالأدمن اللي نازل بيدوّر على محل كان بيترمي لفوق ساعة أي تحديث. */
+  const _top = box.scrollTop;
+  _listSig = html; box.innerHTML = html;
+  if (_top) box.scrollTop = _top;
+};
+
+/* ── المحفظة — كارت وفورم محليين على الـ API ─────────── */
+const TXN_TYPES = {
+  credit: { t: "شحن رصيد",  icon: "💰", ep: "credit" },
+  debit:  { t: "خصم من الرصيد", icon: "➖", ep: "debit" },
+};
+function walletCardHtml(w) {
+  const bal = readWallet(w).balance;
+  return `<div class="card">
+    <div class="card-h">💳 المحفظة</div>
+    <div class="kv"><span class="k">الرصيد الحالي</span>
+      <span class="v" style="font-weight:800;color:var(--${bal > 0 ? "green" : "muted"})">${money(bal)} ج.م</span></div>
+    <div class="acts">
+      <button class="btn ok" data-w-act="credit">💰 شحن رصيد</button>
+      <button class="btn danger" data-w-act="debit">➖ خصم</button>
+    </div></div>`;
+}
+function walletFormHtml() {
+  return `
+    <label>المبلغ (ج.م) *</label><input id="wAmt" type="number" min="1" step="0.5" dir="ltr" />
+    <label>ملاحظة</label><input id="wNote" placeholder="اختياري" />
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn pri" style="flex:1" id="wSave">💾 تسجيل</button>
+    </div>`;
+}
+function openWallet(type, s) {
+  const cfg = TXN_TYPES[type] || TXN_TYPES.credit;
+  openM(`${cfg.icon} ${cfg.t} — ${nameOf(s)}`, walletFormHtml());
+  $("wSave").onclick = async () => {
+    const amt = parseFloat($("wAmt").value);
+    if (!amt || amt <= 0) return toast("اكتب مبلغ صحيح");
+    $("wSave").disabled = true;
+    try {
+      const d = await API.post(`/api/wallets/store/${s.id}/${cfg.ep}`, {
+        amount: amt, note: $("wNote").value || ""
+      });
+      closeM();
+      toast(`اتسجّلت الحركة — الرصيد بقى ${money(d.wallet ? d.wallet.balance : d.balance)} ج.م`);
+    } catch (e) { $("wSave").disabled = false; toast("خطأ: " + (e.message || "")); }
+  };
+}
+
+/* ── منظومة الثقة للمحل ─────────────────────────────────────────
+   المحل نفسه طرف في المنظومة زي أي حد — رقمه (shopPhone) هو مفتاحه.
+   الدرجة بتتحسب سيرفر-سايد؛ الواجهة بتعرض بس، ولازم عدد الشحنات
+   يظهر جنب الدرجة عشان تتقرا صح. */
+const phoneOf = s => String(s.shopPhone || s.shopPhone2 || "").trim();
+
+/* phone اختياري: شاشة التعديل بتبعت الرقم الجديد على طول. من غيره كنا
+   بنقرا الرقم من S.stores — وهي بيعيد بناها استطلاع /api/users كل 15 ثانية
+   بكائنات جديدة، فبعد الحفظ على طول كنا بنجيب سمعة الرقم **القديم** ونخزّنها
+   كإدخال سليم، والشرط اللي تحت (!force && t && !t.err) بيمنع أي إعادة جلب
+   بعدها — فتفضل غلط لحد ريلود أو دوسة تحديث يدوي. */
+async function loadTrust(username, force, phone) {
+  const s = S.stores.find(x => x.username === username);
+  const ph = String(phone || "").trim() || (s ? phoneOf(s) : "");
+  if (!ph) return;
+  const t = S.trust[username];
+  if (!force && t && !t.err && !t.loading) return;
+  S.trust[username] = { loading: true };
+  if (S.sel === username) renderPane();
+  try {
+    const d = await TrustAdmin.ratings(ph);
+    S.trust[username] = { phone: d.phone, rep: d.reputation, items: d.items || [] };
+  } catch (e) {
+    S.trust[username] = { err: e?.message || String(e) };
+  }
+  if (S.sel === username) renderPane();
+}
+
+function trustBadgeInline(s) {
+  if (!phoneOf(s)) return "";
+  const t = S.trust[s.username];
+  if (!t || t.loading) return `<span style="font-size:11.5px;color:var(--muted)">⏳ بنحسب درجة الثقة…</span>`;
+  if (t.err) return "";
+  return TrustAdmin.badgeHtml(t.rep);
+}
+
+function trustCardHtml(s) {
+  const ph = phoneOf(s);
+  if (!ph) return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة</div>
+    <div class="empty" style="padding:18px">مفيش رقم هاتف مسجّل للمحل — والرقم هو مفتاح منظومة الثقة.</div></div>`;
+
+  const t = S.trust[s.username];
+  const acts = `<div class="acts">
+      <button class="btn ok" data-act="rate">➕ تقييم</button>
+      <button class="btn" data-act="identity">✏️ تصحيح الاسم المعتمد</button>
+      <button class="btn" data-act="trust-refresh">🔄 تحديث</button>
+    </div>`;
+
+  if (!t || t.loading) return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة</div>
+    <div class="empty" style="padding:18px">⏳ بنحمّل السمعة…</div>${acts}</div>`;
+  if (t.err) return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة</div>
+    <div class="empty" style="padding:18px;color:var(--brand)">تعذّر تحميل السمعة<br />
+      <span style="font-size:12px;direction:ltr">${esc(t.err)}</span></div>${acts}</div>`;
+
+  const r = t.rep || {};
+  const isNew = r.score === null || r.score === undefined;
+  return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة <span class="n" dir="ltr">${esc(t.phone || ph)}</span></div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="text-align:center;min-width:88px">
+        <b style="display:block;font-size:29px;font-weight:900;line-height:1.1">${
+          isNew ? "—" : Number(r.score).toFixed(1)}</b>
+        <span style="font-size:11.5px;color:var(--muted)">${isNew ? "محل جديد" : "من 5"}</span>
+      </div>
+      <div style="flex:1;min-width:190px">
+        ${TrustAdmin.badgeHtml(r)}
+        <div style="margin-top:6px">${TrustAdmin.detailsHtml(r)}</div>
+      </div>
+    </div>
+    <div class="kv"><span class="k">عدد الشحنات</span><span class="v">${Number(r.totalOrders || 0)}${
+      isNew ? ` <span style="color:var(--muted);font-weight:400;font-size:12px">— لسه مفيش تاريخ</span>` : ""}</span></div>
+    <div class="kv"><span class="k">التقييمات اليدوية</span><span class="v">${Number(r.manualCount || 0)}${
+      r.manualCount ? ` <span style="color:var(--muted);font-weight:400;font-size:12px">— متوسط ${Number(r.manualAvg).toFixed(2)}</span>` : ""}</span></div>
+    ${acts}
+    <div class="card-h" style="margin-top:14px">💬 آخر التقييمات <span class="n">${(t.items || []).length}</span></div>
+    <div style="margin:0 -15px -15px">${TrustAdmin.ratingsListHtml(t.items, 8)}</div>
+  </div>`;
+}
+
+function askRate(s) {
+  const ph = phoneOf(s);
+  openM(`➕ تقييم ${nameOf(s)}`, `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8">
+      التقييم بيتسجّل باسم الإدارة على الرقم <b dir="ltr">${esc(ph)}</b>،
+      وبيدخل في المصداقية بوزن 40% مع نسبة نجاح الشحنات.</p>
+    <label>النجوم *</label>${TrustAdmin.starPickerHtml("rStars", 0)}
+    <label>ملاحظة</label><input id="rNote" placeholder="اختياري — سبب التقييم" />
+    <div id="rErr" style="color:var(--brand);font-size:12.5px;min-height:18px;margin-top:6px"></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn pri" style="flex:1" id="rSave">💾 سجّل التقييم</button>
+    </div>`);
+  $("rSave").onclick = async () => {
+    const stars = TrustAdmin.picked("rStars");
+    if (!stars) return $("rErr").textContent = "اختار عدد النجوم";
+    $("rSave").disabled = true;
+    try {
+      await TrustAdmin.rate({ userId: s.id, phone: ph, stars, note: $("rNote").value.trim() });
+      closeM(); toast("اتسجّل التقييم ✅");
+      loadTrust(s.username, true);
+    } catch (e) { $("rSave").disabled = false; $("rErr").textContent = "تعذّر: " + (e.message || ""); }
+  };
+}
+
+function askIdentity(s) {
+  const ph = phoneOf(s);
+  openM("✏️ تصحيح الاسم المعتمد", `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8">
+      الاسم المعتمد هو اللي بيظهر لأي طرف بيبحث بالرقم <b dir="ltr">${esc(ph)}</b>،
+      وبيغلب أي اسم متكرر في الأوردرات.</p>
+    <label>الاسم المعتمد *</label><input id="iName" value="${esc(s.shopName || "")}" />
+    <label>العنوان المعتمد</label><input id="iAddr" value="${esc(s.shopAddress || "")}" />
+    <div id="iErr" style="color:var(--brand);font-size:12.5px;min-height:18px;margin-top:6px"></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn pri" style="flex:1" id="iSave">💾 حفظ</button>
+    </div>`);
+  $("iSave").onclick = async () => {
+    const name = $("iName").value.trim();
+    if (!name) return $("iErr").textContent = "اكتب الاسم المعتمد";
+    $("iSave").disabled = true;
+    try {
+      await TrustAdmin.saveIdentity(ph, { name, address: $("iAddr").value.trim() });
+      closeM(); toast("اتحفظ الاسم المعتمد ✅");
+      loadTrust(s.username, true);
+    } catch (e) { $("iSave").disabled = false; $("iErr").textContent = "تعذّر: " + (e.message || ""); }
+  };
+}
+
+/* ── التفاصيل ───────────────────────────────────────── */
+function renderPane() {
+  if (!S.sel) return;
+  const s = S.stores.find(x => x.username === S.sel);
+  /* شيل كلاس detail هنا: الرسالة دي مالهاش pane-hd فمالهاش زرار رجوع، وعلى
+     الموبايل الكلاس ده بيخفي قايمة المحلات — فالأدمن بيتحبس في شاشة فاضية. */
+  if (!s) { S.sel = null; $("main").classList.remove("detail"); _paneSig = "";
+    $("pane").innerHTML =
+    `<div class="pane-empty"><div><i>🏪</i>المحل ده مابقاش موجود</div></div>`; return; }
+
+  /* الأرقام من التجميع المضبوط، وصفوف «آخر الشحنات» من النافذة اللي
+     عندنا (دي عرض لآخر 12 بس فالنافذة كفاية ليها). */
+  const st = statOf(s.username);
+  const os = ordersOf(s.username);
+  const total  = st.orders;
+  const done   = st.done;
+  const live   = st.live;
+  const cancel = st.cancelled;
+  const deliv  = st.delivery;
+  const cod    = st.prepaid;
+  const kv = (k, v, ltr) => `<div class="kv"><span class="k">${k}</span><span class="v${ltr ? " ltr" : ""}">${v}</span></div>`;
+
+  const html = `
+    <div class="pane-hd">
+      <button class="ico back" onclick="backToList()">›</button>
+      <div class="p-av">${esc(initial(s))}</div>
+      <div style="flex:1;min-width:0">
+        <h2>${esc(nameOf(s))}
+          ${s.blocked ? `<span class="tag t-block">🚫 موقوف</span>`
+            : `<span class="tag t-ok">✅ نشِط</span>`}</h2>
+        <div class="sub" dir="ltr">${esc(s.shopPhone || "—")}</div>
+        <div style="margin-top:6px">${trustBadgeInline(s)}</div>
+      </div>
+      ${s.shopPhone ? `<a class="btn" href="tel:${esc(s.shopPhone)}">📞 اتصل</a>
+      <a class="btn" target="_blank" rel="noopener"
+        href="https://wa.me/2${esc(String(s.shopPhone).replace(/\D/g, ""))}">💬 واتساب</a>` : ""}
+    </div>
+
+    <div class="pane-body">
+      ${s.blocked ? `<div class="warnbox">🚫 <b>الحساب موقوف</b> — مش هيقدر يدخل البوابة ولا يبعت شحنات.</div>` : ""}
+
+      <div class="kpis">
+        <div class="kpi"><b>${total}</b><span>إجمالي الشحنات</span></div>
+        <div class="kpi"><b style="color:var(--green)">${done}</b><span>تم التسليم</span></div>
+        <div class="kpi"><b style="color:var(--orange)">${live}</b><span>جارية</span></div>
+        <div class="kpi"><b style="color:var(--muted)">${cancel}</b><span>ملغية</span></div>
+        <div class="kpi"><b style="color:var(--brand)">${money(deliv)}</b><span>إجمالي التوصيل</span></div>
+        <div class="kpi"><b style="color:var(--blue)">${money(cod)}</b><span>إجمالي العهدة</span></div>
+      </div>
+
+      ${trustCardHtml(s)}
+
+      ${walletCardHtml(s.wallet)}
+
+      <div class="card">
+        <div class="card-h">🏪 بيانات المحل</div>
+        ${kv("اسم المحل", esc(s.shopName || "—"))}
+        ${kv("اسم المستخدم", esc(s.username), 1)}
+        ${kv("كلمة المرور", "•••••• <span style='font-size:11px;color:var(--muted)'>(مشفرة — غيّرها من التعديل)</span>", 1)}
+        ${kv("الهاتف", esc(s.shopPhone || "—"), 1)}
+        ${kv("هاتف إضافي", esc(s.shopPhone2 || "—"), 1)}
+        ${kv("العنوان", esc(s.shopAddress || "—"))}
+        ${kv("اتسجّل", fmtFull(s.createdAt))}
+        <div class="acts">
+          <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
+          <button class="btn ${s.blocked ? "ok" : "danger"}" data-act="block">
+            ${s.blocked ? "✅ إلغاء الإيقاف" : "🚫 إيقاف المحل"}</button>
+          <button class="btn danger" data-act="del">🗑️ حذف المحل</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">📦 آخر الشحنات <span class="n">${total}</span></div>
+        ${os.length ? os.slice()
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+          .slice(0, 12).map(o => kv(
+            `<b dir="ltr">${esc(o.orderNum || "—")}</b>
+             <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
+               ${esc(o.status || "—")} · ${fmtFull(o.createdAt)}</div>`,
+            `${money(o.totalDeliveryPrice)} ج.م`)).join("")
+          : total
+            ? `<div class="empty" style="padding:24px"><i>🗄️</i>عنده ${total} شحنة —
+                 بس كلها أقدم من نافذة العرض الحالية</div>`
+            : `<div class="empty" style="padding:24px"><i>📭</i>مفيش شحنات لسه</div>`}
+      </div>
+    </div>`;
+
+  if (_paneSig !== html) {
+    /* هنا الحاوية جوّه العنصر اللي بنكتب فيه، فبناخد مكان القراية قبل
+       الكتابة ونرجّعه على النسخة الجديدة. */
+    const _pb = $("pane").querySelector(".pane-body");
+    const _top = _pb ? _pb.scrollTop : 0;
+    _paneSig = html; $("pane").innerHTML = html;
+    const _pb2 = $("pane").querySelector(".pane-body");
+    if (_pb2 && _top) _pb2.scrollTop = _top;
+  }
+  /* الربط بيتعاد على طول (حتى لو مكتبناش) عشان الأزرار تشتغل على أحدث نسخة من s */
+  $("pane").querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b.dataset.act, s));
+  $("pane").querySelectorAll("[data-w-act]").forEach(b => b.onclick = () => openWallet(b.dataset.wAct, s));
+}
+
+/* ── النوافذ ────────────────────────────────────────── */
+const openM = (title, html) => { $("mTitle").textContent = title; $("mBody").innerHTML = html;
+  $("modal").classList.add("on"); };
+window.closeM = () => $("modal").classList.remove("on");
+$("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
+
+function act(a, s) {
+  if (a === "edit")     return openEdit(s);
+  if (a === "block")    return doBlock(s, !s.blocked);
+  if (a === "del")      return askDelete(s);
+  if (a === "rate")     return askRate(s);
+  if (a === "identity") return askIdentity(s);
+  if (a === "trust-refresh") return loadTrust(s.username, true);
+}
+
+function formHtml(s = {}, isNew = false) {
+  return `
+    <label>اسم المحل *</label><input id="fShop" value="${esc(s.shopName || "")}" placeholder="مثال: محل النور" />
+    <label>اسم المستخدم *</label>
+    <input id="fUser" value="${esc(s.username || "")}" dir="ltr" ${isNew ? "" : "disabled"}
+           placeholder="بيدخل بيه على بوابة المحلات" />
+    <label>كلمة المرور ${isNew ? "*" : ""}</label>
+    <input id="fPass" value="" dir="ltr" placeholder="${isNew ? "" : "سيبها فاضية لو مش هتتغير"}" />
+    <label>هاتف المحل *</label><input id="fPhone" value="${esc(s.shopPhone || "")}" dir="ltr" placeholder="01xxxxxxxxx" />
+    <label>هاتف إضافي</label><input id="fPhone2" value="${esc(s.shopPhone2 || "")}" dir="ltr" />
+    <label>عنوان المحل</label><textarea id="fAddr" rows="2">${esc(s.shopAddress || "")}</textarea>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.8">
+      💡 المحل مش مربوط بفرع — الفرع المسؤول بيتحدّد من منطقة الاستلام في كل شحنة.</div>
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn pri" style="flex:1" id="fSave">${isNew ? "➕ إضافة المحل" : "💾 حفظ"}</button>
+    </div>`;
+}
+
+function readForm() {
+  return {
+    shopName:   $("fShop").value.trim(),
+    username:   $("fUser").value.trim(),
+    password:   $("fPass").value.trim(),
+    shopPhone:  $("fPhone").value.trim(),
+    shopPhone2: $("fPhone2").value.trim(),
+    shopAddress:$("fAddr").value.trim(),
+  };
+}
+
+window.openAdd = function () {
+  openM("➕ إضافة محل جديد", formHtml({}, true));
+  $("fSave").onclick = async () => {
+    const f = readForm();
+    if (!f.shopName)  return toast("اكتب اسم المحل");
+    if (!f.username)  return toast("اكتب اسم المستخدم");
+    if (!f.password)  return toast("اكتب كلمة المرور");
+    if (!f.shopPhone) return toast("اكتب هاتف المحل");
+    $("fSave").disabled = true;
+    try {
+      await API.post("/api/users", { ...f, role: "صاحب محل" });
+      /* متحطّش الاسم في S.sel على طول: أي بولر تاني ممكن يرجع قبل /api/users
+         فـrenderPane مايلاقيش المحل ويكتب «مابقاش موجود» وتفضل عالقة.
+         بنسيبه معلّق في pendingOpen لحد ما القايمة توصل وrefresh يفتحه. */
+      closeM(); S.pendingOpen = f.username; toast("اتضاف المحل ✅");
+    } catch (e) { $("fSave").disabled = false; toast("خطأ: " + (e.message || "")); }
+  };
+};
+
+function openEdit(s) {
+  openM("✏️ تعديل " + nameOf(s), formHtml(s, false));
+  $("fSave").onclick = async () => {
+    const f = readForm();
+    if (!f.shopName)  return toast("اكتب اسم المحل");
+    if (!f.shopPhone) return toast("اكتب هاتف المحل");
+    $("fSave").disabled = true;
+    try {
+      const { username, password, ...rest } = f;
+      const body = password ? { ...rest, password } : rest;
+      const phoneChanged = f.shopPhone  !== String(s.shopPhone  || "").trim()
+                        || f.shopPhone2 !== String(s.shopPhone2 || "").trim();
+      await API.put("/api/users/" + s.id, body);
+      closeM(); toast("اتحفظت البيانات ✅");
+      /* كاش الثقة مفتاحه الـusername بس بياناته بتاعة الرقم — لو الرقم اتغيّر
+         لازم يتبطّل، وإلا الأدمن بيتفرّج على سمعة رقم مش بتاع المحل ده.
+         بنحدّث الرقم على النسخة المحلية الأول عشان loadTrust تسأل بالرقم
+         الجديد من غير ما تستنى الاستطلاع يرجع. */
+      if (phoneChanged) {
+        /* بنحدّث الصف اللي جوّه S.stores مش النسخة اللي الشاشة اتفتحت بيها —
+           دي ممكن تكون بقت يتيمة بعد أي دورة استطلاع. وبنبعت الرقم الجديد
+           لـloadTrust صراحةً عشان مانعتمدش على الترتيب أصلاً. */
+        const row = S.stores.find(x => x.username === s.username) || s;
+        row.shopPhone = f.shopPhone; row.shopPhone2 = f.shopPhone2;
+        delete S.trust[s.username];
+        loadTrust(s.username, true, f.shopPhone || f.shopPhone2);
+      }
+    } catch (e) { $("fSave").disabled = false; toast("خطأ: " + (e.message || "")); }
+  };
+}
+
+async function doBlock(s, on) {
+  try {
+    await API.post(`/api/users/${s.id}/block`, { blocked: on });
+    toast(on ? "اتوقف المحل 🚫" : "اترفع الإيقاف ✅");
+  } catch (e) { toast("خطأ: " + (e.message || "")); }
+}
+
+function askDelete(s) {
+  /* العدد هنا بيتقال للمستخدم قبل حذف نهائي — لازم يكون العدد الحقيقي
+     مش عيّنة، عشان ما يحذفش محل وهو فاكر إن مالوش شحنات. */
+  const n = statOf(s.username).orders;
+  openM("🗑️ حذف المحل", `
+    <p style="font-size:13.5px;line-height:1.9">
+      هتحذف <b>${esc(nameOf(s))}</b> نهائيًا؟ الحساب مش هيقدر يدخل تاني.
+      ${n ? `<br /><b style="color:var(--brand)">عنده ${n} شحنة</b> — الشحنات نفسها
+      هتفضل زي ما هي في النظام، بس مش هتقدر تربطها بحسابه بعد كده.` : ""}
+      <br /><span style="color:var(--muted);font-size:12.5px">لو عايز توقفه مؤقتًا بس، استخدم «إيقاف المحل».</span>
+    </p>
+    <div style="display:flex;gap:9px;margin-top:16px">
+      <button class="btn" style="flex:1" onclick="closeM()">إلغاء</button>
+      <button class="btn danger" style="flex:1" id="delOk">🗑️ أكّد الحذف</button>
+    </div>`);
+  $("delOk").onclick = async () => {
+    try {
+      await API.del("/api/users/" + s.id);
+      closeM(); S.sel = null; $("main").classList.remove("detail"); toast("اتحذف المحل");
+    } catch (e) { toast("خطأ: " + (e.message || "")); }
+  };
+}
+
+/* ── الرسم ──────────────────────────────────────────── */
+window.refresh = function () {
+  if (!ME) return;
+  $("chips").innerHTML = FILTERS.map(f =>
+    `<button class="chip ${S.filter === f.k ? "on" : ""}" onclick="setFilter('${f.k}')">${f.t}</button>`).join("");
+  // المحل اللي لسه متضاف وصل في القايمة → افتحه بالكامل (رسم + كلاس + سمعة)
+  if (S.pendingOpen && S.stores.some(x => x.username === S.pendingOpen))
+    return openStore(S.pendingOpen);
+  renderList();
+  if (S.sel) renderPane();
+};
+</script>
+  <script>
+  /* تسجيل Service Worker — شرط عشان المتصفح يسمح بتثبيت اللوحة كتطبيق
+     بنافذة مستقلة وأيقونة على سطح المكتب. staff-sw.js مقصود إنه مايكاشش
+     الصفحات (الأيقونات بس) عشان التحديثات توصل فورًا. */
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('staff-sw.js').catch(function () {});
+    });
+  }
+  </script>
+</body>
+</html>

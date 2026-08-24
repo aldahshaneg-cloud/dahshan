@@ -1,0 +1,213 @@
+Compare-Route 'complaints'              'GET' '/api/complaints' -Auth
+Compare-Route 'complaints?status=open'   'GET' '/api/complaints?status=open' -Auth
+Compare-Route 'complaints?status=resolved' 'GET' '/api/complaints?status=resolved' -Auth
+Compare-Route 'complaints?status=all'    'GET' '/api/complaints?status=all' -Auth
+Compare-Route 'complaints?status فاضي'   'GET' '/api/complaints?status=' -Auth
+Compare-Route 'complaints?status مجهول'  'GET' '/api/complaints?status=zzz' -Auth
+Compare-Route 'complaints بلا دخول'      'GET' '/api/complaints'
+Compare-Route 'zone-requests'            'GET' '/api/zone-requests' -Auth
+Compare-Route 'zone-requests?pending'    'GET' '/api/zone-requests?status=pending' -Auth
+Compare-Route 'zone-requests?added'      'GET' '/api/zone-requests?status=added' -Auth
+Compare-Route 'zone-requests?all'        'GET' '/api/zone-requests?status=all' -Auth
+Compare-Route 'zone-requests?مجهول'      'GET' '/api/zone-requests?status=zzz' -Auth
+Compare-Route 'zone-requests بلا دخول'   'GET' '/api/zone-requests'
+Compare-Route 'settings'                 'GET' '/api/settings' -Auth
+Compare-Route 'settings بلا دخول'        'GET' '/api/settings'
+Compare-Route 'settings/site عام'        'GET' '/api/settings/site'
+Compare-Route 'settings/site بدخول'      'GET' '/api/settings/site' -Auth
+Compare-Route 'partners عام'             'GET' '/api/partners'
+Compare-Route 'partners بدخول'           'GET' '/api/partners' -Auth
+    Write-Host ''
+    Write-Host '══ المالية — الخزن وحركات النقدية ══' -ForegroundColor Cyan
+    Compare-Route 'cash-stores'          'GET' '/api/cash-stores' -Auth
+    Compare-Route 'cash-stores?branchId' 'GET' '/api/cash-stores?branchId=1' -Auth
+    Compare-Route 'cash-stores?branchId=0' 'GET' '/api/cash-stores?branchId=0' -Auth
+    Compare-Route 'cash-stores?branchId فاضي' 'GET' '/api/cash-stores?branchId=' -Auth
+    Compare-Route 'cash-stores بلا دخول' 'GET' '/api/cash-stores'
+    Compare-Route 'cash txns'            'GET' '/api/cash-stores/1/transactions' -Auth
+    Compare-Route 'cash txns?type'       'GET' '/api/cash-stores/1/transactions?type=in' -Auth
+    Compare-Route 'cash txns?from/to'    'GET' '/api/cash-stores/1/transactions?from=2026-08-01&to=2026-08-31' -Auth
+    Compare-Route 'cash txns id مش رقم'  'GET' '/api/cash-stores/abc/transactions' -Auth
+    Compare-Route 'cash txns id صفر'     'GET' '/api/cash-stores/0/transactions' -Auth
+    Compare-Route 'cash txns id سالب'    'GET' '/api/cash-stores/-3/transactions' -Auth
+    Compare-Route 'cash txns بلا دخول'   'GET' '/api/cash-stores/1/transactions'
+    Write-Host ''
+    Write-Host '══ المالية — العهدة والمصروفات ══' -ForegroundColor Cyan
+    Compare-Route 'custody'              'GET' '/api/custody' -Auth
+    Compare-Route 'custody?pilotId'      'GET' '/api/custody?pilotId=1' -Auth
+    Compare-Route 'custody?from/to'      'GET' '/api/custody?from=2026-08-01&to=2026-08-31' -Auth
+    Compare-Route 'custody بلا دخول'     'GET' '/api/custody'
+    Compare-Route 'pilot custody'        'GET' '/api/pilots/1/custody' -Auth
+    Compare-Route 'pilot custody مش موجود' 'GET' '/api/pilots/999999/custody' -Auth
+    Compare-Route 'pilot custody مش رقم' 'GET' '/api/pilots/abc/custody' -Auth
+    Compare-Route 'pilot custody بلا دخول' 'GET' '/api/pilots/1/custody'
+    Compare-Route 'expenses'             'GET' '/api/expenses' -Auth
+    Compare-Route 'expenses?from/to'     'GET' '/api/expenses?from=2026-08-01&to=2026-08-31' -Auth
+    Compare-Route 'expenses?branchId'    'GET' '/api/expenses?branchId=1' -Auth
+    Compare-Route 'expenses بلا دخول'    'GET' '/api/expenses'
+    Write-Host ''
+    Write-Host '══ المالية — المحافظ (بوابة IDOR) ══' -ForegroundColor Cyan
+    Compare-Route 'wallets افتراضي'      'GET' '/api/wallets' -Auth
+    Compare-Route 'wallets?store'        'GET' '/api/wallets?ownerType=store' -Auth
+    Compare-Route 'wallets?customer'     'GET' '/api/wallets?ownerType=customer' -Auth
+    Compare-Route 'wallets?نوع غلط'      'GET' '/api/wallets?ownerType=xxx' -Auth
+    Compare-Route 'wallets?نوع فاضي'     'GET' '/api/wallets?ownerType=' -Auth
+    Compare-Route 'wallets بلا دخول'     'GET' '/api/wallets'
+    Compare-Route 'wallet store/1'       'GET' '/api/wallets/store/1' -Auth
+    Compare-Route 'wallet customer/1'    'GET' '/api/wallets/customer/1' -Auth
+    Compare-Route 'wallet مش متخلقة'     'GET' '/api/wallets/customer/999999' -Auth
+    Compare-Route 'wallet نوع غلط'       'GET' '/api/wallets/pilot/1' -Auth
+    Compare-Route 'wallet id صفر'        'GET' '/api/wallets/store/0' -Auth
+    Compare-Route 'wallet id مش رقم'     'GET' '/api/wallets/store/abc' -Auth
+    Compare-Route 'wallet بلا دخول'      'GET' '/api/wallets/store/1'
+    Write-Host ''
+    Write-Host '══ الحضور والموظفين اليدويين ══' -ForegroundColor Cyan
+    Compare-Route 'attendance يوم القاهرة' 'GET' '/api/attendance' -Auth
+    Compare-Route 'attendance?day'       'GET' '/api/attendance?day=2026-08-19' -Auth
+    Compare-Route 'attendance?from/to'   'GET' '/api/attendance?from=2026-08-01&to=2026-08-31' -Auth
+    Compare-Route 'attendance?from بس'   'GET' '/api/attendance?from=2026-08-01' -Auth
+    Compare-Route 'attendance?day يغلب from' 'GET' '/api/attendance?day=2026-08-19&from=2026-08-01' -Auth
+    Compare-Route 'attendance?username'  'GET' '/api/attendance?username=admin' -Auth
+    Compare-Route 'attendance يوم فاضي'  'GET' '/api/attendance?day=1990-01-01' -Auth
+    Compare-Route 'attendance بلا دخول'  'GET' '/api/attendance'
+    Compare-Route 'manual-employees'     'GET' '/api/manual-employees' -Auth
+    Compare-Route 'manual-employees بلا دخول' 'GET' '/api/manual-employees'
+Write-Host ''
+Write-Host '══ تطبيق الطيار — بلا دخول (لازم 401) ══' -ForegroundColor Cyan
+Compare-Route 'pilot/state بلا دخول'           'GET' '/api/pilot/state'
+Compare-Route 'pilot/active-orders بلا دخول'   'GET' '/api/pilot/active-orders'
+Compare-Route 'pilot/return-requests بلا دخول' 'GET' '/api/pilot/return-requests'
+Compare-Route 'pilot/leave-requests بلا دخول'  'GET' '/api/pilot/leave-requests'
+Compare-Route 'pilot/shift-requests بلا دخول'  'GET' '/api/pilot/shift-requests'
+Compare-Route 'pilot/finished-orders بلا دخول' 'GET' '/api/pilot/finished-orders'
+Compare-Route 'pilot/closeouts بلا دخول'       'GET' '/api/pilot/closeouts'
+Write-Host ''
+Write-Host '══ تطبيق الطيار — بحساب مش طيار (لازم 403 بنفس النص) ══' -ForegroundColor Cyan
+Compare-Route 'pilot/state أدمن'           'GET' '/api/pilot/state' -Auth
+Compare-Route 'pilot/active-orders أدمن'   'GET' '/api/pilot/active-orders' -Auth
+Compare-Route 'pilot/return-requests أدمن' 'GET' '/api/pilot/return-requests' -Auth
+Compare-Route 'pilot/leave-requests أدمن'  'GET' '/api/pilot/leave-requests' -Auth
+Compare-Route 'pilot/shift-requests أدمن'  'GET' '/api/pilot/shift-requests' -Auth
+Compare-Route 'pilot/finished-orders أدمن' 'GET' '/api/pilot/finished-orders' -Auth
+Compare-Route 'pilot/closeouts أدمن'       'GET' '/api/pilot/closeouts' -Auth
+Write-Host ''
+Write-Host '══ تطبيق الطيار — الباراميترات (بوابة الدور بتضرب قبلها، بس بتثبت مطابقة الراوتنج) ══' -ForegroundColor Cyan
+Compare-Route 'state?since'          'GET' '/api/pilot/state?since=1' -Auth
+Compare-Route 'state?since كبير'     'GET' '/api/pilot/state?since=99999999999999' -Auth
+Compare-Route 'state?since+sig'      'GET' '/api/pilot/state?since=1&sig=deadbeef1234' -Auth
+Compare-Route 'state?since فاضي'     'GET' '/api/pilot/state?since=' -Auth
+Compare-Route 'active-orders?since'  'GET' '/api/pilot/active-orders?since=1' -Auth
+Compare-Route 'active-orders?since ك' 'GET' '/api/pilot/active-orders?since=99999999999999' -Auth
+Compare-Route 'return-req?status'    'GET' '/api/pilot/return-requests?status=pending' -Auth
+Compare-Route 'return-req?status صفر' 'GET' '/api/pilot/return-requests?status=0' -Auth
+Compare-Route 'return-req?since'     'GET' '/api/pilot/return-requests?since=99999999999999' -Auth
+Compare-Route 'leave-req?status'     'GET' '/api/pilot/leave-requests?status=approved' -Auth
+Compare-Route 'leave-req?status غلط' 'GET' '/api/pilot/leave-requests?status=zzz' -Auth
+Compare-Route 'leave-req?since'      'GET' '/api/pilot/leave-requests?since=1' -Auth
+Compare-Route 'shift-req?status'     'GET' '/api/pilot/shift-requests?status=pending' -Auth
+Compare-Route 'shift-req?since'      'GET' '/api/pilot/shift-requests?since=99999999999999' -Auth
+Compare-Route 'finished?day'         'GET' '/api/pilot/finished-orders?day=2026-08-19' -Auth
+Compare-Route 'finished?day غلط'     'GET' '/api/pilot/finished-orders?day=19-08-2026' -Auth
+Compare-Route 'finished?day مستحيل'  'GET' '/api/pilot/finished-orders?day=2026-13-45' -Auth
+Compare-Route 'finished?shift'       'GET' '/api/pilot/finished-orders?shift=1' -Auth
+Compare-Route 'finished?shift غريبة' 'GET' '/api/pilot/finished-orders?shift=999999' -Auth
+Compare-Route 'finished?since'       'GET' '/api/pilot/finished-orders?since=99999999999999' -Auth
+Compare-Route 'finished?since سالب'  'GET' '/api/pilot/finished-orders?since=-5' -Auth
+Compare-Route 'finished?day+shift'   'GET' '/api/pilot/finished-orders?day=2026-08-19&shift=1' -Auth
+Write-Host ''
+Write-Host '══ تطبيق الطيار — مسارات مش موجودة (لازم 404 المسار غير موجود) ══' -ForegroundColor Cyan
+Compare-Route 'GET pilot/version'  'GET' '/api/pilot/version' -Auth
+Compare-Route 'GET pilot/location' 'GET' '/api/pilot/location' -Auth
+Compare-Route 'GET pilot/shift/end' 'GET' '/api/pilot/shift/end' -Auth
+Write-Host ''
+Write-Host '══ 7) لوحة العمليات — قراءة ══' -ForegroundColor Cyan
+Compare-Route 'board بلا فرع'      'GET' '/api/board' -Auth
+Compare-Route 'board فرع'          'GET' '/api/board?branch=3' -Auth
+Compare-Route 'board فرع مش موجود' 'GET' '/api/board?branch=999' -Auth
+Compare-Route 'board since قديم'   'GET' '/api/board?branch=3&since=1' -Auth
+Compare-Route 'board since جديد'   'GET' '/api/board?branch=3&since=99999999999999' -Auth
+Compare-Route 'board بلا دخول'     'GET' '/api/board?branch=3'
+Compare-Route 'shifts'             'GET' '/api/shifts' -Auth
+Compare-Route 'shifts?branch'      'GET' '/api/shifts?branch=3' -Auth
+Compare-Route 'shifts?pilot'       'GET' '/api/shifts?pilot=6' -Auth
+Compare-Route 'shifts?status نشط'  'GET' '/api/shifts?status=active' -Auth
+Compare-Route 'shifts?status منتهي' 'GET' '/api/shifts?status=ended' -Auth
+Compare-Route 'shifts?status غلط'  'GET' '/api/shifts?status=zzz' -Auth
+Compare-Route 'shifts?branch=0'    'GET' '/api/shifts?branch=0' -Auth
+Compare-Route 'shifts?since فاضي'  'GET' '/api/shifts?since=' -Auth
+Compare-Route 'shifts?since قديم'  'GET' '/api/shifts?since=1' -Auth
+Compare-Route 'shifts?since جديد'  'GET' '/api/shifts?since=99999999999999' -Auth
+Compare-Route 'shifts بلا دخول'    'GET' '/api/shifts'
+Compare-Route 'closeout بلا طيار'  'GET' '/api/closeouts/monthly' -Auth
+Compare-Route 'closeout بلا شهر'   'GET' '/api/closeouts/monthly?pilot=6' -Auth
+Compare-Route 'closeout طيار سالب' 'GET' '/api/closeouts/monthly?pilot=-3&month=2026-08' -Auth
+Compare-Route 'closeout طيار نص'   'GET' '/api/closeouts/monthly?pilot=abc&month=2026-08' -Auth
+Compare-Route 'closeout شهر بلا شرطة' 'GET' '/api/closeouts/monthly?pilot=6&month=202608' -Auth
+Compare-Route 'closeout شهر 13'    'GET' '/api/closeouts/monthly?pilot=6&month=2026-13' -Auth
+Compare-Route 'closeout طيار مش موجود' 'GET' '/api/closeouts/monthly?pilot=99999&month=2026-08' -Auth
+Compare-Route 'closeout شهر فاضي'  'GET' '/api/closeouts/monthly?pilot=6&month=2026-07' -Auth
+Compare-Route 'closeout شهر بورديات' 'GET' '/api/closeouts/monthly?pilot=6&month=2026-08' -Auth
+Compare-Route 'closeout بلا دخول'  'GET' '/api/closeouts/monthly?pilot=6&month=2026-08'
+Compare-Route 'join-requests'      'GET' '/api/join-requests' -Auth
+Compare-Route 'join-requests?branch' 'GET' '/api/join-requests?branch=3&status=pending' -Auth
+Compare-Route 'join-requests?since' 'GET' '/api/join-requests?since=1' -Auth
+Compare-Route 'join-requests بلا دخول' 'GET' '/api/join-requests'
+Compare-Route 'leave-requests'     'GET' '/api/leave-requests' -Auth
+Compare-Route 'leave-requests?status' 'GET' '/api/leave-requests?status=approved' -Auth
+Compare-Route 'leave-requests?branch' 'GET' '/api/leave-requests?branch=3' -Auth
+Compare-Route 'leave-requests بلا دخول' 'GET' '/api/leave-requests'
+Compare-Route 'shift-requests'     'GET' '/api/shift-requests' -Auth
+Compare-Route 'shift-requests?branch' 'GET' '/api/shift-requests?branch=3' -Auth
+Compare-Route 'shift-requests?since' 'GET' '/api/shift-requests?since=99999999999999' -Auth
+Compare-Route 'shift-requests بلا دخول' 'GET' '/api/shift-requests'
+Compare-Route 'return-requests'    'GET' '/api/return-requests' -Auth
+Compare-Route 'return-requests?status' 'GET' '/api/return-requests?status=pending' -Auth
+Compare-Route 'return-requests بلا دخول' 'GET' '/api/return-requests'
+Compare-Route 'pilot-transfers'    'GET' '/api/pilot-transfers' -Auth
+Compare-Route 'pilot-transfers?branch' 'GET' '/api/pilot-transfers?branch=3&status=pending' -Auth
+Compare-Route 'pilot-transfers?since' 'GET' '/api/pilot-transfers?since=1' -Auth
+Compare-Route 'pilot-transfers بلا دخول' 'GET' '/api/pilot-transfers'
+Compare-Route 'support-requests'   'GET' '/api/support-requests' -Auth
+Compare-Route 'support-requests?status' 'GET' '/api/support-requests?status=pending' -Auth
+Compare-Route 'support-requests?since' 'GET' '/api/support-requests?since=1' -Auth
+Compare-Route 'support-requests بلا دخول' 'GET' '/api/support-requests'
+Compare-Route 'customers'              'GET' '/api/customers' -Auth
+Compare-Route 'customers?since جديد'   'GET' '/api/customers?since=99999999999999' -Auth
+Compare-Route 'customers?since قديم'   'GET' '/api/customers?since=1' -Auth
+Compare-Route 'customers?since فاضي'   'GET' '/api/customers?since=' -Auth
+Compare-Route 'customers?since صفر'    'GET' '/api/customers?since=0' -Auth
+Compare-Route 'customers بلا دخول'     'GET' '/api/customers'
+Compare-Route 'pickup-profile بلا دخول' 'GET' '/api/store/pickup-profile'
+Compare-Route 'pickup-profile بأدمن'    'GET' '/api/store/pickup-profile' -Auth
+Compare-Route 'coverage عام'          'GET' '/api/public/coverage'
+Compare-Route 'coverage بدخول'        'GET' '/api/public/coverage' -Auth
+Compare-Route 'track موجود'           'GET' '/api/track/CAI-260818-004'
+Compare-Route 'track متعدد الطرود'    'GET' '/api/track/CAI-260809-001'
+Compare-Route 'track طرد 1'           'GET' '/api/track/CAI-260809-001-1'
+Compare-Route 'track طرد 2'           'GET' '/api/track/CAI-260809-001-2'
+Compare-Route 'track طرد مش موجود'    'GET' '/api/track/CAI-260809-001-9'
+Compare-Route 'track لاحقة غلط'       'GET' '/api/track/CAI-260809-001-2-5'
+Compare-Route 'track مش موجود'        'GET' '/api/track/CAI-000000-999'
+Compare-Route 'track رقم بايظ'        'GET' '/api/track/x'
+Compare-Route 'track فاضي (مسافة)'    'GET' '/api/track/%20'
+Compare-Route 'track بلا باراميتر'    'GET' '/api/track'
+Compare-Route 'track بدخول أدمن'      'GET' '/api/track/CAI-260809-001' -Auth
+Compare-Route 'lookup رقم'          'GET' '/api/lookup?phone=01012345678' -Auth
+Compare-Route 'lookup دولي'         'GET' '/api/lookup?phone=%2B201012345678' -Auth
+Compare-Route 'lookup بشرط'         'GET' '/api/lookup?phone=0100-123-4567' -Auth
+Compare-Route 'lookup بلا صفر'      'GET' '/api/lookup?phone=1012345678' -Auth
+Compare-Route 'lookup بلا رقم'      'GET' '/api/lookup' -Auth
+Compare-Route 'lookup رقم قصير'     'GET' '/api/lookup?phone=12345' -Auth
+Compare-Route 'lookup بلا دخول'     'GET' '/api/lookup?phone=01012345678'
+Compare-Route 'ratings رقم'         'GET' '/api/trust/01012345678/ratings' -Auth
+Compare-Route 'ratings رقم مجهول'   'GET' '/api/trust/01099999999/ratings' -Auth
+Compare-Route 'ratings رقم قصير'    'GET' '/api/trust/123/ratings' -Auth
+Compare-Route 'ratings بلا دخول'    'GET' '/api/trust/01012345678/ratings'
+Compare-Route 'lookup-log'          'GET' '/api/trust/lookup-log' -Auth
+Compare-Route 'lookup-log?limit'    'GET' '/api/trust/lookup-log?limit=5' -Auth
+Compare-Route 'lookup-log?limit=0'  'GET' '/api/trust/lookup-log?limit=0' -Auth
+Compare-Route 'lookup-log?limit كبير' 'GET' '/api/trust/lookup-log?limit=99999' -Auth
+Compare-Route 'lookup-log?actor'    'GET' '/api/trust/lookup-log?actor=admin' -Auth
+Compare-Route 'lookup-log?actor فاضي' 'GET' '/api/trust/lookup-log?actor=' -Auth
+Compare-Route 'lookup-log?phone'    'GET' '/api/trust/lookup-log?phone=%2B201012345678' -Auth
+Compare-Route 'lookup-log بلا دخول' 'GET' '/api/trust/lookup-log'

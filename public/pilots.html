@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>الدهشان | إدارة الطيارين</title>
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="manifest" href="pilots-manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="الدهشان" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+:root{
+  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
+  --line:#e9edef; --line2:#d1d7db;
+  --txt:#111b21; --muted:#667781;
+  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  --green:#15803d; --green-soft:rgba(21,128,61,.1);
+  --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
+  --blue:#1d4ed8; --blue-soft:rgba(29,78,216,.1);
+  --font:'Cairo',system-ui,sans-serif; --hd:60px;
+}
+:root.dark{
+  --bg:#0b141a; --panel:#111b21; --hover:#182229; --active:#2a3942;
+  --line:#222d34; --line2:#2a3942;
+  --txt:#e9edef; --muted:#8696a0;
+  --brand:#e8192c; --brand-d:#b91c1c; --brand-soft:rgba(232,25,44,.14);
+  --green:#22c55e; --green-soft:rgba(34,197,94,.14);
+  --orange:#f97316; --orange-soft:rgba(249,115,22,.14);
+  --blue:#60a5fa; --blue-soft:rgba(96,165,250,.14);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);height:100vh;overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;color:inherit}
+
+#gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:60;padding:20px}
+.gate-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 26px;
+  width:100%;max-width:360px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.gate-box img{height:48px;margin-bottom:14px}
+.gate-box h1{font-size:17px;font-weight:800;margin-bottom:4px}
+.gate-box p{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+.gate-box input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;font-size:14px;margin-bottom:9px;outline:none}
+.gate-box input:focus{border-color:var(--brand)}
+.gbtn{width:100%;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;
+  font-weight:800;font-size:14.5px;cursor:pointer}
+#gateErr{color:var(--brand);font-size:12.5px;margin-top:9px;min-height:17px}
+
+#app{display:none;height:100vh;flex-direction:column}
+#app.on{display:flex}
+.topbar{height:var(--hd);flex:none;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:0 16px}
+.topbar img{height:30px}
+.topbar .ttl{font-size:16px;font-weight:800;white-space:nowrap}
+.topbar .sp{margin-inline-start:auto;display:flex;align-items:center;gap:10px}
+.ico{width:36px;height:36px;border-radius:50%;border:none;background:none;cursor:pointer;
+  font-size:16px;color:var(--muted)}
+.ico:hover{background:var(--hover)}
+.me{display:flex;align-items:center;gap:8px}
+.me b{font-size:13px;display:block;line-height:1.3}
+.me span{font-size:11px;color:var(--muted)}
+.av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:14px}
+
+.tabs{flex:none;background:var(--panel);border-bottom:1px solid var(--line);display:flex;
+  gap:2px;padding:0 10px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:none;background:none;padding:12px 13px;font-size:13px;font-weight:700;color:var(--muted);
+  cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent}
+.tab.on{color:var(--brand);border-bottom-color:var(--brand)}
+.tab .n{background:var(--brand);color:#fff;border-radius:99px;padding:0 6px;font-size:10.5px;
+  margin-inline-start:5px;font-weight:800}
+
+.body{flex:1;overflow-y:auto;min-height:0;padding:16px}
+.pane{display:none}
+.pane.on{display:block}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.bar input,.bar select{background:var(--panel);border:1px solid var(--line2);border-radius:9px;
+  padding:9px 12px;font-size:13px;outline:none;min-width:140px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:11px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card-h{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.card-h b{font-size:14.5px;font-weight:800;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-av{width:40px;height:40px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:16px;flex:none}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:12.8px;
+  border-bottom:1px solid var(--line)}
+.kv:last-of-type{border-bottom:none}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:700;text-align:end}
+.kv .v.ltr{direction:ltr}
+.tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.t-ok{background:var(--green-soft);color:var(--green)}
+.t-warn{background:var(--orange-soft);color:var(--orange)}
+.t-bad{background:var(--brand-soft);color:var(--brand)}
+.t-info{background:var(--blue-soft);color:var(--blue)}
+.acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.btn{border:1px solid var(--line2);background:var(--panel);color:var(--txt);border-radius:9px;
+  padding:8px 13px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;
+  align-items:center;gap:5px}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.ok{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.btn.danger{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.empty{padding:56px 20px;text-align:center;color:var(--muted);font-size:14px}
+.empty i{font-size:42px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+.note{background:var(--blue-soft);border:1px solid var(--blue);border-radius:11px;padding:11px 14px;
+  font-size:12.5px;margin-bottom:14px;line-height:1.7}
+.qrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:9px 12px;margin-bottom:7px}
+.qno{width:28px;height:28px;border-radius:8px;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:13px;flex:none}
+.qrow b{flex:1;font-size:13.5px}
+#map{height:min(66vh,560px);border-radius:12px;border:1px solid var(--line);overflow:hidden}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:9px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+.kpi b{font-size:20px;font-weight:900;display:block}
+.kpi span{font-size:11.5px;color:var(--muted)}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:none;
+  align-items:flex-end;justify-content:center}
+.modal.on{display:flex}
+.sheet{background:var(--panel);width:100%;max-width:460px;border-radius:16px 16px 0 0;
+  max-height:88vh;display:flex;flex-direction:column}
+@media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
+.sheet-h{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
+.sheet-b{padding:18px 20px;overflow-y:auto}
+.sheet-b input,.sheet-b textarea,.sheet-b select{width:100%;background:var(--bg);
+  border:1px solid var(--line2);border-radius:10px;padding:11px 13px;font-size:13.5px;
+  outline:none;margin-top:6px;resize:none}
+.sheet-b label{font-size:12px;color:var(--muted);font-weight:700;display:block;margin-top:12px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+  background:var(--txt);color:var(--bg);border-radius:9px;padding:11px 20px;
+  font-size:13.5px;font-weight:700;display:none;max-width:88vw;text-align:center}
+#toast.on{display:block}
+@media(max-width:700px){ .me b,.me span{display:none} .topbar .ttl{font-size:14px} }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <h1>🧑‍✈️ إدارة الطيارين</h1>
+    <p>تشغيل الأسطول: الدور والورديات والأذونات والنقل</p>
+    <input id="gUser" placeholder="اسم المستخدم" dir="ltr" autocomplete="username" />
+    <input id="gPass" type="password" placeholder="كلمة المرور" dir="ltr" autocomplete="current-password" />
+    <button class="gbtn" onclick="doLogin()">دخول</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <div class="ttl">🧑‍✈️ إدارة الطيارين</div>
+    <div class="sp">
+      <button class="ico" id="themeBtn" title="الوضع الليلي">🌙</button>
+      <button class="ico" onclick="location.href='home.html'" title="البوابة">🏠</button>
+      <div class="me"><div class="av" id="meAv">؟</div>
+        <div><b id="meName">—</b><span id="meRole">—</span></div></div>
+      <button class="ico" onclick="doLogout()" title="خروج" style="color:var(--brand)">⏻</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="body">
+    <!-- ⚠️ أشرطة الأدوات (بحث/اختيار فرع) **بره** الحتة اللي بتترسم من جديد.
+         المستطلعات بتنده paint() كل ٨–٢٠ ثانية، ولو الـinput كان جوه الـHTML
+         المتبدّل كان بيتهد وهو تحت إيد المستخدم: التركيز بيضيع، والحروف اللي
+         بيكتبها بتتقطع، والقايمة المفتوحة بتتقفل. الثابت فوق والمتغيّر تحت. -->
+    <div class="pane on" id="pane-pilots">
+      <div class="bar">
+        <input id="q" placeholder="🔍 ابحث بالاسم أو الموبايل أو رقم العربية…"
+               oninput="S.q=this.value;renderPilots()" />
+        <select id="pilotBranch" onchange="S.branchFilter=this.value;renderPilots()"></select>
+        <button class="btn pri" onclick="openPilotForm()">➕ طيار جديد</button>
+      </div>
+      <div id="pilots-body"></div>
+    </div>
+    <div class="pane" id="pane-board">
+      <div class="bar">
+        <select id="boardBranch" onchange="S.boardBranch=this.value;S.board=null;renderBoard();pollBoard()"></select>
+        <span style="font-size:12.5px;color:var(--muted)">الدور بيتحدّث كل ٨ ثواني</span>
+      </div>
+      <div id="board-body"></div>
+    </div>
+    <div class="pane" id="pane-shifts">
+      <div class="bar">
+        <input id="shq" placeholder="🔍 ابحث باسم الطيار…"
+               oninput="S.shQ=this.value;renderShifts()" />
+        <select id="shBranch" onchange="S.shBranch=this.value;renderShifts()"></select>
+        <select id="shStatus" onchange="S.shStatus=this.value;renderShifts()">
+          <option value="active">🟢 جارية الآن</option>
+          <option value="ended">⬛ منتهية</option>
+          <option value="">الكل</option>
+        </select>
+      </div>
+      <div id="shifts-body"></div>
+    </div>
+    <div class="pane" id="pane-requests">
+      <div class="bar">
+        <input id="rqq" placeholder="🔍 ابحث باسم الطيار…"
+               oninput="S.rqQ=this.value;renderRequests()" />
+        <select id="rqStatus" onchange="S.rqStatus=this.value;renderRequests()">
+          <option value="pending">⏳ معلّقة</option>
+          <option value="approved">✅ مقبولة</option>
+          <option value="rejected">❌ مرفوضة</option>
+          <option value="">كل الحالات</option>
+        </select>
+      </div>
+      <div id="requests-body"></div>
+    </div>
+    <div class="pane" id="pane-join"></div>
+    <div class="pane" id="pane-transfers"></div>
+    <div class="pane" id="pane-support"></div>
+    <div class="pane" id="pane-map">
+      <div class="bar">
+        <select id="mapBranch" onchange="renderMap()"></select>
+        <span style="font-size:12.5px;color:var(--muted)" id="mapInfo">—</span>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="sheet">
+  <div class="sheet-h" id="mTitle">—</div>
+  <div class="sheet-b" id="mBody"></div>
+</div></div>
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/constants.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/vendor/pusher.min.js"></script>
+<script src="assets/js/realtime.js?v=20260822a"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   لوحة مشرف الطيارين — pilot_supervisor
+   ───────────────────────────────────────────────────────────────────
+   اللوحة دي **مالهاش أي شاشة فلوس** بالقصد: مفيش تقفيلة ولا خزنة ولا
+   عهدة ولا مرتبات ولا تقارير. ده مش اختصار في الواجهة — السيرفر أصلًا
+   بيرفض المسارات دي للدور (شوف الشرح فوق routes/api.php)، والواجهة
+   بتعكس نفس الحدود عشان الشاشة ما تعرضش زرار بيرجّع 403.
+   نتيجتان مقصودتان بتبانوا للمستخدم:
+     • إنهاء الوردية وعودة الطيار بتسوية → **مش هنا**، دول للفرع/الإدارة
+       لأنهم بيحرّكوا خزنة وعهدة (settlePilotMoney).
+     • طلب الإرجاع → رفض بس. الموافقة بتحوّل الأوردر لـ«لم يتم التوصيل»
+       يعني تحصيل مش متم، فسايبينها للفرع.
+   النموذج المعماري: stores.html / customers.html (مش tiar.html).
+
+   الشاشات: الطيارون · الدور واللوحة · الورديات · الطلبات (أذونات/ورديات/
+   إرجاع) · طلبات الانضمام · النقل · الدعم · الخريطة. الستة الأساسية
+   منقولة من tiar.html — **الوظيفة** مش الكود؛ tiar لسه شغّالة زي ما هي
+   والأدمن بيشوف كل حاجة من مكانه (اللوحة دي إضافة مش نقل).
+
+   ✅ البثّ اتضاف 2026-08-22 مع حدث `pilot.request.changed`: تفويض قناة
+   الفرع اتوسّع لمشرف الطيارين، واللوحة بتشترك في قنوات كل الفروع —
+   أي طلب إذن/وردية أو قراره بيركل المستطلعات فورًا (والاستطلاع كل
+   10ث فاضل زي ما هو كشبكة أمان).
+═══════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const toast = m => { const t = $("toast"); t.textContent = m; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 2800); };
+const fmt = d => d ? new Date(d).toLocaleString("ar-EG") : "—";
+const ago = d => {
+  if (!d) return "—";
+  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return "من ثواني";
+  if (s < 3600) return `من ${Math.floor(s/60)} دقيقة`;
+  if (s < 86400) return `من ${Math.floor(s/3600)} ساعة`;
+  return `من ${Math.floor(s/86400)} يوم`;
+};
+
+if (localStorage.getItem("pilots-theme") === "dark") document.documentElement.classList.add("dark");
+const syncTheme = () => $("themeBtn").textContent =
+  document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+syncTheme();
+$("themeBtn").onclick = () => {
+  const d = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("pilots-theme", d ? "dark" : "light"); syncTheme();
+};
+
+/* ── الدخول ─────────────────────────────────────────────────
+   الأدوار المسموح لها بالصفحة: مشرف الطيارين وصاحبها الأصلي (الأدمن).
+   مفيش logout عند رفض الدور — الجلسة كوكي واحد على الدومين كله، وقتلها
+   هنا كان هيطرد نفس اليوزر من تاباته التانية. نفس تعليل stores.html. */
+const ROLES_OK = ["pilot_supervisor", "مشرف الطيارين", "admin", "مدير", "مدير عام"];
+let ME = null;
+window._onSessionExpired = () => { ME = null; location.reload(); };
+
+function applySession(u) {
+  ME = { username: u.username, role: u.role, isAdmin: ["admin","مدير","مدير عام"].includes(u.role) };
+  $("gate").style.display = "none"; $("app").classList.add("on");
+  $("meName").textContent = u.name || u.username;
+  $("meRole").textContent = ME.isAdmin ? "الإدارة" : "مشرف الطيارين";
+  $("meAv").textContent = (u.name || u.username || "؟")[0];
+  start();
+}
+window.doLogin = async function () {
+  const u = $("gUser").value.trim(), p = $("gPass").value, err = $("gateErr");
+  err.textContent = "";
+  if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
+  try {
+    const res = await API.login(u, p);
+    if (!ROLES_OK.includes(res.user.role)) { err.textContent = "الصفحة دي لمشرف الطيارين بس"; return; }
+    applySession(res.user);
+  } catch (e) { err.textContent = e.message || "اسم المستخدم أو كلمة المرور غير صحيحة"; }
+};
+window.doLogout = async () => { try { await API.logout(); } catch (e) {} location.reload(); };
+(async function () {
+  try {
+    const d = await API.me();
+    if (d.user && ROLES_OK.includes(d.user.role)) applySession(d.user);
+  } catch (e) {}
+})();
+
+/* ── الحالة ─────────────────────────────────────────────── */
+const S = {
+  pilots: [], branches: [], branchById: {},
+  leave: [], shiftReq: [], returnReq: [], join: [], transfers: [], support: [], shifts: [],
+  board: null, boardBranch: "", q: "", branchFilter: "", tab: "pilots",
+  /* فلاتر الشاشات — القيم عايشة هنا مش في الـDOM عشان الرسم كل نبضة
+     مايرجّعهاش للافتراضي (نفس سبب فصل الأشرطة الثابتة عن المتغيّرة). */
+  shQ: "", shStatus: "active", shBranch: "", rqQ: "", rqStatus: "pending"
+};
+const TABS = [
+  ["pilots",    "🧑‍✈️ الطيارون",     () => 0],
+  ["board",     "🎯 الدور واللوحة",  () => 0],
+  ["shifts",    "🕒 الورديات",       () => 0],
+  ["requests",  "📥 الطلبات",        () => pend(S.leave) + pend(S.shiftReq) + pend(S.returnReq)],
+  ["join",      "📝 طلبات الانضمام", () => pend(S.join)],
+  ["transfers", "🔁 النقل",          () => pend(S.transfers)],
+  ["support",   "🆘 الدعم",          () => pend(S.support)],
+  ["map",       "🗺️ الخريطة",        () => 0],
+];
+const pend = a => (a || []).filter(x => x.status === "pending").length;
+const pilotName = id => (S.pilots.find(p => p.id === id) || {}).name || ("#" + id);
+/* الوردية المفتوحة للطيار. «مفيش صف» و«صف منتهي» الاتنين معناهم مقفولة،
+   والحالة الغايبة بتتقري active زي السيرفر (BoardWire::shift). */
+const activeShift = pilotId => S.shifts.find(s => s.pilotId === pilotId && (s.status || "active") === "active");
+const durTxt = ms => {
+  if (!(ms > 0)) return "—";
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return h ? `${h} س ${m} د` : `${m} د`;
+};
+
+let _started = false;
+function start() {
+  if (_started) return; _started = true;
+  renderTabs();
+
+    /* ── البثّ اللحظي: طلبات الإذن/الورديات بتوصل فورًا ─────────────
+       ركلة واحدة مجمّعة (400ms) لكل المستطلعات — رخيصة لأن كل بولر بيسأل
+       بـ?since والفاضي بيرد changed:false. حدث الأوردرات بياخد نفس الركلة
+       (البورد هنا بيتحدّث منها برضه). الاشتراك بيتزامن مع قايمة الفروع. */
+    let _rtKick = null;
+    function _rtPoke() {
+      clearTimeout(_rtKick);
+      _rtKick = setTimeout(() => { try { API.pokeAll(); } catch (_) {} }, 400);
+    }
+    function _rtSync() {
+      const RT = window.REALTIME;
+      if (!RT || !RT.available()) return;
+      const ids = (S.branches || []).map(b => b && b.id).filter(Boolean);
+      if (!ids.length) return;
+      try { RT.syncBranches(ids, _rtPoke, _rtPoke); } catch (_) {}
+    }
+  new API.Poller("/api/pilots", { interval: 10000, onChange: d => {
+    S.pilots = (d.items || []).sort((a,b) => (a.name||"").localeCompare(b.name||"", "ar"));
+    paint();
+  }});
+  new API.Poller("/api/branches", { interval: 60000, useSince: false, onChange: d => {
+    S.branches = d.items || [];
+    S.branchById = {}; S.branches.forEach(b => { S.branchById[b.id] = b; });
+      _rtSync();
+    if (!S.boardBranch && S.branches[0]) S.boardBranch = String(S.branches[0].id);
+    paint();
+  }});
+  new API.Poller("/api/leave-requests",  { interval: 10000, onChange: d => { S.leave    = d.items || []; paint(); }});
+  new API.Poller("/api/shift-requests",  { interval: 10000, onChange: d => { S.shiftReq = d.items || []; paint(); }});
+  new API.Poller("/api/return-requests", { interval: 10000, onChange: d => { S.returnReq= d.items || []; paint(); }});
+  new API.Poller("/api/join-requests",   { interval: 20000, onChange: d => { S.join     = d.items || []; paint(); }});
+  new API.Poller("/api/pilot-transfers", { interval: 20000, onChange: d => { S.transfers= d.items || []; paint(); }});
+  new API.Poller("/api/support-requests",{ interval: 15000, onChange: d => { S.support  = d.items || []; paint(); }});
+  /* الورديات من غير ?status — شاشة الورديات محتاجة الجارية **والمنتهية**
+     (المسار بيرجّع آخر ٥٠٠ وردية)، والفلترة بتتعمل عندنا. تحذير للي بعدي:
+     رد الوردية شايل bonus/deduction/advance — **متعرضهاش**، دي فلوس
+     والشاشة دي مالهاش فلوس. بنستخدم منها الوقت والفرع والحالة بس. */
+  new API.Poller("/api/shifts", { interval: 20000, onChange: d => {
+    S.shifts = d.items || []; paint();
+  }});
+
+  /* اللوحة مسار مركّب مش قايمة (رد بمفاتيح ثابتة مش items) و**بيطلب فرع
+     صريح** — الإدارة ومشرف الطيارين الاتنين مالهمش فرع مربوط، فمن غير
+     ?branch= الرد 400. فبولر لوحده بيتحرّك مع الاختيار. */
+  setInterval(pollBoard, 8000);
+  setTimeout(pollBoard, 400);
+}
+
+async function pollBoard() {
+  if (document.hidden || S.tab !== "board" || !S.boardBranch) return;
+  try {
+    S.board = await API.get("/api/board", { branch: S.boardBranch });
+    if (S.tab === "board") renderBoard();
+  } catch (e) { console.warn("board:", e.message || e); }
+}
+
+/* ── التبويبات ───────────────────────────────────────────── */
+function renderTabs() {
+  $("tabs").innerHTML = TABS.map(([k, label]) =>
+    `<button class="tab${S.tab===k?" on":""}" id="tab-${k}" onclick="go('${k}')">${label}<span id="cnt-${k}"></span></button>`
+  ).join("");
+  paintTabCounts();
+}
+function paintTabCounts() {
+  for (const [k,, n] of TABS) {
+    const el = $("cnt-" + k); if (!el) continue;
+    const v = n(); el.className = v ? "n" : ""; el.textContent = v ? v : "";
+  }
+}
+window.go = function (k) {
+  S.tab = k;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
+  $("tab-" + k).classList.add("on");
+  document.querySelectorAll(".pane").forEach(p => p.classList.remove("on"));
+  $("pane-" + k).classList.add("on");
+  paint();
+  if (k === "board") pollBoard();
+  if (k === "map") setTimeout(renderMap, 30);
+};
+
+/* ── الرسم ───────────────────────────────────────────────── */
+function paint() {
+  paintTabCounts();
+  if (S.tab === "pilots")    renderPilots();
+  if (S.tab === "board")     renderBoard();
+  if (S.tab === "shifts")    renderShifts();
+  if (S.tab === "requests")  renderRequests();
+  if (S.tab === "join")      renderJoin();
+  if (S.tab === "transfers") renderTransfers();
+  if (S.tab === "support")   renderSupport();
+  if (S.tab === "map")       renderMap();
+}
+const branchOptions = (sel, all) =>
+  (all ? `<option value="">كل الفروع</option>` : "") +
+  S.branches.map(b => `<option value="${b.id}"${String(sel)===String(b.id)?" selected":""}>${esc(b.name)}</option>`).join("");
+const emptyBox = (icon, txt) => `<div class="empty"><i>${icon}</i>${esc(txt)}</div>`;
+/* قوايم الفروع الثابتة بتتعبّى مرة واحدة لما /api/branches توصل — إعادة
+   بنائها كل نبضة كانت بتقفل القايمة المفتوحة وترجّع الاختيار للأول. */
+function fillBranchSelect(id, sel, all) {
+  const el = $(id);
+  if (!el || el.options.length === S.branches.length + (all ? 1 : 0)) return;
+  el.innerHTML = branchOptions(sel, all);
+}
+
+const ST = {
+  waiting:   ["في الدور", "t-ok"],
+  delivering:["بيوصّل",   "t-info"],
+  on_leave:  ["في إذن",   "t-warn"],
+};
+function statusTag(p) {
+  const s = p.pilotStatus || "";
+  const [txt, cls] = ST[s] || [s ? esc(s) : "خارج الشيفت", "t-bad"];
+  return `<span class="tag ${cls}">${txt}</span>`;
+}
+
+/* ── ١. الطيارون ─────────────────────────────────────────── */
+function renderPilots() {
+  fillBranchSelect("pilotBranch", S.branchFilter, true);
+  const q = S.q.trim();
+  const list = S.pilots.filter(p =>
+    (!S.branchFilter || String(p.assignedBranchId) === String(S.branchFilter)) &&
+    (!q || (p.name||"").includes(q) || (p.phone1||"").includes(q) || (p.vehicleNo||"").includes(q)));
+
+  $("pilots-body").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>${S.pilots.length}</b><span>إجمالي الطيارين</span></div>
+      <div class="kpi"><b>${S.pilots.filter(p=>p.pilotStatus==="waiting").length}</b><span>في الدور</span></div>
+      <div class="kpi"><b>${S.pilots.filter(p=>p.pilotStatus==="delivering").length}</b><span>بيوصّلوا</span></div>
+      <div class="kpi"><b>${S.pilots.filter(p=>p.pilotStatus==="on_leave").length}</b><span>في إذن</span></div>
+    </div>
+    ${list.length ? `<div class="grid">${list.map(p => {
+      const sh = activeShift(p.id);
+      return `<div class="card">
+        <div class="card-h">
+          <div class="r-av">${esc((p.name||"؟")[0])}</div>
+          <b>${esc(p.name)}</b>${statusTag(p)}
+        </div>
+        <div class="kv"><span class="k">الموبايل</span><span class="v ltr">${esc(p.phone1||"—")}</span></div>
+        <div class="kv"><span class="k">الفرع</span><span class="v">${esc(p.assignedBranchName||"—")}</span></div>
+        <div class="kv"><span class="k">رقم العربية</span><span class="v ltr">${esc(p.vehicleNo||"—")}</span></div>
+        <div class="kv"><span class="k">أوردرات جارية</span><span class="v">${p.activeOrders||0}</span></div>
+        <div class="kv"><span class="k">الدور</span><span class="v">${p.queueNo ?? "—"}</span></div>
+        <div class="kv"><span class="k">الوردية</span><span class="v">${sh ? "مفتوحة " + ago(sh.startedAt) : "مقفولة"}</span></div>
+        <div class="kv"><span class="k">نسخة التطبيق</span><span class="v ltr">${esc(p.appVersion||"—")}</span></div>
+        <div class="acts">
+          <button class="btn" onclick="openPilotForm(${p.id})">✏️ تعديل</button>
+          ${sh ? "" : `<button class="btn ok" onclick="doShiftOpen(${p.id})">▶️ فتح وردية</button>`}
+          ${p.pilotStatus === "waiting"
+            ? `<button class="btn" onclick="doQueue('leave',${p.id})">⏹️ خروج من الدور</button>`
+            : `<button class="btn" onclick="doQueue('enter',${p.id})">➕ دخول الدور</button>`}
+          <button class="btn danger" onclick="openForceLeave(${p.id})">⏸️ إيقاف بإذن</button>
+          <button class="btn" onclick="openTransferForm(${p.id})">🔁 نقل لفرع</button>
+        </div>
+      </div>`;
+    }).join("")}</div>` : emptyBox("🧑‍✈️", "مفيش طيارين مطابقين للبحث")}
+    <div class="note" style="margin-top:16px">
+      💡 <b>إنهاء الوردية</b> و<b>عودة الطيار بتسوية</b> مش من هنا — الاتنين بيحرّكوا
+      خزنة وعهدة، فبيتعملوا من لوحة الفرع أو الإدارة. الشاشة دي للتشغيل بس.
+    </div>`;
+}
+
+window.openPilotForm = function (id) {
+  const p = id ? S.pilots.find(x => x.id === id) : null;
+  openModal(p ? "✏️ تعديل طيار" : "➕ طيار جديد", `
+    <label>الاسم *</label><input id="f_name" value="${esc(p?.name||"")}" />
+    <label>موبايل ١</label><input id="f_p1" dir="ltr" value="${esc(p?.phone1||"")}" />
+    <label>موبايل ٢</label><input id="f_p2" dir="ltr" value="${esc(p?.phone2||"")}" />
+    <label>الرقم القومي</label><input id="f_card" dir="ltr" value="${esc(p?.cardNum||"")}" />
+    <label>رقم العربية</label><input id="f_veh" dir="ltr" value="${esc(p?.vehicleNo||"")}" />
+    <label>العنوان</label><input id="f_addr" value="${esc(p?.address||"")}" />
+    <label>الفرع</label><select id="f_branch">${branchOptions(p?.assignedBranchId, true)}</select>
+    <label>ملاحظات</label><textarea id="f_notes" rows="2">${esc(p?.notes||"")}</textarea>
+    <div class="note" style="margin-top:14px">
+      العمولة والمرتب مش من هنا — بيتحطّوا من الإدارة أو الحسابات.
+    </div>
+    <div class="acts"><button class="btn pri" onclick="savePilot(${id||0})">💾 حفظ</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.savePilot = async function (id) {
+  const body = {
+    name: $("f_name").value.trim(), phone1: $("f_p1").value.trim(),
+    phone2: $("f_p2").value.trim(), cardNum: $("f_card").value.trim(),
+    vehicleNo: $("f_veh").value.trim(), address: $("f_addr").value.trim(),
+    notes: $("f_notes").value.trim(),
+    assignedBranchId: $("f_branch").value ? Number($("f_branch").value) : null,
+  };
+  if (!body.name) { toast("اسم الطيار مطلوب"); return; }
+  try {
+    if (id) await API.put("/api/pilots/" + id, body);
+    else    await API.post("/api/pilots", body);
+    toast(id ? "اتحفظ ✓" : "الطيار اتضاف ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+window.doShiftOpen = async function (pilotId) {
+  const p = S.pilots.find(x => x.id === pilotId);
+  const branchId = p?.assignedBranchId || Number(S.boardBranch) || null;
+  if (!branchId) { toast("الطيار مش تابع لفرع — حدّد فرعه الأول"); return; }
+  try { await API.post("/api/shifts/open", { pilotId, branchId }); toast("الوردية اتفتحت ✓"); API.pokeAll(); }
+  catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+window.doQueue = async function (op, pilotId) {
+  const p = S.pilots.find(x => x.id === pilotId);
+  const body = op === "enter" ? { pilotId, branchId: p?.assignedBranchId || undefined } : { pilotId };
+  try { await API.post("/api/queue/" + op, body);
+    toast(op === "enter" ? "دخل الدور ✓" : "خرج من الدور ✓"); API.pokeAll(); }
+  catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+window.openForceLeave = function (pilotId) {
+  openModal("⏸️ إيقاف الطيار بإذن", `
+    <label>نوع الإذن</label>
+    <select id="f_type"><option value="rest">راحة</option><option value="dayoff">يوم إجازة</option>
+      <option value="incident">عطل / حادثة</option></select>
+    <label>السبب</label><textarea id="f_reason" rows="2" placeholder="اختياري"></textarea>
+    <div class="acts"><button class="btn danger" onclick="doForceLeave(${pilotId})">إيقاف</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.doForceLeave = async function (pilotId) {
+  try {
+    await API.post(`/api/pilots/${pilotId}/force-leave`,
+      { type: $("f_type").value, reason: $("f_reason").value.trim() });
+    toast("الطيار اتوقف بإذن ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٢. الدور واللوحة ────────────────────────────────────── */
+function renderBoard() {
+  fillBranchSelect("boardBranch", S.boardBranch, false);
+  const b = S.board;
+  const q = (b?.queue || []);
+  $("board-body").innerHTML = `
+    ${b ? `
+      <div class="kpis">
+        <div class="kpi"><b>${(b.pilots||[]).length}</b><span>طيارو الفرع</span></div>
+        <div class="kpi"><b>${q.length}</b><span>في الدور</span></div>
+        <div class="kpi"><b>${b.pending?.leaveRequests||0}</b><span>أذونات معلقة</span></div>
+        <div class="kpi"><b>${b.pending?.shiftRequests||0}</b><span>طلبات وردية</span></div>
+        <div class="kpi"><b>${b.pending?.returnRequests||0}</b><span>طلبات إرجاع</span></div>
+        <div class="kpi"><b>${b.pending?.transfers||0}</b><span>نقل معلق</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><b>🎯 ترتيب الدور</b></div>
+        ${q.length ? q.map((x, i) => `
+          <div class="qrow">
+            <div class="qno">${x.queueNo}</div><b>${esc(x.name)}</b>
+            <button class="btn" ${i===0?"disabled":""} onclick="moveQueue(${i},-1)">▲</button>
+            <button class="btn" ${i===q.length-1?"disabled":""} onclick="moveQueue(${i},1)">▼</button>
+            <button class="btn danger" onclick="doQueue('leave',${x.pilotId})">خروج</button>
+          </div>`).join("") : `<div class="empty" style="padding:26px"><i>🎯</i>مفيش حد في الدور دلوقتي</div>`}
+      </div>` : emptyBox("⏳", "بيحمّل لوحة الفرع…")}`;
+}
+window.moveQueue = async function (i, dir) {
+  const q = [...(S.board?.queue || [])];
+  const j = i + dir;
+  if (j < 0 || j >= q.length) return;
+  [q[i], q[j]] = [q[j], q[i]];
+  try {
+    await API.post("/api/queue/reorder", { branchId: Number(S.boardBranch), pilotIds: q.map(x => x.pilotId) });
+    toast("الدور اتظبط ✓"); pollBoard();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٣. الورديات ────────────────────────────────────────────
+   منقولة من شاشة «ورديات الطيارين» في tiar.html — **الوظيفة بس**:
+   المتابعة وفتح الوردية ونقلها. اللي اتساب هناك بالقصد: عدد أوردرات
+   الوردية (بيتحسب من GET /api/orders اللي بيجيب مبالغ الأوردرات)،
+   وزراري «إنهاء الوردية» و«عرض التقفيلة» (فلوس — الفرع/الإدارة). */
+function renderShifts() {
+  fillBranchSelect("shBranch", S.shBranch, true);
+  const q = S.shQ.trim();
+  const st = s => s.status || "active";
+  const list = S.shifts
+    .filter(s => (!S.shStatus || st(s) === S.shStatus) &&
+                 (!S.shBranch || String(s.branchId) === String(S.shBranch)) &&
+                 (!q || (s.pilotName || "").includes(q)))
+    .slice()
+    .sort((a, b) => new Date(b.startedAt || 0) - new Date(a.startedAt || 0));
+
+  /* طيار له فرع ومفيش وردية مفتوحة — ده أهم صف في الشاشة عمليًا:
+     الفرع مستنيه والدور ناقص. الزرار جنبه بيفتح الوردية على طول. */
+  const noShift = S.pilots.filter(p => p.assignedBranchId && !activeShift(p.id) &&
+    (!S.shBranch || String(p.assignedBranchId) === String(S.shBranch)));
+
+  $("shifts-body").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>${S.shifts.filter(s => st(s) === "active").length}</b><span>ورديات جارية</span></div>
+      <div class="kpi"><b>${noShift.length}</b><span>من غير وردية</span></div>
+      <div class="kpi"><b>${list.length}</b><span>معروضة بالفلتر</span></div>
+    </div>
+    ${noShift.length ? `<div class="card">
+      <div class="card-h"><b>🔔 طيارون لسه مافتحوش وردية</b><span class="tag t-warn">${noShift.length}</span></div>
+      ${noShift.slice(0, 40).map(p => `<div class="qrow">
+        <b>${esc(p.name)}<span style="color:var(--muted);font-weight:400"> · ${esc(p.assignedBranchName || "—")}
+          · <span dir="ltr">${esc(p.phone1 || "—")}</span></span></b>
+        <button class="btn ok" onclick="doShiftOpen(${p.id})">▶️ فتح وردية</button>
+      </div>`).join("")}
+      ${noShift.length > 40
+        ? `<div style="font-size:12px;color:var(--muted);padding:5px 3px">…و${noShift.length - 40} غيرهم — ضيّق بالفرع</div>` : ""}
+    </div>` : ""}
+    <div class="note">
+      <b>إنهاء الوردية</b> و<b>التقفيلة</b> مش من هنا — الاتنين بيسوّوا فلوس
+      (عمولة وعهدة وخزنة) فبيتعملوا من لوحة الفرع أو الإدارة. المتاح هنا:
+      فتح الوردية · نقلها لفرع تاني · متابعتها.
+    </div>
+    ${list.length ? `<div class="grid">${list.slice(0, 200).map(s => {
+      const on = st(s) === "active";
+      const endMs = on ? Date.now() : new Date(s.endedAt || s.startedAt).getTime();
+      return `<div class="card">
+        <div class="card-h"><div class="r-av">${esc((s.pilotName || "؟")[0])}</div>
+          <b>${esc(s.pilotName || "—")}</b>
+          <span class="tag ${on ? "t-ok" : "t-info"}">${on ? "جارية" : "منتهية"}</span></div>
+        <div class="kv"><span class="k">الفرع</span><span class="v">${esc(s.branchName || "—")}</span></div>
+        <div class="kv"><span class="k">البداية</span><span class="v">${fmt(s.startedAt)}</span></div>
+        <div class="kv"><span class="k">النهاية</span><span class="v">${on ? "—" : fmt(s.endedAt)}</span></div>
+        <div class="kv"><span class="k">المدة</span><span class="v">${durTxt(endMs - new Date(s.startedAt).getTime())}</span></div>
+        <div class="kv"><span class="k">فتحها</span><span class="v">${esc(s.openedBy || "—")}</span></div>
+        ${s.transferredAt ? `<div class="kv"><span class="k">اتنقلت</span><span class="v">${ago(s.transferredAt)}</span></div>` : ""}
+        ${on ? `<div class="acts">
+          <button class="btn" onclick="openShiftTransfer(${s.id})">🔁 نقل الوردية لفرع</button>
+          <button class="btn" onclick="openForceLeave(${s.pilotId})">⏸️ إيقاف بإذن</button>
+        </div>` : ""}
+      </div>`;
+    }).join("")}</div>` : emptyBox("🕒", "مفيش ورديات مطابقة للفلتر")}`;
+}
+window.openShiftTransfer = function (shiftId) {
+  const s = S.shifts.find(x => x.id === shiftId);
+  openModal("🔁 نقل وردية " + (s ? s.pilotName || "" : ""), `
+    <div class="note">ده بينقل <b>الوردية المفتوحة</b> لفرع تاني لآخر اليوم —
+      مش نقل الطيار نفسه. النقل الدائم من تبويب «النقل».</div>
+    <label>الفرع الجديد *</label><select id="sf_branch">${branchOptions(s ? s.branchId : "", false)}</select>
+    <div class="acts"><button class="btn pri" onclick="doShiftTransfer(${shiftId})">💾 نقل</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.doShiftTransfer = async function (shiftId) {
+  const branchId = Number($("sf_branch").value || 0);
+  if (!branchId) { toast("اختار الفرع"); return; }
+  try {
+    await API.post(`/api/shifts/${shiftId}/transfer`, { branchId });
+    toast("الوردية اتنقلت ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٤. الطلبات: أذونات · ورديات · إرجاع ────────────────── */
+const LEAVE_AR = { rest:"راحة", dayoff:"يوم إجازة", incident:"عطل/حادثة" };
+const RQ_ST = { pending:["معلّق","t-warn"], approved:["مقبول","t-ok"], rejected:["مرفوض","t-bad"] };
+/* فلتر الحالة + اسم الطيار — بيتطبّق على التلات قوايم بنفس الشكل.
+   الافتراضي «معلّقة» عشان الشاشة تفتح على اللي محتاج قرار. */
+function rqFilter(list) {
+  const q = S.rqQ.trim();
+  return (list || []).filter(x =>
+    (!S.rqStatus || x.status === S.rqStatus) &&
+    (!q || (x.pilotName || "").includes(q)));
+}
+const stTag = x => {
+  const p = RQ_ST[x.status] || [esc(x.status || "—"), "t-info"];
+  return `<span class="tag ${p[1]}">${p[0]}</span>`;
+};
+function renderRequests() {
+  const L = rqFilter(S.leave);
+  const H = rqFilter(S.shiftReq);
+  const R = rqFilter(S.returnReq);
+  const nq = S.rqQ.trim();
+  /* «سارية» مش حالة في الفلتر — دي أذونات متقبّلة ولسه مافيش endedAt،
+     يعني الطيار واقف دلوقتي. بتفضل بانة مهما كان الفلتر عشان محدش
+     ينساها مفتوحة؛ بحث الاسم بس اللي بيمسّها. */
+  const active = S.leave.filter(x => x.status === "approved" && !x.endedAt &&
+    (!nq || (x.pilotName || "").includes(nq)));
+
+  $("requests-body").innerHTML = `
+    <div class="note">
+      طلب <b>الإرجاع</b> هنا رفض بس. الموافقة بتحوّل الأوردر لـ«لم يتم التوصيل»
+      يعني تحصيل مش متم — دي من لوحة الفرع.
+    </div>
+    <div class="card"><div class="card-h"><b>🛌 طلبات الإذن</b><span class="tag t-warn">${L.length}</span></div>
+      ${L.length ? L.map(x => `<div class="qrow">
+        <b>${esc(x.pilotName)} — ${LEAVE_AR[x.type]||esc(x.type)}${x.reason?` · ${esc(x.reason)}`:""}
+          <span style="color:var(--muted);font-weight:400"> · ${esc(x.branchName||"")} · ${ago(x.requestedAt)}</span></b>
+        ${x.status === "pending" ? `
+          <button class="btn ok" onclick="act('/api/leave-requests/${x.id}/approve','الإذن اتقبل')">موافقة</button>
+          <button class="btn danger" onclick="act('/api/leave-requests/${x.id}/reject','الإذن اترفض')">رفض</button>`
+        : stTag(x)}
+      </div>`).join("") : `<div class="empty" style="padding:22px">مفيش طلبات إذن بالفلتر ده</div>`}
+    </div>
+    <div class="card"><div class="card-h"><b>🟢 أذونات سارية</b><span class="tag t-info">${active.length}</span></div>
+      ${active.length ? active.map(x => `<div class="qrow">
+        <b>${esc(x.pilotName)} — ${LEAVE_AR[x.type]||esc(x.type)}
+          <span style="color:var(--muted);font-weight:400"> · بدأ ${ago(x.respondedAt||x.requestedAt)}
+          ${x.forcedBy?" · إيقاف إجباري":""}</span></b>
+        <button class="btn" onclick="act('/api/leave-requests/${x.id}/end','الإذن اتقفل')">إنهاء الإذن</button>
+      </div>`).join("") : `<div class="empty" style="padding:22px">مفيش أذونات سارية</div>`}
+    </div>
+    <div class="card"><div class="card-h"><b>🕒 طلبات فتح وردية</b><span class="tag t-warn">${H.length}</span></div>
+      ${H.length ? H.map(x => `<div class="qrow">
+        <b>${esc(x.pilotName)}<span style="color:var(--muted);font-weight:400"> · ${esc(x.branchName||"")} · ${ago(x.requestedAt)}</span></b>
+        ${x.status === "pending" ? `
+          <button class="btn ok" onclick="act('/api/shift-requests/${x.id}/approve','الوردية اتفتحت')">موافقة</button>
+          <button class="btn danger" onclick="act('/api/shift-requests/${x.id}/reject','الطلب اترفض')">رفض</button>`
+        : stTag(x)}
+      </div>`).join("") : `<div class="empty" style="padding:22px">مفيش طلبات ورديات بالفلتر ده</div>`}
+    </div>
+    <div class="card"><div class="card-h"><b>↩️ طلبات إرجاع أوردر</b><span class="tag t-warn">${R.length}</span></div>
+      ${R.length ? R.map(x => `<div class="qrow">
+        <b>${esc(x.pilotName)} — أوردر ${esc(x.orderNum)}${x.reason?` · ${esc(x.reason)}`:""}
+          <span style="color:var(--muted);font-weight:400"> · ${ago(x.requestedAt)}</span></b>
+        ${x.status === "pending"
+          ? `<button class="btn danger" onclick="act('/api/return-requests/${x.id}/reject','الطلب اترفض')">رفض</button>`
+          : stTag(x)}
+      </div>`).join("") : `<div class="empty" style="padding:22px">مفيش طلبات إرجاع بالفلتر ده</div>`}
+    </div>`;
+}
+window.act = async function (url, okMsg, body) {
+  try { await API.post(url, body || {}); toast(okMsg + " ✓"); API.pokeAll(); pollBoard(); }
+  catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٥. طلبات الانضمام ──────────────────────────────────── */
+function renderJoin() {
+  const list = S.join.filter(x => x.status === "pending");
+  $("pane-join").innerHTML = `
+    <div class="bar"><button class="btn pri" onclick="openJoinForm()">➕ تسجيل طلب انضمام</button></div>
+    <div class="kpis">
+      <div class="kpi"><b>${list.length}</b><span>معلّقة</span></div>
+      <div class="kpi"><b>${S.join.filter(x=>x.status==="approved").length}</b><span>اتقبلت</span></div>
+      <div class="kpi"><b>${S.join.filter(x=>x.status==="rejected").length}</b><span>اترفضت</span></div>
+    </div>
+    ${list.length ? `<div class="grid">${list.map(x => `
+      <div class="card">
+        <div class="card-h"><div class="r-av">${esc((x.name||"؟")[0])}</div><b>${esc(x.name)}</b>
+          <span class="tag t-warn">معلق</span></div>
+        <div class="kv"><span class="k">موبايل</span><span class="v ltr">${esc(x.phone1||"—")}</span></div>
+        <div class="kv"><span class="k">رقم قومي</span><span class="v ltr">${esc(x.cardNum||"—")}</span></div>
+        <div class="kv"><span class="k">العربية</span><span class="v ltr">${esc(x.vehicleNo||"—")}</span></div>
+        <div class="kv"><span class="k">الفرع</span><span class="v">${esc(x.branchName||"—")}</span></div>
+        <div class="kv"><span class="k">العنوان</span><span class="v">${esc(x.address||"—")}</span></div>
+        <div class="kv"><span class="k">اتقدّم</span><span class="v">${ago(x.createdAt)}</span></div>
+        <div class="acts">
+          <button class="btn ok" onclick="openJoinApprove(${x.id})">✅ قبول وإنشاء حساب</button>
+          <button class="btn danger" onclick="act('/api/join-requests/${x.id}/reject','الطلب اترفض')">رفض</button>
+        </div>
+      </div>`).join("")}</div>` : emptyBox("📝", "مفيش طلبات انضمام معلقة")}`;
+}
+window.openJoinForm = function () {
+  openModal("➕ تسجيل طلب انضمام", `
+    <label>الاسم *</label><input id="j_name" />
+    <label>موبايل ١ *</label><input id="j_p1" dir="ltr" />
+    <label>موبايل ٢</label><input id="j_p2" dir="ltr" />
+    <label>الرقم القومي</label><input id="j_card" dir="ltr" />
+    <label>رقم العربية</label><input id="j_veh" dir="ltr" />
+    <label>العنوان</label><input id="j_addr" />
+    <label>الفرع</label><select id="j_branch">${branchOptions("", true)}</select>
+    <div class="acts"><button class="btn pri" onclick="saveJoin()">💾 حفظ</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.saveJoin = async function () {
+  const name = $("j_name").value.trim(), p1 = $("j_p1").value.trim();
+  if (!name || !p1) { toast("الاسم والموبايل مطلوبين"); return; }
+  try {
+    await API.post("/api/join-requests", {
+      name, phone1: p1, phone2: $("j_p2").value.trim(), cardNum: $("j_card").value.trim(),
+      vehicleNo: $("j_veh").value.trim(), address: $("j_addr").value.trim(),
+      branchId: $("j_branch").value ? Number($("j_branch").value) : null,
+    });
+    toast("الطلب اتسجّل ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+/* الاسم بيتجاب من الحالة مش بيتبعت في الـonclick: esc() بتهرّب لـHTML،
+   واللي جوه attribute بيترجع نص قبل ما JS تشوفه — فاسم فيه ' كان بيكسر
+   النداء. الـid رقم من السيرفر (CoreWire::wireId ⇒ int) فآمن يتحط. */
+window.openJoinApprove = function (id) {
+  const j = S.join.find(x => x.id === id);
+  openModal("✅ قبول " + (j ? j.name || "" : ""), `
+    <div class="note">القبول بيعمل كارت طيار <b>وحساب دخول للتطبيق</b> — الحساب بيتخلق
+      بدور «طيار» بس، والعمولة والمرتب بيتحطّوا بعدين من الإدارة.</div>
+    <label>اسم المستخدم *</label><input id="a_user" dir="ltr" autocomplete="off" />
+    <label>كلمة المرور * (٤ حروف على الأقل)</label><input id="a_pass" dir="ltr" autocomplete="new-password" />
+    <div class="acts"><button class="btn ok" onclick="doJoinApprove(${id})">قبول</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.doJoinApprove = async function (id) {
+  const username = $("a_user").value.trim(), password = $("a_pass").value;
+  if (!username || password.length < 4) { toast("اسم المستخدم وكلمة مرور ٤ حروف على الأقل"); return; }
+  try {
+    await API.post(`/api/join-requests/${id}/approve`, { username, password });
+    toast("الطيار اتقبل واتعمله حساب ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٦. النقل بين الفروع ────────────────────────────────── */
+const TR_ST = { pending:["معلق","t-warn"], approved:["ساري","t-ok"],
+                rejected:["مرفوض","t-bad"], ended:["منتهي","t-info"] };
+function renderTransfers() {
+  const list = S.transfers;
+  $("pane-transfers").innerHTML = `
+    <div class="bar"><button class="btn pri" onclick="openTransferForm()">➕ طلب نقل جديد</button></div>
+    ${list.length ? `<div class="grid">${list.map(x => {
+      const [t, c] = TR_ST[x.status] || [esc(x.status), "t-info"];
+      return `<div class="card">
+        <div class="card-h"><b>${esc(x.pilotName)}</b><span class="tag ${c}">${t}</span></div>
+        <div class="kv"><span class="k">من</span><span class="v">${esc(x.fromBranchName||"—")}</span></div>
+        <div class="kv"><span class="k">إلى</span><span class="v">${esc(x.toBranchName||"—")}</span></div>
+        <div class="kv"><span class="k">النوع</span><span class="v">${x.type==="permanent"?"دائم":"مؤقت"}</span></div>
+        <div class="kv"><span class="k">اتطلب</span><span class="v">${ago(x.requestedAt)}</span></div>
+        <div class="acts">
+          ${x.status === "pending" ? `
+            <button class="btn ok" onclick="act('/api/pilot-transfers/${x.id}/approve','النقل اتقبل')">موافقة</button>
+            <button class="btn danger" onclick="act('/api/pilot-transfers/${x.id}/reject','النقل اترفض')">رفض</button>` : ""}
+          ${x.status === "approved" ? `
+            <button class="btn" onclick="act('/api/pilot-transfers/${x.id}/end','النقل اتقفل')">إنهاء النقل</button>` : ""}
+        </div>
+      </div>`;
+    }).join("")}</div>` : emptyBox("🔁", "مفيش نقلات مسجّلة")}`;
+}
+window.openTransferForm = function (pilotId) {
+  const p = pilotId ? S.pilots.find(x => x.id === pilotId) : null;
+  openModal("🔁 طلب نقل طيار", `
+    <label>الطيار *</label>
+    <select id="t_pilot">${S.pilots.map(x =>
+      `<option value="${x.id}"${x.id===pilotId?" selected":""}>${esc(x.name)}</option>`).join("")}</select>
+    <label>من فرع</label><select id="t_from">${branchOptions(p?.assignedBranchId, true)}</select>
+    <label>إلى فرع *</label><select id="t_to">${branchOptions("", true)}</select>
+    <label>النوع</label><select id="t_type"><option value="temp">مؤقت</option>
+      <option value="permanent">دائم</option></select>
+    <div class="acts"><button class="btn pri" onclick="saveTransfer()">💾 إرسال الطلب</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.saveTransfer = async function () {
+  const toBranchId = Number($("t_to").value || 0);
+  if (!toBranchId) { toast("اختار الفرع المنقول ليه"); return; }
+  try {
+    await API.post("/api/pilot-transfers", {
+      pilotId: Number($("t_pilot").value), toBranchId,
+      fromBranchId: $("t_from").value ? Number($("t_from").value) : null,
+      type: $("t_type").value,
+    });
+    toast("طلب النقل اتسجّل ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٧. الدعم بين الفروع ────────────────────────────────── */
+function renderSupport() {
+  const list = S.support;
+  $("pane-support").innerHTML = `
+    <div class="bar"><button class="btn pri" onclick="openSupportForm()">🆘 طلب دعم لفرع</button></div>
+    <div class="note">الفرع الطالب بيستنى طيار من فرع تاني. الإرسال بيختار الطيار،
+      والقبول بيقفل الطلب.</div>
+    ${list.length ? `<div class="grid">${list.map(x => `
+      <div class="card">
+        <div class="card-h"><b>${esc(x.requestingBranchName||"—")}</b>
+          <span class="tag ${x.status==="pending"?"t-warn":x.status==="accepted"?"t-ok":"t-info"}">${esc(x.status)}</span></div>
+        <div class="kv"><span class="k">من</span><span class="v">${x.broadcast?"كل الفروع":esc(S.branchById[x.fromBranchId]?.name||"—")}</span></div>
+        <div class="kv"><span class="k">الملاحظات</span><span class="v">${esc(x.notes||"—")}</span></div>
+        <div class="kv"><span class="k">الطيار المرسل</span><span class="v">${esc(x.pilotName||"—")}</span></div>
+        <div class="kv"><span class="k">اتطلب</span><span class="v">${ago(x.requestedAt)}</span></div>
+        <div class="acts">
+          ${x.status === "pending" ? `
+            <button class="btn ok" onclick="openSendPilot(${x.id})">🧑‍✈️ إرسال طيار</button>
+            <button class="btn danger" onclick="act('/api/support-requests/${x.id}/cancel','الطلب اتلغى')">إلغاء</button>` : ""}
+          ${x.status === "accepted" && x.pilotId ? `
+            <button class="btn" onclick="act('/api/support-requests/${x.id}/accept-pilot','الطيار اتسلّم')">استلام الطيار</button>` : ""}
+        </div>
+      </div>`).join("")}</div>` : emptyBox("🆘", "مفيش طلبات دعم")}`;
+}
+window.openSupportForm = function () {
+  openModal("🆘 طلب دعم", `
+    <label>الفرع الطالب *</label><select id="s_branch">${branchOptions(S.boardBranch, false)}</select>
+    <label>من فرع (سيبه فاضي = كل الفروع)</label><select id="s_from">${branchOptions("", true)}</select>
+    <label>ملاحظات</label><textarea id="s_notes" rows="2"></textarea>
+    <div class="acts"><button class="btn pri" onclick="saveSupport()">إرسال</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.saveSupport = async function () {
+  try {
+    await API.post("/api/support-requests", {
+      branchId: Number($("s_branch").value),
+      fromBranchId: $("s_from").value ? Number($("s_from").value) : null,
+      notes: $("s_notes").value.trim(),
+    });
+    toast("طلب الدعم اتبعت ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+window.openSendPilot = function (id) {
+  const free = S.pilots.filter(p => p.pilotStatus === "waiting");
+  openModal("🧑‍✈️ إرسال طيار للدعم", `
+    <label>الفرع المرسِل *</label><select id="p_branch">${branchOptions(S.boardBranch, false)}</select>
+    <label>الطيار *</label>
+    <select id="p_pilot">${(free.length ? free : S.pilots).map(p =>
+      `<option value="${p.id}">${esc(p.name)}${p.assignedBranchName?" · "+esc(p.assignedBranchName):""}</option>`).join("")}</select>
+    <div class="acts"><button class="btn ok" onclick="doSendPilot(${id})">إرسال</button>
+      <button class="btn" onclick="closeModal()">إلغاء</button></div>`);
+};
+window.doSendPilot = async function (id) {
+  try {
+    await API.post(`/api/support-requests/${id}/send-pilot`, {
+      branchId: Number($("p_branch").value), fromBranchId: Number($("p_branch").value),
+      pilotId: Number($("p_pilot").value),
+    });
+    toast("الطيار اتبعت ✓"); closeModal(); API.pokeAll();
+  } catch (e) { toast("خطأ: " + (e.message || e)); }
+};
+
+/* ── ٨. الخريطة ─────────────────────────────────────────── */
+let _map = null, _layer = null;
+function renderMap() {
+  if (S.tab !== "map") return;
+  fillBranchSelect("mapBranch", "", true);
+  const bf = $("mapBranch") ? $("mapBranch").value : "";
+  const pts = S.pilots.filter(p => p.location && (!bf || String(p.assignedBranchId) === String(bf)));
+  $("mapInfo").textContent = `${pts.length} طيار عليهم موقع من ${S.pilots.length}`;
+
+  if (!window.L) return;
+  if (!_map) {
+    _map = L.map("map").setView([30.0444, 31.2357], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(_map);
+    _layer = L.layerGroup().addTo(_map);
+  } else { _map.invalidateSize(); }
+
+  _layer.clearLayers();
+  pts.forEach(p => {
+    L.marker([p.location.lat, p.location.lng]).addTo(_layer).bindPopup(
+      `<b>${esc(p.name)}</b><br>${esc(p.assignedBranchName||"—")}<br>` +
+      `${(ST[p.pilotStatus]||["خارج الشيفت"])[0]} · آخر تحديث ${ago(p.location.updatedAt)}`);
+  });
+  if (pts.length) _map.fitBounds(pts.map(p => [p.location.lat, p.location.lng]), { padding: [40, 40], maxZoom: 14 });
+}
+
+/* ── المودال ────────────────────────────────────────────── */
+function openModal(title, html) { $("mTitle").textContent = title; $("mBody").innerHTML = html; $("modal").classList.add("on"); }
+window.closeModal = () => $("modal").classList.remove("on");
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+["gUser","gPass"].forEach(id => $(id).addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); }));
+</script>
+<script>
+/* تسجيل Service Worker — شرط عشان المتصفح يسمح بتثبيت اللوحة كتطبيق
+   بنافذة مستقلة. staff-sw.js مقصود إنه مايكاشش الصفحات (الأيقونات بس). */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('staff-sw.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

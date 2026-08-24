@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#111b21" />
+<title>الدهشان | إدارة العملاء</title>
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="manifest" href="customers-manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="الدهشان" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+/* ══════════════════════════════════════════════════════════════
+   إدارة العملاء — تخطيط بعمودين على نمط واتساب:
+   لستة العملاء على اليمين، وتفاصيل العميل المختار على الشمال.
+   الوضع الفاتح هو الافتراضي لأنه أريح للنظر في الشغل الطويل.
+══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
+  --line:#e9edef; --line2:#d1d7db;
+  --txt:#111b21; --muted:#667781; --soft:#8696a0;
+  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  --green:#15803d; --green-soft:rgba(21,128,61,.1);
+  --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
+  --blue:#1d4ed8;
+  --font:'Cairo',system-ui,sans-serif; --hd:60px;
+}
+:root.dark{
+  --bg:#0b141a; --panel:#111b21; --hover:#182229; --active:#2a3942;
+  --line:#222d34; --line2:#2a3942;
+  --txt:#e9edef; --muted:#8696a0; --soft:#667781;
+  --brand:#e8192c; --brand-d:#b91c1c; --brand-soft:rgba(232,25,44,.14);
+  --green:#22c55e; --green-soft:rgba(34,197,94,.14);
+  --orange:#f59e0b; --orange-soft:rgba(245,158,11,.14);
+  --blue:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--txt);height:100vh;overflow:hidden}
+button,input,select,textarea{font-family:inherit;color:inherit;font-size:inherit}
+img{display:block;max-width:100%}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+
+/* ── بوابة الدخول ── */
+#gate{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:900;padding:20px}
+.gate-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:38px 32px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.07)}
+.gate-box img{height:54px;margin:0 auto 18px}
+.gate-box h1{font-size:19px;font-weight:800;margin-bottom:6px}
+.gate-box p{color:var(--muted);font-size:14px;margin-bottom:22px}
+.gate-box input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;margin-bottom:10px;outline:none;font-size:14px;text-align:right}
+.gate-box input:focus{border-color:var(--brand)}
+.gbtn{width:100%;background:var(--brand);color:#fff;border:none;border-radius:10px;padding:14px;
+  font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.gbtn:hover{background:var(--brand-d)}
+#gateErr{color:var(--brand);font-size:13.5px;margin-top:14px;min-height:20px}
+
+/* ── التخطيط ── */
+#app{display:none;height:100vh}
+#app.on{display:flex;flex-direction:column}
+.topbar{height:var(--hd);background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.topbar img{height:30px}
+.topbar .ttl{font-weight:800;font-size:15.5px}
+.topbar .sp{margin-inline-start:auto;display:flex;align-items:center;gap:8px}
+.ico{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);
+  display:grid;place-items:center;cursor:pointer;font-size:16px;color:var(--muted)}
+.ico:hover{background:var(--hover);color:var(--txt)}
+.me{display:flex;align-items:center;gap:9px;font-size:13px}
+.me b{display:block;font-size:13px}.me span{color:var(--muted);font-size:11.5px}
+.av{width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;flex:none}
+
+.main{flex:1;display:flex;min-height:0;min-width:0}
+/* العمود اليمين: اللستة */
+.side{width:380px;flex:none;background:var(--panel);border-inline-start:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.side-top{padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
+.search{display:flex;align-items:center;gap:9px;background:var(--bg);border-radius:9px;padding:8px 13px}
+.search input{background:none;border:none;outline:none;flex:1;font-size:14px;min-width:0}
+/* التبويبات بتلفّ لسطر تاني بدل الـ scroll الأفقي — كان بيخفي آخر
+   تبويب من غير أي علامة إن في حاجة وراه */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.chip{padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:none;
+  font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.list{flex:1;overflow-y:auto;min-height:0}
+.row{display:flex;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line);
+  align-items:center}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--active)}
+.row .r-av{width:46px;height:46px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:17px;flex:none;position:relative}
+.row.blocked .r-av{background:var(--brand-soft);filter:grayscale(.4)}
+.row .r-av .dot{position:absolute;bottom:0;inset-inline-start:0;width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--panel)}
+.r-b{flex:1;min-width:0}
+.r-1{display:flex;align-items:baseline;gap:8px}
+.r-1 b{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.r-1 span{font-size:11px;color:var(--muted);flex:none}
+.r-2{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12.5px;color:var(--muted)}
+.r-2 .ph{direction:ltr}
+.tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.t-block{background:var(--brand-soft);color:var(--brand)}
+.t-warn{background:var(--orange-soft);color:var(--orange)}
+.t-ok{background:var(--green-soft);color:var(--green)}
+.empty{padding:60px 24px;text-align:center;color:var(--muted);font-size:14px}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+
+/* العمود الشمال: التفاصيل */
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.pane-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.pane-empty i{font-size:64px;font-style:normal;display:block;margin-bottom:16px;opacity:.35}
+/* الهيدر بيلتف بدل ما يفيض — الأزرار بتنزل سطر تحت في الشاشات الضيقة */
+.pane-hd{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;
+  display:flex;align-items:center;gap:14px;flex:none;flex-wrap:wrap;min-width:0}
+.pane-hd .p-av{width:52px;height:52px;border-radius:50%;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.pane-hd h2{font-size:17px;font-weight:800;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.pane-hd .sub{font-size:12.5px;color:var(--muted);margin-top:2px;direction:ltr;text-align:right}
+/* overflow-x شبكة أمان: لو أي محتوى طلع أعرض من العمود (إيميل طويل،
+   جدول، إلخ) يبقى فيه تمرير أفقي بدل ما يتقص تحت الشاشة */
+.pane-body{flex:1;overflow-y:auto;overflow-x:auto;padding:18px 20px 40px;min-width:0}
+.kv .v{overflow-wrap:anywhere}
+.back{display:none}
+@media(max-width:900px){
+  .side{width:100%}
+  .main.detail .side{display:none}
+  .main:not(.detail) .pane{display:none}
+  .back{display:grid}
+}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px;text-align:center}
+.kpi b{display:block;font-size:21px;font-weight:900;line-height:1.15}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:13.5px;
+  display:flex;align-items:center;gap:8px}
+.card-h .n{margin-inline-start:auto;color:var(--muted);font-weight:700;font-size:12px}
+.kv{display:flex;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted);min-width:120px;flex:none}
+.kv .v{flex:1;font-weight:700;word-break:break-word}
+.kv .v.ltr{direction:ltr;text-align:right}
+.acts{display:flex;gap:9px;flex-wrap:wrap;padding:14px 16px}
+.btn{border:1px solid var(--line2);background:var(--panel);color:var(--txt);border-radius:9px;
+  padding:9px 16px;font-size:13.5px;font-weight:700;cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.pri:hover{background:var(--brand-d)}
+.btn.danger{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.btn.danger:hover{background:var(--brand);color:#fff}
+.btn.ok{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.btn.ok:hover{background:var(--green);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.warnbox{background:var(--brand-soft);border:1px solid var(--brand);border-radius:11px;
+  padding:12px 15px;font-size:13px;line-height:1.8;margin-bottom:14px}
+
+.olist .o{display:flex;gap:11px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line)}
+.olist .o:last-child{border-bottom:none}
+.o .oi{width:38px;height:38px;border-radius:10px;background:var(--bg);display:grid;place-items:center;
+  font-size:16px;flex:none}
+.o .ob{flex:1;min-width:0}
+.o .ob b{font-size:13.5px;direction:ltr;display:block}
+.o .ob span{font-size:11.5px;color:var(--muted)}
+.o .price{font-weight:800;font-size:13.5px;white-space:nowrap}
+
+.f{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.f label{font-size:12.5px;color:var(--muted);font-weight:700}
+.f input,.f select{background:var(--bg);border:1px solid var(--line2);border-radius:9px;
+  padding:11px 13px;outline:none;width:100%}
+.f input:focus,.f select:focus{border-color:var(--brand)}
+
+/* مودال */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:none;
+  align-items:center;justify-content:center;padding:18px}
+.modal.on{display:flex}
+.sheet{background:var(--panel);border-radius:14px;width:100%;max-width:440px;max-height:90vh;
+  overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.sheet-h{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
+.sheet-b{padding:18px 20px}
+#toast{position:fixed;bottom:24px;right:50%;transform:translateX(50%) translateY(20px);
+  background:var(--txt);color:var(--panel);padding:11px 20px;border-radius:10px;font-size:13.5px;
+  font-weight:700;z-index:800;opacity:0;transition:.25s;pointer-events:none}
+#toast.on{opacity:1;transform:translateX(50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <img src="assets/logo.png" alt="الدهشان" onerror="this.style.display='none'" />
+    <h1>إدارة العملاء</h1>
+    <p>الدخول للمديرين فقط</p>
+    <input id="gUser" placeholder="اسم المستخدم" autocomplete="username" />
+    <input id="gPass" type="password" placeholder="كلمة المرور" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doLogin()" />
+    <button class="gbtn" onclick="doLogin()">دخول</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <img src="assets/logo.png" alt="" onerror="this.style.display='none'" />
+    <div class="ttl">إدارة العملاء</div>
+    <div class="sp">
+      <button class="ico" title="سجل البحث بالتليفون" onclick="openLookupLog()">🕵️</button>
+      <button class="ico" id="themeBtn" title="الوضع الليلي">🌙</button>
+      <div class="me"><div class="av" id="meAv">A</div>
+        <div><b id="meName">—</b><span id="meMail">—</span></div></div>
+      <button class="ico" id="outBtn" title="خروج" style="color:var(--brand)">⏻</button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <!-- لستة العملاء -->
+    <div class="side">
+      <div class="side-top">
+        <div class="search">🔍<input id="q" placeholder="ابحث بالاسم أو الرقم أو الإيميل" autocomplete="off" /></div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <!-- التفاصيل -->
+    <div class="pane" id="pane">
+      <div class="pane-empty"><div><i>👥</i>اختار عميل من اللستة عشان تشوف بياناته<br />وتتحكم في حسابه</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet">
+  <div class="sheet-h" id="mTitle">—</div>
+  <div class="sheet-b" id="mBody"></div>
+</div></div>
+<div id="toast"></div>
+
+<script src="assets/js/constants.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/trust-admin.js"></script>
+<script>
+/* اتحول للـ REST API — الجلسة كوكي PHP والبيانات بالاستطلاع */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const toast = m => { const t = $("toast"); t.textContent = m; t.className = "on";
+  clearTimeout(window._t); window._t = setTimeout(() => t.className = "", 2600); };
+
+const S = { customers: [], orders: [], zones: [], branches: {}, wallets: {},
+            sel: null, filter: "all", q: "", readErr: null,
+            /* منظومة الثقة — كاش لكل عميل: {rep, items, phone} أو {err} أو {loading} */
+            trust: {},
+            /* أرقام مجمّعة مضبوطة من /api/orders/stats — { customerId: {orders, delivery, byStatus} } */
+            stats: {} };
+
+/* ── الثيم: الفاتح افتراضي (أريح للنظر)، والاختيار بيتحفظ ── */
+if (localStorage.getItem("cust-theme") === "dark") document.documentElement.classList.add("dark");
+const syncTheme = () => $("themeBtn").textContent =
+  document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+syncTheme();
+$("themeBtn").onclick = () => {
+  const dark = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("cust-theme", dark ? "dark" : "light");
+  syncTheme();
+};
+
+/* ══ الدخول — مدير بس، جلسة السيرفر هي المرجع (زي stores.html) ══ */
+let ME = null;
+window._onSessionExpired = () => { ME = null; location.reload(); };
+
+function applySession(u) {
+  ME = { username: u.username, role: u.role };
+  const nm = u.name || u.username || "مدير";
+  $("meName").textContent = nm; $("meMail").textContent = "إدارة";
+  $("meAv").textContent = (nm.trim()[0] || "A");
+  $("gate").style.display = "none"; $("app").classList.add("on");
+  start();
+}
+window.doLogin = async function () {
+  const u = $("gUser").value.trim(), p = $("gPass").value, err = $("gateErr");
+  err.textContent = "";
+  if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
+  try {
+    const res = await API.login(u, p);
+    if (res.user.role !== "admin") {
+      await API.logout().catch(() => {});
+      err.textContent = "الحساب ده مش مدير — كلّم إدارة النظام."; return;
+    }
+    applySession(res.user);
+  } catch (e) { err.textContent = e.message || "اسم المستخدم أو كلمة المرور غير صحيحة"; }
+};
+$("outBtn").onclick = async () => { try { await API.logout(); } catch (e) {} location.reload(); };
+(async function () {
+  try {
+    const d = await API.me();
+    if (d.user && d.user.role === "admin") applySession(d.user);
+  } catch (e) {}
+})();
+
+/* ══ البيانات — Pollers بدل onValue ══ */
+let _started = false;
+function start() {
+  if (_started) return; _started = true;
+  /* useSince مفعّل: المسار بقى بيرجّع {changed:false} لو مفيش جديد، فبدل
+     ما نحمّل 1.85 ميجا كل 10 ثواني (~665 ميجا/ساعة على 32 ألف عميل) بنحمّل
+     الرد الكامل بس لما يكون فيه تغيير فعلي. الرد لما بيتغيّر بيرجع كامل
+     (مش delta) فالاستبدال تحت لسه صح. */
+  new API.Poller("/api/customers", { interval: 15000, onChange: d => {
+    S.readErr = null;
+    S.customers = (d.items || []).map(v => {
+      const o = { ...v };
+      o._addresses = o.addresses || [];
+      o._receivers = o.savedReceivers || [];
+      delete o.addresses; delete o.savedReceivers;
+      o.wallet = { balance: (S.wallets[o.id] || 0) };
+      return o;
+    });
+    renderList(); if (S.sel) renderPane(S.sel);
+  }, onError: e => {
+    // فشل التحميل ≠ «مفيش بيانات» — نقولها صريحة
+    S.readErr = e?.message || String(e);
+    renderList();
+  }});
+  new API.Poller("/api/wallets", { interval: 15000, useSince: false,
+    params: { ownerType: "customer" }, onChange: d => {
+    S.wallets = {};
+    (d.items || []).forEach(w => { S.wallets[w.ownerId] = w.balance; });
+    S.customers = S.customers.map(c => ({ ...c, wallet: { balance: (S.wallets[c.id] || 0) } }));
+    renderList(); if (S.sel) renderPane(S.sel);
+  }});
+  /* limit صريح زي branch.html و callcenter.html — من غير الباراميتر ده السيرفر
+     بيرد بأحدث 300 أوردر في الشركة كلها، وده بيخلي أغلب العملاء يبانوا «0 طلب»
+     في اللستة وفي الـKPIs وفي تحذير الحذف رغم إن ليهم تاريخ طلبات فعلي.
+     وuseSince سايبينه على الافتراضي (true) زي السوابق دي بالظبط: مع 1000 صف
+     الرد الكامل ~1.2 ميجا، ولو نزل كل 8 ثواني بيبقى نص جيجا في الساعة لكل تاب.
+     بالـsince المسار بيرجّع {changed:false} لما مفيش جديد فمابندفعش التكلفة دي
+     غير عند تغيير فعلي — بس ساعتها الرد بيبقى **المتغيّر بس**، فلازم ندمج في
+     كاش بالمعرّف بدل ما نستبدل S.orders (الاستبدال كان هيمسح باقي التاريخ).
+     الدمج آمن هنا لأن الأوردرات مافيش عليها حذف فعلي في الـAPI. */
+  const _ordersById = new Map();
+  new API.Poller("/api/orders", { interval: 8000, params: { limit: 1000 }, onChange: d => {
+    (d.items || []).forEach(o => {
+      // else = الأوردر اتفكّ من العميل بعد ما كان مربوط، فيتشال من الكاش
+      if (o.customerId || o.source === "customer") _ordersById.set(o.id, o);
+      else _ordersById.delete(o.id);
+    });
+    S.orders = [..._ordersById.values()];
+    renderList(); if (S.sel) renderPane(S.sel);
+  }});
+  /* الأرقام المضبوطة لكل عميل — تجميع على السيرفر في استعلام واحد.
+     مستطلع /api/orders فوق بيجيب صفوف الأوردرات للعرض، لكن العدادات
+     والمبالغ بقت من هنا كاملة بدل ما تتحسب من نافذة «آخر 1000 أوردر
+     في الشركة» اللي كانت بتخلي أغلب العملاء يبانوا «0 طلب». */
+  new API.Poller("/api/orders/stats", {
+    interval: 30000, useSince: false, params: { groupBy: "customerId" },
+    onChange: d => { S.stats = d.stats || {}; renderList(); if (S.sel) renderPane(S.sel); }
+  });
+  new API.Poller("/api/zones", { interval: 60000, useSince: false, onChange: d => {
+    S.zones = (d.items || []);
+  }});
+  new API.Poller("/api/branches", { interval: 60000, useSince: false, onChange: d => {
+    S.branches = {};
+    (d.items || []).forEach(b => { S.branches[b.id] = b; });
+  }});
+}
+
+const ordersOf = id => S.orders
+  .filter(o => String(o.customerId ?? "") === String(id))
+  .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+/* أرقام العميل. المصدر المعتمد هو /api/orders/stats (تجميع على كل الجدول)،
+   والحساب من S.orders احتياطي للحظات الأولى قبل ما الإحصائيات توصل.
+   التصنيفات مطابقة حرفيًا للي كانت الواجهة بتحسبه: «ملغي» بس هي الملغية،
+   و«لم يتم التوصيل» بتتحسب ضمن الجارية زي الأول بالظبط. */
+const _DONE_AR = "تم التسليم", _CANC_AR = "ملغي";
+function statOf(id) {
+  const s = S.stats[String(id)];
+  if (s) {
+    const bs = s.byStatus || {};
+    const total = Number(s.orders) || 0;
+    const done  = Number(bs[_DONE_AR]) || 0;
+    const canc  = Number(bs[_CANC_AR]) || 0;
+    return { orders: total, done, cancelled: canc, live: total - done - canc,
+             spend: Number(s.delivery) || 0, exact: true };
+  }
+  const os = ordersOf(id);
+  return {
+    orders: os.length,
+    done:      os.filter(o => o.status === _DONE_AR).length,
+    cancelled: os.filter(o => o.status === _CANC_AR).length,
+    live:      os.filter(o => ![_DONE_AR, _CANC_AR].includes(o.status)).length,
+    spend:     os.reduce((a, o) => a + (Number(o.totalDeliveryPrice) || 0), 0),
+    exact: false,
+  };
+}
+const nameOf = c => (c.displayNameAr || c.name || "").trim() || "عميل بدون اسم";
+const initial = c => nameOf(c)[0] || "؟";
+const state = c => c.blocked ? "blocked" : (c.profileCompleted ? "ok" : "warn");
+const fmtDate = v => v ? new Date(v).toLocaleDateString("ar-EG", { day:"numeric", month:"short", year:"numeric" }) : "—";
+const fmtFull = v => v ? new Date(v).toLocaleString("ar-EG") : "—";
+const money = n => (Number(n) || 0).toLocaleString("ar-EG");
+const readWallet = w => ({ balance: Number((w && w.balance) || 0) });
+
+/* ══ اللستة ══ */
+/* نفس السقف المكتوب في api/routes/customers.php (LIMIT 2000). المسار مابيرجّعش
+   إجمالي عدد العملاء، فده الدليل الوحيد المتاح على إن النافذة اتقصّت. */
+const CUST_CAP = 2000;
+const FILTERS = [
+  { k:"all",     t:"الكل" },
+  { k:"active",  t:"نشِطون" },
+  { k:"blocked", t:"محظورون" },
+  { k:"warn",    t:"بيانات ناقصة" },
+  { k:"top",     t:"الأكتر طلبًا" }
+];
+$("chips").innerHTML = FILTERS.map(f =>
+  `<button class="chip${f.k === "all" ? " on" : ""}" data-k="${f.k}">${f.t}</button>`).join("");
+$("chips").querySelectorAll(".chip").forEach(b => b.onclick = () => {
+  S.filter = b.dataset.k;
+  $("chips").querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === b));
+  renderList();
+});
+$("q").addEventListener("input", e => { S.q = e.target.value.trim().toLowerCase(); renderList(); });
+
+function filtered() {
+  let list = S.customers.slice();
+  if (S.filter === "active")  list = list.filter(c => !c.blocked);
+  if (S.filter === "blocked") list = list.filter(c => c.blocked);
+  if (S.filter === "warn")    list = list.filter(c => !c.profileCompleted);
+  if (S.q) list = list.filter(c =>
+    [nameOf(c), c.phone1, c.phone2, c.email].some(x => String(x || "").toLowerCase().includes(S.q)));
+  if (S.filter === "top") list.sort((a, b) => statOf(b.id).orders - statOf(a.id).orders);
+  else list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return list;
+}
+
+/* الرسم بيكتب على حاوية التمرير نفسها، فاستبدال innerHTML بيصفّر الـscrollTop
+   ويرمي المدير لفوق. واستطلاع /api/wallets (كل 15 ثانية، من غير since) بينده
+   الرسم من غير أي شرط — يعني كل ربع دقيقة الصفحة كانت بتقفز لفوق وانت نازل
+   بتدوّر على حد، حتى لو مفيش أي حاجة اتغيّرت. بنعمل حاجتين: نقارن الناتج
+   الأول ومانلمسش الـDOM لو هو هو، وحتى لو فيه تغيير نرجّع مكان القراية.
+   scrollerSel للحالة اللي الحاوية بتكون **جوّه** العنصر اللي بنكتب فيه
+   (اللوحة اليمين: بنكتب على #pane والتمرير على .pane-body اللي جوّاها). */
+function setHtmlKeepScroll(el, html, scrollerSel) {
+  if (!el || el.innerHTML === html) return false;
+  const sc  = scrollerSel ? el.querySelector(scrollerSel) : el;
+  const top = sc ? sc.scrollTop : 0;
+  el.innerHTML = html;
+  const sc2 = scrollerSel ? el.querySelector(scrollerSel) : el;
+  if (sc2 && top) sc2.scrollTop = top;
+  return true;
+}
+/* آخر عميل اتعرض — لما المدير يفتح عميل تاني لازم اللوحة تبدأ من فوق،
+   مش تكمّل من مكان قراية العميل اللي قبله. */
+let _paneLastId = null;
+
+function renderList() {
+  const list = filtered(), box = $("list");
+  if (S.readErr && !S.customers.length) {   // فشل ≠ فاضي — لازم يبان الفرق
+    setHtmlKeepScroll(box, `<div class="empty"><i>⚠️</i>
+      <b style="display:block;color:var(--brand);margin-bottom:8px">تعذّر تحميل العملاء</b>
+      <div style="font-size:12.5px;direction:ltr">${esc(S.readErr)}</div></div>`);
+    return;
+  }
+  if (!list.length) {
+    /* البحث محلي على المحمّل بس (المسار /api/customers بيرجّع أحدث 2000 عميل ومافيهوش
+       بحث ولا صفحات)، فنتيجة فاضية ≠ «العميل مش موجود» — لازم نقولها للمدير بدل
+       ما يفتكر إن الحساب اتحذف أو الرقم غلط.
+       بس التحذير ده يتقال **بس لما النافذة تكون فعلًا مقصوصة** (وصلنا السقف):
+       لو المحمّل أقل من السقف يبقى دول كل عملاء القاعدة، ونتيجة فاضية معناها
+       «مش موجود» بجد — والتحذير ساعتها بيقلب لكذب ويخلي المدير يدوّر على وهم. */
+    const atCap = S.customers.length >= CUST_CAP;
+    setHtmlKeepScroll(box, `<div class="empty"><i>👤</i>${
+      !S.customers.length ? "لسه مفيش عملاء مسجّلين في التطبيق"
+        : !S.q || !atCap ? "مفيش عملاء بالمواصفات دي"
+        : `مفيش عملاء بالمواصفات دي
+          <div style="font-size:12.5px;margin-top:10px;line-height:1.9">
+            البحث بيدوّر جوّه أحدث <b>${money(S.customers.length)}</b> عميل بس —
+            لو العميل قديم مش هيظهر هنا حتى لو موجود في القاعدة.</div>`}</div>`);
+    return;
+  }
+  setHtmlKeepScroll(box, list.map(c => {
+    const n = statOf(c.id).orders, st = state(c);
+    const dot = st === "blocked" ? "var(--brand)" : st === "ok" ? "var(--green)" : "var(--orange)";
+    return `<div class="row${c.id === S.sel ? " on" : ""}${c.blocked ? " blocked" : ""}" data-id="${c.id}">
+      <div class="r-av">${esc(initial(c))}<span class="dot" style="background:${dot}"></span></div>
+      <div class="r-b">
+        <div class="r-1"><b>${esc(nameOf(c))}</b><span>${fmtDate(c.createdAt)}</span></div>
+        <div class="r-2">
+          <span class="ph">${esc(c.phone1 || "—")}</span>
+          <span>·</span><span>${n} طلب</span>
+          ${c.blocked ? `<span class="tag t-block">محظور</span>`
+            : !c.profileCompleted ? `<span class="tag t-warn">ناقص</span>` : ""}
+        </div>
+      </div></div>`;
+  }).join(""));
+  box.querySelectorAll(".row").forEach(r => r.onclick = () => select(Number(r.dataset.id)));
+}
+
+function select(id) {
+  S.sel = id;
+  $("main").classList.add("detail");
+  renderList(); renderPane(id);
+  loadTrust(id);           // درجة الثقة بتتحمّل مرة عند الاختيار (مش مع كل استطلاع)
+}
+window.backToList = () => { $("main").classList.remove("detail"); };
+
+/* ══ تفاصيل العميل ══ */
+function renderPane(id) {
+  const c = S.customers.find(x => x.id === id);
+  /* زرار الرجوع لازم يتحط هنا كمان: تحت 900px اللستة متخفية طول ما كلاس detail
+     موجود، والعميل ممكن يختفي لوحده من الاستطلاع (مدير تاني حذفه) فالمستخدم
+     يتحبس في الشاشة دي من غير أي مخرج غير تحديث الصفحة */
+  if (!c) { _paneLastId = null; $("pane").innerHTML = `<div class="pane-empty">
+    <button class="ico back" onclick="backToList()">›</button>
+    <div><i>👥</i>العميل ده مابقاش موجود</div></div>`; return; }
+  /* الأرقام من التجميع المضبوط، وصفوف الطلبات من النافذة اللي عندنا. */
+  const stt = statOf(id);
+  const os = ordersOf(id);
+  const total = stt.orders;
+  const done = stt.done;
+  const cancel = stt.cancelled;
+  const live = stt.live;
+  const spend = stt.spend;
+  const kv = (k, v, ltr) => `<div class="kv"><span class="k">${k}</span><span class="v${ltr ? " ltr" : ""}">${v}</span></div>`;
+
+  /* لو المدير فتح عميل تاني نبدأ من فوق؛ ولو هو نفس العميل (استطلاع
+     بيعيد الرسم) نرجّعه لمكان قرايته. */
+  const _samePane = _paneLastId === id;
+  _paneLastId = id;
+  setHtmlKeepScroll($("pane"), `
+    <div class="pane-hd">
+      <button class="ico back" onclick="backToList()">›</button>
+      <div class="p-av">${esc(initial(c))}</div>
+      <div style="flex:1;min-width:0">
+        <h2>${esc(nameOf(c))}
+          ${c.blocked ? `<span class="tag t-block">🚫 محظور</span>`
+            : !c.profileCompleted ? `<span class="tag t-warn">⚠️ بيانات ناقصة</span>`
+            : `<span class="tag t-ok">✅ نشِط</span>`}</h2>
+        <div class="sub">${esc(c.phone1 || "—")}</div>
+        <div style="margin-top:6px">${trustBadgeInline(c)}</div>
+      </div>
+      ${c.phone1 ? `<a class="btn" href="tel:${esc(c.phone1)}">📞 اتصل</a>` : ""}
+      ${c.phone1 ? `<a class="btn" target="_blank" rel="noopener"
+         href="https://wa.me/2${esc(String(c.phone1).replace(/\D/g,""))}">💬 واتساب</a>` : ""}
+    </div>
+
+    <div class="pane-body">
+      ${c.blocked ? `<div class="warnbox">🚫 <b>الحساب محظور</b> — مش هيقدر يعمل طلبات جديدة.
+        ${c.blockedAt ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">
+          اتحظر ${fmtFull(c.blockedAt)}${c.blockedBy ? ` — بواسطة ${esc(c.blockedBy)}` : ""}</div>` : ""}</div>` : ""}
+
+      <div class="kpis">
+        <div class="kpi"><b>${total}</b><span>إجمالي الطلبات</span></div>
+        <div class="kpi"><b style="color:var(--green)">${done}</b><span>تم التسليم</span></div>
+        <div class="kpi"><b style="color:var(--orange)">${live}</b><span>جارية</span></div>
+        <div class="kpi"><b style="color:var(--muted)">${cancel}</b><span>ملغية</span></div>
+        <div class="kpi"><b style="color:var(--brand)">${money(spend)}</b><span>إجمالي التوصيل</span></div>
+      </div>
+
+      ${trustCardHtml(c)}
+
+      ${walletCardHtml(c.wallet)}
+
+      <div class="card">
+        <div class="card-h">👤 بيانات الحساب</div>
+        ${kv("الاسم", esc(nameOf(c)))}
+        ${kv("الهاتف", esc(c.phone1 || "—"), 1)}
+        ${kv("رقم إضافي", esc(c.phone2 || "—"), 1)}
+        ${kv("البريد", esc(c.email || "—"), 1)}
+        ${kv("العنوان", esc(c.address || "—"))}
+        ${kv("المنطقة", esc(c.defaultZoneName || "—"))}
+        ${kv("الفرع المسؤول", esc(c.defaultBranchName || "—"))}
+        ${kv("تاريخ التسجيل", fmtFull(c.createdAt))}
+        ${kv("اكتمال البيانات", c.profileCompleted
+            ? `<span style="color:var(--green)">مكتملة ✓</span>`
+            : `<span style="color:var(--orange)">ناقصة</span>`)}
+      </div>
+
+      <div class="card">
+        <div class="card-h">⚙️ التحكم في الحساب</div>
+        <div class="acts">
+          <button class="btn ${c.blocked ? "ok" : "danger"}" data-act="block">
+            ${c.blocked ? "✅ ارفع الحظر" : "🚫 احظر العميل"}</button>
+          <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
+          <button class="btn" data-act="zone">📍 تغيير المنطقة</button>
+          <button class="btn danger" data-act="del">🗑️ حذف الحساب</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">📦 آخر الطلبات <span class="n">${total}</span></div>
+        ${os.length ? `<div class="olist">${os.slice(0, 12).map(o => {
+          const ic = o.status === "تم التسليم" ? "✅" : o.status === "ملغي" ? "✖️" : "🛵";
+          return `<div class="o"><div class="oi">${ic}</div>
+            <div class="ob"><b>#${esc(o.orderNum || "—")}</b>
+              <span>${fmtDate(o.createdAt)} · ${esc(o.status || "—")} · ${esc(o.branchName || "—")}</span></div>
+            <div class="price">${money(o.totalDeliveryPrice)} ج.م</div></div>`;
+        }).join("")}</div>`
+          : total
+            ? `<div class="empty" style="padding:26px"><i>🗄️</i>عنده ${total} طلب —
+                 بس كلها أقدم من نافذة العرض الحالية</div>`
+            : `<div class="empty" style="padding:26px"><i>📭</i>مفيش طلبات</div>`}
+      </div>
+
+      <div class="card">
+        <div class="card-h">📍 العناوين المحفوظة <span class="n">${c._addresses.length}</span></div>
+        ${c._addresses.length ? c._addresses.map(a =>
+          kv(esc(a.label || "عنوان"), esc(a.fullAddress || "—"))).join("")
+          : `<div class="empty" style="padding:22px">مفيش عناوين محفوظة</div>`}
+      </div>
+
+      <div class="card">
+        <div class="card-h">👥 المستلمون السابقون <span class="n">${c._receivers.length}</span></div>
+        ${c._receivers.length ? c._receivers.slice(0, 10).map(r =>
+          kv(esc(r.name || "—"), esc(r.phone || "—") + (r.address ? ` — ${esc(r.address)}` : ""))).join("")
+          : `<div class="empty" style="padding:22px">مفيش مستلمين محفوظين</div>`}
+      </div>
+    </div>`, _samePane ? ".pane-body" : null);
+
+  $("pane").querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b.dataset.act, c));
+  $("pane").querySelectorAll("[data-w-act]").forEach(b =>
+    b.onclick = () => openWallet(b.dataset.wAct, c));
+}
+
+/* ══ المحفظة ══════════════════════════════════════════════════
+   الرصيد الموجب = فلوس ليه عندنا يقدر يستخدمها في أوردر مجاني أو خصم.
+   بتتسجل عبر /api/wallets/customer/{id}/credit|debit (زي stores.html). */
+const TXN_TYPES = {
+  credit: { t: "شحن رصيد",     icon: "💰", ep: "credit" },
+  debit:  { t: "خصم من الرصيد", icon: "➖", ep: "debit" },
+};
+function walletCardHtml(w) {
+  const bal = readWallet(w).balance;
+  return `<div class="card">
+    <div class="card-h">💳 المحفظة</div>
+    <div class="kv"><span class="k">الرصيد الحالي</span>
+      <span class="v" style="font-weight:800;color:var(--${bal > 0 ? "green" : "muted"})">${money(bal)} ج.م</span></div>
+    <div class="acts">
+      <button class="btn ok" data-w-act="credit">💰 شحن رصيد</button>
+      <button class="btn danger" data-w-act="debit">➖ خصم</button>
+    </div></div>`;
+}
+function walletFormHtml() {
+  return `
+    <div class="f"><label>المبلغ (ج.م) *</label><input id="wAmt" type="number" min="1" step="0.5" dir="ltr" /></div>
+    <div class="f"><label>ملاحظة</label><input id="wNote" placeholder="اختياري" /></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="wSave">💾 تسجيل</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`;
+}
+function openWallet(type, c) {
+  const cfg = TXN_TYPES[type] || TXN_TYPES.credit;
+  openM(`${cfg.icon} ${cfg.t} — ${nameOf(c)}`, walletFormHtml());
+  $("wSave").onclick = async () => {
+    const amt = parseFloat($("wAmt").value);
+    if (!amt || amt <= 0) { toast("اكتب مبلغ صحيح"); return; }
+    $("wSave").disabled = true;
+    try {
+      const d = await API.post(`/api/wallets/customer/${c.id}/${cfg.ep}`, {
+        amount: amt, note: $("wNote").value || ""
+      });
+      S.wallets[c.id] = d.balance;
+      closeM();
+      toast(`اتسجّلت الحركة — الرصيد بقى ${money(d.balance)} ج.م`);
+    } catch (e) { $("wSave").disabled = false; toast("خطأ: " + (e.message || "")); }
+  };
+}
+
+/* ══ منظومة الثقة ══════════════════════════════════════════════
+   الرقم هو مفتاح الشخص في المنظومة كلها. الدرجة بتتحسب سيرفر-سايد
+   (نجوم النجاح من الشحنات + متوسط التقييمات اليدوية) — الواجهة بتعرض بس.
+   لازم يظهر **عدد الشحنات** جنب الدرجة عشان الدرجة تتقرا صح. */
+const phoneOf = c => String(c.phone1 || c.phone2 || "").trim();
+
+/* عدّاد طلبات لكل عميل: الردود ممكن توصل بترتيب مقلوب. لو الرقم اتغيّر
+   وطلب الرقم القديم (اللي بدأ من select) لسه طاير، رده الأبطأ كان بيكتب فوق
+   سمعة الرقم الجديد — يعني الكارت يعرض سمعة شخص تاني. آخر طلب اتبعت هو
+   صاحب الحق الوحيد في الكتابة، واللي قبله رده بيترمي. */
+const _trustSeq = {};
+
+async function loadTrust(id, force) {
+  const c = S.customers.find(x => x.id === id);
+  if (!c) return;
+  const ph = phoneOf(c);
+  if (!ph) return;
+  if (!force && S.trust[id] && !S.trust[id].err && !S.trust[id].loading) return;
+  const seq = _trustSeq[id] = (_trustSeq[id] || 0) + 1;
+  S.trust[id] = { loading: true };
+  if (S.sel === id) renderPane(id);
+  try {
+    const d = await TrustAdmin.ratings(TrustAdmin.normalizePhone(ph));
+    if (seq !== _trustSeq[id]) return;          // اتجاوزه طلب أحدث — الرد ده بايت
+    S.trust[id] = { phone: d.phone, rep: d.reputation, items: d.items || [] };
+  } catch (e) {
+    if (seq !== _trustSeq[id]) return;
+    S.trust[id] = { err: e?.message || String(e) };
+  }
+  if (S.sel === id) renderPane(id);
+}
+
+function trustBadgeInline(c) {
+  const t = S.trust[c.id];
+  if (!phoneOf(c)) return "";
+  if (!t || t.loading) return `<span style="font-size:11.5px;color:var(--muted)">⏳ بنحسب درجة الثقة…</span>`;
+  if (t.err) return "";
+  return TrustAdmin.badgeHtml(t.rep);
+}
+
+function trustCardHtml(c) {
+  const ph = phoneOf(c);
+  if (!ph) return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة</div>
+    <div class="empty" style="padding:22px">مفيش رقم تليفون مسجّل للعميل ده —
+      والرقم هو مفتاح منظومة الثقة. ضيف الرقم من «تعديل البيانات» الأول.</div></div>`;
+
+  const t = S.trust[c.id];
+  const acts = `<div class="acts">
+      <button class="btn ok" data-act="rate">➕ تقييم</button>
+      <button class="btn" data-act="identity">✏️ تصحيح الاسم المعتمد</button>
+      <button class="btn" data-act="trust-refresh">🔄 تحديث</button>
+    </div>`;
+
+  if (!t || t.loading) return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة</div>
+    <div class="empty" style="padding:22px">⏳ بنحمّل السمعة…</div>${acts}</div>`;
+
+  if (t.err) return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة</div>
+    <div class="empty" style="padding:22px;color:var(--brand)">تعذّر تحميل السمعة<br />
+      <span style="font-size:12px;direction:ltr">${esc(t.err)}</span></div>${acts}</div>`;
+
+  const r = t.rep || {};
+  const isNew = r.score === null || r.score === undefined;
+  return `<div class="card">
+    <div class="card-h">🛡️ درجة الثقة <span class="n" dir="ltr">${esc(t.phone || ph)}</span></div>
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="text-align:center;min-width:92px">
+        <b style="display:block;font-size:30px;font-weight:900;line-height:1.1">${
+          isNew ? "—" : Number(r.score).toFixed(1)}</b>
+        <span style="font-size:11.5px;color:var(--muted)">${isNew ? "عميل جديد" : "من 5"}</span>
+      </div>
+      <div style="flex:1;min-width:190px">
+        ${TrustAdmin.badgeHtml(r)}
+        <div style="margin-top:6px">${TrustAdmin.detailsHtml(r)}</div>
+      </div>
+    </div>
+    <div class="kv"><span class="k">عدد الشحنات</span>
+      <span class="v">${Number(r.totalOrders || 0)}${
+        isNew ? ` <span style="color:var(--muted);font-weight:400;font-size:12px">— لسه مفيش تاريخ يتحسب منه</span>` : ""}</span></div>
+    <div class="kv"><span class="k">التقييمات اليدوية</span>
+      <span class="v">${Number(r.manualCount || 0)}${
+        r.manualCount ? ` <span style="color:var(--muted);font-weight:400;font-size:12px">— متوسط ${Number(r.manualAvg).toFixed(2)}</span>` : ""}</span></div>
+    ${acts}
+    <div class="card-h" style="border-top:1px solid var(--line)">💬 آخر التقييمات
+      <span class="n">${(t.items || []).length}</span></div>
+    ${TrustAdmin.ratingsListHtml(t.items, 8)}
+  </div>`;
+}
+
+function askRate(c) {
+  const ph = phoneOf(c);
+  openM(`➕ تقييم ${nameOf(c)}`, `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-bottom:12px">
+      التقييم ده بيتسجّل باسم الإدارة على الرقم <b dir="ltr">${esc(ph)}</b> —
+      وبيدخل في حساب المصداقية بوزن 40% مع نسبة نجاح الشحنات.</p>
+    <div class="f"><label>النجوم *</label>${TrustAdmin.starPickerHtml("rStars", 0)}</div>
+    <div class="f"><label>ملاحظة</label><input id="rNote" placeholder="اختياري — سبب التقييم" /></div>
+    <div id="rErr" style="color:var(--brand);font-size:12.5px;min-height:18px"></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="okBtn">💾 سجّل التقييم</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = async () => {
+    const stars = TrustAdmin.picked("rStars");
+    if (!stars) return $("rErr").textContent = "اختار عدد النجوم";
+    $("okBtn").disabled = true;
+    try {
+      await TrustAdmin.rate({ customerId: c.id, phone: ph, stars, note: $("rNote").value.trim() });
+      closeM(); toast("اتسجّل التقييم ✓");
+      loadTrust(c.id, true);
+    } catch (e) { $("okBtn").disabled = false; $("rErr").textContent = "تعذّر: " + (e?.message || e); }
+  };
+}
+
+function askIdentity(c) {
+  const ph = phoneOf(c);
+  const t = S.trust[c.id] || {};
+  openM("✏️ تصحيح الاسم المعتمد", `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-bottom:12px">
+      الاسم المعتمد هو اللي بيظهر لأي طرف بيبحث بالرقم <b dir="ltr">${esc(ph)}</b>.
+      التصحيح اليدوي بيغلب أي اسم متكرر في الأوردرات.</p>
+    <div class="f"><label>الاسم المعتمد *</label><input id="iName" value="${esc(nameOf(c))}" /></div>
+    <div class="f"><label>العنوان المعتمد</label><input id="iAddr" value="${esc(c.address || "")}" /></div>
+    <div id="iErr" style="color:var(--brand);font-size:12.5px;min-height:18px"></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="okBtn">💾 حفظ</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = async () => {
+    const name = $("iName").value.trim();
+    if (!name) return $("iErr").textContent = "اكتب الاسم المعتمد";
+    $("okBtn").disabled = true;
+    try {
+      await TrustAdmin.saveIdentity(TrustAdmin.normalizePhone(ph), { name, address: $("iAddr").value.trim() });
+      closeM(); toast("اتحفظ الاسم المعتمد ✓");
+      loadTrust(c.id, true);
+    } catch (e) { $("okBtn").disabled = false; $("iErr").textContent = "تعذّر: " + (e?.message || e); }
+  };
+}
+
+/* ── سجل البحث (admin بس) — مين بحث عن مين وإمتى ── */
+const ACTOR_AR = { admin:"إدارة", branch:"مشرف فرع", callcenter:"كول سنتر",
+                   store:"محل", customer:"عميل تطبيق" };
+window.openLookupLog = async function () {
+  openM("🕵️ سجل البحث بالتليفون", `
+    <div class="f"><label>فلترة برقم (اختياري)</label>
+      <input id="llPhone" dir="ltr" placeholder="01xxxxxxxxx" /></div>
+    <div style="display:flex;gap:9px;margin-bottom:12px">
+      <button class="btn pri" id="llGo">🔍 عرض</button>
+      <button class="btn" onclick="closeM()">إغلاق</button></div>
+    <div id="llBox" style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px">
+      <div class="empty" style="padding:22px">⏳ بنحمّل…</div></div>`);
+  const load = async () => {
+    const box = $("llBox");
+    box.innerHTML = `<div class="empty" style="padding:22px">⏳ بنحمّل…</div>`;
+    try {
+      const p = $("llPhone").value.trim();
+      const d = await TrustAdmin.lookupLog(p ? { phone: p, limit: 200 } : { limit: 200 });
+      const items = d.items || [];
+      if (!items.length) { box.innerHTML = `<div class="empty" style="padding:22px">مفيش عمليات بحث مسجّلة</div>`; return; }
+      box.innerHTML = items.map(r => `
+        <div style="padding:9px 13px;border-bottom:1px solid var(--line);font-size:12.5px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <b>${esc(r.actorName || "—")}</b>
+            <span style="font-size:11px;color:var(--muted)">${esc(ACTOR_AR[r.actorType] || r.actorType || "")}</span>
+            <span style="margin-inline-start:auto;font-size:11px;color:var(--muted)">${fmtFull(r.createdAt)}</span>
+          </div>
+          <div style="margin-top:3px;color:var(--muted)">
+            بحث عن <b dir="ltr" style="color:var(--txt)">${esc(r.searchedPhone)}</b>
+            · ${r.found ? "اتلاقى" : "ملقاش"}
+            · ${r.fullAccess ? "بيانات كاملة" : "بيانات مقنّعة"}
+          </div></div>`).join("");
+    } catch (e) {
+      box.innerHTML = `<div class="empty" style="padding:22px;color:var(--brand)">تعذّر: ${esc(e?.message || e)}</div>`;
+    }
+  };
+  $("llGo").onclick = load;
+  load();
+};
+
+/* ══ الإجراءات ══ */
+const openM = (title, html) => { $("mTitle").textContent = title; $("mBody").innerHTML = html;
+  $("modal").classList.add("on"); };
+window.closeM = () => $("modal").classList.remove("on");
+$("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
+
+function act(a, c) {
+  if (a === "block")    return askBlock(c);
+  if (a === "edit")     return askEdit(c);
+  if (a === "zone")     return askZone(c);
+  if (a === "del")      return askDelete(c);
+  if (a === "rate")     return askRate(c);
+  if (a === "identity") return askIdentity(c);
+  if (a === "trust-refresh") return loadTrust(c.id, true);
+}
+
+/** تحديث محلي فوري بعد كتابة ناجحة (والـ poke بيكمّل التزامن) */
+function applyCustomer(cu) {
+  if (!cu) return;
+  const before = S.customers.find(x => x.id === cu.id);
+  S.customers = S.customers.map(x => x.id === cu.id
+    ? { ...x, ...cu, _addresses: x._addresses, _receivers: x._receivers,
+        addresses: undefined, savedReceivers: undefined }
+    : x);
+  /* الرقم هو مفتاح منظومة الثقة، والكاش مفهرس بمعرّف العميل — يعني لو الرقم اتغيّر
+     الكاش القديم بقى سمعة شخص تاني، ولو العميل مكانش له رقم خالص مافيش أي مسار
+     بينده loadTrust فالكارت بيقف على «بنحمّل». نلغي الكاش ونعيد التحميل هنا عشان
+     نغطي كل مسارات الكتابة (تعديل البيانات/الحظر/المنطقة) مش askEdit لوحدها. */
+  const after = S.customers.find(x => x.id === cu.id);
+  if (before && after && phoneOf(before) !== phoneOf(after)) {
+    delete S.trust[cu.id];
+    loadTrust(cu.id, true);
+  }
+  renderList(); if (S.sel) renderPane(S.sel);
+}
+
+function askBlock(c) {
+  if (c.blocked) return doBlock(c, false);        // رفع الحظر من غير تأكيد
+  openM("حظر العميل", `
+    <p style="font-size:13.5px;line-height:1.9;margin-bottom:16px">
+      هتحظر <b>${esc(nameOf(c))}</b>؟ مش هيقدر يعمل طلبات جديدة من التطبيق،
+      لكن طلباته القديمة هتفضل زي ما هي.</p>
+    <div style="display:flex;gap:9px">
+      <button class="btn danger" id="okBtn">🚫 أكّد الحظر</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = () => { closeM(); doBlock(c, true); };
+}
+async function doBlock(c, on) {
+  try {
+    const d = await API.post(`/api/customers/${c.id}/block`, { blocked: on });
+    applyCustomer(d.customer);
+    toast(on ? "اتحظر العميل ✓" : "اترفع الحظر ✓");
+  } catch (e) { toast("تعذّر: " + (e?.message || e)); }
+}
+
+function askEdit(c) {
+  openM("تعديل بيانات العميل", `
+    <div class="f"><label>الاسم</label><input id="eName" value="${esc(nameOf(c))}" /></div>
+    <div class="f"><label>الهاتف</label><input id="ePh1" dir="ltr" value="${esc(c.phone1 || "")}" /></div>
+    <div class="f"><label>رقم إضافي</label><input id="ePh2" dir="ltr" value="${esc(c.phone2 || "")}" /></div>
+    <div class="f"><label>العنوان</label><input id="eAddr" value="${esc(c.address || "")}" /></div>
+    <div id="eErr" style="color:var(--brand);font-size:12.5px;min-height:18px"></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="okBtn">حفظ</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = async () => {
+    const name = $("eName").value.trim(), p1 = $("ePh1").value.trim();
+    if (!name) return $("eErr").textContent = "اكتب اسم العميل";
+    if (p1 && !/^0?1[0-9]{9}$/.test(p1.replace(/[\s-]/g, "")))
+      return $("eErr").textContent = "رقم الهاتف غير صحيح";
+    try {
+      const d = await API.put(`/api/customers/${c.id}`, {
+        name, phone1: p1,
+        phone2: $("ePh2").value.trim(), address: $("eAddr").value.trim()
+      });
+      applyCustomer(d.customer);
+      closeM(); toast("اتحفظت البيانات ✓");
+    } catch (e) { $("eErr").textContent = "تعذّر الحفظ: " + (e?.message || e); }
+  };
+}
+
+function askZone(c) {
+  const opts = S.zones.slice()
+    .sort((a, b) => (a.areaName || "").localeCompare(b.areaName || "", "ar"))
+    .map(z => `<option value="${z.id}"${c.defaultZoneId === z.id ? " selected" : ""}>${
+      esc(z.areaName || z.name || z.id)}</option>`).join("");
+  openM("تغيير منطقة العميل", `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-bottom:14px">
+      المنطقة بتحدّد الفرع المسؤول عن العميل وسعر التوصيل الافتراضي.</p>
+    <div class="f"><label>المنطقة</label>
+      <select id="zSel"><option value="">— بدون —</option>${opts}</select></div>
+    <div style="display:flex;gap:9px;margin-top:8px">
+      <button class="btn pri" id="okBtn">حفظ</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = async () => {
+    const id = $("zSel").value;
+    try {
+      const d = await API.post(`/api/customers/${c.id}/zone`, { zoneId: id || null });
+      applyCustomer(d.customer);
+      closeM(); toast("اتغيّرت المنطقة ✓");
+    } catch (e) { toast("تعذّر: " + (e?.message || e)); }
+  };
+}
+
+function askDelete(c) {
+  /* العدد ده بيتقال للمستخدم قبل حذف مالوش رجعة — لازم يكون العدد
+     الحقيقي مش عيّنة النافذة. */
+  const n = statOf(c.id).orders;
+  openM("حذف حساب العميل", `
+    <div class="warnbox">⚠️ <b>الحذف مالوش رجعة.</b><br />
+      هيتشال حساب <b>${esc(nameOf(c))}</b> وعناوينه ومستلمينه المحفوظين ومحفظته.
+      ${n ? `<br />طلباته (<b>${n}</b>) هتفضل في النظام زي ما هي.` : ""}
+      <br /><span style="color:var(--muted)">لو عايز توقفه بس، الأحسن تحظره بدل ما تحذفه.</span></div>
+    <div class="f"><label>اكتب <b>حذف</b> عشان تأكّد</label><input id="dW" placeholder="حذف" /></div>
+    <div style="display:flex;gap:9px">
+      <button class="btn danger" id="okBtn" disabled>🗑️ احذف نهائيًا</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("dW").addEventListener("input", e => $("okBtn").disabled = e.target.value.trim() !== "حذف");
+  $("okBtn").onclick = async () => {
+    try {
+      await API.del(`/api/customers/${c.id}`);
+      /* شيل كلاس detail زي stores.html — من غيره تحت 900px اللستة بتفضل متخفية
+         والـpane الجديد مافيهوش زرار رجوع، فالمدير بيتحبس في شاشة «اتحذف الحساب» */
+      closeM(); S.sel = null; $("main").classList.remove("detail");
+      S.customers = S.customers.filter(x => x.id !== c.id);
+      renderList();
+      $("pane").innerHTML = `<div class="pane-empty"><div><i>👥</i>اتحذف الحساب</div></div>`;
+      toast("اتحذف الحساب");
+    } catch (e) { toast("تعذّر الحذف: " + (e?.message || e)); }
+  };
+}
+</script>
+  <script>
+  /* تسجيل Service Worker — شرط عشان المتصفح يسمح بتثبيت اللوحة كتطبيق
+     بنافذة مستقلة وأيقونة على سطح المكتب. staff-sw.js مقصود إنه مايكاشش
+     الصفحات (الأيقونات بس) عشان التحديثات توصل فورًا. */
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('staff-sw.js').catch(function () {});
+    });
+  }
+  </script>
+</body>
+</html>

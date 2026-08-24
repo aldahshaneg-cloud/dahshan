@@ -1,0 +1,23 @@
+{
+  "name": "الدهشان | بوابة المحلات",
+  "short_name": "محلي",
+  "description": "ابعت شحناتك وتابعها وشوف رصيدك أول بأول",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./store.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "شحنة جديدة", "url": "./store.html#new-order", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "طلباتي", "url": "./store.html#my-orders", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
