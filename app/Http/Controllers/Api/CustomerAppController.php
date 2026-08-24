@@ -410,6 +410,13 @@ class CustomerAppController
             'ok'       => true,
             'customer' => CustomerAppWire::customer(self::customerRowFull((int) $c['id'])),
             'wallet'   => self::walletWire((int) $c['id']),
+            /* بوابة التحصيل — الواجهة بتقفل الخانة بيها. الحارس الحقيقي في
+               orderCreate؛ ده للعرض بس عشان العميل يفهم ليه مقفولة. */
+            'cod'      => [
+                'allowed'      => self::deliveredOrdersCount((int) $c['id']) >= self::COD_MIN_DELIVERED,
+                'delivered'    => self::deliveredOrdersCount((int) $c['id']),
+                'minDelivered' => self::COD_MIN_DELIVERED,
+            ],
             'version'  => config('dahshan.version'),
         ]);
     }
@@ -417,6 +424,29 @@ class CustomerAppController
     /* ═══════════════════════════════════════════════════════════════
        PUT /api/customer/profile — استكمال/تعديل البيانات
     ═══════════════════════════════════════════════════════════════ */
+
+    /** أقل عدد أوردرات **متسلّمة** قبل ما العميل يقدر يحط مبلغ تحصيل. */
+    public const COD_MIN_DELIVERED = 10;
+
+    /**
+     * عدد أوردرات العميل اللي اتسلّمت فعلًا.
+     *
+     * 🔴 «اتسلّمت» مش «اتعملت» عن قصد: مبلغ التحصيل معناه إن الطيار بيدفع
+     * فلوس من جيبه للعميل وبيحصّلها من المستلم — يعني عهدة على الشركة.
+     * لو العدّ على أي أوردر، حد يقدر يعمل ١٠ أوردرات وهمية ويلغيها ويفتح
+     * الميزة. الأوردر المتسلّم هو الوحيد اللي بيثبت تعامل حقيقي.
+     */
+    public static function deliveredOrdersCount(int $customerId): int
+    {
+        if ($customerId <= 0) {
+            return 0;
+        }
+
+        return (int) (DB::selectOne(
+            "SELECT COUNT(*) AS c FROM orders WHERE customer_id = ? AND status = 'delivered'",
+            [$customerId]
+        )->c ?? 0);
+    }
 
     /** المقابل لـ customer_valid_phone() — مصري: 10 أرقام بعد 1، وصفر اختياري */
     private static function validPhone(string $p): bool
@@ -786,6 +816,9 @@ class CustomerAppController
             throw new ApiException('اكمل بياناتك (الاسم ورقم الموبايل والمنطقة) الأول قبل إنشاء أوردر');
         }
 
+        // بوابة التحصيل — بتتقرا مرة واحدة قبل حلقة الطرود
+        $codAllowed = self::deliveredOrdersCount($cid) >= self::COD_MIN_DELIVERED;
+
         $b = $this->body($request);
         $deliveriesIn = $b['deliveries'] ?? [];
         if (! is_array($deliveriesIn) || ! count($deliveriesIn)) {
@@ -909,7 +942,11 @@ class CustomerAppController
                         'zone_id'         => $zoneId,
                         'zone_name'       => (string) $zone['area_name'],
                         'zone_price'      => (float) $zone['price'],
-                        'order_price'     => (float) ($d['orderPrice'] ?? 0),
+                        /* 🔴 الحارس هنا مش في الواجهة: الواجهة بتقفل الخانة بس
+                           أي حد يقدر يبعت الحقل مباشرة للـAPI. العميل الجديد
+                           بياخد صفر مهما بعت — من غير رسالة خطأ عشان الأوردر
+                           يعدّي عادي، والواجهة أصلًا بتشرح له السبب. */
+                        'order_price'     => $codAllowed ? (float) ($d['orderPrice'] ?? 0) : 0.0,
                         'address'         => trim((string) ($d['address'] ?? '')) ?: null,
                         'note'            => trim((string) ($d['note'] ?? '')) ?: null,
                     ];
@@ -1530,7 +1567,15 @@ class CustomerAppController
         $c   = $this->customerRequire($request);
         $now = WireTime::nowDb();
 
-        $orderId = DB::transaction(function () use ($c, $id, $now): int {
+        /* سبب الإلغاء من العميل — قايمة مقفولة في الواجهة، والسيرفر بيقصّ
+           الطول ويقع على النص القديم لو مابعتش حاجة (توافق مع أي نسخة أقدم
+           من التطبيق لسه شغّالة على موبايل عميل). العمود varchar(190). */
+        $reasonIn     = trim((string) ($this->body($request)['reason'] ?? ''));
+        $cancelReason = $reasonIn !== ''
+            ? mb_substr('العميل: ' . $reasonIn, 0, 190)
+            : 'إلغاء من العميل';
+
+        $orderId = DB::transaction(function () use ($c, $id, $now, $cancelReason): int {
             $order = self::lockOrderRow($id);
             if (! $order) {
                 throw new ApiException('الطلب غير موجود', 409);
@@ -1548,7 +1593,7 @@ class CustomerAppController
                         cancelled_at = ?, cancelled_by = ?, cancelled_reason = ?
                   WHERE id = ?",
                 [
-                    $order['status'] ?: 'processing', $now, $now, 'عميل', 'إلغاء من العميل', (int) $order['id'],
+                    $order['status'] ?: 'processing', $now, $now, 'عميل', $cancelReason, (int) $order['id'],
                 ]
             );
 

@@ -20,7 +20,13 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
   <!-- طبقة REST الموحدة (fetch بجلسة كوكي + Poller) — بديل SDK فايربيز -->
-  <script src="assets/js/api.js"></script>
+  <script>
+  /* لافتة «تحديث · محدّث الآن» بتتركّب تلقائيًا من api.js على bottom:18px،
+     وده جوّه البار السفلي بالظبط فكانت مغطّية تبويبَي الرئيسية والطلبات.
+     البار ٩٦px + المنطقة الآمنة، والتوست فوقه على طول — فبنرفعها فوقهم. */
+  window.API_REFRESH_BOTTOM = "calc(150px + var(--safe-b, 0px))";
+</script>
+<script src="assets/js/api.js"></script>
   <!-- منظومة الثقة: البحث الفوري بالتليفون + بادچ السمعة + تقييم المستلم -->
   <script src="assets/js/trust.js"></script>
 
@@ -557,6 +563,7 @@ a{color:var(--red);text-decoration:none}
         <div id="sndBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
         <div class="map" id="sndMap" style="height:130px;margin-top:12px"></div>
         <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')"
+        data-optional="1"
           data-tip="حدّد الدبوس على مكان الاستلام بالظبط. من غيره الطيار بيدوّر بالعنوان المكتوب وممكن يتوه.">📍 تحديد نقطة الاستلام على الخريطة *</button>
         <div id="sndPinState" style="display:none;font-size:11.5px;color:var(--green);
              margin-top:8px;text-align:center;font-weight:600"></div>
@@ -630,8 +637,8 @@ a{color:var(--red);text-decoration:none}
           <div data-tip="قيمة البضاعة نفسها — بتستخدم للتأمين وتقدير التعويض لو حصل تلف. مش بتتحصّل من المستلم."><span class="lbl">قيمة البضاعة (ج.م)</span>
             <input id="odValue" type="number" inputmode="decimal" min="0" value="0" /></div>
         </div>
-        <span class="lbl" style="margin-top:14px">طريقة الدفع</span>
-        <div class="chips" id="payBox" data-tip="«كاش» = سعر التوصيل يتدفع عند التسليم. «مدفوع مسبقًا» = اتدفع قبل كده."></div>
+        <span class="lbl" style="margin-top:14px;display:none">طريقة الدفع</span>
+        <div class="chips" id="payBox" style="display:none" data-tip="«كاش» = سعر التوصيل يتدفع عند التسليم. «مدفوع مسبقًا» = اتدفع قبل كده."></div>
         <span class="lbl" style="margin-top:14px">عدد القطع</span>
         <div class="counter" data-tip="عدد القطع في الشحنة كلها.">
           <button onclick="bumpPieces(1)">＋</button><b id="odPieces">1</b><button onclick="bumpPieces(-1)">－</button>
@@ -759,6 +766,14 @@ a{color:var(--red);text-decoration:none}
 </section>
 
 <!-- ═══ البار السفلي ══════════════════════════════════════ -->
+<!-- جرس ثابت فوق-شمال على كل التبويبات (الهيدر بتاع كل شاشة مختلف،
+     فالجرس العائم أبسط من إننا نضيفه في ٦ هيدرات ونزامنهم) -->
+<div id="floatBell" onclick="go('notifs')" style="display:none;position:fixed;top:calc(10px + var(--safe-t,0px));
+     left:12px;z-index:70;width:42px;height:42px;border-radius:14px;background:var(--card);
+     border:1px solid var(--line);align-items:center;justify-content:center;font-size:19px;
+     box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer">🔔
+  <span id="floatBellDot" class="dotb" style="display:none;position:absolute;top:-5px;left:-5px"></span></div>
+
 <nav class="nav" id="bottomNav" style="display:none">
   <div class="nb" data-p="home"      onclick="go('home')"><i>🏠</i>الرئيسية</div>
   <div class="nb" data-p="orders"    onclick="go('orders')"><i>🧾</i>الطلبات</div>
@@ -1321,8 +1336,17 @@ const EG_GOVERNORATES = ["القاهرة","الجيزة","الإسكندرية",
    ودجت العنوان — محافظة + مدينة + تفاصيل، بنفس صيغة النص
    المخزّنة حاليًا ("التفاصيل، المدينة، المحافظة")
 ══════════════════════════════════════════════════════════════ */
+/* opts.simple = العنوان بالتفصيل بس من غير محافظة/مدينة.
+   بيتستعمل في بيانات المستلم: منطقة التسليم (rcvZone) هي اللي بتحدد الفرع
+   والسعر فعلًا، والمحافظة/المدينة كانوا تكرار بيطوّل الفورم على العميل. */
 function renderAddr(containerId, opts = {}) {
   const el = $(containerId); if (!el) return;
+  if (opts.simple) {
+    el.innerHTML = `<span class="lbl">العنوان بالتفصيل</span>
+      <input id="${containerId}-detail" placeholder="الشارع، رقم العمارة، الدور، الشقة…" />`;
+    if (opts.value) { const d = $(`${containerId}-detail`); if (d) d.value = opts.value; }
+    return;
+  }
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
       <div><span class="lbl">المحافظة</span>
@@ -1353,6 +1377,8 @@ function fillCities(containerId, keep) {
   }
 }
 function getAddr(containerId) {
+  // الوضع المبسّط: مفيش محافظة/مدينة — التفصيل هو العنوان كله
+  if (!$(`${containerId}-gov`)) return ($(`${containerId}-detail`)?.value || "").trim();
   const g = ($(`${containerId}-gov`)?.value || "").trim();
   const a = ($(`${containerId}-area`)?.value || "").trim();
   const d = ($(`${containerId}-detail`)?.value || "").trim();
@@ -1715,6 +1741,9 @@ function attachListeners() {
       const wasBlocked = !!(S.profile && S.profile.blocked);
       S.profile = d.customer || S.profile;
       S.wallet  = d.wallet   || S.wallet;
+      if (d.cod) S.cod = d.cod;
+      // لو العميل واقف على فورم الطلب والبوابة اتفتحت، الخانة تتحدّث فورًا
+      if (S.page === "new" && typeof renderReceiverBlocks === "function") renderReceiverBlocks();
       if (S.profile.blocked && !wasBlocked) showBlocked();   // اتحظر وهو فاتح
       if (S.page === "home")    renderHome();
       if (S.page === "account") renderAccount();
@@ -2273,7 +2302,6 @@ function renderDetail() {
       ${row("مبلغ التحصيل", fmtMoney(d.orderPrice) + " ج.م")}
       ${o.goodsValue ? row("قيمة البضاعة", fmtMoney(o.goodsValue) + " ج.م") : ""}
       ${row("سعر التوصيل", d.zonePrice ? fmtMoney(d.zonePrice) + " ج.م" : "يحدده الفرع")}
-      ${row("طريقة الدفع", o.paymentMethod || "—")}
       ${row("الفرع", o.branchName || "—")}
       ${o.pilotName ? row("الطيار", o.pilotName) : ""}
       ${d.note ? row("ملاحظات", d.note) : ""}
@@ -2460,10 +2488,47 @@ async function ensurePilotContact(o) {
    بتاعة الكارت الأول، وكان بيقرا o.rating اللي الـAPI مابيرجّعوش (الصح o.ratings.customer)
    فبيفضل ظاهر فاضي حتى بعد ما العميل يقيّم. التقييم كله بقى في ratingCardHtml. */
 
+/* أسباب الإلغاء — قايمة مقفولة عشان تطلع تقرير مفيد للإدارة بدل نص حر.
+   السيرفر بيخزّنها في orders.cancelled_reason مسبوقة بـ«العميل:». */
+const CANCEL_REASONS = [
+  "غيّرت رأيي — مش محتاج الطلب",
+  "لقيت سعر أحسن",
+  "الطلب اتأخر عليّا",
+  "غلطت في بيانات المستلم",
+  "غلطت في العنوان أو المنطقة",
+  "هطلبه في وقت تاني",
+];
+
+function pickCancelReason() {
+  return new Promise(resolve => {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);display:flex;align-items:flex-end";
+    box.innerHTML = `<div style="background:var(--card);width:100%;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b,0px));max-height:80vh;overflow:auto">
+        <b style="font-size:15.5px;display:block;margin-bottom:4px">ليه بتلغي الطلب؟</b>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">اختيارك بيساعدنا نحسّن الخدمة</div>
+        <div id="_crList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button class="btn ghost" id="_crBack" style="margin-top:14px">رجوع</button>
+      </div>`;
+    const list = box.querySelector("#_crList");
+    CANCEL_REASONS.forEach(r => {
+      const b = document.createElement("button");
+      b.className = "btn ghost"; b.textContent = r;
+      b.style.cssText = "text-align:right;justify-content:flex-start";
+      b.onclick = () => { box.remove(); resolve(r); };
+      list.appendChild(b);
+    });
+    box.querySelector("#_crBack").onclick = () => { box.remove(); resolve(null); };
+    box.onclick = e => { if (e.target === box) { box.remove(); resolve(null); } };
+    document.body.appendChild(box);
+  });
+}
+
 async function cancelOrder(id) {
-  if (!confirm("إلغاء الطلب؟ لن تتمكن من التراجع.")) return;
+  const reason = await pickCancelReason();
+  if (reason === null) return;              // رجع من غير ما يختار = مفيش إلغاء
+  if (!confirm(`إلغاء الطلب؟\nالسبب: ${reason}\nلن تتمكن من التراجع.`)) return;
   try {
-    const res = await api.post(`/api/customer/orders/${id}/cancel`);
+    const res = await api.post(`/api/customer/orders/${id}/cancel`, { reason });
     if (res.order) mergeOrders([res.order]);
     toast("تم إلغاء الطلب", "ok");
   } catch (e) { toast("تعذّر الإلغاء: " + e.message, "err"); }
@@ -2499,7 +2564,14 @@ function refreshBadge() {
   const n = S.notifUnread > 0 ? unreadOrders() : 0;
   const b = $("navBadge");
   b.style.display = n ? "grid" : "none"; b.textContent = n > 99 ? "99+" : n;
-  if (S.page === "home") { $("homeBell").style.display = n ? "grid" : "none"; $("homeBell").textContent = n; }
+  /* الجرس في هيدر الرئيسية كان بيتحدّث لما نكون على الرئيسية بس — والجرس
+     العائم (#floatBell) بيبان على كل التبويبات فبيتحدّث دايمًا. */
+  const hb = $("homeBell");
+  if (hb) { hb.style.display = n ? "grid" : "none"; hb.textContent = n; }
+  const fb = $("floatBellDot");
+  if (fb) { fb.style.display = n ? "grid" : "none"; fb.textContent = n > 99 ? "99+" : n; }
+  const fw = $("floatBell");
+  if (fw) fw.style.display = ["splash", "login", "setup", "new"].includes(S.page) ? "none" : "flex";
 }
 
 function renderNotifs() {
@@ -2851,7 +2923,12 @@ function startNewOrder() {
   // كل الخطوات وبعدين يترفض في الآخر
   if (!isOpenNow()) return showClosed();
   S.wizStep = 1;
-  S.draft = { kind: "طرد", pay: "كاش", pieces: 1,
+  /* 🔴 اسم عشوائي لحقول المستلم مع كل طلب جديد. المسوّدة بتتصفّر صح
+     (blankReceiver)، لكن كروم بيملّي حقول الاسم/التليفون لوحده من تاريخ
+     الإدخال لما الحقل يبقى بنفس الاسم — فالعميل كان بيلاقي بيانات مستلم
+     الطلب اللي فات. الاسم المتغيّر بيكسر المطابقة دي. */
+  S.formNonce = Math.random().toString(36).slice(2, 8);
+  S.draft = { kind: "طرد", pieces: 1,
               sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
               receivers: [blankReceiver()] };
 
@@ -2870,7 +2947,7 @@ function startNewOrder() {
 
   $("odCodTotal").value = 0; $("odValue").value = 0; $("odNote").value = "";
   $("odPieces").textContent = 1;
-  drawKinds(); drawPays();
+  drawKinds();
   renderSavedPicks();
   wizNext(1);
   go("new");
@@ -2901,6 +2978,10 @@ function onSenderZone() {
 // images = صور الطرد ده لوحده. قبل كده كانت صور واحدة بتتحط على كل
 // الطرود، فلو العميل بعت ٣ طرود مختلفة كانت صور الطرد الأول بتروح
 // للتلاتة — والفرع والطيار يشوفوا مرفقات مش بتاعة الطرد اللي معاهم.
+/* بوابة التحصيل — السيرفر بيرجّعها في /api/customer/me. لو الحقل مش موجود
+   (سيرفر أقدم) بنسيب الخانة مفتوحة — الحارس الحقيقي على السيرفر برضه. */
+const codLocked = () => S.cod ? !S.cod.allowed : false;
+
 const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"",
                                lat:null, lng:null, cod:0, images:[] });
 
@@ -2931,9 +3012,11 @@ function receiverBlockHtml(r, i, multi, receipt) {
 
     <div id="rcvFields-${i}" style="display:${receipt ? "none" : "block"}">
       <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم الشحنة."><div class="fi">👤</div><div class="fb">
-        <b>الاسم</b><input id="rcvName-${i}" placeholder="اسم المستلم" value="${esc(r.name)}" /></div></div>
+        <b>الاسم</b><input id="rcvName-${i}" placeholder="اسم المستلم" value="${esc(r.name)}"
+          autocomplete="off" autocorrect="off" spellcheck="false" name="rn-${i}-${S.formNonce}" /></div></div>
       <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت التسليم. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
-        <b>رقم الهاتف</b><input id="rcvPhone-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone)}" /></div></div>
+        <b>رقم الهاتف</b><input id="rcvPhone-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone)}"
+          autocomplete="off" autocorrect="off" name="rp-${i}-${S.formNonce}" /></div></div>
       <!-- منظومة الثقة: بادچ سمعة المستلم بيظهر أول ما الرقم يكتمل -->
       <div id="rcvTrust-${i}" style="display:none;margin:-4px 0 10px"></div>
       <div id="rcvTrustNote-${i}" style="display:none;font-size:11.5px;line-height:1.8;margin:-4px 0 10px"></div>
@@ -2948,7 +3031,13 @@ function receiverBlockHtml(r, i, multi, receipt) {
     <div id="rcvPrice-${i}" style="margin-top:9px;font-size:13px;display:none"></div>
 
     <span class="lbl" style="margin-top:12px">مبلغ التحصيل من المستلم (ج.م)</span>
-    <input id="rcvCod-${i}" type="number" inputmode="decimal" min="0" value="${esc(r.cod || 0)}"
+    ${codLocked() ? `<div style="background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);
+        border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.8;color:var(--muted)">
+        🔒 التحصيل بيتفتح بعد <b style="color:var(--orange)">${S.cod.minDelivered}</b> طلبات متسلّمة
+        — عندك دلوقتي <b style="color:var(--orange)">${S.cod.delivered}</b>.
+        <div style="margin-top:3px">الطيار بيدفع المبلغ ده من جيبه ويحصّله من المستلم، عشان كده بيتفتح بعد تعامل موثّق.</div></div>` : ""}
+    <input id="rcvCod-${i}" type="number" inputmode="decimal" min="0"
+           ${codLocked() ? "disabled" : ""} value="${codLocked() ? 0 : esc(r.cod || 0)}"
            oninput="updateRcvTotal()"
            data-tip="المبلغ اللي الطيار هيحصّله من مستلم الطرد ده بالذات. لو مفيش تحصيل سيبه صفر." />
 
@@ -2986,7 +3075,7 @@ function renderReceiverBlocks() {
 
   // ودجت العنوان والمنطقة والخريطة لكل بلوك — لازم بعد ما الـ HTML يتحط
   list.forEach((r, i) => {
-    renderAddr("rcvAddrW-" + i, { value: r.address || "" });
+    renderAddr("rcvAddrW-" + i, { value: r.address || "", simple: true });
     const sel = $("rcvZone-" + i);
     sel.onchange = () => onReceiverZone(i);
     showMiniMap("rcvMap-" + i, r.lat, r.lng);
@@ -3331,8 +3420,11 @@ function wizNext(step) {
       if (!$("sndZone").value)                   return toast("اختر منطقة الاستلام", "err");
       // من غير دبوس، الفرع بيضطر يخمّن مكان الاستلام من نص العنوان
       // والدبوس بيقع غلط — فده إجباري
-      if (!S.draft.sndLat || !S.draft.sndLng)
-        return toast("حدّد نقطة الاستلام على الخريطة — الطيار بيروح عليها", "err");
+      /* 🔴 نقطة الاستلام بقت **اختيارية** (طلب صاحب النظام): كانت بتوقف
+         العميل عند خطوة ١ لو ماحدّدش دبوس، وده كان بيقطع طلبات كتير —
+         خصوصًا مع عميل بيطلب من مكان مش عارف يحدده على الخريطة. العنوان
+         النصّي والمنطقة إجباريين وكفاية للطيار يوصل. الدبوس بيفضل متاح
+         ويوفّر على الطيار وقت لما العميل يحدده، بس مش شرط للإكمال. */
     }
     if (S.wizStep === 2) {
       readReceiverBlocks();
@@ -3523,7 +3615,10 @@ async function submitOrder() {
       customerName: S.profile.displayNameAr || "",
       customerPhone: S.profile.phone1 || "",
       orderKind: S.draft.kind,
-      paymentMethod: S.draft.pay,
+      /* طريقة الدفع اتشالت من التطبيق (طلب صاحب النظام): العميل مابيدفعش
+         في التطبيق أصلًا — التحصيل بيحصل عند التسليم. القيمة بتتبعت ثابتة
+         عشان عقد الـAPI مايتغيّرش والتقارير القديمة تفضل متسقة. */
+      paymentMethod: "كاش",
       piecesCount: S.draft.pieces,
       goodsValue: parseFloat($("odValue").value) || 0
     });

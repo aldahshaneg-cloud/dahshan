@@ -272,7 +272,11 @@
     wrap.id = "api-refresh-fab";
     wrap.setAttribute("role", "status");
     wrap.style.cssText =
-      "position:fixed;z-index:99998;bottom:" + (opts.bottom || "18px") + ";" +
+      /* اللوحة تقدر ترفع اللافتة بـ window.API_REFRESH_BOTTOM — تطبيق العميل
+      عنده بار سفلي ثابت ٩٦px فاللافتة كانت مغطّية تبويبين. الافتراضي زي
+      ما كان بالظبط، فباقي اللوحات مااتأثرتش. */
+    "position:fixed;z-index:99998;bottom:" +
+      (opts.bottom || global.API_REFRESH_BOTTOM || "18px") + ";" +
       (opts.side === "left" ? "left:16px;" : "right:16px;") +
       "display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;" +
       "background:rgba(20,20,24,.92);color:#f0f0f0;border:1px solid rgba(255,255,255,.16);" +
