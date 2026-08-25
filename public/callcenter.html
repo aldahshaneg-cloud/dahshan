@@ -737,6 +737,19 @@
       } catch(e) { console.error("passthrough error", e); }
     })();
 
+    /* ── دور الكول سنتر ─────────────────────────────────────────────────
+       الكول سنتر بيسجّل الأوردر ويبعته للفرع — وبعد كده الأوردر بقى شغل
+       الفرع والطيار. فأزرار التحميل والنقل والإلغاء والتأجيل والحذف
+       بتتخفي عنه من جداول الأوردرات، ولوحة الطيارين كمان، وحذف العملاء.
+
+       🔴 ده إخفاء واجهة مش أمان: الأمان الحقيقي في `role:` على المسارات
+       (routes/api.php). الفايدة إن الزرار المكسور — اللي بيرجّع «غير مسموح
+       لك بهذه العملية» — مابقاش موجود أصلًا.
+
+       الفحص على **الدور** مش على الملف، لأن المدير بيفتح نفس الشاشة عن
+       قصد (شوف _restoreSavedSession) ولازم يشوف كل حاجة زي ما هي. */
+    window.isCC = () => (window._currentUser || {}).role === "كول سنتر";
+
     /* ── Session ────────────────────────────────────────────────────────── */
     function saveSession(username, role) {
       localStorage.setItem("tiar-session", JSON.stringify({ username, role }));
@@ -748,6 +761,8 @@
       document.getElementById("app").classList.add("visible");
       document.getElementById("sidebar-username").textContent = username;
       document.getElementById("sidebar-role").textContent = role || "";
+      // كلاس الدور — الـCSS بيخفي بيه لوحة الطيارين والتحديد الجماعي
+      document.body.classList.toggle("cc-role", isCC());
       setTimeout(() => { try { disableAutoBackupOnce().then(() => checkAutoBackup()); } catch(e) {} }, 1500);
       setTimeout(() => { try { loadAttendanceTimeout(); } catch(e) {} }, 2000);
       /* البثّ بيبدأ بعد الدخول بس — القناة خاصة وتفويضها من
@@ -2319,7 +2334,7 @@
         <td dir="ltr">${ esc(c.phone1) }</td>
         <td dir="ltr">${ esc(c.phone2 || "—") }</td>
         <td>${ esc(c.address) }</td>
-        <td><button class="edit-btn" onclick="openEditClient('senders','${ escJs(c.id) }','sender')">تعديل</button><button class="del-btn" onclick="deleteClient('senders','${ escJs(c.id) }')">حذف</button></td>
+        <td><button class="edit-btn" onclick="openEditClient('senders','${ escJs(c.id) }','sender')">تعديل</button>${isCC() ? "" : `<button class="del-btn" onclick="deleteClient('senders','${ escJs(c.id) }')">حذف</button>`}</td>
       </tr>`).join("");
     }});
     // تسليمون — كانت onValue("receivers")
@@ -2338,7 +2353,7 @@
         <td dir="ltr">${ esc(c.phone1) }</td>
         <td dir="ltr">${ esc(c.phone2 || "—") }</td>
         <td>${ esc(c.address) }</td>
-        <td><button class="edit-btn" onclick="openEditClient('receivers','${ escJs(c.id) }','receiver')">تعديل</button><button class="del-btn" onclick="deleteClient('receivers','${ escJs(c.id) }')">حذف</button></td>
+        <td><button class="edit-btn" onclick="openEditClient('receivers','${ escJs(c.id) }','receiver')">تعديل</button>${isCC() ? "" : `<button class="del-btn" onclick="deleteClient('receivers','${ escJs(c.id) }')">حذف</button>`}</td>
       </tr>`).join("");
     }});
 
@@ -2739,14 +2754,34 @@
         clearState();
         const query = this.value.trim();
         if (!query) { hideDropdown(); return; }
+        if (tooShort(query)) { showTooShort(query); return; }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => doSearch(query), 200);
       });
 
       input.addEventListener('focus', function() {
         const query = this.value.trim();
-        if (query.length >= 1) doSearch(query);
+        if (query && !tooShort(query)) doSearch(query);
       });
+
+      /* 🔴 العتبة هنا مش تجميل: السيرفر بقى بيرجّع قايمة **فاضية** تحت
+         العتبة (EntitiesController::partyList)، والودجت بيقرا الفاضي على
+         إنه «لا توجد نتائج» ويعرض زرار «إضافة عميل جديد» — يعني الموظف
+         كان هيتساق لإنشاء عميل مكرر وهو لسه كاتب نص الرقم. */
+      function tooShort(q) {
+        const d = String(q).replace(/\D/g, "");
+        const isNum = d.length > 0 && /^[0-9+\-\s()]+$/.test(q);
+        return isNum ? d.length < 10 : q.length < 2;
+      }
+      function showTooShort(q) {
+        const d = String(q).replace(/\D/g, "");
+        const isNum = d.length > 0 && /^[0-9+\-\s()]+$/.test(q);
+        dropdown.innerHTML = '<div class="smart-search-empty">' +
+          (isNum ? 'اكتب رقم التليفون كامل (10 أرقام على الأقل)' : 'اكتب حرفين على الأقل') +
+          '</div>';
+        addNewBtn.style.display = 'none';
+        showDropdown();
+      }
 
       document.addEventListener('click', function(e) {
         if (!wrapper.contains(e.target)) hideDropdown();
@@ -3839,6 +3874,37 @@
       const o = (window._ordersData || []).find(x => x.id === orderId);
       if (!o) return;
       const parcels = o.deliveries || [];
+
+      /* رقم الطيار تحت اسمه — موظف الكول سنتر بيتصل بيه وهو على التليفون مع
+         العميل، وقبل كده كان لازم يسيب الشاشة ويدوّر في لوحة الطيارين.
+         الرقم من كاش /api/pilots (متاح لدوره)؛ لو الكاش لسه مانزلش الاسم
+         بيظهر لوحده من غير ما حاجة تتكسر. */
+      const _pilotRow   = (window._pilotsData || []).find(p => String(p.id) === String(o.pilotId));
+      const _pilotPhones = [_pilotRow && _pilotRow.phone1, _pilotRow && _pilotRow.phone2].filter(Boolean);
+
+      /* 🔴 وقت التحميل على الطيار **مش** `statusSince`.
+         `status_since` بيتكتب من فوق مع كل تغيير حالة — التسليم والإلغاء
+         والتأجيل — فالأوردر المسلَّم كان بيعرض **وقت التسليم** في خانة
+         «تحميل الطلب على المندوب»، والأوردر اللي لسه مااتحملش (statusSince
+         بيساوي createdAt وقت الإنشاء) كان بيعرض صف تحميل وهمي بنفس وقت
+         وصوله للفرع. ده اللي كان بيرحّل الخط الزمني كله خانة.
+
+         `current_pilot_since` هو الحقل الوحيد اللي مابيتلمسش بعد التحميل
+         (بيتغيّر مع النقل بين الطيارين بس). ومع النقل بيبقى وقت **آخر**
+         نقل، فأول تحميل بنرجّعه من `statusSince` طالما هو قبل أول نقل —
+         النقل ممنوع يلمسه (OrdersController::transfer قاعدة 1). لو الاتنين
+         مش صالحين بنسيب الصف بدل ما نخترع وقت غلط. */
+      const _hist = Array.isArray(o.transferHistory) ? o.transferHistory : [];
+      let assignedAt = null;
+      if (o.pilotId || o.pilotName) {
+        if (_hist.length) {
+          const firstT = new Date(_hist[0].at).getTime();
+          const ss = o.statusSince ? new Date(o.statusSince).getTime() : NaN;
+          assignedAt = (!isNaN(ss) && !isNaN(firstT) && ss <= firstT) ? o.statusSince : null;
+        } else {
+          assignedAt = o.currentPilotSince || o.statusSince || null;
+        }
+      }
       const fmt = iso => iso ? new Date(iso).toLocaleString("ar-EG") : "—";
       const fmtDur = (startIso, endIso) => {
         if (!startIso || !endIso) return "—";
@@ -3928,6 +3994,20 @@
               ${o.storePrepaidNote ? `<div style="font-size:.76rem;color:var(--muted);margin-top:3px">📝 ${ esc(o.storePrepaidNote) }</div>` : ""}
             </div>
           </div>` : ""}
+          ${/* 🔴 الفرق بين الرقمين لازم يفضل صريح في كل شاشة بيظهروا فيها:
+               • العهدة = فلوس **بتتدفع** من الطيار للمحل عند الاستلام.
+               • قيمة البضاعة = بيانات للتأمين والمتابعة، **مابتتدفعش**.
+               نفس التوضيح بالحرف في تطبيق الطيار — لو اتغيّر هنا يتغيّر هناك. */""}
+          ${o.goodsValue ? `
+          <div class="od-prepaid" style="border-color:rgba(136,136,136,.45);background:rgba(136,136,136,.07)">
+            <span style="font-size:1.6rem">💰</span>
+            <div>
+              <div style="font-weight:800;color:var(--text);font-size:.9rem">قيمة البضاعة — للعلم بس</div>
+              <div style="font-size:1.35rem;font-weight:800;color:var(--text)">${ esc(o.goodsValue) } ج.م</div>
+              <div style="font-size:.78rem;color:var(--muted);margin-top:3px">
+                الطيار <b>مابيدفعش</b> القيمة دي — اللي بيتدفع للمحل هو <b>العهدة</b> بس.</div>
+            </div>
+          </div>` : ""}
           <div class="od-card">
             <div class="od-card-title">📋 معلومات الطلب</div>
 
@@ -3955,11 +4035,14 @@
               </div>
             </div>
 
-            <!-- الطيار -->
+            <!-- الطيار — الاسم ورقمه تحته عشان الاتصال المباشر -->
             ${o.pilotName ? `
             <div class="od-info-block" style="margin-top:10px;padding:10px 14px;background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.18);border-radius:10px">
               <span class="od-info-label">🛵 المندوب</span>
               <span class="od-info-val" style="color:var(--sky);font-weight:700;font-size:.95rem">${ esc(o.pilotName) }</span>
+              ${_pilotPhones.length ? `<div style="margin-top:5px;display:flex;gap:12px;flex-wrap:wrap">${
+                _pilotPhones.map(ph => `<a href="tel:${ esc(ph) }" dir="ltr" style="color:var(--sky);font-size:.86rem;font-weight:700;text-decoration:none">📞 ${ esc(ph) }</a>`).join("")
+              }</div>` : ""}
             </div>` : ""}
 
             <!-- ── خط زمني ── -->
@@ -3969,7 +4052,8 @@
               ${(function(){
                 const stages = [];
                 stages.push({ icon:"📥", label:"وصول الطلب للفرع", time:o.createdAt, color:"14,165,233" });
-                if (o.statusSince) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:o.statusSince, color:"249,115,22" });
+                // assignedAt متحسوبة فوق — مش statusSince (شوف التعليق هناك)
+                if (assignedAt) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:assignedAt, color:"249,115,22" });
                 // مراحل النقل بين الطيارين — الوقت بيكمّل ولا يبدأ من جديد
                 for (const t of (Array.isArray(o.transferHistory) ? o.transferHistory : [])) {
                   stages.push({ icon:"🔄", label:`نقل من ${ esc(t.fromName || "—") } إلى ${ esc(t.toName || "—") }`,
@@ -4007,23 +4091,40 @@
                       <td style="padding:7px 4px;color:var(--muted);white-space:nowrap">الآن (مستمر)</td>
                       <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:rgb(20,184,166)" id="od-timer-${ esc(o.id) }">${formatElapsed(o.receivedAt)}</td>
                     </tr>`;
-                } else if (o.statusSince) {
+                } else if (o.status !== "ملغي") {
+                  /* الأوردر اللي لسه مااتحملش على طيار كان بياخد نفس سطر
+                     «في انتظار استلام الطيار للطرد» — وهو أصلًا لسه في الفرع
+                     مافيش طيار. بقى السطر بيقول المرحلة الناقصة فعلًا،
+                     والعدّاد بيعدّ من وصوله الفرع مش من statusSince. */
+                  const waitFrom  = assignedAt || o.createdAt;
+                  const waitLabel = o.status === "مؤجل" ? "الطلب مؤجل — في انتظار فك التأجيل"
+                                  : assignedAt          ? "في انتظار استلام الطيار للطرد"
+                                                        : "في انتظار التحميل على طيار";
                   liveRow = `
                     <tr style="border-top:1px solid var(--border)">
                       <td style="padding:7px 4px">
                         <div style="display:flex;align-items:center;gap:7px">
                           <span style="width:20px;height:20px;border-radius:50%;background:rgba(249,115,22,.18);display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0">⏳</span>
-                          <span style="color:var(--text);font-weight:600">في انتظار استلام الطيار للطرد</span>
+                          <span style="color:var(--text);font-weight:600">${ esc(waitLabel) }</span>
                         </div>
                       </td>
                       <td style="padding:7px 4px;color:var(--muted);white-space:nowrap">الآن (مستمر)</td>
-                      <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:var(--orange)" id="od-timer-${ esc(o.id) }">${formatElapsed(o.statusSince)}</td>
+                      <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:var(--orange)" id="od-timer-${ esc(o.id) }">${formatElapsed(waitFrom)}</td>
                     </tr>`;
                 }
 
+                // المراحل بتترتب بالوقت — النقل بين الطيارين بيتحط في نص
+                // المصفوفة بعد التحميل، وأي ترتيب غلط كان بيطلع مدة سالبة
+                stages.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
                 const rows = stages.map((s, i) => {
-                  const prev = i > 0 ? stages[i - 1].time : null;
-                  const dur  = prev ? fmtDur(prev, s.time) : "—";
+                  /* 🔴 المدة بقت «قد إيه فضل في المرحلة دي» مش «قد إيه عدّى
+                     قبل ما يوصلها». قبل كده صف «وصول الطلب للفرع» كان بياخد
+                     «—»، والوقت اللي قعده الأوردر في الفرع كان مكتوب في الصف
+                     اللي تحته (تحميل على المندوب) — يعني عمود المدة كله
+                     مترحّل خانة لتحت. */
+                  const next = stages[i + 1];
+                  const dur  = next ? fmtDur(s.time, next.time) : (liveRow ? "جارية" : "—");
                   return `
                     <tr style="border-top:1px solid var(--border)">
                       <td style="padding:7px 4px">
@@ -4042,18 +4143,21 @@
                 const finalTime = o.deliveredAt || o.undeliveredAt;
                 if (finalTime) {
                   const segs = [];
-                  if (o.createdAt && o.statusSince) segs.push({ label:"⏳ انتظار في الفرع", from:o.createdAt, to:o.statusSince, color:"249,115,22" });
-                  if (o.statusSince && o.receivedAt) {
-                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:o.statusSince, to:o.receivedAt, color:"139,92,246" });
-                  } else if (o.statusSince && o.tripStartedAt) {
+                  /* assignedAt مش statusSince — للأوردر المسلَّم statusSince
+                     بيساوي وقت التسليم، فالرسم كان بيقول إن الرحلة كلها
+                     «انتظار في الفرع» ومدة التوصيل صفر. */
+                  if (o.createdAt && assignedAt) segs.push({ label:"⏳ انتظار في الفرع", from:o.createdAt, to:assignedAt, color:"249,115,22" });
+                  if (assignedAt && o.receivedAt) {
+                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:assignedAt, to:o.receivedAt, color:"139,92,246" });
+                  } else if (assignedAt && o.tripStartedAt) {
                     // طلبات قديمة قبل وجود حقل receivedAt منفصل
-                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:o.statusSince, to:o.tripStartedAt, color:"139,92,246" });
+                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:assignedAt, to:o.tripStartedAt, color:"139,92,246" });
                   }
                   if (o.receivedAt && o.tripStartedAt) segs.push({ label:"📦 مستلم قبل بدء الرحلة", from:o.receivedAt, to:o.tripStartedAt, color:"20,184,166" });
                   if (o.tripStartedAt && finalTime) {
                     segs.push({ label:"🚀 مدة الرحلة الفعلية", from:o.tripStartedAt, to:finalTime, color:"14,165,233" });
-                  } else if (o.statusSince && finalTime) {
-                    segs.push({ label:"🛵 مدة التوصيل", from:o.statusSince, to:finalTime, color:"14,165,233" });
+                  } else if (assignedAt && finalTime) {
+                    segs.push({ label:"🛵 مدة التوصيل", from:assignedAt, to:finalTime, color:"14,165,233" });
                   }
 
                   const secs  = segs.map(s => Math.max(0, Math.floor((new Date(s.to).getTime() - new Date(s.from).getTime()) / 1000)));
@@ -4078,10 +4182,16 @@
                       <div style="margin-top:12px;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px">
                         <div style="font-size:.76rem;font-weight:700;color:var(--muted);margin-bottom:10px">📊 توزيع الوقت على مراحل الطلب</div>
                         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-                          <div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(${ esc(gradParts.join(",")) });flex-shrink:0;box-shadow:inset 0 0 0 6px var(--bg,#0b0b0b)"></div>
+                          ${/* 🔴 التلاتة دول HTML متولّد جوّه، مش نص من بيانات
+                               المستخدم. esc() عليهم كانت بتطبع الوسوم نفسها
+                               كنص في الشاشة («الأكواد ظاهرة في التوقيتات»)
+                               وتلغي الرسم البياني. اللي محتاج تهريب اتهرّب
+                               عند بنائه فوق: esc(s.label) وesc(s.color)
+                               وesc(pct) — فمفيش حاجة غير مهرّبة بتعدّي. */""}
+                          <div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(${ gradParts.join(",") });flex-shrink:0;box-shadow:inset 0 0 0 6px var(--bg,#0b0b0b)"></div>
                           <div style="flex:1;min-width:170px;display:flex;flex-direction:column;gap:7px">
-                            <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--border)">${ esc(barParts.join("")) }</div>
-                            ${ esc(legendParts.join("")) }
+                            <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--border)">${ barParts.join("") }</div>
+                            ${ legendParts.join("") }
                             <div style="display:flex;justify-content:space-between;font-size:.78rem;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">
                               <span style="color:var(--muted)">⏱️ الإجمالي (من الفرع حتى ${ esc(o.deliveredAt ? "التسليم" : "الإرجاع") })</span>
                               <span style="font-weight:800;color:var(--green)">${fmtDur(o.createdAt, finalTime)}</span>
@@ -4130,7 +4240,8 @@
         </div>`;
       document.body.appendChild(box);
       if (!o.deliveredAt && !o.undeliveredAt) {
-        const timerBase = o.tripStartedAt || o.receivedAt || o.statusSince || o.createdAt;
+        // نفس أساس liveRow بالظبط — assignedAt مش statusSince
+        const timerBase = o.tripStartedAt || o.receivedAt || assignedAt || o.createdAt;
         const odTimerEl = document.getElementById(`od-timer-${ esc(o.id) }`);
         if (odTimerEl && timerBase) {
           const odInt = setInterval(() => {
@@ -4392,6 +4503,10 @@
        رسم 6 جداول من الأول. تحميل جماعي لـ 10 أوردرات = 10 أحداث من
        فايربيز = 10 رسمات كاملة (94 مللي بدل 9). التسجيل تحت بيجمّعهم.
     ──────────────────────────────────────────────────────────────────── */
+    /* متاحة على window عشان الجداول تترسم بنداء مباشر من غير انتظار
+       دورة الاستطلاع (فحص/تشخيص) — نفس سبب وجود window._renderDeliveredTable.
+       التصريح بيترفع (hoisting) فالإسناد قبله شغّال. */
+    window._renderOrdersUI = _renderOrdersUI;
     function _renderOrdersUI(data) {
       // بقت بتستقبل Array جاهزة من الـ Poller (مش كائن فايربيز بالمفاتيح)
       const list = Array.isArray(data) ? data
@@ -4456,13 +4571,14 @@
             ${o.notes ? `<td style="font-size:.78rem;color:var(--orange);max-width:110px;white-space:normal">📝 ${ esc(o.notes) }</td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
             <td>
               <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
+              ${isCC() ? "" : `
               <button class="assign-btn" onclick="assignPilotToOrder('${ escJs(o.id) }')">🛵 تحميل</button>
               <button class="del-btn" style="background:rgba(249,115,22,.15);color:var(--orange);border:1px solid var(--orange)" onclick="openTransferOrderModal('${ escJs(o.id) }')">🔁 نقل لفرع آخر</button>
               <button class="del-btn" style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red)" onclick="cancelOrder('${ escJs(o.id) }')">❌ إلغاء</button>
               ${o.status === "مؤجل"
                 ? `<button class="finish-btn" onclick="unpostponeOrder('${ escJs(o.id) }')">▶️ فك التأجيل</button>`
                 : `<button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>`}
-              <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>
+              <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>`}
             </td>
           </tr>`;
         }).join("");
@@ -4508,9 +4624,10 @@
               ${o.notes ? `<td style="font-size:.78rem;color:var(--orange);max-width:110px;white-space:normal">📝 ${ esc(o.notes) }</td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
+                ${isCC() ? "" : `
                 <button class="transfer-btn" style="background:rgba(249,115,22,.15);color:var(--orange);border:1px solid var(--orange)" onclick="transferOrderPilot('${ escJs(o.id) }')">🔄 نقل لطيار آخر</button>
                 <button class="del-btn" style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red)" onclick="cancelOrder('${ escJs(o.id) }')">❌ إلغاء</button>
-                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>
+                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>`}
                 ${/* ⛔ «✅ إنهاء» و«لم يتم التوصيل» اتشالوا من لوحة الكول سنتر
                    2026-08-23: السيرفر بيرفضهما لدوره (routes/api.php — deliver و
                    undeliver = role:pilot,branch,admin) لأنهم بيقفلوا الأوردر
@@ -4545,7 +4662,7 @@
               <td>${o.storePrepaid ? `<span style="background:rgba(249,115,22,.12);color:var(--orange);font-weight:700;padding:3px 8px;border-radius:6px;font-size:.82rem">💵 ${ esc(o.storePrepaid) } ج.م</span>` : '<span style="color:var(--muted);font-size:.78rem">—</span>'}</td>
               <td style="min-width:110px">${orderSourceBadge(o)}</td>
               <td style="font-size:.75rem;color:var(--muted)">${ esc(o.deliveredAt ? new Date(o.deliveredAt).toLocaleString("ar-EG") : "—") }</td>
-              <td><button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button> <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
+              <td>${isCC() ? "" : `<button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button> `}<button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
             </tr>`;
           }).join("");
         };
@@ -4583,9 +4700,10 @@
                 ${o.cancelledBy ? `<div style="margin-top:2px">بواسطة: ${ esc(o.cancelledBy) }</div>` : ""}
               </td>
               <td>
-                <button class="finish-btn" onclick="restoreOrder('${ escJs(o.id) }')">↩ استرجاع</button>
-                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف نهائي</button>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
+                ${isCC() ? "" : `
+                <button class="finish-btn" onclick="restoreOrder('${ escJs(o.id) }')">↩ استرجاع</button>
+                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف نهائي</button>`}
               </td>
             </tr>`;
           }).join("");
@@ -4613,9 +4731,10 @@
               <td style="font-size:.75rem;color:var(--muted)">${ esc(o.undeliveredAt ? new Date(o.undeliveredAt).toLocaleString("ar-EG") : "—") }</td>
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
+                ${isCC() ? "" : `
                 <button class="transfer-btn" onclick="assignPilotToOrder('${ escJs(o.id) }')">🔄 إعادة تحميل على طيار</button>
-              <button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>
-                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>
+                <button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>
+                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>`}
               </td>
             </tr>`;
           }).join("");
@@ -5086,8 +5205,10 @@
         `<option value="manual_${ esc(e.id) }">${ esc(e.name) } ${ esc(e.jobTitle ? "— " + e.jobTitle : "") } (يدوي)</option>`
       );
       sel.innerHTML = `<option value="">— كل الموظفين —</option>` +
-        (systemOpts.length ? `<optgroup label="موظفو النظام">${ esc(systemOpts.join("")) }</optgroup>` : "") +
-        (manualOpts.length ? `<optgroup label="موظفون خارج النظام">${ esc(manualOpts.join("")) }</optgroup>` : "");
+        // نفس غلطة الرسم البياني: دول وسوم <option> متولّدة، والتهريب
+        // بيتعمل جوّه الـmap فوق. esc() هنا كانت بتفضّي القايمة.
+        (systemOpts.length ? `<optgroup label="موظفو النظام">${ systemOpts.join("") }</optgroup>` : "") +
+        (manualOpts.length ? `<optgroup label="موظفون خارج النظام">${ manualOpts.join("") }</optgroup>` : "");
       sel.value = current;
       // ضبط الشهر الحالي افتراضياً
       const monthInput = document.getElementById("hrHistoryMonth");
@@ -7002,7 +7123,7 @@
         const lines = Object.entries(targets).filter(([,v]) => v.length).map(([k,v]) => `${CLEANUP_LABELS[k]||k}: <b>${ esc(v.length) }</b>`);
         const total = Object.values(targets).reduce((s,v) => s + v.length, 0);
         resultEl.innerHTML = total
-          ? `سيتم حذف:<br>${ esc(lines.join(" — ")) }<br><br><b style="color:var(--red)">الإجمالي: ${total} سجل</b>`
+          ? `سيتم حذف:<br>${ lines.join(" — ") }<br><br><b style="color:var(--red)">الإجمالي: ${total} سجل</b>`
           : `لا توجد سجلات قديمة مطابقة للشروط المحددة قبل هذا التاريخ.`;
         document.getElementById("cleanupExecBtn").disabled = total === 0;
       } catch(e) { resultEl.innerHTML = ""; showToast("خطأ: " + e.message, "error"); }
@@ -7334,6 +7455,12 @@
     /* ── Orders Layout ── */
     .orders-layout { display: flex; min-height: 100vh; width: 100%; }
     .orders-content { flex: 1; min-width: 0; padding: 32px; overflow-x: auto; }
+    /* الكول سنتر: لوحة الطيارين مخفية، ومعاها التحديد الجماعي وشريط
+       «تحميل على طيار» — التحميل كله برّه دوره. الـ!important عشان
+       الكلاسات دي بيتحط عليها display بالجافاسكربت. */
+    body.cc-role .pilots-panel,
+    body.cc-role .order-chk,
+    body.cc-role #bulk-bar { display: none !important; }
     /* ── Pilots Panel ── */
     .pilots-panel { width: 270px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); display: none; flex-direction: column; overflow: hidden; position: fixed; left: 0; top: 0; height: 100vh; z-index: 50; }
     .pilots-panel.visible { display: flex; }
@@ -8093,6 +8220,13 @@
                        title="بيتحسب تلقائيًا من عهدة كل طرد فوق" /></div>
               <div class="fg"><label>سبب العهدة</label>
                 <input id="storePrepaidNote" placeholder="مثال: محل جديد" /></div>
+              <!-- 💰 قيمة الأوردر — بيانات مش فلوس. الطيار **مابيدفعهاش**؛
+                   اللي بيتدفع هو العهدة بس. الفرق ده مكتوب صراحةً في تفاصيل
+                   الأوردر عند الطيار عشان ماحدش يخلط بينهم. -->
+              <div class="fg"><label>💰 قيمة الأوردر / البضاعة (ج.م)
+                  <span style="font-weight:500;font-size:.72rem">— للعلم بس، الطيار مابيدفعهاش</span></label>
+                <input type="number" id="goodsValue" min="0" step="0.5" dir="ltr"
+                       style="text-align:left" placeholder="0" oninput="updateSummary()" /></div>
               <div class="fg full"><label>ملاحظات على الأوردر</label>
                 <textarea id="orderNotes" rows="2" placeholder="أي تعليمات للطيار أو الفرع…"></textarea></div>
             </div>
@@ -8131,15 +8265,43 @@
     <div class="page" id="page-ccomplaints">
       <div class="sec-header">
         <div><span class="sec-title">⚠️ الشكاوى والمتابعة</span>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:3px">تسجيل شكاوى العملاء ومتابعة حلها</div></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select class="field-cc" id="cStatus" onchange="renderComplaints()">
-            <option value="open">المفتوحة</option><option value="">الكل</option><option value="resolved">المحلولة</option>
-          </select>
-          <button class="add-btn" onclick="openComplaintModal()">➕ تسجيل شكوى</button>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:3px" id="compSub">تسجيل شكاوى العملاء ومتابعة حلها</div></div>
+        <button class="add-btn" onclick="openComplaintModal()">➕ تسجيل شكوى</button>
+      </div>
+
+      <!-- فلاتر الشكاوى — الفلترة كلها محلية على القايمة المحمّلة، فمفيش
+           نداء سيرفر مع كل حرف. المدى الافتراضي فاضي = كل التاريخ. -->
+      <div class="call-card" style="margin-bottom:15px">
+        <div class="fgrid">
+          <div class="fg full"><label>🔎 بحث — اسم العميل، رقمه، رقم الأوردر، أو نص الشكوى</label>
+            <input id="cSearch" placeholder="اكتب اسم أو رقم…" autocomplete="off" oninput="renderComplaints()" /></div>
+          <div class="fg"><label>نوع المشكلة</label>
+            <select id="cType" onchange="renderComplaints()"><option value="">— كل الأنواع —</option></select></div>
+          <div class="fg"><label>الحالة</label>
+            <select id="cStatus" onchange="renderComplaints()">
+              <option value="open">المفتوحة</option><option value="">الكل</option><option value="resolved">المحلولة</option>
+            </select></div>
+          <div class="fg"><label>مسجّلة بواسطة</label>
+            <select id="cBy" onchange="renderComplaints()"><option value="">— الكل —</option></select></div>
+          <div class="fg"><label>من تاريخ</label>
+            <input type="date" id="cFrom" onchange="renderComplaints()" /></div>
+          <div class="fg"><label>إلى تاريخ</label>
+            <input type="date" id="cTo" onchange="renderComplaints()" /></div>
+        </div>
+        <div style="margin-top:11px;display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+          <button class="btn-ghost-cc btn-xs-cc" onclick="resetComplaintFilters()">↺ تصفير الفلاتر</button>
+          <span style="font-size:.76rem;color:var(--muted)" id="compCount">—</span>
         </div>
       </div>
+
       <div class="stats" id="compStats"></div>
+
+      <!-- توزيع الأنواع — «أكتر نوع مشاكل موجود» في سطر واحد. الضغط على
+           أي نوع بيفلتر عليه بدل ما الموظف يفتح القايمة المنسدلة. -->
+      <div class="call-card" style="margin-bottom:15px">
+        <div class="call-card-title">📊 توزيع أنواع المشاكل <span style="font-weight:500;font-size:.74rem;color:var(--muted)">— حسب الفلاتر المطبّقة ماعدا النوع</span></div>
+        <div id="compTypes"></div>
+      </div>
       <div class="table-wrap"><table>
         <thead><tr><th>#</th><th>التاريخ</th><th>الأوردر</th><th>العميل</th><th>النوع</th>
           <th>التفاصيل</th><th>الحالة</th><th>بواسطة</th><th>إجراء</th></tr></thead>
@@ -8187,7 +8349,8 @@
         <div>
           <div class="sec-header"><span class="sec-title" style="font-size:.95rem">👥 أداء فريق الكول سنتر</span></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>الموظف</th><th class="num-cc">أوردرات</th><th class="num-cc">تم التسليم</th>
+            <thead><tr><th>الموظف</th><th class="num-cc">أوردرات</th><th class="num-cc">ساعات العمل</th>
+              <th class="num-cc">أوردر / ساعة</th><th class="num-cc">تم التسليم</th>
               <th class="num-cc">ملغاة</th><th class="num-cc">قيمة التوصيل</th></tr></thead>
             <tbody id="perfAgentsBody"></tbody></table></div>
         </div>
@@ -9501,10 +9664,14 @@
     if (window.innerWidth <= 900) closeSidebar();
     PAGES.forEach(p => { document.getElementById(`page-${p}`)?.classList.remove("active"); });
     document.getElementById(`page-${page}`)?.classList.add("active");
+    /* لوحة الطيارين مخفية عن الكول سنتر — دوره مالوش سلطة عليهم. بيانات
+       الطيارين نفسها لسه بتتحمّل عادي، لأن تفاصيل الأوردر بتعرض اسم
+       الطيار ورقمه منها. */
+    const showPilots = (page === "orders") && !(window.isCC && window.isCC());
     const pilotsPanel = document.querySelector(".pilots-panel");
-    if (pilotsPanel) pilotsPanel.classList.toggle("visible", page === "orders");
+    if (pilotsPanel) pilotsPanel.classList.toggle("visible", showPilots);
     const mainEl = document.getElementById("main");
-    if (mainEl) mainEl.classList.toggle("with-panel", page === "orders");
+    if (mainEl) mainEl.classList.toggle("with-panel", showPilots);
     document.querySelectorAll(".nav-item").forEach(btn => {
       btn.classList.remove("active");
       if (btn.getAttribute("onclick")?.includes(`'${page}'`)) btn.classList.add("active");
@@ -11012,14 +11179,27 @@
     }
     return out.sort((a,b) => a.score-b.score || a.name.localeCompare(b.name,"ar")).slice(0,12);
   }
+  /* عتبتين مش واحدة (قرار صاحب النظام): بالاسم حرفين، وبالرقم 10 أرقام.
+     الدفتر بيكبر كل يوم، والبحث بآخر تلات أرقام بيرجّع صفوف كتير ملهاش
+     لازمة — والموظف أصلًا بيسمع الرقم كامل من العميل على التليفون.
+     نفس العتبتين مطبّقين على السيرفر (EntitiesController::partyList)
+     عشان النداء المباشر للـAPI مايتخطاهمش. */
+  const MIN_NAME_CHARS   = 2;
+  const MIN_PHONE_DIGITS = 10;
+  /** «ده رقم ولا اسم؟» — أرقام وفواصل بس = رقم */
+  const looksNumeric = q => { const d = digits(q); return d.length > 0 && /^[0-9+\-\s()]+$/.test(String(q||"")); };
+
   function searchCustomers(q, list) {
     const n = norm(q), d = digits(q);
-    if (!n && !d) return [];
+    const byPhone = d.length >= MIN_PHONE_DIGITS;
+    const byName  = n.length >= MIN_NAME_CHARS;
+    if (!byPhone && !byName) return [];
     const out = [];
     for (const c of list) {
       const nm = norm(c.name), p1 = digits(c.phone1), p2 = digits(c.phone2);
-      let score = (d.length>=4 && (p1.includes(d)||p2.includes(d))) ? 0
-                : nm === n ? 1 : nm.startsWith(n) ? 2 : (n.length>=2 && nm.includes(n)) ? 3 : -1;
+      let score = (byPhone && (p1.includes(d)||p2.includes(d))) ? 0
+                : !byName ? -1
+                : nm === n ? 1 : nm.startsWith(n) ? 2 : nm.includes(n) ? 3 : -1;
       if (score < 0) continue;
       out.push({ c, score });
     }
@@ -11034,8 +11214,59 @@
   /* ══════════════════════════════════════════════════════════════
      شاشة الأوردر الجديد
   ══════════════════════════════════════════════════════════════ */
-  let F = { senderId:null, parcels:[], lockBranch:"", seq:0, senderZoneId:"", senderZoneName:"" };
+  let F = { senderId:null, parcels:[], lockBranch:"", seq:0, senderZoneId:"", senderZoneName:"", custody:null };
   const P = n => F.parcels.find(x => x.n === Number(n)) || null;
+
+  /* ══════════════════════════════════════════════════════════════
+     بوابة العهدة (قرار صاحب النظام)
+     ──────────────────────────────────────────────────────────────
+     العهدة = فلوس بتطلع من جيب الطيار للمحل عند الاستلام وبيحصّلها من
+     المستلم — يعني الشركة ضامنة المبلغ. موظف الكول سنتر بياخد الطلب على
+     التليفون من حد مايعرفوش، فالبوابة: جهة الاستلام لازم تكون كمّلت 10
+     أوردرات **متسلّمة**، وسقف 3000 ج.م للأوردر الواحد.
+
+     🔴 القفل ده للواجهة بس — الحارس الحقيقي في OrdersController::store
+     وبيرفض بالصريح. لو نداء البوابة فشل بنقفل (الافتراض الآمن للفلوس)
+     ونقول السبب، بدل ما نفتح على أساس إن مافيش رد.
+  ══════════════════════════════════════════════════════════════ */
+  const CUSTODY_FALLBACK = { allowed:false, delivered:0, minDelivered:10, maxAmount:3000 };
+
+  function custodyOpen() {
+    const c = F.custody;
+    // البوابة مربوطة بالعميل اللي اتقرت له — أي تغيير في العميل بيقفلها
+    return !!(c && c.allowed && String(c.senderId || "") === String(F.senderId || ""));
+  }
+  function custodyMax() { return Number((F.custody || CUSTODY_FALLBACK).maxAmount) || 3000; }
+  function custodyReason() {
+    const c = F.custody || CUSTODY_FALLBACK;
+    if (!F.senderId) return "عميل جديد — العهدة بتتفتح بعد " + (c.minDelivered || 10) + " أوردرات متسلّمة";
+    if (c.error)     return "تعذّر التأكد من سجل العميل — العهدة مقفولة لحد ما الاتصال يرجع";
+    return "العميل كمّل " + (c.delivered || 0) + " أوردر متسلّم — العهدة بتتفتح بعد " + (c.minDelivered || 10);
+  }
+
+  let _custodySeq = 0;
+  async function loadCustodyGate() {
+    const sid = F.senderId;
+    const seq = ++_custodySeq;
+    if (!sid) {
+      // عميل جديد: مالوش تاريخ أصلًا، فمقفولة من غير نداء للسيرفر
+      F.custody = Object.assign({}, CUSTODY_FALLBACK, { senderId:"" });
+      renderParcels(); updateSummary();
+      return;
+    }
+    try {
+      const d = await api2().get("/api/senders/" + encodeURIComponent(sid) + "/custody");
+      if (seq !== _custodySeq) return;          // رد قديم وصل متأخر
+      F.custody = { senderId: String(sid), allowed: !!d.allowed,
+        delivered: Number(d.delivered) || 0,
+        minDelivered: Number(d.minDelivered) || 10,
+        maxAmount: Number(d.maxAmount) || 3000 };
+    } catch (e) {
+      if (seq !== _custodySeq) return;
+      F.custody = Object.assign({}, CUSTODY_FALLBACK, { senderId: String(sid), error: true });
+    }
+    renderParcels(); updateSummary();
+  }
 
   /* ══════════════════════════════════════════════════════════════
      منظومة الثقة — البحث الفوري بالتليفون في شاشة الأوردر الجديد
@@ -11071,6 +11302,7 @@
 
   window.renderNewOrder = function() {
     if (!F.parcels.length) addParcel(); else { renderParcels(); updateSummary(); }
+    loadCustodyGate();
     renderBranchLock();
     bindTrust("sender", "senderPhone", "ccSenderTrust",
       { nameId: "senderSearch", addrId: "senderAddress" });
@@ -11082,7 +11314,7 @@
                    p2:$("senderPhone2").value, a:$("senderAddress").value,
                    zId:F.senderZoneId, zName:F.senderZoneName, br:F.lockBranch };
     F = { senderId:null, parcels:[], lockBranch:"", seq:0, senderZoneId:"", senderZoneName:"" };
-    ["senderSearch","senderPhone","senderPhone2","senderAddress","senderArea","storePrepaid","storePrepaidNote","orderNotes"]
+    ["senderSearch","senderPhone","senderPhone2","senderAddress","senderArea","storePrepaid","storePrepaidNote","goodsValue","orderNotes"]
       .forEach(id => { const el = $(id); if (el) el.value = ""; });
     // بنحتفظ بجهة الاستلام ومنطقتها — محل واحد بيبعت كذا أوردر ورا بعض،
     // ومنطقة الاستلام هي اللي بيتحدّد منها الفرع فمفيش داعي يعيدها كل مرة
@@ -11092,12 +11324,16 @@
     F.senderZoneId = keep.zId || ""; F.senderZoneName = keep.zName || ""; F.lockBranch = keep.br || "";
     $("senderResults").classList.remove("open");
     addParcel(); renderSenderState(); renderSenderAreaHit(); renderBranchLock();
+    loadCustodyGate();   // العميل بيفضل محفوظ بعد الإفراغ، فالبوابة بتتقرا له تاني
     setTimeout(() => $(`pRecv${ esc(F.parcels[0].n) }`)?.focus(), 60);
   };
 
   window.onSenderSearch = function() {
     const q = $("senderSearch").value.trim(), box = $("senderResults");
+    const hadSender = F.senderId;
     F.senderId = null; renderSenderState();
+    // العميل اتغيّر → البوابة تتقفل فورًا (من غير نداء، مفيش senderId)
+    if (hadSender) loadCustodyGate();
     if (q.length < 2) { box.classList.remove("open"); box.innerHTML=""; updateSummary(); return; }
     const hits = searchCustomers(q, SENDERS());
     box.innerHTML = hits.map((c,i) => `
@@ -11116,12 +11352,13 @@
     $("senderPhone2").value = c.phone2||""; $("senderAddress").value = c.address||"";
     $("senderResults").classList.remove("open");
     renderSenderState(); updateSummary();
+    loadCustodyGate();                          // العهدة مسموحة للعميل ده ولا لأ؟
     if (_trustRun.sender) _trustRun.sender();   // بادچ الثقة كمان لما يختار من القائمة
     setTimeout(() => $(`pArea${ esc(F.parcels[0]?.n) }`)?.focus(), 50);
   };
   window.useNewSender = function() {
     F.senderId = null; $("senderResults").classList.remove("open");
-    renderSenderState(); $("senderPhone").focus();
+    renderSenderState(); loadCustodyGate(); $("senderPhone").focus();
   };
 
   function renderSenderState() {
@@ -11235,6 +11472,7 @@
       ph2:$(`pPhone2${ esc(p.n) }`)?.value ?? "", area:$(`pArea${ esc(p.n) }`)?.value ?? "",
       addr:$(`pAddr${ esc(p.n) }`)?.value ?? "", note:$(`pNote${ esc(p.n) }`)?.value ?? "",
       prepaid:$(`pPrepaid${ esc(p.n) }`)?.value ?? "" }));
+    const open = custodyOpen();
     box.innerHTML = F.parcels.map((p,i) => {
       const v = saved.find(s => s.n === p.n) || {};
       return `<div class="parcel">
@@ -11265,8 +11503,11 @@
           <div class="fg full"><label>عنوان التسليم بالتفصيل <span class="req">*</span></label>
             <input id="pAddr${ esc(p.n) }" value="${esc(v.addr)}" placeholder="الشارع، رقم العمارة، علامة مميزة…" oninput="updateSummary()" /></div>
           <div class="fg"><label>💵 عهدة الطرد <span style="font-weight:500;font-size:.72rem">— يدفعها الطيار للمحل</span></label>
-            <input id="pPrepaid${ esc(p.n) }" type="number" min="0" step="0.5" value="${esc(v.prepaid)}"
-                   dir="ltr" style="text-align:left" placeholder="0" oninput="updateSummary()" /></div>
+            <input id="pPrepaid${ esc(p.n) }" type="number" min="0" step="0.5"
+                   value="${ esc(open ? v.prepaid : "") }"
+                   dir="ltr" style="text-align:left" placeholder="${ esc(open ? "0" : "🔒 مقفولة") }"
+                   oninput="updateSummary()" ${open ? "" : "disabled"} />
+            ${open ? "" : `<div style="font-size:.71rem;color:var(--orange);margin-top:5px;line-height:1.7">🔒 ${esc(custodyReason())}</div>`}</div>
           <div class="fg full"><label>ملاحظة على الطرد</label>
             <input id="pNote${ esc(p.n) }" value="${esc(v.note)}" placeholder="اختياري" /></div>
         </div></div>`;
@@ -11415,6 +11656,7 @@
     prepaid = round2(prepaid);
     const prepaidEl = $("storePrepaid");
     if (prepaidEl) prepaidEl.value = prepaid;
+    const goods = round2(Number($("goodsValue")?.value) || 0);
     let total = 0;
     const rows = F.parcels.map((p,i) => {
       total += p.price||0;
@@ -11432,7 +11674,8 @@
         <b style="color:${ esc(F.lockBranch?"var(--green)":"var(--muted)") }">${esc(F.lockBranch?branchName(F.lockBranch):"لم يُحدَّد")}</b></div>
       <div class="sum-line"><span>عدد الطرود</span><b>${ esc(F.parcels.length) }</b></div>
       ${rows}
-      ${prepaid?`<div class="sum-line"><span>عهدة للمحل</span><b style="color:var(--orange)">${fmt(prepaid)}</b></div>`:""}
+      ${prepaid?`<div class="sum-line"><span>عهدة للمحل <span style="font-size:.68rem;color:var(--muted)">(الطيار بيدفعها)</span></span><b style="color:var(--orange)">${fmt(prepaid)}</b></div>`:""}
+      ${goods?`<div class="sum-line"><span>قيمة البضاعة <span style="font-size:.68rem;color:var(--muted)">(للعلم — مش بتتدفع)</span></span><b style="color:var(--muted)">${fmt(goods)}</b></div>`:""}
       <div class="sum-total"><span>إجمالي التوصيل</span><span style="color:#14b8a6">${fmt(total)} ج.م</span></div>`;
 
     const problems = validateOrder();
@@ -11463,6 +11706,14 @@
       if (p.manual && !p.branchId)          out.push(`${L}اختر الفرع`);
       if (p.manual && !p.price)             out.push(`${L}أدخل سعر التوصيل`);
     });
+
+    /* بوابة العهدة — نفس شرطي السيرفر بالظبط عشان الرسالة توصل قبل
+       الحفظ. السيرفر بيرفض برضه لو اتخطّت من غير الواجهة. */
+    let prepaidTotal = 0;
+    F.parcels.forEach(p => { prepaidTotal += Number($(`pPrepaid${ esc(p.n) }`)?.value) || 0; });
+    if (prepaidTotal > 0 && !custodyOpen()) out.push("العهدة مقفولة — " + custodyReason());
+    else if (prepaidTotal > custodyMax())   out.push(`أقصى عهدة ${custodyMax()} ج.م — المبلغ ده لازم يتسجّل من الفرع`);
+
     return out;
   }
 
@@ -11515,6 +11766,8 @@
         branchId: branch.id, notes:$("orderNotes").value.trim(),
         deliveries,
         storePrepaidNote: $("storePrepaidNote").value.trim(),
+        // قيمة البضاعة — بيانات للطيار، مش مبلغ بيتدفع (شوف تفاصيل الأوردر)
+        goodsValue: Number($("goodsValue")?.value) || 0,
         source:"callcenter"
       });
       const orderNum = res.order?.orderNum || "";
@@ -11598,16 +11851,23 @@
   window.renderCCSearch = function() {
     const q = ($("qSearch")?.value||"").trim(), box = $("qResults");
     if (!box) return;
-    if (q.length < 3) {
-      box.innerHTML = `<div class="cc-info">اكتب <b>3 حروف/أرقام على الأقل</b>. البحث بيشمل رقم الأوردر، تليفونات المُرسِل والمستلِم، الأسماء، والعناوين — في <b>كل أوردرات النظام</b>.</div>`;
+    const nq = norm(q), dq = digits(q);
+    /* نفس عتبتي دفتر العملاء: رقم = 10 أرقام، غير كده = حرفين. الفرق إن
+       الشاشة دي بتنده السيرفر (fetchServerSearch) مع كل كتابة، فالعتبة
+       هنا بتوفّر نداء مش بس صفوف. */
+    const isNum   = looksNumeric(q);
+    const byPhone = dq.length >= MIN_PHONE_DIGITS;
+    if (isNum ? !byPhone : q.length < MIN_NAME_CHARS) {
+      box.innerHTML = `<div class="cc-info">${isNum
+        ? `اكتب <b>رقم التليفون كامل</b> — ${MIN_PHONE_DIGITS} أرقام على الأقل.`
+        : `اكتب <b>${MIN_NAME_CHARS} حروف على الأقل</b>.`} البحث بيشمل رقم الأوردر، تليفونات المُرسِل والمستلِم، الأسماء، والعناوين — في <b>كل أوردرات النظام</b>.</div>`;
       return;
     }
-    const nq = norm(q), dq = digits(q);
     fetchServerSearch(q);
     const hits = ORDERS().filter(o => {
       const hay = norm(`${ esc(o.orderNum) } ${ esc(o.senderName) } ${(o.deliveries||[]).map(d=>`${ esc(d.receiverName) } ${ esc(d.address) } ${ esc(d.zoneName) }`).join(" ")}`);
       const ph = digits(`${ esc(o.senderPhone) }${ esc(o.senderPhone2) }${(o.deliveries||[]).map(d=>`${ esc(d.receiverPhone) }${ esc(d.receiverPhone2) }`).join("")}`);
-      return hay.includes(nq) || (dq.length>=4 && ph.includes(dq));
+      return hay.includes(nq) || (byPhone && ph.includes(dq));
     }).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,25);
 
     if (!hits.length) { box.innerHTML = `<div class="cc-warn">مفيش نتائج لـ «${esc(q)}» — جرّب رقم تليفون أو جزء من الاسم.</div>`; return; }
@@ -11678,16 +11938,106 @@
       ${s?`<span class="stat-sub">${esc(s)}</span>`:""}</div>`;
   }
 
+  window.resetComplaintFilters = function() {
+    ["cSearch","cType","cBy","cFrom","cTo"].forEach(id => { const el = $(id); if (el) el.value = ""; });
+    const st = $("cStatus"); if (st) st.value = "open";
+    renderComplaints();
+  };
+
+  /** فلترة بالنوع من الشريط البياني — أسرع من فتح القايمة المنسدلة */
+  window.filterComplaintType = function(t) {
+    const el = $("cType"); if (!el) return;
+    el.value = (el.value === t) ? "" : t;   // ضغطة تانية على نفس النوع = إلغاء
+    renderComplaints();
+  };
+
+  /* الفلاتر كلها بتتطبّق على نفس القايمة المحمّلة (COMPLAINTS) — مفيش
+     نداء سيرفر مع كل حرف. الدالة passExceptType بتستثني فلتر النوع عن قصد:
+     شريط التوزيع لازم يفضل شايف كل الأنواع عشان الموظف يعرف أنهي نوع
+     أكتر، حتى وهو واقف على نوع واحد. */
+  function complaintFilters() {
+    return {
+      q:    norm($("cSearch")?.value || ""),
+      /* مسار التليفون بيشتغل بس لو اللي اتكتب رقم أصلًا. من غير الشرط ده
+         البحث عن «HAL-5» كان بياخد الـ5 كرقم ويطابق أي تليفون فيه خمسة. */
+      qd:   looksNumeric($("cSearch")?.value || "") ? digits($("cSearch")?.value || "") : "",
+      type: $("cType")?.value || "",
+      st:   $("cStatus")?.value ?? "open",
+      by:   $("cBy")?.value || "",
+      from: $("cFrom")?.value || "",
+      to:   $("cTo")?.value || "",
+    };
+  }
+
+  function passExceptType(c, f) {
+    if (f.st === "open"     && c.status === "resolved") return false;
+    if (f.st === "resolved" && c.status !== "resolved") return false;
+    if (f.by && (c.createdBy || "") !== f.by) return false;
+    const d = toDateStr(c.createdAt);
+    if (f.from && d < f.from) return false;
+    if (f.to   && d > f.to)   return false;
+    if (f.q || f.qd) {
+      const hay = norm([c.customer, c.orderNum, c.details, c.resolution, c.createdBy].join(" "));
+      const ph  = digits(c.phone || "");
+      const okText = f.q  && hay.includes(f.q);
+      const okPh   = f.qd && ph.includes(f.qd);
+      if (!okText && !okPh) return false;
+    }
+    return true;
+  }
+
   window.renderComplaints = function() {
-    const st = $("cStatus")?.value ?? "open";
-    const rows = COMPLAINTS.filter(c => st==="open" ? c.status!=="resolved" : st==="resolved" ? c.status==="resolved" : true)
+    const f = complaintFilters();
+
+    // تعبئة قوايم النوع و«بواسطة» من البيانات نفسها (مرة واحدة لكل قيمة)
+    const tSel = $("cType");
+    if (tSel && tSel.options.length <= 1) {
+      tSel.innerHTML = `<option value="">— كل الأنواع —</option>` +
+        Object.entries(CTYPES).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+      tSel.value = f.type;
+    }
+    const bySel = $("cBy");
+    if (bySel) {
+      const cur = bySel.value;
+      const names = [...new Set(COMPLAINTS.map(c => c.createdBy).filter(Boolean))].sort();
+      if (bySel.options.length !== names.length + 1) {
+        bySel.innerHTML = `<option value="">— الكل —</option>` +
+          names.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join("");
+        bySel.value = cur;
+      }
+    }
+
+    const base = COMPLAINTS.filter(c => passExceptType(c, f));
+    const rows = base.filter(c => !f.type || c.type === f.type)
       .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+
+    // ── توزيع الأنواع (على base — من غير فلتر النوع) ──
+    const tc = new Map();
+    for (const c of base) { const k = c.type || "other"; tc.set(k, (tc.get(k)||0) + 1); }
+    const tArr = [...tc.entries()].sort((a,b)=>b[1]-a[1]);
+    const tMax = tArr.length ? tArr[0][1] : 0;
+    $("compTypes").innerHTML = tArr.length ? tArr.map(([k,v],i) => `
+      <div onclick="filterComplaintType('${escJs(k)}')" title="اضغط للفلترة على النوع ده"
+           style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer;${ esc(f.type===k?"background:rgba(249,115,22,.12)":"") }">
+        <span style="min-width:150px;font-size:.83rem;font-weight:${ esc(i===0?"800":"600") }">${ esc(i===0?"🥇 ":"") }${esc(CTYPES[k]||k)}</span>
+        <span style="flex:1;height:9px;border-radius:5px;background:var(--border);overflow:hidden;display:block">
+          <span style="display:block;height:100%;width:${ esc(tMax?Math.round(v/tMax*100):0) }%;background:${ esc(i===0?"var(--orange)":"var(--sky)") }"></span></span>
+        <span class="num-cc" style="min-width:70px;font-weight:800">${fmt0(v)}
+          <span style="color:var(--muted);font-weight:500;font-size:.74rem">(${ esc(base.length?Math.round(v/base.length*100):0) }%)</span></span>
+      </div>`).join("")
+      : `<div style="color:var(--muted);font-size:.83rem;padding:6px 2px">مفيش شكاوى في النطاق ده</div>`;
+
+    const cnt = $("compCount");
+    if (cnt) cnt.textContent = `${fmt0(rows.length)} شكوى معروضة من ${fmt0(COMPLAINTS.length)} في النظام`;
+
     const open = COMPLAINTS.filter(c => c.status!=="resolved").length;
     $("compStats").innerHTML =
       statCard("شكاوى مفتوحة", fmt0(open), open?"var(--red)":"var(--green)") +
       statCard("شكاوى اليوم", fmt0(COMPLAINTS.filter(c=>toDateStr(c.createdAt)===todayStr()).length), "var(--orange)") +
       statCard("إجمالي الشكاوى", fmt0(COMPLAINTS.length), "var(--sky)") +
-      statCard("محلولة", fmt0(COMPLAINTS.filter(c=>c.status==="resolved").length), "var(--green)");
+      statCard("محلولة", fmt0(COMPLAINTS.filter(c=>c.status==="resolved").length), "var(--green)") +
+      statCard("أكتر نوع مشكلة", tArr.length ? (CTYPES[tArr[0][0]]||tArr[0][0]) : "—", "var(--orange)",
+               tArr.length ? fmt0(tArr[0][1]) + " شكوى" : "");
 
     $("compBody").innerHTML = rows.length ? rows.map((c,i) => {
       const o = ORDERS().find(x => x.id === c.orderId);
@@ -11704,7 +12054,7 @@
         <td style="white-space:nowrap">
           ${c.status!=="resolved"?`<button class="btn-ghost-cc btn-xs-cc" style="border-color:var(--green);color:var(--green)" onclick="resolveComplaint('${ escJs(c.id) }')">✓ حل</button>`:""}
         </td></tr>`;
-    }).join("") : `<tr><td colspan="9" class="empty-row">مفيش شكاوى${st==="open"?" مفتوحة":""} ✓</td></tr>`;
+    }).join("") : `<tr><td colspan="9" class="empty-row">مفيش شكاوى مطابقة للفلاتر${f.st==="open"?" (المفتوحة)":""} ✓</td></tr>`;
   };
 
   window.openComplaintModal = function(orderId) {
@@ -11831,6 +12181,57 @@
   /* ══════════════════════════════════════════════════════════════
      أدائي
   ══════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     ساعات العمل — من جلسات الحضور (attendance_sessions)
+     ──────────────────────────────────────────────────────────────
+     الأداء بقى «أوردر لكل ساعة عمل» مش «عدد أوردرات» وحده: موظف عمل 40
+     أوردر في 8 ساعات مش زي واحد عملهم في وردتين.
+
+     الجلسة المفتوحة (مافيش checkOut) بتتحسب لحد «lastSeen» مش لحد
+     دلوقتي — الموظف اللي قفل المتصفح من غير انصراف مالوش يفضل بيراكم
+     ساعات وهمية. والجلسة الأطول من 16 ساعة بتتقص: دي شبه أكيد جلسة
+     ماقفلتش صح، وسيبها بيخلي «أوردر/ساعة» يقرب من صفر ويبوّظ المقارنة.
+
+     🔒 السيرفر بيقص الرد على حضور الموظف نفسه لما يكون دوره كول سنتر
+     (FinanceController::attendanceList)، فباقي الصفوف بتطلع «—» عنده
+     والمدير بيشوف الكل.
+  ══════════════════════════════════════════════════════════════ */
+  const MAX_SESSION_MS = 16 * 3600 * 1000;
+  let HOURS = { key: "", byUser: null, loading: false, denied: false };
+
+  function hoursOf(username) {
+    if (!HOURS.byUser) return null;
+    const ms = HOURS.byUser[username];
+    return ms === undefined ? null : ms / 3600000;
+  }
+  const fmtHours = h => h === null ? "—" : (h < 0.05 ? "0" : h.toFixed(1)) + " س";
+  const perHour  = (count, h) => (h === null || h < 0.05) ? "—" : (count / h).toFixed(1);
+
+  async function loadHours(from, to) {
+    const key = from + "|" + to;
+    if (HOURS.key === key || HOURS.loading) return;
+    HOURS.loading = true;
+    try {
+      const d = await api2().get("/api/attendance", { from, to });
+      const byUser = {};
+      for (const day of Object.values(d.days || {})) {
+        for (const [user, rec] of Object.entries(day || {})) {
+          for (const ses of (rec.sessions || [])) {
+            const inMs  = Number(ses.checkIn);
+            const outMs = Number(ses.checkOut || ses.lastSeen || 0);
+            if (!inMs || !outMs || outMs <= inMs) continue;
+            byUser[user] = (byUser[user] || 0) + Math.min(outMs - inMs, MAX_SESSION_MS);
+          }
+        }
+      }
+      HOURS = { key, byUser, loading: false, denied: false };
+    } catch (e) {
+      // 403 = الدور مش مسموح له (مثلًا مدير فرع فتح الشاشة) — مش خطأ نعرضه
+      HOURS = { key, byUser: {}, loading: false, denied: true };
+    }
+    if (document.querySelector("#page-ccperf.active")) renderCCPerf();
+  }
+
   window.renderCCPerf = function() {
     const f = $("pFrom"), t = $("pTo");
     if (f && !f.value) f.value = todayStr().slice(0,8) + "01";
@@ -11844,6 +12245,7 @@
       ag.value = cur;
     }
     const agent = ag?.value || "";
+    loadHours(from, to);           // بيرسم تاني لوحده أول ما توصل الساعات
     const inRange = ORDERS().filter(o => { const d = toDateStr(o.createdAt);
       return (!from || d>=from) && (!to || d<=to); });
     const cc = inRange.filter(o => o.source === "callcenter");
@@ -11855,8 +12257,14 @@
     const value = mine.reduce((s,o)=>s+(Number(o.totalDeliveryPrice)||0),0);
     const manualZ = mine.filter(o => (o.deliveries||[]).some(d => !d.zoneId)).length;
 
+    const myUser  = agent || ME().username;
+    const myHours = hoursOf(myUser);
+
     $("perfStats").innerHTML =
       statCard("أوردراتي", fmt0(mine.length), "var(--sky)", `من ${fmt0(cc.length)} للكول سنتر`) +
+      statCard("ساعات العمل", fmtHours(myHours), "var(--purple)",
+               myHours === null ? (HOURS.loading ? "جاري التحميل…" : "مفيش جلسات حضور في المدى") : "من جلسات الحضور") +
+      statCard("أوردر / ساعة", perHour(mine.length, myHours), "var(--orange)", "معدّل الإنتاج") +
       statCard("تم تسليمها", fmt0(done), "var(--green)", mine.length?`${ esc(Math.round(done/mine.length*100)) }%`:"") +
       statCard("ملغاة", fmt0(cancelled), cancelled?"var(--red)":"var(--muted)") +
       statCard("قيمة التوصيل", money(value), "#14b8a6") +
@@ -11871,14 +12279,33 @@
       if (o.status==="ملغي") a.cancelled++;
     }
     const me = ME().username;
-    $("perfAgentsBody").innerHTML = agents.size ? [...agents.entries()].sort((a,b)=>b[1].n-a[1].n).map(([k,a])=>`
+    /* الترتيب بقى على «أوردر/ساعة» لما الساعات معروفة — ده المقياس اللي
+       صاحب النظام طلبه. اللي ساعاته مش معروفة بينزل تحت بترتيب العدد. */
+    const agentRows = [...agents.entries()].map(([k,a]) => {
+      const h = hoursOf(k);
+      return { k, a, h, rate: (h !== null && h >= 0.05) ? a.n / h : null };
+    }).sort((x,y) => {
+      if (x.rate !== null && y.rate !== null) return y.rate - x.rate;
+      if (x.rate !== null) return -1;
+      if (y.rate !== null) return 1;
+      return y.a.n - x.a.n;
+    });
+
+    $("perfAgentsBody").innerHTML = agentRows.length ? agentRows.map(({k,a,h})=>`
       <tr${k===me?' style="background:rgba(232,25,44,.06)"':''}>
         <td><b>${esc(k)}</b>${k===me?' <span style="background:rgba(168,85,247,.15);color:var(--purple);padding:2px 7px;border-radius:20px;font-size:.63rem;font-weight:700">أنا</span>':''}</td>
         <td class="num-cc" style="font-weight:700">${fmt0(a.n)}</td>
+        <td class="num-cc" style="color:var(--purple)">${ esc(fmtHours(h)) }</td>
+        <td class="num-cc" style="font-weight:800;color:var(--orange)">${ esc(perHour(a.n, h)) }</td>
         <td class="num-cc" style="color:var(--green)">${fmt0(a.done)}</td>
         <td class="num-cc" style="color:${ esc(a.cancelled?"var(--red)":"var(--muted)") }">${fmt0(a.cancelled)}</td>
-        <td class="num-cc">${fmt(a.value)}</td></tr>`).join("")
-      : `<tr><td colspan="5" class="empty-row">مفيش بيانات في المدى</td></tr>`;
+        <td class="num-cc">${fmt(a.value)}</td></tr>`).join("") +
+      (HOURS.byUser && agentRows.some(r => r.h === null)
+        ? `<tr><td colspan="7" style="font-size:.74rem;color:var(--muted);padding:9px 4px">
+             ⓘ «—» في خانة الساعات معناها مفيش جلسات حضور مسجّلة للموظف ده في المدى${
+             HOURS.denied ? "، أو إن دورك مايسمحش بقراية حضور غيرك" : ""}.</td></tr>`
+        : "")
+      : `<tr><td colspan="7" class="empty-row">مفيش بيانات في المدى</td></tr>`;
 
     const zmap = new Map();
     for (const o of cc) for (const d of (o.deliveries||[])) {

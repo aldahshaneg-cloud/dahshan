@@ -67,6 +67,9 @@ class RouteCoverage extends Command
 
         'POST /api/customer/push/unsubscribe' =>
             'حذف اشتراك جهاز العميل من إشعارات الستارة — الجهة المقابلة للاشتراك',
+
+        'GET /api/senders/{id}/custody' =>
+            'بوابة العهدة لجهة الاستلام (كمّل 10 أوردرات متسلّمة؟ وسقف 3000 ج.م) — قيد اتفرض على الكول سنتر بعد الترحيل بقرار صاحب النظام، النظام القديم مكانش بيقيّد العهدة أصلًا',
     ];
 
     protected $signature = 'route:coverage {--missing : اعرض الناقص بس} {--extra : اعرض الزيادة بس}';

@@ -27,6 +27,24 @@ class VerifyWireParity extends Command
 
     protected $description = 'بيقارن طبقة السلك الجديدة بدوال النظام القديم على بيانات حقيقية';
 
+    /**
+     * حقول اتضافت في طبقة السلك الجديدة بعد الترحيل ومالهاش مقابل في
+     * الأصل — ميزة جديدة، مش اختلاف ترحيل.
+     *
+     * المفتاح: اسم الكيان زي ما هو متمرّر لـcheckEntity.
+     * القيمة: [اسم الحقل => السبب]. أي سطر جديد هنا لازم يجي معاه سبب
+     *         مكتوب — القايمة من غير أسباب بتبقى قايمة تجاهل مش قايمة بيضا.
+     *
+     * ⚠️ الحقل بيتشال من **الجديد** قبل المقارنة بس. لو الأصل بيبعت حقل
+     * والجديد مابيبعتوش، ده بيفضل فشل — وده المقصود: الحذف بيكسر واجهات
+     * شغّالة، والإضافة لأ.
+     */
+    private const INTENTIONAL_FIELDS = [
+        'store_contacts' => [
+            'zoneId' => 'منطقة التسليم المعتادة للعميل في دفتر المحل — اتضافت 2026-08-24 عشان اختيار العميل يعبّي المنطقة والسعر تلقائيًا. الأصل مكانش بيخزّن منطقة مع جهة الاتصال أصلًا.',
+        ],
+    ];
+
     private int $pass = 0;
     private int $fail = 0;
     private array $failures = [];
@@ -117,14 +135,23 @@ class VerifyWireParity extends Command
         $rows = DB::select($sql . ' LIMIT ' . $limit);
         foreach ($rows as $row) {
             $arr = (array) $row;
-            $this->compare($label . '#' . ($arr['id'] ?? '?'), $legacyFn($arr), $new($arr));
+            $this->compare($label . '#' . ($arr['id'] ?? '?'), $legacyFn($arr), $new($arr), $label);
         }
         $this->line(sprintf('  %-15s : %d صف', $label, count($rows)));
     }
 
-    private function compare(string $what, mixed $old, mixed $new): void
+    private function compare(string $what, mixed $old, mixed $new, ?string $entity = null): void
     {
         // المقارنة على الـJSON عشان تكشف اختلاف الترتيب والنوع كمان
+        /* الحقول المضافة عن قصد بتتشال من الجديد قبل المقارنة — بكده
+           الفحص يفضل بيمسك أي اختلاف تاني في نفس الكيان بدل ما يبقى
+           كله أحمر بسبب حقل معروف. */
+        if ($entity !== null && is_array($new) && isset(self::INTENTIONAL_FIELDS[$entity])) {
+            foreach (array_keys(self::INTENTIONAL_FIELDS[$entity]) as $f) {
+                unset($new[$f]);
+            }
+        }
+
         $a = json_encode($old, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $b = json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 

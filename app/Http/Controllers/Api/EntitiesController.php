@@ -208,6 +208,33 @@ class EntitiesController
     }
 
     /**
+     * GET /api/senders/{id}/custody — العميل ده يستاهل عهدة ولا لأ؟
+     *
+     * العهدة = فلوس بتطلع من جيب الطيار للمحل عند الاستلام وبيحصّلها من
+     * المستلم — يعني الشركة ضامنة المبلغ لحد ما الشحنة توصل. موظف الكول
+     * سنتر بيسمع الطلب من حد على التليفون مايعرفوش، فالبوابة اتحطت.
+     *
+     * العدّ على الأوردرات **المتسلّمة** مش المتعملة: أي حد يقدر يعمل ١٠
+     * أوردرات وهمية ويلغيها؛ الأوردر المتسلّم هو الوحيد اللي بيثبت تعامل.
+     * (نفس منطق CustomerAppController::deliveredOrdersCount للعميل المسجّل.)
+     *
+     * الرد للعرض بس — الحارس الحقيقي في OrdersController::store.
+     */
+    public function senderCustodyGate(string $id): JsonResponse
+    {
+        $senderId = (int) $id;
+        $done = OrdersController::senderDeliveredCount($senderId ?: null);
+
+        return ApiResponse::ok([
+            'senderId'     => $senderId,
+            'delivered'    => $done,
+            'minDelivered' => OrdersController::CC_CUSTODY_MIN_DELIVERED,
+            'maxAmount'    => OrdersController::CC_CUSTODY_MAX,
+            'allowed'      => $done >= OrdersController::CC_CUSTODY_MIN_DELIVERED,
+        ]);
+    }
+
+    /**
      * 🔒 خصوصية: ده تفريغ لدفتر العملاء كله (لحد 5000 صف باسم وتليفون
      * وعنوان). موظفين بس — أي دور تاني كان يسحب الدفتر بنداء واحد.
      *
@@ -223,7 +250,17 @@ class EntitiesController
         $q = trim((string) $request->query('q', ''));
 
         if ($q !== '') {
-            if (mb_strlen($q) < 2) {
+            /* عتبتين مش واحدة (طلب صاحب النظام):
+             *   • بالاسم — حرفين على الأقل (زي ما كان).
+             *   • بالرقم — 10 أرقام على الأقل، يعني الرقم كامل تقريبًا.
+             * السبب إن البحث بآخر 3-4 أرقام بيرجّع صفوف كتير من دفتر بيكبر
+             * كل يوم، والموظف أصلًا بيسمع الرقم كامل من العميل. الفحص هنا
+             * مش في الواجهة بس — العتبة اللي في الواجهة بيتخطاها أي نداء
+             * مباشر للـAPI. */
+            $digits = preg_replace('/\D/', '', $q);
+            $isNumeric = $digits !== '' && preg_match('/^[0-9+\-\s()]+$/', $q) === 1;
+            $minLen = $isNumeric ? 10 : 2;
+            if (($isNumeric ? strlen($digits) : mb_strlen($q)) < $minLen) {
                 return PollableList::items([]);
             }
             $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';

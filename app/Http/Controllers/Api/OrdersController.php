@@ -285,6 +285,30 @@ class OrdersController
      * و`storePrepaid` = مجموع عهدة الطرود. الاتنين **من غير round()** —
      * زي الأصل بالحرف (شوف notes).
      */
+    /** أقل عدد أوردرات **متسلّمة** لجهة الاستلام قبل ما الكول سنتر يحط عهدة. */
+    public const CC_CUSTODY_MIN_DELIVERED = 10;
+
+    /** أقصى عهدة للأوردر الواحد من الكول سنتر (ج.م). */
+    public const CC_CUSTODY_MAX = 3000.0;
+
+    /**
+     * عدد أوردرات جهة الاستلام دي اللي اتسلّمت فعلًا.
+     *
+     * «اتسلّمت» مش «اتعملت» عن قصد — الأوردر الملغي أو الوهمي مايثبتش
+     * تعامل، ومن غير الشرط ده البوابة بتتفتح بعشر إلغاءات.
+     */
+    public static function senderDeliveredCount(?int $senderId): int
+    {
+        if (! $senderId) {
+            return 0;
+        }
+
+        return (int) (DB::selectOne(
+            "SELECT COUNT(*) AS c FROM orders WHERE sender_id = ? AND status = 'delivered'",
+            [$senderId]
+        )->c ?? 0);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $actor = $request->actorOrFail();
@@ -429,6 +453,36 @@ class OrdersController
                 // 🔴 فلوس: مجموع خام من غير round() — منقول بالحرف
                 $totalPrice   = array_sum(array_column($parcels, 'zone_price'));
                 $storePrepaid = array_sum(array_column($parcels, 'order_price'));
+
+                /* ── بوابة العهدة للكول سنتر ──────────────────────────────
+                   العهدة بتطلع من جيب الطيار للمحل وبيحصّلها من المستلم،
+                   فالشركة ضامنة المبلغ. الفرع شايف العميل قدامه فمش داخل
+                   البوابة؛ الكول سنتر بياخد الطلب على التليفون من حد
+                   مايعرفوش، فشرطين:
+                     • جهة الاستلام كمّلت 10 أوردرات **متسلّمة**.
+                     • وسقف 3000 ج.م للأوردر الواحد.
+
+                   🔴 رفض صريح مش تصفير صامت — عكس تطبيق العميل. هناك
+                   العميل نفسه بيكتب الرقم والواجهة بتشرح له ليه مقفول؛
+                   هنا موظف بيكتب رقم اتقاله على التليفون، ولو صفّرناه في
+                   السكات الطيار مش هيدفع للمحل ومحدش هيعرف ليه.
+
+                   المكان مقصود: قبل allocOrderNum() — الرفض هنا مابيحرقش
+                   رقم أوردر من عدّاد اليوم. */
+                if ($storePrepaid > 0 && ($source === 'callcenter' || $actor->role === 'callcenter')) {
+                    if ($storePrepaid > self::CC_CUSTODY_MAX) {
+                        throw new ApiException(
+                            'أقصى عهدة مسموحة من الكول سنتر ' . (int) self::CC_CUSTODY_MAX . ' ج.م — المبلغ ده لازم يتسجّل من الفرع'
+                        );
+                    }
+                    $done = self::senderDeliveredCount($senderId);
+                    if ($done < self::CC_CUSTODY_MIN_DELIVERED) {
+                        throw new ApiException(
+                            'العميل ده كمّل ' . $done . ' أوردر متسلّم بس — العهدة بتتفتح بعد '
+                            . self::CC_CUSTODY_MIN_DELIVERED . ' أوردرات متسلّمة'
+                        );
+                    }
+                }
 
                 // كل التحقق وبحث المناطق خلص — دلوقتي بس نخصّص الرقم
                 $orderNum = $allocOrderNum();

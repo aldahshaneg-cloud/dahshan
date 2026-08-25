@@ -3035,14 +3035,33 @@
         clearState();
         const query = this.value.trim();
         if (!query) { hideDropdown(); return; }
+        if (tooShort(query)) { showTooShort(query); return; }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => doSearch(query), 200);
       });
 
       input.addEventListener('focus', function() {
         const query = this.value.trim();
-        if (query.length >= 1) doSearch(query);
+        if (query && !tooShort(query)) doSearch(query);
       });
+
+      /* عتبتين: بالاسم حرفين، وبالرقم 10 أرقام — نفس اللي على السيرفر
+         (EntitiesController::partyList). تحت العتبة بنقول السبب بدل ما
+         نبعت نداء وناخد قايمة فاضية تتقرا «مفيش عميل بالاسم ده». */
+      function tooShort(q) {
+        const d = String(q).replace(/\D/g, "");
+        const isNum = d.length > 0 && /^[0-9+\-\s()]+$/.test(q);
+        return isNum ? d.length < 10 : q.length < 2;
+      }
+      function showTooShort(q) {
+        const d = String(q).replace(/\D/g, "");
+        const isNum = d.length > 0 && /^[0-9+\-\s()]+$/.test(q);
+        dropdown.innerHTML = '<div class="smart-search-empty">' +
+          (isNum ? 'اكتب رقم التليفون كامل (10 أرقام على الأقل)' : 'اكتب حرفين على الأقل') +
+          '</div>';
+        addNewBtn.style.display = 'none';
+        showDropdown();
+      }
 
       document.addEventListener('click', function(e) {
         if (!wrapper.contains(e.target)) hideDropdown();

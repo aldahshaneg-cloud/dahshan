@@ -3560,6 +3560,30 @@
       const o = (window._ordersData || []).find(x => x.id === orderId)
              || (window._allOrdersData || []).find(x => x.id === orderId);
       if (!o) return;
+
+      /* 🔴 وقت التحميل على الطيار **مش** statusSince.
+         status_since بيتكتب من فوق مع كل تغيير حالة — التسليم والإلغاء
+         والتأجيل — فالأوردر المسلَّم كان بيعرض **وقت التسليم** في خانة
+         «تحميل الطلب على المندوب»، والأوردر اللي لسه مااتحملش (statusSince
+         بيساوي createdAt وقت الإنشاء) كان بيعرض صف تحميل وهمي بنفس وقت
+         وصوله للفرع.
+
+         current_pilot_since هو الحقل الوحيد اللي مابيتلمسش بعد التحميل
+         (بيتغيّر مع النقل بين الطيارين بس). ومع النقل بيبقى وقت **آخر**
+         نقل، فأول تحميل بنرجّعه من statusSince طالما هو قبل أول نقل —
+         النقل ممنوع يلمسه (OrdersController::transfer قاعدة 1).
+         (نفس الكود بالحرف في callcenter.html — أي تغيير هنا يتعمل هناك.) */
+      const _hist = Array.isArray(o.transferHistory) ? o.transferHistory : [];
+      let assignedAt = null;
+      if (o.pilotId || o.pilotName) {
+        if (_hist.length) {
+          const firstT = new Date(_hist[0].at).getTime();
+          const ss = o.statusSince ? new Date(o.statusSince).getTime() : NaN;
+          assignedAt = (!isNaN(ss) && !isNaN(firstT) && ss <= firstT) ? o.statusSince : null;
+        } else {
+          assignedAt = o.currentPilotSince || o.statusSince || null;
+        }
+      }
       const parcels = o.deliveries || [];
       const fmt = iso => iso ? new Date(iso).toLocaleString("ar-EG") : "—";
       const fmtDur = (startIso, endIso) => {
@@ -3685,7 +3709,8 @@
               ${(function(){
                 const stages = [];
                 stages.push({ icon:"📥", label:"وصول الطلب للفرع", time:o.createdAt, color:"14,165,233" });
-                if (o.statusSince) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:o.statusSince, color:"249,115,22" });
+                // assignedAt متحسوبة فوق — مش statusSince (شوف التعليق هناك)
+                if (assignedAt) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:assignedAt, color:"249,115,22" });
                 if (o.receivedAt) stages.push({ icon:"📦", label:"استلام الطلب", time:o.receivedAt, color:"20,184,166" });
                 if (o.tripStartedAt) stages.push({ icon:"🚀", label:"بدء الرحلة", time:o.tripStartedAt, color:"139,92,246" });
 
@@ -3718,23 +3743,36 @@
                       <td style="padding:7px 4px;color:var(--muted);white-space:nowrap">الآن (مستمر)</td>
                       <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:rgb(20,184,166)" id="od-timer-${ esc(o.id) }">${formatElapsed(o.receivedAt)}</td>
                     </tr>`;
-                } else if (o.statusSince) {
+                } else if (o.status !== "ملغي") {
+                  /* الأوردر اللي لسه مااتحملش على طيار كان بياخد نفس سطر
+                     «في انتظار استلام الطيار للطرد» — وهو أصلًا لسه في الفرع
+                     مافيش طيار. والملغي كان بيفضل بيعدّ للأبد. */
+                  const waitFrom  = assignedAt || o.createdAt;
+                  const waitLabel = o.status === "مؤجل" ? "الطلب مؤجل — في انتظار فك التأجيل"
+                                  : assignedAt          ? "في انتظار استلام الطيار للطرد"
+                                                        : "في انتظار التحميل على طيار";
                   liveRow = `
                     <tr style="border-top:1px solid var(--border)">
                       <td style="padding:7px 4px">
                         <div style="display:flex;align-items:center;gap:7px">
                           <span style="width:20px;height:20px;border-radius:50%;background:rgba(249,115,22,.18);display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0">⏳</span>
-                          <span style="color:var(--text);font-weight:600">في انتظار استلام الطيار للطرد</span>
+                          <span style="color:var(--text);font-weight:600">${ esc(waitLabel) }</span>
                         </div>
                       </td>
                       <td style="padding:7px 4px;color:var(--muted);white-space:nowrap">الآن (مستمر)</td>
-                      <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:var(--orange)" id="od-timer-${ esc(o.id) }">${formatElapsed(o.statusSince)}</td>
+                      <td style="padding:7px 4px;font-weight:700;white-space:nowrap;color:var(--orange)" id="od-timer-${ esc(o.id) }">${formatElapsed(waitFrom)}</td>
                     </tr>`;
                 }
 
+                stages.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
                 const rows = stages.map((s, i) => {
-                  const prev = i > 0 ? stages[i - 1].time : null;
-                  const dur  = prev ? fmtDur(prev, s.time) : "—";
+                  /* 🔴 المدة بقت «قد إيه فضل في المرحلة دي» مش «قد إيه عدّى
+                     قبل ما يوصلها». قبل كده صف «وصول الطلب للفرع» كان بياخد
+                     «—» والوقت اللي قعده في الفرع مكتوب في الصف اللي تحته —
+                     يعني عمود المدة كله مترحّل خانة لتحت. */
+                  const next = stages[i + 1];
+                  const dur  = next ? fmtDur(s.time, next.time) : (liveRow ? "جارية" : "—");
                   return `
                     <tr style="border-top:1px solid var(--border)">
                       <td style="padding:7px 4px">
@@ -3753,18 +3791,21 @@
                 const finalTime = o.deliveredAt || o.undeliveredAt;
                 if (finalTime) {
                   const segs = [];
-                  if (o.createdAt && o.statusSince) segs.push({ label:"⏳ انتظار في الفرع", from:o.createdAt, to:o.statusSince, color:"249,115,22" });
-                  if (o.statusSince && o.receivedAt) {
-                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:o.statusSince, to:o.receivedAt, color:"139,92,246" });
-                  } else if (o.statusSince && o.tripStartedAt) {
+                  /* assignedAt مش statusSince — للأوردر المسلَّم statusSince
+                     بيساوي وقت التسليم، فالرسم كان بيقول إن الرحلة كلها
+                     «انتظار في الفرع» ومدة التوصيل صفر. */
+                  if (o.createdAt && assignedAt) segs.push({ label:"⏳ انتظار في الفرع", from:o.createdAt, to:assignedAt, color:"249,115,22" });
+                  if (assignedAt && o.receivedAt) {
+                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:assignedAt, to:o.receivedAt, color:"139,92,246" });
+                  } else if (assignedAt && o.tripStartedAt) {
                     // طلبات قديمة قبل وجود حقل receivedAt منفصل
-                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:o.statusSince, to:o.tripStartedAt, color:"139,92,246" });
+                    segs.push({ label:"🕓 انتظار استلام الطيار للطرد", from:assignedAt, to:o.tripStartedAt, color:"139,92,246" });
                   }
                   if (o.receivedAt && o.tripStartedAt) segs.push({ label:"📦 مستلم قبل بدء الرحلة", from:o.receivedAt, to:o.tripStartedAt, color:"20,184,166" });
                   if (o.tripStartedAt && finalTime) {
                     segs.push({ label:"🚀 مدة الرحلة الفعلية", from:o.tripStartedAt, to:finalTime, color:"14,165,233" });
-                  } else if (o.statusSince && finalTime) {
-                    segs.push({ label:"🛵 مدة التوصيل", from:o.statusSince, to:finalTime, color:"14,165,233" });
+                  } else if (assignedAt && finalTime) {
+                    segs.push({ label:"🛵 مدة التوصيل", from:assignedAt, to:finalTime, color:"14,165,233" });
                   }
 
                   const secs  = segs.map(s => Math.max(0, Math.floor((new Date(s.to).getTime() - new Date(s.from).getTime()) / 1000)));
@@ -3789,10 +3830,15 @@
                       <div style="margin-top:12px;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px">
                         <div style="font-size:.76rem;font-weight:700;color:var(--muted);margin-bottom:10px">📊 توزيع الوقت على مراحل الطلب</div>
                         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-                          <div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(${ esc(gradParts.join(",")) });flex-shrink:0;box-shadow:inset 0 0 0 6px var(--bg,#0b0b0b)"></div>
+                          ${/* 🔴 التلاتة دول HTML متولّد جوّه، مش نص من بيانات
+                               المستخدم. esc() عليهم كانت بتطبع الوسوم نفسها كنص
+                               في الشاشة وتلغي الرسم البياني. اللي محتاج تهريب
+                               اتهرّب عند بنائه فوق: esc(s.label) وesc(s.color)
+                               وesc(pct). */""}
+                          <div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(${ gradParts.join(",") });flex-shrink:0;box-shadow:inset 0 0 0 6px var(--bg,#0b0b0b)"></div>
                           <div style="flex:1;min-width:170px;display:flex;flex-direction:column;gap:7px">
-                            <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--border)">${ esc(barParts.join("")) }</div>
-                            ${ esc(legendParts.join("")) }
+                            <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--border)">${ barParts.join("") }</div>
+                            ${ legendParts.join("") }
                             <div style="display:flex;justify-content:space-between;font-size:.78rem;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">
                               <span style="color:var(--muted)">⏱️ الإجمالي (من الفرع حتى ${ esc(o.deliveredAt ? "التسليم" : "الإرجاع") })</span>
                               <span style="font-weight:800;color:var(--green)">${fmtDur(o.createdAt, finalTime)}</span>
@@ -3844,7 +3890,8 @@
         </div>`;
       document.body.appendChild(box);
       if (!o.deliveredAt && !o.undeliveredAt) {
-        const timerBase = o.tripStartedAt || o.receivedAt || o.statusSince || o.createdAt;
+        // نفس أساس liveRow بالظبط — assignedAt مش statusSince
+        const timerBase = o.tripStartedAt || o.receivedAt || assignedAt || o.createdAt;
         const odTimerEl = document.getElementById(`od-timer-${ esc(o.id) }`);
         if (odTimerEl && timerBase) {
           const odInt = setInterval(() => {
@@ -4786,12 +4833,32 @@
         clearState();
         const query = this.value.trim();
         if (!query) { hideDropdown(); return; }
+        if (tooShort(query)) { showTooShort(query); return; }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => doSearch(query), 200);
       });
       input.addEventListener('focus', function() {
-        if (this.value.trim().length >= 1) doSearch(this.value.trim());
+        const q = this.value.trim();
+        if (q && !tooShort(q)) doSearch(q);
       });
+
+      /* عتبتين: بالاسم حرفين، وبالرقم 10 أرقام — نفس اللي على السيرفر
+         (EntitiesController::partyList). تحت العتبة بنقول السبب بدل ما
+         نبعت نداء وناخد قايمة فاضية تتقرا «مفيش عميل بالاسم ده». */
+      function tooShort(q) {
+        const d = String(q).replace(/\D/g, "");
+        const isNum = d.length > 0 && /^[0-9+\-\s()]+$/.test(q);
+        return isNum ? d.length < 10 : q.length < 2;
+      }
+      function showTooShort(q) {
+        const d = String(q).replace(/\D/g, "");
+        const isNum = d.length > 0 && /^[0-9+\-\s()]+$/.test(q);
+        dropdown.innerHTML = '<div class="smart-search-empty">' +
+          (isNum ? 'اكتب رقم التليفون كامل (10 أرقام على الأقل)' : 'اكتب حرفين على الأقل') +
+          '</div>';
+        addNewBtn.style.display = 'none';
+        showDropdown();
+      }
       document.addEventListener('click', function(e) {
         if (!wrapper.contains(e.target)) hideDropdown();
       });

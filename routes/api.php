@@ -117,8 +117,11 @@ Route::get('expenses', [FinanceController::class, 'expensesList'])
 Route::get('wallets/{ownerType}/{ownerId}', [FinanceController::class, 'walletGet']);
 Route::get('wallets', [FinanceController::class, 'walletsList'])
     ->middleware('role:admin,accountant,callcenter');
+/* 🔴 الكول سنتر اتضاف هنا عشان شاشة «أدائي» بقت بتقيس الأداء بـ«أوردر لكل
+   ساعة عمل» — والساعات مصدرها الوحيد جلسات الحضور. الدور **مقصوص جوه
+   الكنترولر على حضوره هو بس**: مايشوفش حضور زمايله ولا حضور الطيارين. */
 Route::get('attendance', [FinanceController::class, 'attendanceList'])
-    ->middleware('role:admin,branch,hr,accountant');
+    ->middleware('role:admin,branch,hr,accountant,callcenter');
 Route::get('manual-employees', [FinanceController::class, 'manualEmployeesList'])
     ->middleware('role:admin,hr,branch');
 
@@ -194,6 +197,10 @@ Route::delete('admin-emails/{id}', [EntitiesController::class, 'adminEmailsDelet
 // lookup قبل أي {id} على نفس الجذر — بحث بالتليفون للموظفين بس
 Route::get('senders/lookup', [EntitiesController::class, 'sendersLookup'])
     ->middleware('role:admin,branch,callcenter');
+/* بوابة العهدة: العميل ده يستاهل عهدة ولا لأ؟ الواجهة بتقفل الخانة بيها،
+   والحارس الحقيقي في POST /api/orders (الواجهة مابتحرسش فلوس). */
+Route::get('senders/{id}/custody', [EntitiesController::class, 'senderCustodyGate'])
+    ->middleware('role:admin,branch,callcenter');
 Route::get('receivers/lookup', [EntitiesController::class, 'receiversLookup'])
     ->middleware('role:admin,branch,callcenter');
 // 🔒 الـupsert ده كان بيرجّع الصف الموجود كامل لو الرقم متكرر — التفاف تام
@@ -211,23 +218,30 @@ Route::delete('store-contacts/{id}', [EntitiesController::class, 'storeContactsD
 /* ── الأوردرات ── */
 Route::post('upload', [OrdersController::class, 'upload']);
 // bulk قبل {id} — أشكال مختلفة بس بنلتزم بالقاعدة
-/* 🔴 الكول سنتر اتضاف 2026-08-23 بقرار صاحب النظام: التوزيع شغل تشغيلي بحت
-   ومالوش أثر مالي — الموظف وهو على التليفون مع العميل لازم يقدر يحمّل الأوردر
-   على طيار أو ينقله من طيار لطيار من غير ما يستنى الفرع.
-   ⛔ اللي **فضل مقفول** عن قصد: deliver و undeliver — دول بيقفلوا الأوردر
-   ماليًا (تحصيل وتسوية مع الطيار)، فلازم يتعملوا من اللي ماسك الطرد فعلًا
-   (الطيار) أو الفرع اللي بيشرف عليه، مش من مكتب بناءً على مكالمة تليفون.
-   تقنيًا الفتح آمن: claimCore و transfer بيستعملوا guardBranch بس، وهي بتقيّد
-   دور branch لوحده — الكول سنتر بيعدّي زي admin (بيخدم كل الفروع مش فرع واحد). */
-Route::post('orders/assign-bulk', [OrdersController::class, 'assignBulk'])->middleware('role:branch,admin,callcenter');
+/* 🔴 الكول سنتر **اترجع واتقفل** 2026-08-25 بقرار صاحب النظام، بعد ما كان
+   اتفتح 2026-08-23. القرار الجديد بالحرف: «الكول سنتر ليس له سلطة على الطيار
+   أو الفرع غير أنه يرسل الأوردر». فالتحميل على طيار (assign · assign-bulk)
+   والنقل من طيار لطيار (transfer) رجعوا للفرع والإدارة بس.
+
+   ⛔ deliver و undeliver فضلوا مقفولين من الأول (بيقفلوا الأوردر ماليًا).
+
+   ✅ اللي فضل مفتوح للكول سنتر عن قصد — ده شغله هو مش سلطة على حد:
+      • store            — تسجيل الأوردر وإرساله للفرع (جوهر الدور).
+      • cancel/postpone  — العميل بيتصل يلغي أو يأجّل، والموظف على التليفون.
+      • transfer-branch  — تصحيح **غلطته هو** لما يبعت الأوردر لفرع غلط.
+      • update           — تصحيح بيانات العميل والعنوان بعد المكالمة.
+
+   الأزرار في callcenter.html اتخفت كمان (isCC)، بس الإخفاء تجميل —
+   القفل الحقيقي هو السطور دي. */
+Route::post('orders/assign-bulk', [OrdersController::class, 'assignBulk'])->middleware('role:branch,admin');
 Route::post('orders/settle-money-bulk', [OrdersController::class, 'settleMoneyBulk'])->middleware('role:branch,admin');
 Route::post('orders', [OrdersController::class, 'store'])
     ->middleware('role:branch,admin,callcenter,store,customer');
 Route::put('orders/{id}', [OrdersController::class, 'update'])->middleware('role:branch,admin,callcenter');
 Route::post('orders/{id}/split', [OrdersController::class, 'split'])->middleware('role:branch,admin');
 Route::post('orders/{id}/images', [OrdersController::class, 'addImages']);
-Route::post('orders/{id}/assign', [OrdersController::class, 'assign'])->middleware('role:branch,admin,callcenter');
-Route::post('orders/{id}/transfer', [OrdersController::class, 'transfer'])->middleware('role:branch,admin,callcenter');
+Route::post('orders/{id}/assign', [OrdersController::class, 'assign'])->middleware('role:branch,admin');
+Route::post('orders/{id}/transfer', [OrdersController::class, 'transfer'])->middleware('role:branch,admin');
 Route::post('orders/{id}/transfer-branch', [OrdersController::class, 'transferBranch'])
     ->middleware('role:branch,admin,callcenter');
 Route::post('orders/{id}/receive', [OrdersController::class, 'receive'])->middleware('role:pilot,branch,admin');

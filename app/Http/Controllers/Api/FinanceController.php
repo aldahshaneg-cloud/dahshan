@@ -330,6 +330,7 @@ class FinanceController
      */
     public function attendanceList(Request $request): JsonResponse
     {
+        $actor = $request->actorOrFail();
         $q = $request->query();
 
         $day  = ! empty($q['day'])  ? trim((string) $q['day'])  : null;
@@ -356,6 +357,13 @@ class FinanceController
         if (! empty($q['username'])) {
             $sql .= ' AND username = ?';
             $params[] = trim((string) $q['username']);
+        }
+        /* 🔒 الكول سنتر بيشوف حضوره هو بس. الشرط بيتضاف **بعد** فلتر
+           username مش بدله — فلو بعت ?username=حد_تاني بيبقى الشرطين مع
+           بعض والنتيجة صفر صفوف، مش بيانات حد تاني. */
+        if ($actor->role === 'callcenter') {
+            $sql .= ' AND username = ?';
+            $params[] = $actor->username;
         }
         // مفيش LIMIT هنا — الفلترة باليوم هي السقف الفعلي (سلوك الأصل)
         $sql .= ' ORDER BY session_date, username, id';
