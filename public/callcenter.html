@@ -4571,14 +4571,6 @@
             ${o.notes ? `<td style="font-size:.78rem;color:var(--orange);max-width:110px;white-space:normal">📝 ${ esc(o.notes) }</td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
             <td>
               <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
-              ${isCC() ? "" : `
-              <button class="assign-btn" onclick="assignPilotToOrder('${ escJs(o.id) }')">🛵 تحميل</button>
-              <button class="del-btn" style="background:rgba(249,115,22,.15);color:var(--orange);border:1px solid var(--orange)" onclick="openTransferOrderModal('${ escJs(o.id) }')">🔁 نقل لفرع آخر</button>
-              <button class="del-btn" style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red)" onclick="cancelOrder('${ escJs(o.id) }')">❌ إلغاء</button>
-              ${o.status === "مؤجل"
-                ? `<button class="finish-btn" onclick="unpostponeOrder('${ escJs(o.id) }')">▶️ فك التأجيل</button>`
-                : `<button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>`}
-              <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>`}
             </td>
           </tr>`;
         }).join("");
@@ -4624,10 +4616,6 @@
               ${o.notes ? `<td style="font-size:.78rem;color:var(--orange);max-width:110px;white-space:normal">📝 ${ esc(o.notes) }</td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
-                ${isCC() ? "" : `
-                <button class="transfer-btn" style="background:rgba(249,115,22,.15);color:var(--orange);border:1px solid var(--orange)" onclick="transferOrderPilot('${ escJs(o.id) }')">🔄 نقل لطيار آخر</button>
-                <button class="del-btn" style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red)" onclick="cancelOrder('${ escJs(o.id) }')">❌ إلغاء</button>
-                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>`}
                 ${/* ⛔ «✅ إنهاء» و«لم يتم التوصيل» اتشالوا من لوحة الكول سنتر
                    2026-08-23: السيرفر بيرفضهما لدوره (routes/api.php — deliver و
                    undeliver = role:pilot,branch,admin) لأنهم بيقفلوا الأوردر
@@ -4662,7 +4650,7 @@
               <td>${o.storePrepaid ? `<span style="background:rgba(249,115,22,.12);color:var(--orange);font-weight:700;padding:3px 8px;border-radius:6px;font-size:.82rem">💵 ${ esc(o.storePrepaid) } ج.م</span>` : '<span style="color:var(--muted);font-size:.78rem">—</span>'}</td>
               <td style="min-width:110px">${orderSourceBadge(o)}</td>
               <td style="font-size:.75rem;color:var(--muted)">${ esc(o.deliveredAt ? new Date(o.deliveredAt).toLocaleString("ar-EG") : "—") }</td>
-              <td>${isCC() ? "" : `<button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button> `}<button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
+              <td><button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
             </tr>`;
           }).join("");
         };
@@ -4701,9 +4689,6 @@
               </td>
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
-                ${isCC() ? "" : `
-                <button class="finish-btn" onclick="restoreOrder('${ escJs(o.id) }')">↩ استرجاع</button>
-                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف نهائي</button>`}
               </td>
             </tr>`;
           }).join("");
@@ -4731,10 +4716,6 @@
               <td style="font-size:.75rem;color:var(--muted)">${ esc(o.undeliveredAt ? new Date(o.undeliveredAt).toLocaleString("ar-EG") : "—") }</td>
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
-                ${isCC() ? "" : `
-                <button class="transfer-btn" onclick="assignPilotToOrder('${ escJs(o.id) }')">🔄 إعادة تحميل على طيار</button>
-                <button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>
-                <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>`}
               </td>
             </tr>`;
           }).join("");
@@ -7458,9 +7439,9 @@
     /* الكول سنتر: لوحة الطيارين مخفية، ومعاها التحديد الجماعي وشريط
        «تحميل على طيار» — التحميل كله برّه دوره. الـ!important عشان
        الكلاسات دي بيتحط عليها display بالجافاسكربت. */
-    body.cc-role .pilots-panel,
-    body.cc-role .order-chk,
-    body.cc-role #bulk-bar { display: none !important; }
+    body.cc-role .pilots-panel { display: none !important; }
+    /* خانة التحديد وشريط التحميل الجماعي مالهمش وظيفة من غير زرار «تحميل» */
+    .order-chk, #bulk-bar { display: none !important; }
     /* ── Pilots Panel ── */
     .pilots-panel { width: 270px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); display: none; flex-direction: column; overflow: hidden; position: fixed; left: 0; top: 0; height: 100vh; z-index: 50; }
     .pilots-panel.visible { display: flex; }
