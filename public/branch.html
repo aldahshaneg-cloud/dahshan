@@ -78,6 +78,7 @@
   <script src="assets/js/constants.js"></script>
   <script src="assets/js/api.js"></script>
   <script src="assets/js/trust-admin.js"></script>
+  <script src="assets/js/zonepick.js?v=20260826"></script>
   <!-- التحديث الفوري (Reverb). المكتبة **محليًا** مش من CDN: المشروع
        اتلسع قبل كده من SheetJS اللي بيتحمّل من cdnjs، ولو الشبكة مقفولة
        على النت الصفحة بتقع.
@@ -5112,7 +5113,7 @@
           </div>
           <div class="form-group full">
             <label>المنطقة <span style="color:var(--red)">*</span></label>
-            <select id="bDZone-${n}"><option value="">— اختر المنطقة —</option></select>
+            <select id="bDZone-${n}" data-zonepick><option value="">— اختر المنطقة —</option></select>
           </div>
           <div class="form-group">
             <label>سعر التوصيل</label>

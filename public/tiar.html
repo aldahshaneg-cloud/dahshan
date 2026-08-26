@@ -28,6 +28,7 @@
   <!-- طبقة REST المشتركة: constants.js (خرائط الحالات) + api.js (window.API والـ Poller) -->
   <script src="assets/js/constants.js"></script>
   <script src="assets/js/api.js"></script>
+  <script src="assets/js/zonepick.js?v=20260826"></script>
 
   <!-- ══════════════════════════════════════════════════════════════
        التحديث الفوري (Reverb) — **جنب** الاستطلاع مش مكانه
@@ -3278,7 +3279,7 @@
           </div>
           <div class="form-group full">
             <label>المنطقة <span class="req">*</span></label>
-            <select id="dZone-${n}" required>
+            <select id="dZone-${n}" required data-zonepick>
               <option value="">— اختر المنطقة —</option>
             </select>
           </div>

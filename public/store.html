@@ -99,6 +99,7 @@
   <script src="assets/js/api.js"></script>
   <!-- منظومة الثقة: البحث الفوري بالتليفون + بادچ السمعة + تقييم المستلم -->
   <script src="assets/js/trust.js"></script>
+  <script src="assets/js/zonepick.js?v=20260826"></script>
   <script type="module">
     /* ═══ REST بدل فايربيز — كل القراءة والكتابة عبر assets/js/api.js ═══
        التحويل جراحي (CONVENTIONS.md بند «الواجهات المحوّلة»): نفس أشكال
@@ -1412,7 +1413,7 @@
         <div id="rTrust-${n}" class="trust-box" style="display:none"></div>
         <div class="fg">
           <label>المنطقة <span class="req">*</span></label>
-          <select id="rZone-${n}" onchange="onZone(${n})">
+          <select id="rZone-${n}" onchange="onZone(${n})" data-zonepick>
             <option value="">— اختر المنطقة —</option>
           </select>
         </div>
@@ -3757,7 +3758,7 @@ window.renderHome = function () {
 
         <div class="fg" style="margin:10px 0 0">
           <label>🗺️ منطقة الاستلام <span class="req">*</span></label>
-          <select id="pickupZone" onchange="onPickupZone()">
+          <select id="pickupZone" onchange="onPickupZone()" data-zonepick>
             <option value="">— اختر منطقة الاستلام —</option>
           </select>
           <div id="pickupBranchInfo" style="margin-top:6px"></div>
@@ -3900,7 +3901,7 @@ window.renderHome = function () {
                style="margin-bottom:12px" />
 
         <label class="set-lbl">📍 منطقة الاستلام <span style="color:var(--red)">*</span></label>
-        <select id="profZone" class="set-field" style="margin-bottom:4px">
+        <select id="profZone" class="set-field" style="margin-bottom:4px" data-zonepick>
           <option value="">— اختر منطقة الاستلام —</option>
         </select>
         <div class="set-help">منها بيتحدّد الفرع اللي هيستلم منك</div>

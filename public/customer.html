@@ -37,6 +37,7 @@
   window.API_NO_REFRESH_BTN = true;
 </script>
 <script src="assets/js/api.js"></script>
+  <script src="assets/js/zonepick.js?v=20260826"></script>
   <!-- منظومة الثقة: البحث الفوري بالتليفون + بادچ السمعة + تقييم المستلم -->
   <script src="assets/js/trust.js"></script>
 
@@ -517,7 +518,7 @@ a{color:var(--red);text-decoration:none}
           اختر المنطقة اللي هنستلم منها شحناتك — الفرع المسؤول عن خدمتك بيتحدد منها تلقائيًا.
         </div>
         <span class="lbl">المنطقة</span>
-        <select id="sutZone" data-tip="المنطقة اللي بنستلم منها شحناتك عادةً — منها بيتحدد الفرع المسؤول عن خدمتك."></select>
+        <select id="sutZone" data-zonepick data-tip="المنطقة اللي بنستلم منها شحناتك عادةً — منها بيتحدد الفرع المسؤول عن خدمتك."></select>
         <div id="sutBranch" style="margin-top:12px;font-size:13px;display:none"></div>
       </div>
       <div style="display:flex;gap:10px">
@@ -595,7 +596,7 @@ a{color:var(--red);text-decoration:none}
         <span class="lbl">عنوان الاستلام</span>
         <div id="sndAddrW" data-tip="العنوان اللي الطيار هيروح عليه يستلم الشحنة — اكتب الشارع ورقم العمارة والدور."></div>
         <span class="lbl" style="margin-top:12px">منطقة الاستلام (تحدد الفرع)</span>
-        <select id="sndZone" data-tip="منطقة الاستلام هي اللي بتحدد الفرع المسؤول عن طلبك، ومنها بتظهر مناطق التسليم المتاحة."></select>
+        <select id="sndZone" data-zonepick data-tip="منطقة الاستلام هي اللي بتحدد الفرع المسؤول عن طلبك، ومنها بتظهر مناطق التسليم المتاحة."></select>
         <div id="sndBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
         <div class="map" id="sndMap" style="height:130px;margin-top:12px"></div>
         <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')"
@@ -2740,7 +2741,7 @@ function openAddrSheet(id) {
     <input id="addrLabelCustom" placeholder="اسم مخصص (اختياري)" value="${esc(a && !["المنزل","العمل"].includes(a.label) ? a.label : "")}" />
     <div style="margin-top:12px"><div id="addrW"></div></div>
     <span class="lbl" style="margin-top:12px">المنطقة (تحدد الفرع)</span>
-    <select id="addrZone"></select>
+    <select id="addrZone" data-zonepick></select>
     <div id="addrBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
     <div class="map" id="addrMap" style="height:140px;margin-top:12px"></div>
     <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('addr')">📍 تحديد الموقع على الخريطة</button>
@@ -2854,7 +2855,7 @@ function openEditProfile() {
       <input value="${esc(S.profile?.email || "")}" disabled /></div></div>
     <span class="lbl">العنوان</span><div id="epAddrW"></div>
     <span class="lbl" style="margin-top:12px">منطقة الاستلام الافتراضية</span>
-    <select id="epZone"></select>
+    <select id="epZone" data-zonepick></select>
     <button class="btn" style="margin-top:16px" onclick="saveEditProfile()">حفظ التعديلات</button>`);
   renderAddr("epAddrW", { value: S.profile?.address || "" });
   fillZoneSelect($("epZone"), { selected: S.profile?.defaultZoneId });
@@ -3149,7 +3150,7 @@ function receiverBlockHtml(r, i, multi, receipt) {
     </div>
 
     <span class="lbl" style="margin-top:${receipt ? 0 : 12}px">منطقة التسليم</span>
-    <select id="rcvZone-${i}" data-tip="منطقة التسليم هي اللي بيتحسب منها سعر التوصيل. إجبارية في كل الحالات."></select>
+    <select id="rcvZone-${i}" data-zonepick data-tip="منطقة التسليم هي اللي بيتحسب منها سعر التوصيل. إجبارية في كل الحالات."></select>
     <div id="rcvPrice-${i}" style="margin-top:9px;font-size:13px;display:none"></div>
 
     <span class="lbl" style="margin-top:12px">مبلغ التحصيل من المستلم (ج.م)</span>
