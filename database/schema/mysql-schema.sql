@@ -1802,6 +1802,10 @@ CREATE TABLE `zones` (
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
+  /* 🔴 نفس المنطقة ممكن تتسجّل مرة لكل فرع بيوصّل لها (من/إلى) — ده مقصود.
+     اللي مش مقصود إنها تتسجّل مرتين لنفس الفرع: بيخلّي الاسم يتكرر في
+     قوايم الاختيار من غير أي فرق، وحصل فعلًا في 4 مناطق. */
+  UNIQUE KEY `uq_zones_area_branch` (`area_name`,`delivery_branch_id`),
   KEY `idx_zones_legacy` (`legacy_key`),
   KEY `idx_zones_area` (`area_name`),
   KEY `idx_zones_delivery_branch` (`delivery_branch_id`),
