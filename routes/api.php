@@ -95,6 +95,10 @@ Route::get('closeouts/monthly', [BoardController::class, 'closeoutGet'])
     ->middleware('role:admin,branch');
 Route::get('join-requests', [BoardController::class, 'joinRequestsList'])
     ->middleware('role:admin,branch,pilot_supervisor');
+/* تعديلات عمولة الطيار — بديل لعمولة أوردر أو مبلغ مستقل بلا أوردر.
+   مدير الفرع مقصوص على طيارين فرعه جوّه الكنترولر. */
+Route::get('pilot-commission-adjustments', [BoardController::class, 'commissionAdjustmentsList'])
+    ->middleware('role:admin,branch,accountant');
 Route::get('leave-requests', [BoardController::class, 'leaveRequestsList']);
 Route::get('shift-requests', [BoardController::class, 'shiftRequestsList']);
 Route::get('return-requests', [BoardController::class, 'returnRequestsList']);
@@ -252,6 +256,11 @@ Route::post('orders/{id}/cancel', [OrdersController::class, 'cancel'])->middlewa
 Route::post('orders/{id}/postpone', [OrdersController::class, 'postpone'])->middleware('role:branch,admin,callcenter');
 Route::post('orders/{id}/unpostpone', [OrdersController::class, 'unpostpone'])->middleware('role:branch,admin,callcenter');
 Route::post('orders/{id}/settle-money', [OrdersController::class, 'settleMoney'])->middleware('role:branch,admin');
+// 💰 تعديل عمولة طيار — بيدخل مستحقاته فعلًا، فالكتابة للمدير ومدير الفرع بس
+Route::post('pilot-commission-adjustments', [BoardController::class, 'commissionAdjustmentSave'])
+    ->middleware('role:admin,branch');
+Route::delete('pilot-commission-adjustments/{id}', [BoardController::class, 'commissionAdjustmentDelete'])
+    ->middleware('role:admin,branch');
 
 /* ── لوحة العمليات: الدور والورديات ── */
 Route::post('queue/enter', [BoardController::class, 'queueEnter'])->middleware('role:admin,branch,pilot_supervisor');

@@ -96,6 +96,7 @@
   <script src="assets/js/api.js"></script>
   <script src="assets/js/trust-admin.js"></script>
   <script src="assets/js/zonepick.js?v=20260826"></script>
+  <script src="assets/js/commadj.js?v=20260826"></script>
   <!-- البثّ الفوري (Laravel Reverb عبر pusher-js) — **إضافة فوق الاستطلاع**
        مش بديل عنه. كل بولر في الصفحة سايب بفترته زي ما هو.
 
@@ -9032,11 +9033,11 @@
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;background:var(--panel);padding:14px 16px;border-radius:12px;border:1px solid var(--border)">
         <div>
           <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ</label>
-          <input type="date" id="poFromDate" onchange="applyPilotOrdersFilters()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem">
+          <input type="date" id="poFromDate" onchange="loadPilotCommAdj()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem">
         </div>
         <div>
           <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">إلى تاريخ</label>
-          <input type="date" id="poToDate" onchange="applyPilotOrdersFilters()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem">
+          <input type="date" id="poToDate" onchange="loadPilotCommAdj()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem">
         </div>
         <div>
           <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">بحث</label>
@@ -9054,6 +9055,15 @@
           <tbody id="pilotOrdersBody"><tr><td colspan="10" class="empty-row">جاري التحميل…</td></tr></tbody>
         </table>
       </div>
+
+      <!-- عمولات مستقلة بلا أوردر (تعويض شكوى وخلافه). بتدخل مستحقات
+           الطيار زي عمولة الأوردرات بالظبط، فمكانها جنبها مش في شاشة تانية -->
+      <div class="sec-header" style="margin-top:20px">
+        <span class="sec-title">💰 عمولات بلا أوردر</span>
+        <button id="poAddCommBtn" class="add-btn" style="display:none" onclick="openAddPilotComm()">➕ إضافة عمولة</button>
+      </div>
+      <div id="poExtrasBox"></div>
+
     </div>
 
     <!-- صفحة الإعدادات (الفروع + المناطق + المستخدمون) -->
@@ -10354,6 +10364,8 @@
     window._pilotOrdersFilter = { pilotId, pilotName, fromISO, toISO };
     navigateTo("pilot-orders");
     renderPilotOrdersPage();
+    // تعديلات العمولة بتتحمّل للطيار ده وبتعيد الرسم أول ما توصل
+    if (window.loadPilotCommAdj) loadPilotCommAdj();
   };
 
   window.renderPilotOrdersPage = function() {
@@ -10419,10 +10431,22 @@
     const totalCount    = filtered.length;
     const totalRevenue  = filtered.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
     const pilot = pilots.find(p => p.id === pilotId);
+    /* الإجمالي لازم يطابق اللي الطيار هياخده فعلًا: العمولة المكتوبة بالإيد
+       بتغلب المحسوبة، والعمولات المستقلة (بلا أوردر) بتتضاف فوقهم. نفس
+       المعادلة بالظبط في buildMonthlyData على السيرفر — أي اختلاف معناه
+       رقم في الشاشة غير الرقم اللي بيتصرف. */
     const totalComm     = filtered.reduce((s,o) => {
-      const pt = pilots.find(p => p.id === o.pilotId);
-      return s + (window.pilotCommissionFor ? pilotCommissionFor(pt, o) : 0);
-    }, 0);
+      const pt  = pilots.find(p => p.id === o.pilotId);
+      const adj = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
+      return s + (adj ? (Number(adj.amount) || 0)
+                      : (window.pilotCommissionFor ? pilotCommissionFor(pt, o) : 0));
+    }, 0) + (window.CommAdj ? CommAdj.extrasTotal() : 0);
+
+    // بلوك العمولات المستقلة + زرار الإضافة (للمدير ومشرف الفرع بس)
+    const exBox = document.getElementById("poExtrasBox");
+    if (exBox && window.CommAdj) exBox.innerHTML = CommAdj.extrasHtml();
+    const addBtn = document.getElementById("poAddCommBtn");
+    if (addBtn) addBtn.style.display = (window.CommAdj && CommAdj.canEdit()) ? "" : "none";
 
     const countEl = document.getElementById("poTotalCount");
     const revEl   = document.getElementById("poTotalRevenue");
@@ -10447,7 +10471,12 @@
       const deliveries = o.deliveries || [];
       const recvNames = deliveries.map(d => d.receiverName || "—").join("، ");
       const recvAreas = deliveries.map(d => d.zone || d.address || "—").join("، ");
-      const commission = pilot ? (window.pilotCommissionFor ? pilotCommissionFor(pilot, o) : 0) : 0;
+      const autoComm   = pilot ? (window.pilotCommissionFor ? pilotCommissionFor(pilot, o) : 0) : 0;
+    /* العمولة المكتوبة بالإيد بتغلب الحساب التلقائي — أوردر السفر بيتحسب
+       نص سعر الخدمة مش العمولة الثابتة. الرقم ده هو نفسه اللي بيدخل
+       مستحقات الطيار على السيرفر (buildMonthlyData)، مش رقم عرض. */
+    const _adj       = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
+    const commission = _adj ? (Number(_adj.amount) || 0) : autoComm;
       return `
         <tr>
           <td class="idx">${i+1}</td>
@@ -10457,11 +10486,44 @@
           <td style="font-size:.8rem;color:var(--muted)">${recvAreas}</td>
           <td>${ esc(branch ? branch.name : "—") }</td>
           <td style="color:var(--green);font-weight:600">${ esc(Number(o.totalDeliveryPrice || 0).toFixed(2)) } ج.م</td>
-          <td style="color:var(--sky)">${ esc(commission.toFixed(2)) } ج.م</td>
+          <td style="white-space:nowrap"><span style="color:${ esc(_adj ? "var(--orange)" : "var(--sky)") };font-weight:${ esc(_adj ? "800" : "400") }">${ esc(commission.toFixed(2)) } ج.م</span>${_adj ? `<span title="${ esc(_adj.reason || "") }" style="margin-inline-start:5px;background:rgba(249,115,22,.16);color:var(--orange);padding:1px 6px;border-radius:20px;font-size:.66rem;font-weight:700">معدّلة</span>` : ""}${(window.CommAdj && CommAdj.canEdit() && pilot) ? `<button onclick="editPilotComm('${ escJs(o.id) }')" title="تعديل العمولة" style="margin-inline-start:6px;background:rgba(14,165,233,.14);color:var(--sky);border:1px solid rgba(14,165,233,.3);padding:2px 7px;border-radius:7px;cursor:pointer;font-size:.72rem">✏️</button>` : ""}</td>
           <td style="font-size:.78rem;color:var(--muted)">${dtStr}</td>
           <td><button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
         </tr>`;
     }).join("");
+  };
+
+  /* ── تعديلات عمولة الطيار ──────────────────────────────────────
+     الشاشة دي هي اللي المدير/مشرف الفرع بيراجع منها مستحقات الطيار،
+     فمكان التعديل هنا مش في شاشة تانية. التعديلات بتتحمّل مع كل تغيير
+     في المدى عشان اللي معروض يطابق اللي محسوب. */
+  window._caRefresh = function () {
+    if (window.applyPilotOrdersFilters) applyPilotOrdersFilters();
+  };
+
+  window.loadPilotCommAdj = async function () {
+    const f = window._pilotOrdersFilter || {};
+    if (!window.CommAdj || !f.pilotId) return;
+    await CommAdj.load(f.pilotId,
+      document.getElementById("poFromDate")?.value || null,
+      document.getElementById("poToDate")?.value   || null);
+    if (window.applyPilotOrdersFilters) applyPilotOrdersFilters();
+  };
+
+  window.editPilotComm = function (orderId) {
+    const f = window._pilotOrdersFilter || {};
+    const pilot = (window._pilotsData || []).find(p => p.id === f.pilotId);
+    const order = (window._ordersData || []).find(o => o.id === orderId);
+    if (!pilot || !order || !window.CommAdj) return;
+    const auto = window.pilotCommissionFor ? pilotCommissionFor(pilot, order) : 0;
+    CommAdj.openEdit(pilot, order, auto, window._caRefresh);
+  };
+
+  window.openAddPilotComm = function () {
+    const f = window._pilotOrdersFilter || {};
+    const pilot = (window._pilotsData || []).find(p => p.id === f.pilotId);
+    if (!pilot || !window.CommAdj) return;
+    CommAdj.openAdd(pilot, window._caRefresh);
   };
 
   window.clearPilotOrdersFilters = function() {

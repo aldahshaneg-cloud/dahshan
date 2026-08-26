@@ -14,6 +14,7 @@ use App\Support\Vocab;
 use App\Support\WireTime;
 use App\Wire\BoardWire;
 use App\Wire\CoreWire;
+use App\Wire\FinanceWire;
 use DateTimeImmutable;
 use DateTimeZone;
 use Exception;
@@ -2385,6 +2386,203 @@ class BoardController
         ];
     }
 
+    /* ═══════════════════════════════════════════════════════════
+       تعديلات عمولة الطيار — pilot_commission_adjustments
+       ───────────────────────────────────────────────────────────
+       العمولة في النظام بتتحسب لحظيًا (نسبة الطيار × سعر التوصيل)،
+       والحساب ده مابيعرفش يعبّر عن حالتين حقيقيتين في الشغل:
+
+         • أوردر سفر — بيتحسب **نص سعر الخدمة** مش العمولة الثابتة.
+           أوردر بـ100 عمولته 50، مش الـ8 المعتادين.
+         • تعويض شكوى — العميل بيترضّى من غير أوردر أصلًا، والطيار
+           بياخد عمولته عليها.
+
+       فبقى فيه سجل تعديلات: نوع «override» بيحل محل عمولة أوردر
+       بعينه، ونوع «extra» مبلغ مستقل بتاريخه.
+
+       🔴 التعديل ده **بيدخل مستحقات الطيار الفعلية** مش شاشة التقارير
+       بس (buildMonthlyData بتضمّه). عشان كده كل صف بيتسجّل بمين عمله
+       وإمتى وليه — من غير سبب المسار بيرفض.
+    ═══════════════════════════════════════════════════════════ */
+
+    /** GET /api/pilot-commission-adjustments?pilotId=&from=&to= */
+    public function commissionAdjustmentsList(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+
+        $where = [];
+        $args  = [];
+
+        if ($pilotId = (int) $request->query('pilotId', 0)) {
+            $where[] = 'a.pilot_id = ?';
+            $args[]  = $pilotId;
+        }
+        if ($from = trim((string) $request->query('from', ''))) {
+            $where[] = 'a.effective_date >= ?';
+            $args[]  = $from;
+        }
+        if ($to = trim((string) $request->query('to', ''))) {
+            $where[] = 'a.effective_date <= ?';
+            $args[]  = $to;
+        }
+        /* 🔒 مدير الفرع بيشوف طيارين فرعه بس. الشرط على فرع **الطيار**
+           مش على branch_id المخزّن في الصف: الطيار ممكن يكون اتنقل، والفرع
+           اللي بيحاسبه دلوقتي هو اللي المفروض يشوف. */
+        if ($actor->role === 'branch') {
+            $where[] = 'p.assigned_branch_id = ?';
+            $args[]  = (int) ($actor->branchId ?? 0);
+        }
+
+        $rows = DB::select(
+            'SELECT a.*, p.name AS pilot_name, o.order_num, b.name AS branch_name
+               FROM pilot_commission_adjustments a
+               JOIN pilots p ON p.id = a.pilot_id
+               LEFT JOIN orders o ON o.id = a.order_id
+               LEFT JOIN branches b ON b.id = a.branch_id'
+            . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
+            . ' ORDER BY a.effective_date DESC, a.id DESC LIMIT 500',
+            $args
+        );
+
+        return PollableList::items(array_map(
+            fn ($r) => FinanceWire::commissionAdjustment((array) $r),
+            $rows
+        ));
+    }
+
+    /**
+     * POST /api/pilot-commission-adjustments
+     * { pilotId, orderId?, amount, reason, effectiveDate? }
+     *
+     * وجود orderId معناه override (بديل عمولة الأوردر ده)، وغيابه
+     * معناه extra (مبلغ مستقل). الأوردر الواحد ليه تعديل واحد بالكتير —
+     * الإرسال تاني على نفس الأوردر بيعدّل الموجود مش بيضيف صف تاني
+     * (القيد uq_pca_order بيفرض ده على مستوى القاعدة كمان).
+     */
+    public function commissionAdjustmentSave(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $b = $request->all();
+
+        $pilotId = (int) ($b['pilotId'] ?? 0);
+        if (! $pilotId) {
+            throw new ApiException('الطيار مطلوب');
+        }
+        $pilotRow = DB::selectOne('SELECT * FROM pilots WHERE id = ?', [$pilotId]);
+        if (! $pilotRow) {
+            throw ApiException::notFound('الطيار غير موجود');
+        }
+        $pilot = (array) $pilotRow;
+        $pilotBranch = $pilot['assigned_branch_id'] !== null ? (int) $pilot['assigned_branch_id'] : null;
+
+        if ($actor->role === 'branch' && $pilotBranch !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('الطيار ده مش على فرعك');
+        }
+
+        $reason = trim((string) ($b['reason'] ?? ''));
+        if ($reason === '') {
+            throw new ApiException('اكتب سبب التعديل — ده مبلغ بيدخل مستحقات الطيار');
+        }
+
+        /* المبلغ مسموح يكون صفر (إلغاء عمولة أوردر) بس مش سالب — الخصم
+           له مساره الخاص (deduction_amount على الوردية) وخلطهم بيخلي
+           رقم العمولة في التقرير مايتقراش. */
+        $amount = (float) ($b['amount'] ?? -1);
+        if ($amount < 0) {
+            throw new ApiException('المبلغ لازم يكون صفر أو أكتر — الخصومات مكانها تقفيلة الوردية');
+        }
+
+        $orderId = isset($b['orderId']) && $b['orderId'] !== '' && $b['orderId'] !== null
+            ? (int) $b['orderId'] : null;
+        $kind = $orderId ? 'override' : 'extra';
+
+        $effective = trim((string) ($b['effectiveDate'] ?? ''));
+        if ($orderId) {
+            $ord = DB::selectOne('SELECT id, pilot_id, branch_id, delivered_at, created_at FROM orders WHERE id = ?', [$orderId]);
+            if (! $ord) {
+                throw ApiException::notFound('الأوردر غير موجود');
+            }
+            $ord = (array) $ord;
+            if ((int) ($ord['pilot_id'] ?? 0) !== $pilotId) {
+                throw new ApiException('الأوردر ده مش محمّل على الطيار ده');
+            }
+            /* التاريخ بييجي من الأوردر نفسه — عشان التعديل يقع في نفس
+               الشهر اللي الأوردر اتسلّم فيه مهما اتكتب إمتى. */
+            if ($effective === '') {
+                $effective = substr((string) ($ord['delivered_at'] ?: $ord['created_at']), 0, 10);
+            }
+        }
+        if ($effective === '') {
+            $effective = substr(WireTime::nowDb(), 0, 10);
+        }
+
+        $now = WireTime::nowDb();
+        $id = DB::transaction(function () use ($pilotId, $orderId, $kind, $amount, $reason, $effective, $pilotBranch, $actor, $now): int {
+            if ($orderId) {
+                $ex = DB::selectOne('SELECT id FROM pilot_commission_adjustments WHERE order_id = ? FOR UPDATE', [$orderId]);
+                if ($ex) {
+                    DB::update(
+                        'UPDATE pilot_commission_adjustments
+                            SET pilot_id = ?, kind = ?, amount = ?, reason = ?, effective_date = ?,
+                                branch_id = ?, created_by = ?, updated_at = ?
+                          WHERE id = ?',
+                        [$pilotId, $kind, $amount, $reason, $effective, $pilotBranch, $actor->username, $now, (int) $ex->id]
+                    );
+
+                    return (int) $ex->id;
+                }
+            }
+            DB::insert(
+                'INSERT INTO pilot_commission_adjustments
+                   (pilot_id, order_id, kind, amount, reason, effective_date, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [$pilotId, $orderId, $kind, $amount, $reason, $effective, $pilotBranch, $actor->username, $now]
+            );
+
+            return (int) DB::getPdo()->lastInsertId();
+        });
+
+        $row = DB::selectOne(
+            'SELECT a.*, p.name AS pilot_name, o.order_num, b.name AS branch_name
+               FROM pilot_commission_adjustments a
+               JOIN pilots p ON p.id = a.pilot_id
+               LEFT JOIN orders o ON o.id = a.order_id
+               LEFT JOIN branches b ON b.id = a.branch_id
+              WHERE a.id = ?',
+            [$id]
+        );
+
+        return ApiResponse::out([
+            'ok'         => true,
+            'adjustment' => FinanceWire::commissionAdjustment((array) $row),
+        ]);
+    }
+
+    /** DELETE /api/pilot-commission-adjustments/{id} — رجوع للحساب التلقائي */
+    public function commissionAdjustmentDelete(Request $request, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+
+        $row = DB::selectOne(
+            'SELECT a.*, p.assigned_branch_id
+               FROM pilot_commission_adjustments a
+               JOIN pilots p ON p.id = a.pilot_id
+              WHERE a.id = ?',
+            [(int) $id]
+        );
+        if (! $row) {
+            throw ApiException::notFound('التعديل غير موجود');
+        }
+        if ($actor->role === 'branch'
+            && (int) ($row->assigned_branch_id ?? 0) !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('الطيار ده مش على فرعك');
+        }
+
+        DB::delete('DELETE FROM pilot_commission_adjustments WHERE id = ?', [(int) $id]);
+
+        return ApiResponse::ok();
+    }
+
     /**
      * المقابل لـ board_build_monthly_data(): تجميع الشهر من الورديات.
      *
@@ -2429,14 +2627,22 @@ class BoardController
         if ($shifts) {
             $ids = array_map(fn ($s) => (int) $s['id'], $shifts);
 
-            // مجاميع أوردرات كل وردية دفعة واحدة — مش استعلام لكل وردية
+            /* مجاميع أوردرات كل وردية دفعة واحدة — مش استعلام لكل وردية.
+               الأوردر اللي عليه عمولة مكتوبة بالإيد (override) بيتفصل عن
+               الباقي: الباقي بيتحسب بنسبة الطيار، وهو بيتاخد بمبلغه زي ما
+               هو. من غير الفصل ده كان هيتحسب مرتين. */
             $byShift = [];
             foreach (DB::select(
-                "SELECT shift_id,
+                "SELECT o.shift_id,
                         COUNT(*) AS cnt,
-                        SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS delivered_cnt,
-                        SUM(CASE WHEN status = 'delivered' THEN total_delivery_price ELSE 0 END) AS delivered_price
-                   FROM orders WHERE shift_id IN (" . $this->placeholders($ids) . ') GROUP BY shift_id',
+                        SUM(CASE WHEN o.status = 'delivered' THEN 1 ELSE 0 END) AS delivered_cnt,
+                        SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN 1 ELSE 0 END) AS plain_cnt,
+                        SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN o.total_delivery_price ELSE 0 END) AS plain_price,
+                        SUM(CASE WHEN o.status = 'delivered' AND a.id IS NOT NULL THEN a.amount ELSE 0 END) AS override_sum
+                   FROM orders o
+                   LEFT JOIN pilot_commission_adjustments a
+                          ON a.order_id = o.id AND a.kind = 'override'
+                  WHERE o.shift_id IN (" . $this->placeholders($ids) . ') GROUP BY o.shift_id',
                 $ids
             ) as $r) {
                 $r = (array) $r;
@@ -2470,17 +2676,32 @@ class BoardController
                     if (($s['commission_settle'] ?: 'monthly') === 'monthly') {
                         $ct = $pilot['commission_type'] ?: 'percent';
                         $cv = (float) $pilot['commission_value'];
-                        $totalCommission += $ct === 'fixed'
-                            ? $cv * (int) $agg['delivered_cnt']
-                            : (float) $agg['delivered_price'] * $cv / 100.0;
+                        // الأوردرات العادية بنسبة الطيار + المكتوب بالإيد بمبلغه
+                        $totalCommission += ($ct === 'fixed'
+                            ? $cv * (int) $agg['plain_cnt']
+                            : (float) $agg['plain_price'] * $cv / 100.0)
+                            + (float) $agg['override_sum'];
                     }
                 }
             }
         }
 
+        /* العمولات المستقلة (تعويض شكوى وخلافه) — مالهاش أوردر ولا وردية،
+           فبتتجمع بتاريخها هي. بتتحسب دايمًا بغض النظر عن commission_settle
+           لأنها مبلغ مقطوع اتقرر مرة واحدة مش نسبة على أوردرات. */
+        $extra = (float) (DB::selectOne(
+            "SELECT COALESCE(SUM(amount), 0) AS s
+               FROM pilot_commission_adjustments
+              WHERE pilot_id = ? AND kind = 'extra'
+                AND effective_date >= ? AND effective_date < ?",
+            [$pilotId, substr($fromUtc, 0, 10), substr($toUtc, 0, 10)]
+        )->s ?? 0);
+        $totalCommission += $extra;
+
         return [
             'pilot' => $pilot,
             'monthKey' => $month,
+            'extraCommission' => round($extra, 2),
             'daysInMonth' => $daysInMonth,
             'shiftsCount' => count($shifts),
             'workDays' => count($workDays),

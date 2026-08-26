@@ -1151,6 +1151,29 @@ CREATE TABLE `party_ratings` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_commission_adjustments` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `pilot_id` bigint(20) unsigned NOT NULL COMMENT 'الطيار صاحب العمولة',
+  `order_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الأوردر — NULL يعني عمولة بلا أوردر (تعويض شكوى مثلًا)',
+  `kind` varchar(16) NOT NULL COMMENT 'override = بديل لعمولة الأوردر · extra = مبلغ مستقل',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'المبلغ بالجنيه',
+  `reason` varchar(190) DEFAULT NULL COMMENT 'سبب التعديل — الواجهة بتطلبه إجباري',
+  `effective_date` date NOT NULL COMMENT 'اليوم اللي بتتحسب فيه — أساس التقفيلة الشهرية',
+  `branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'فرع الطيار وقت التعديل — بيه بيتقيّد مدير الفرع',
+  `created_by` varchar(190) NOT NULL COMMENT 'مين عمل التعديل',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT NULL ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pca_order` (`order_id`),
+  KEY `idx_pca_pilot_date` (`pilot_id`,`effective_date`),
+  KEY `idx_pca_branch` (`branch_id`),
+  CONSTRAINT `fk_pca_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
+  CONSTRAINT `fk_pca_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pca_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='تعديلات عمولة الطيار — بديل لعمولة أوردر أو مبلغ مستقل بلا أوردر';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `pilot_join_requests` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',

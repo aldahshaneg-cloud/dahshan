@@ -24,6 +24,41 @@ use App\Support\WireTime;
  */
 final class FinanceWire
 {
+    /**
+     * تعديل عمولة الطيار — pilot_commission_adjustments.
+     *
+     * كيان **جديد** بعد الترحيل، مالوش مقابل في النظام القديم (العمولة
+     * هناك كانت بتتحسب لحظيًا وبس). حالتين:
+     *   • override — بديل لعمولة أوردر بعينه. أوردر السفر مثلًا عمولته
+     *     نص سعر الخدمة مش الثابت المعتاد.
+     *   • extra — مبلغ مستقل بلا أوردر (تعويض شكوى للعميل والطيار أخد
+     *     عمولته عليها).
+     *
+     * 🔴 كل صف هنا فلوس بتدخل مستحقات الطيار فعلًا — عشان كده created_by
+     * و reason **مش اختياريين** في المسار اللي بيكتب.
+     */
+    public static function commissionAdjustment(array|object $row): array
+    {
+        $r = CoreWire::row($row);
+
+        return [
+            'id'            => (int) $r['id'],
+            'pilotId'       => (int) $r['pilot_id'],
+            'pilotName'     => $r['pilot_name'] ?? null,
+            'orderId'       => $r['order_id'] !== null ? (int) $r['order_id'] : null,
+            'orderNum'      => $r['order_num'] ?? null,
+            'kind'          => $r['kind'],
+            'amount'        => (float) $r['amount'],
+            'reason'        => $r['reason'],
+            'effectiveDate' => $r['effective_date'],
+            'branchId'      => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
+            'branchName'    => $r['branch_name'] ?? null,
+            'createdBy'     => $r['created_by'],
+            'createdAt'     => WireTime::toWire($r['created_at']),
+            'updatedAt'     => WireTime::toWire($r['updated_at'] ?? null),
+        ];
+    }
+
     /* ── الخزنة — cash_stores ─────────────────────────────────────
        ملحوظة حاكمة منقولة من الأصل: `balance` هنا **للقراءة بس**؛ الرصيد
        مبيتعدلش من مسار الخزنة أبدًا — حصريًا عبر cash_transactions. */
