@@ -11152,15 +11152,30 @@
   /* ══════════════════════════════════════════════════════════════
      محرك المناطق — قلب الشاشة
   ══════════════════════════════════════════════════════════════ */
+  /* «صف البيت» = المنطقة عند الفرع المالك لها (شوف البلوك فوق الملف).
+     الاستلام بيشوفهم بس، والتسليم بيشوف الكل للفرع المختار. */
+  const isHomeZone = z => {
+    const src = z.sourceBranchId, dst = zoneBranchId(z);
+    return src == null || src === "" || String(src) === String(dst);
+  };
+
   function searchZones(q, lockBranchId) {
     const n = norm(q);
     if (!n) return [];
     const out = [];
+    const seen = new Set();          // منع تكرار الاسم في قايمة الاستلام
     for (const z of ZONES()) {
       const name = z.areaName || z.name || "";
       const nn = norm(name);
       if (!nn) continue;
-      if (lockBranchId && zoneBranchId(z) !== lockBranchId) continue;
+      if (lockBranchId) {
+        if (zoneBranchId(z) !== lockBranchId) continue;
+      } else {
+        if (!isHomeZone(z)) continue;   // الاستلام: صفوف البيت بس
+      }
+      // الاسم مرة واحدة في الحالتين — التسليم مفلتر على فرع واحد أصلًا
+      if (seen.has(nn)) continue;
+      seen.add(nn);
       let score = nn === n ? 0 : nn.startsWith(n) ? 1 : nn.includes(n) ? 2 : -1;
       if (score < 0) continue;
       out.push({ zone:z, name, score, branchId:zoneBranchId(z), price:Number(z.price)||0 });
@@ -11551,8 +11566,11 @@
         <div class="si-sub">🏢 ${esc(branchName(h.branchId))}</div>
       </div>`).join("");
 
-    // مناطق مطابقة في فروع تانية — نوضّحها بدل ما نخفيها
-    if (F.lockBranch) {
+    /* مناطق مطابقة في فروع تانية — بتتعرض **بس لو الفرع المختار
+       مش بيوصّل للمنطقة دي أصلًا**. قبل كده كانت بتظهر دايمًا، فبقت
+       تقول «فرع آخر — غيّر منطقة الاستلام» لمنطقة الفرع بيوصّل لها
+       فعلًا وظاهرة فوقها في نفس القايمة — تحذير غلط بيلخبط الموظف. */
+    if (F.lockBranch && !hits.length) {
       const other = searchZones(q).filter(h => h.branchId !== F.lockBranch);
       html += other.slice(0,4).map(h => `
         <div class="smart-item" style="opacity:.55;cursor:not-allowed" title="منطقة تابعة لفرع آخر — الأوردر مربوط بفرع واحد">

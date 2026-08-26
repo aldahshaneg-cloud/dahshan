@@ -1464,10 +1464,30 @@ function routeBranch(id) {
 const zoneBranchName = z => z.deliveryBranchName || S.branches[zoneBranchId(z)]?.name || "";
 const zoneLabel      = z => z.areaName || z.name || "—";
 
+/* «صف البيت» = المنطقة عند الفرع المالك لها. جدول المناطق بيخزّن نفس
+   المنطقة مرة لكل فرع بيوصّل لها، فمن غير الفلتر ده العميل بيشوف نفس
+   الاسم 3 مرات بنفس السعر ويختار عشوائي — والاختيار بيقرّر الفرع.
+   sourceBranchId = null معناها الإدارة ضافتها بإيدها → تتحسب بيت. */
+const isHomeZone = z => {
+  const src = z.sourceBranchId, dst = zoneBranchId(z);
+  return src == null || src === "" || String(src) === String(dst);
+};
+
 function fillZoneSelect(sel, { branchId, selected } = {}) {
   if (!sel) return;
   let list = S.zones.slice();
+  /* بفرع = قايمة **تسليم** للفرع ده → كل مناطقه.
+     من غير فرع = قايمة **استلام** (منطقة العميل) → صفوف البيت بس،
+     والاسم مرة واحدة (فيه 4 مناطق متسجّلة مرتين بالغلط في القاعدة). */
   if (branchId) list = list.filter(z => zoneBranchId(z) === branchId);
+  else          list = list.filter(isHomeZone);   // الاستلام: صفوف البيت بس
+  // الاسم مرة واحدة في الحالتين — التسليم مفلتر على فرع واحد أصلًا
+  const seen = new Set();
+  list = list.filter(z => {
+    const k = zoneLabel(z).trim();
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
   list.sort((a, b) => zoneLabel(a).localeCompare(zoneLabel(b), "ar"));
   sel.innerHTML = `<option value="">— اختر المنطقة —</option>` + list.map(z =>
     `<option value="${esc(z.id)}">${esc(zoneLabel(z))}${z.price ? ` — ${z.price} ج.م` : ""}</option>`).join("");

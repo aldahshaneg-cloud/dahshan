@@ -1618,11 +1618,28 @@
     function zoneBranchOf(z) { return z ? (z.deliveryBranchId || z.branchId || "") : ""; }
     function zoneLabelOf(z)  { return z ? (z.areaName || z.name || "") : ""; }
 
+    /* «صف البيت» = المنطقة عند الفرع المالك لها. من غير الفلتر ده المحل
+       بيشوف نفس اسم المنطقة 3 مرات (مرة لكل فرع بيوصّل لها) بنفس السعر،
+       واللي بيختاره هو اللي بيحدّد الفرع المسؤول عن شحناته كلها.
+       sourceBranchId = null معناها الإدارة ضافتها بإيدها → تتحسب بيت. */
+    const isHomeZone = z => {
+      const src = z.sourceBranchId;
+      const dst = z.deliveryBranchId ?? z.branchId;
+      return src == null || src === "" || String(src) === String(dst);
+    };
+
     function fillPickupZones() {
       const sel = document.getElementById("pickupZone");
       if (!sel) return;
       const prev = sel.value;
-      const list = (window._allZones || []).slice()
+      const seen = new Set();
+      const list = (window._allZones || [])
+        .filter(z => {
+          if (!isHomeZone(z)) return false;
+          const k = String(zoneLabelOf(z)).trim();
+          if (seen.has(k)) return false;
+          seen.add(k); return true;
+        })
         .sort((a, b) => zoneLabelOf(a).localeCompare(zoneLabelOf(b), "ar"));
       sel.innerHTML = `<option value="">— اختر منطقة الاستلام —</option>` +
         list.map(z => `<option value="${ esc(z.id) }">${zoneLabelOf(z)}</option>`).join("");
@@ -1874,10 +1891,16 @@
       sel.innerHTML = (window._pickupBranchId
         ? `<option value="">— اختر المنطقة —</option>`
         : `<option value="">— اختر منطقة الاستلام أولاً —</option>`);
+      // الاسم مرة واحدة — القايمة مفلترة على فرع واحد، فاسم مكرر = صف
+      // مكرر بالغلط بنفس السعر ومالوش أي فرق
+      const seen = new Set();
       (window._zonesList || []).forEach(z => {
+        const label = String(z.areaName || z.name || "").trim();
+        if (seen.has(label)) return;
+        seen.add(label);
         const o = document.createElement("option");
         o.value = z.id; o.dataset.price = z.price || 0;
-        o.textContent = `${ z.areaName || z.name } — ${ z.price || 0 } ج.م`;
+        o.textContent = `${ label } — ${ z.price || 0 } ج.م`;
         sel.appendChild(o);
       });
     }
