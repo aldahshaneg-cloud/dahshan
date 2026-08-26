@@ -7317,8 +7317,14 @@
     .btn-xs-cc { padding: 4px 9px; font-size: .74rem; border-radius: 6px; }
     .num-cc { font-variant-numeric: tabular-nums; text-align: left; direction: ltr; white-space: nowrap; }
 
-    .call-grid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 18px; align-items: start; }
-    @media (max-width:1100px) { .call-grid { grid-template-columns: 1fr; } }
+    .call-grid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 18px; align-items: stretch; }
+    @media (max-width:1100px) {
+      .call-grid { grid-template-columns: 1fr; }
+      /* على الموبايل العمودين بيبقوا فوق بعض — التثبيت هنا معناه إن
+         الملخص يغطّي الفورم وانت بتكتب، فبيرجع عنصر عادي. */
+      .call-grid .summary { position: static; max-height: none; }
+      .call-grid .summary-body { overflow: visible; }
+    }
     .call-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
     .call-card-title { font-size: .9rem; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
     .call-step { width: 24px; height: 24px; border-radius: 50%; background: var(--sky); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 800; flex-shrink: 0; }
@@ -7359,14 +7365,15 @@
     .parcel-del { background: rgba(232,25,44,.1); color: var(--red); border: 1px solid rgba(232,25,44,.25); width: 28px; height: 28px; border-radius: 7px; cursor: pointer; }
     .parcel-del:hover { background: var(--red); color: #fff; }
 
-    .summary { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
-    .summary-head { padding: 14px 17px; background: var(--panel); border-bottom: 1px solid var(--border); font-weight: 800; font-size: .92rem; }
-    .summary-body { padding: 15px 17px; }
+    .summary { position: sticky; top: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+                display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
+    .summary-head { padding: 14px 17px; background: var(--panel); border-bottom: 1px solid var(--border); font-weight: 800; font-size: .92rem; flex-shrink: 0; }
+    .summary-body { padding: 15px 17px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
     .sum-line { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: .85rem; border-bottom: 1px dashed var(--border); }
     .sum-line:last-of-type { border-bottom: none; }
     .sum-line span:first-child { color: var(--muted); }
     .sum-total { display: flex; justify-content: space-between; padding: 13px 0 0; margin-top: 9px; border-top: 2px solid var(--border); font-size: 1.12rem; font-weight: 800; }
-    .summary-foot { padding: 14px 17px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 9px; }
+    .summary-foot { padding: 14px 17px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 9px; flex-shrink: 0; }
     .btn-save-order { background: var(--green); color: #fff; border: none; padding: 15px; border-radius: 11px; font-size: 1rem; font-weight: 800; cursor: pointer; width: 100%; font-family: var(--font); }
     .btn-save-order:hover { background: #16a34a; }
     .btn-save-order:disabled { opacity: .45; cursor: not-allowed; }
