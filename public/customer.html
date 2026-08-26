@@ -11,7 +11,7 @@
        regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
        نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
        ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
-  <meta name="app-version" content="1.6.0" />
+  <meta name="app-version" content="1.6.1" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -324,6 +324,26 @@ a{color:var(--red);text-decoration:none}
 .nav .dotb{position:absolute;top:2px;left:calc(50% - 16px);min-width:16px;height:16px;padding:0 4px;
   border-radius:999px;background:var(--red);color:#fff;font-size:9.5px;font-weight:800;
   display:grid;place-items:center}
+
+/* ── شريط المراجعة المثبّت (خطوة الملخّص) ─────────────────
+   في لوحة الكول سنتر الملخّص عمود جانبي بيفضل ثابت وانت بتملا الفورم.
+   هنا الشاشة عمود واحد بعرض 520px، فمفيش عمود جانبي أصلًا — والمقابل
+   إن الإجماليات وزرار الإرسال يفضلوا مثبّتين تحت وانت بتنزّل تراجع.
+
+   🔴 ليه fixed مش sticky: الأب «‏.scroll» عليه overflow-y:auto، فأي عنصر
+   جوّاه بيبقى sticky بالنسبة له هو — وهو مابيتمررش أصلًا (الصفحة كلها
+   هي اللي بتتمرر لأن «‏.screen» عليها min-height مش height). جرّبنا
+   sticky فعلًا والكارت فضل ماشي مع الصفحة ومااتثبتش.
+
+   نفس مقاسات «‏.nav» بالظبط عشان الشريطين ما يبانوش مختلفين — والـnav
+   أصلًا مخفي في شاشة الطلب الجديد (شوف showNav) فمفيش تعارض. */
+.wiz-bar{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;z-index:60;
+  background:rgba(12,12,14,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + var(--safe-b))}
+.wiz-bar .wb-tot{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  margin-bottom:9px;font-size:12.5px;color:var(--muted)}
+.wiz-bar .wb-tot b{font-size:15px;color:var(--txt)}
+.wiz-bar .wb-btns{display:flex;gap:10px}
 
 /* ── مودال ──────────────────────────────────────────────── */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;
@@ -684,9 +704,19 @@ a{color:var(--red);text-decoration:none}
         <div id="attachSummary" style="margin-top:10px"></div>
       </div>
       <div class="card" id="summaryCard"></div>
-      <div style="display:flex;gap:10px;margin-top:14px">
-        <button class="btn ghost" onclick="wizNext(3)">السابق</button>
-        <button class="btn" id="submitBtn" onclick="submitOrder()">إرسال الطلب</button>
+      <!-- مسافة بقد الشريط المثبّت عشان آخر كارت ما يتغطّاش -->
+      <div style="height:108px"></div>
+
+      <!-- الأزرار اتنقلت هنا (مش اتكرّرت) — الإجماليات فوقها بتتعبّى من renderSummary -->
+      <div class="wiz-bar" id="wizBar">
+        <div class="wb-tot">
+          <span>إجمالي التوصيل <b id="wbDeliv">—</b></span>
+          <span>التحصيل <b id="wbCod">—</b></span>
+        </div>
+        <div class="wb-btns">
+          <button class="btn ghost" onclick="wizNext(3)">السابق</button>
+          <button class="btn" id="submitBtn" onclick="submitOrder()">إرسال الطلب</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3571,6 +3601,14 @@ function renderSummary() {
     ${row(list.length > 1 ? `إجمالي التوصيل (${list.length} طرود)` : "سعر التوصيل",
           total ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " + مناطق يحددها الفرع") : "يحدده الفرع")}
     ${row("الدفع", S.draft.pay)}`;
+
+  /* نفس الأرقام في الشريط المثبّت تحت — بتتحسب هنا مرة واحدة بدل ما
+     يبقى فيه مصدرين للرقم يفترقوا مع أول تعديل. */
+  const wbD = $("wbDeliv"), wbC = $("wbCod");
+  if (wbD) wbD.textContent = total
+    ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " +")
+    : "يحدده الفرع";
+  if (wbC) wbC.textContent = fmtMoney(draftCodTotal()) + " ج.م";
 }
 
 /* ── رفع الصور — imgcompress ثم POST /api/upload (مش Cloudinary) ── */
