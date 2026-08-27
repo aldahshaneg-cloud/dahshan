@@ -428,7 +428,8 @@ class FinanceController
      */
     public function cashStoresCreate(Request $request): JsonResponse
     {
-        $user = $request->actorOrFail();
+        // بوابة الدخول — الدور نفسه مفروض على المسار (role:admin)
+        $request->actorOrFail();
         $body = $this->body($request);
 
         $name = trim((string) ($body['name'] ?? ''));
@@ -437,10 +438,11 @@ class FinanceController
         }
         $branchId = isset($body['branchId']) && $body['branchId'] !== null && $body['branchId'] !== ''
             ? (int) $body['branchId'] : null;
-        // مشرف الفرع ينشئ خزنًا لفرعه فقط — زي سلوك «خزن الفرع» في النظام القديم
-        if ($user->role === 'branch') {
-            $branchId = (int) $user->branchId;
-        }
+        /* 🔴 المسار بقى للمدير العام بس (role:admin) — قرار صاحب النظام
+           2026-08-26. قبل كده كان مشرف الفرع بيقدر يفتح خزنة لفرعه،
+           والسطرين اللي كانوا هنا كانوا بيقفلوا الفرع على فرعه.
+           بقوا كود ميت فاتشالوا: مشرف الفرع مابيوصلش للمسار أصلًا،
+           والمدير بيختار الفرع بنفسه من الـbody. */
 
         DB::insert(
             'INSERT INTO cash_stores (name, branch_id, balance, created_at) VALUES (?,?,0,?)',

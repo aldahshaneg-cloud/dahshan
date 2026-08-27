@@ -281,8 +281,12 @@ Route::post('closeouts/monthly', [BoardController::class, 'closeoutSave'])->midd
    💰 = بيلمس فلوس.
 ═══════════════════════════════════════════════════════════════ */
 
+/* 🔴 إنشاء الخزنة للمدير العام بس — قرار صاحب النظام 2026-08-26.
+   كان مفتوح لمشرف الفرع والمحاسب كمان، فكان أي فرع يقدر يفتح خزنة
+   لنفسه من غير علم الإدارة، والفلوس تتحرّك جوّه خزنة محدش واخد باله
+   منها. الفتح والإغلاق قرار إداري مش تشغيلي. */
 Route::post('cash-stores', [FinanceController::class, 'cashStoresCreate'])
-    ->middleware('role:admin,accountant,branch');   // 💰
+    ->middleware('role:admin');   // 💰
 Route::post('complaints', [SupportController::class, 'complaintsCreate'])
     ->middleware('role:admin,callcenter,branch');
 Route::post('custody', [FinanceController::class, 'custodyCreate'])

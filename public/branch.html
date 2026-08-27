@@ -4073,14 +4073,26 @@
     function renderCashStoresPage() {
       const body = document.getElementById("cashStoresBody");
       if (!body) return;
+      // الزرار للمدير العام بس — مشرف الفرع بيشوف خزنه ومابيفتحش خزنة
+      const addBtn = document.getElementById("addCashStoreBtn");
+      if (addBtn) addBtn.style.display = (window._currentUser || {}).role === "مدير" ? "" : "none";
       const stores = window._cashStoresData || [];
-      if (!stores.length) { body.innerHTML = `<tr><td colspan="4" class="empty-row">لا توجد خزن — أضف خزنة جديدة</td></tr>`; return; }
+      /* رسالة الفراغ مابتقولش «أضف خزنة» لمشرف الفرع — ده شغل مش بيقدر
+         يعمله، والرسالة اللي بتطلب المستحيل بتخلّيه يفتكر إن فيه عطل. */
+      if (!stores.length) {
+        body.innerHTML = (window._currentUser || {}).role === "مدير"
+          ? `<tr><td colspan="4" class="empty-row">لا توجد خزن — أضف خزنة جديدة</td></tr>`
+          : `<tr><td colspan="4" class="empty-row">لا توجد خزن لفرعك — الإدارة هي اللي بتفتح الخزن</td></tr>`;
+        return;
+      }
       body.innerHTML = stores.map((s,i) => `
         <tr>
           <td class="idx">${i+1}</td>
           <td><b>${ esc(s.name) }</b></td>
           <td style="color:${ esc((Number(s.balance)||0) >= 0 ? 'var(--green)' : 'var(--red)') };font-weight:800">${ esc((Number(s.balance)||0).toFixed(2)) } ج.م</td>
-          <td><button class="del-btn" onclick="deleteCashStore('${ escJs(s.id) }')">حذف</button></td>
+          <td>${(window._currentUser || {}).role === "مدير"
+            ? `<button class="del-btn" onclick="deleteCashStore('${ escJs(s.id) }')">حذف</button>`
+            : `<span style="color:var(--muted);font-size:.78rem">—</span>`}</td>
         </tr>`).join("");
       renderPilotCustodiesTable();
     }
@@ -7009,7 +7021,10 @@
     <div class="page" id="page-cashstores">
       <div class="sec-header">
         <span class="sec-title">🏦 الخزن والعهد</span>
-        <button class="add-btn" onclick="resetCashStoreModal();openModal('cashstore')">➕ خزنة جديدة</button>
+        <!-- فتح الخزنة قرار إداري: الزرار بيظهر للمدير العام بس. ده إخفاء
+             واجهة — القفل الحقيقي role:admin على POST /api/cash-stores -->
+        <button class="add-btn" id="addCashStoreBtn" style="display:none"
+                onclick="resetCashStoreModal();openModal('cashstore')">➕ خزنة جديدة</button>
       </div>
 
       <div class="table-wrap">
