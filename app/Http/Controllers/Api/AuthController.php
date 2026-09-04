@@ -112,6 +112,29 @@ class AuthController
     }
 
     /**
+     * 🍽️ حسابات «روح دمشق بس» — قطاع منفصل عن موظفي الدهشان.
+     *
+     * طلب صاحب النظام 2026-09-04: مشرفي روح دمشق (اللي اتنقلوا من Firebase
+     * أو بيتعملوا من شاشة صلاحيات دمشق) ظهروا في تقفيلة الموظفين وقوايم
+     * الموظفين — وهما مش موظفين عند الدهشان. التعريف بالبيانات مش بالدور:
+     * الحساب اللي صفوف تطبيقاته الصريحة كلها جوّه {damascus, site} وفيها
+     * damascus. أي حساب دهشاني عنده تطبيق تاني (branch/accounts/…) مش منهم.
+     *
+     * @return int[] معرّفات المستخدمين
+     */
+    public static function damascusOnlyUserIds(): array
+    {
+        return array_map(
+            fn ($r) => (int) $r->user_id,
+            DB::select(
+                "SELECT user_id FROM user_app_permissions
+                  GROUP BY user_id
+                 HAVING SUM(app = 'damascus') > 0 AND SUM(app NOT IN ('damascus', 'site')) = 0"
+            )
+        );
+    }
+
+    /**
      * POST /api/login — {username, password, client?, app?}
      * client:"pilot-app" بيرجّع كمان توكن للموبايل (توكن جديد بيلغي القديم).
      *

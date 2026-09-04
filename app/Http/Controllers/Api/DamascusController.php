@@ -1131,7 +1131,13 @@ class DamascusController
             $perms[$r['username']] = ['keys' => (object) $keys, 'branches' => $branches];
         }
 
-        $users = DB::select('SELECT id, username, name, role FROM users WHERE blocked = 0 ORDER BY username');
+        /* قطاع روح دمشق لوحده: القايمة فيها بس اللي بيقدر يفتح تطبيق دمشق
+           (حسابات دمشق نفسها + محاسب الدهشان) — مش كل موظفي الشركة. */
+        $users = array_values(array_filter(
+            DB::select('SELECT id, username, name, role FROM users WHERE blocked = 0 ORDER BY username'),
+            fn ($u) => $u->role !== 'admin'
+                && in_array('damascus', AuthController::appsFor((int) $u->id, (string) $u->role), true)
+        ));
 
         return ApiResponse::out([
             'ok'         => true,

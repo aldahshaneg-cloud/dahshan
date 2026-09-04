@@ -990,11 +990,14 @@ class PilotAccountingController
 
         /* الأدمن مابيظهرش في القايمة — عنده كل حاجة دايمًا ومافيش
            معنى إن صاحب النظام يقفل على نفسه بالغلط. */
+        /* 🍽️ حسابات روح دمشق بس مش من موظفي البرنامج ده — صلاحياتها في شاشة دمشق */
+        $rd = AuthController::damascusOnlyUserIds();
         $users = DB::select(
             "SELECT u.id, u.username, u.name, u.role, u.branch_id, b.name AS branch_name
                FROM users u LEFT JOIN branches b ON b.id = u.branch_id
-              WHERE u.blocked = 0 AND u.role NOT IN ('admin', 'pilot', 'store', 'customer')
-              ORDER BY u.role, u.username"
+              WHERE u.blocked = 0 AND u.role NOT IN ('admin', 'pilot', 'store', 'customer')"
+            . ($rd ? ' AND u.id NOT IN (' . implode(',', array_map('intval', $rd)) . ')' : '')
+            . ' ORDER BY u.role, u.username'
         );
 
         return ApiResponse::out([
@@ -1220,6 +1223,12 @@ class PilotAccountingController
                   FROM users u LEFT JOIN branches b ON b.id = u.branch_id
                  WHERE u.blocked = 0 AND u.role IN ({$ph})";
         $args = self::STAFF_ROLES;
+        /* 🍽️ مشرفي روح دمشق قطاع لوحده — مش موظفين عند الدهشان فمايدخلوش التقفيلة */
+        $rd = AuthController::damascusOnlyUserIds();
+        if ($rd) {
+            $sql .= ' AND u.id NOT IN (' . implode(',', array_fill(0, count($rd), '?')) . ')';
+            $args = array_merge($args, $rd);
+        }
         if ($branchId !== null) {
             $sql .= ' AND u.branch_id = ?';
             $args[] = $branchId;

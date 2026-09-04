@@ -167,9 +167,15 @@ class EntitiesController
 
         $ids = array_map(fn ($r) => (int) $r->id, $rows);
         $perms = $this->usersPerms($ids);
+        /* 🍽️ حسابات «روح دمشق بس» قطاع منفصل — مابتظهرش في قوايم موظفي الدهشان
+           (لوحة الإدارة وتقفيل الطيارين). إدارتها من شاشة صلاحيات روح دمشق نفسها. */
+        $rdOnly = array_flip(AuthController::damascusOnlyUserIds());
 
         $items = [];
         foreach ($rows as $row) {
+            if (isset($rdOnly[(int) $row->id])) {
+                continue;
+            }
             $p = $perms[(int) $row->id] ?? [];
             $items[] = CoreWire::user($row, $p['apps'] ?? [], $p['pages'] ?? []);
         }
