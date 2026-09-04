@@ -199,10 +199,11 @@ try {
 echo "\n══ 5) الواجهات ══\n";
 foreach (['tiar', 'branch'] as $pg) {
     $html = file_get_contents($ROOT . "/public/{$pg}.html");
-    ok("{$pg}: الافتراضي في الراديو — العمولة daily والباقي monthly",
-        str_contains($html, '(name === "srCommissionSettle" ? "daily" : "monthly")') && str_contains($html, 'shift.commissionSettle || "daily"'));
+    ok("{$pg}: مافيش اختيار للعمولة — في نهاية الوردية ثابتة، والباقي monthly",
+        ! str_contains($html, "_settleRadiosHtml('srCommissionSettle'") && ! str_contains($html, '_srSettleVal("srCommissionSettle")')
+        && str_contains($html, 'shift.commissionSettle || "daily"') && str_contains($html, 'العمولة بتروح للطيار في نهاية الوردية'));
     ok("{$pg}: مودال الإنهاء بيبعت commissionSettle وخزنة العمولة",
-        str_contains($html, 'name="_seCommSettle" value="daily" checked') && str_contains($html, 'commissionSettle: commSettle') && str_contains($html, 'commissionStoreId:'));
+        ! str_contains($html, 'name="_seCommSettle"') && str_contains($html, 'commissionSettle: commSettle') && str_contains($html, 'commissionStoreId:'));
     ok("{$pg}: «يسلّم للخزنة دلوقتي» في مودال الإنهاء", str_contains($html, 'id="_seHandNet"') && str_contains($html, 'function _seRecalcHand()'));
     ok("{$pg}: التقرير فيه «حساب التسليم — ياخد كام من الطيار»", str_contains($html, 'حساب التسليم — ياخد كام من الطيار') && str_contains($html, 'id="srHandNet"') && str_contains($html, 'window.recomputeShiftHand = function'));
 }

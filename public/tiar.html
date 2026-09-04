@@ -6633,11 +6633,7 @@
             }</div>
             <div style="font-size:.72rem;color:var(--muted)">«حسب حساب الطيار» = مافيش أي تعديل. غير كده بيتسجّل لكل أوردر متسلّم وبيدخل مستحقاته.</div>
             <!-- 💵 طلب صاحب النظام 2026-09-04: العمولة في نفس اليوم — الطيار بياخدها من اللي معاه -->
-            <div style="margin-top:10px;font-size:.78rem;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-              <span style="color:var(--muted)">تسوية العمولة:</span>
-              <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="_seCommSettle" value="daily" checked style="accent-color:var(--sky)" /> 🗓️ في نفس اليوم — بياخدها من اللي معاه</label>
-              <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="_seCommSettle" value="monthly" style="accent-color:var(--sky)" /> 📆 على الشهر</label>
-            </div>
+            <div style="margin-top:10px;font-size:.78rem;color:var(--sky);font-weight:700">🗓️ العمولة بتروح للطيار في نهاية الوردية — بياخدها من اللي معاه وبيسلّم الباقي</div>
             <div id="_seHandWrap" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px;font-size:.8rem">
               <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">عمولته التقريبية</span><b id="_seCommEst">—</b></div>
               <div style="display:flex;justify-content:space-between;gap:8px;font-size:.95rem;margin-top:5px"><span style="font-weight:800">💵 يسلّم للخزنة دلوقتي</span><b id="_seHandNet" style="color:var(--green)">—</b></div>
@@ -6713,7 +6709,7 @@
         const settle = box.querySelector("input[name='_seCommSettle']:checked")?.value || "daily";
         const est = _seCommEstimate();
         const hand = collected + custody - (settle === "daily" ? est : 0);
-        const e1 = document.getElementById("_seCommEst"); if (e1) e1.textContent = est.toFixed(2) + " ج.م" + (settle === "daily" ? "" : " (على الشهر — مش بتتخصم دلوقتي)");
+        const e1 = document.getElementById("_seCommEst"); if (e1) e1.textContent = est.toFixed(2) + " ج.م" + "";
         const e2 = document.getElementById("_seHandNet"); if (e2) e2.textContent = hand.toFixed(2) + " ج.م";
       }
       ["_seCommValue", "_seCustodyReturn", "_seCollectAmount", "_seCollectedAmount"].forEach(id => document.getElementById(id)?.addEventListener("input", _seRecalcHand));
@@ -6951,7 +6947,7 @@
       const bonus     = Number(document.getElementById("srBonusAmount")?.value) || 0;
       const deduction = Number(document.getElementById("srDeductionAmount")?.value) || 0;
       const advance   = Number(document.getElementById("srAdvanceAmount")?.value) || 0;
-      const cS = data.commissionPaidAt ? "daily" : _srSettleVal("srCommissionSettle");
+      const cS = data.commissionPaidAt ? "daily" : (data.commissionSettle || "daily");   // مافيش اختيار — العمولة في نهاية الوردية
       const bS = _srSettleVal("srBonusSettle");
       const dS = _srSettleVal("srDeductionSettle");
       const aS = _srSettleVal("srAdvanceSettle");
@@ -7056,8 +7052,10 @@
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">قيمة عمولته من الأوردرات</span><span class="od-info-val">${ esc(data.valueLabel) }</span></div>
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">إجمالي عمولة الطيار</span><span class="od-info-val" style="color:var(--sky);font-weight:800">${ esc(data.totalCommission.toFixed(2)) } ج.م</span></div>
             ${ data.commissionPaidAt
-              ? `<div style="margin-top:8px;font-size:.8rem;color:var(--green);font-weight:700">✅ العمولة اتصرفت من الخزنة: ${ esc((Number(data.commissionPaidAmount) || 0).toFixed(2)) } ج.م — مقفولة على «في نفس اليوم»</div>`
-              : `${_settleRadiosHtml('srCommissionSettle', data.commissionSettle)}
+              ? `<div style="margin-top:8px;font-size:.8rem;color:var(--green);font-weight:700">✅ العمولة راحت للطيار في نهاية الوردية: ${ esc((Number(data.commissionPaidAmount) || 0).toFixed(2)) } ج.م</div>`
+              : `${ (data.commissionSettle || "daily") === "daily"
+                  ? `<div style="margin-top:8px;font-size:.78rem;color:var(--sky);font-weight:700">🗓️ العمولة بتروح للطيار في نهاية الوردية — بياخدها من اللي معاه وبيسلّم الباقي</div>`
+                  : `<div style="margin-top:8px;font-size:.78rem;color:var(--muted);font-weight:700">📆 وردية قديمة (قبل 2026-09-04) — عمولتها مرحّلة للتقفيلة الشهرية</div>` }
             <div id="srCommPayoutWrap" style="margin-top:8px;display:${ data.commissionSettle === "daily" ? "block" : "none" }">
               <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">💸 الخزنة اللي هتتصرف منها العمولة — بتتسجل حركة خروج بقيمتها عند الحفظ (الفلوس دخلت الخزنة كاملة في التحصيل):</label>
               <select id="srCommCashStore" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.83rem;font-family:var(--font)">
@@ -7206,7 +7204,7 @@
       const advanceAmount   = Number(document.getElementById("srAdvanceAmount")?.value) || 0;
       const advanceReason   = (document.getElementById("srAdvanceReason")?.value || "").trim();
       /* بعد الصرف التسوية مقفولة daily — السيرفر بيرفض الرجوع شهري */
-      const commissionSettle = data.commissionPaidAt ? "daily" : _srSettleVal("srCommissionSettle");
+      const commissionSettle = data.commissionPaidAt ? "daily" : (data.commissionSettle || "daily");   // مافيش اختيار — العمولة في نهاية الوردية
       const bonusSettle      = _srSettleVal("srBonusSettle");
       const deductionSettle  = _srSettleVal("srDeductionSettle");
       const advanceSettle    = _srSettleVal("srAdvanceSettle");
