@@ -1354,12 +1354,16 @@ CREATE TABLE `pilot_deferred_advances` (
   `monthly` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'القسط الشهري الافتراضي — صفر = تتخصم مرة واحدة',
   `start_month` char(7) NOT NULL COMMENT 'أول شهر خصم YYYY-MM',
   `note` text DEFAULT NULL,
+  `store_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الخزنة اللي خرجت منها السلفة — NULL = اتسجّلت من غير حركة خزنة',
+  `txn_id` bigint(20) unsigned DEFAULT NULL COMMENT 'حركة الخزنة (cash_transactions.id) — الإلغاء بيعكسها',
   `created_by` varchar(190) DEFAULT NULL COMMENT 'اسم مستخدم اللي سجّل السلفة',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `idx_pilot_deferred_advances_pilot` (`pilot_id`),
   KEY `idx_pilot_deferred_advances_start` (`start_month`),
-  CONSTRAINT `fk_pilot_deferred_advances_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`)
+  KEY `fk_pilot_deferred_advances_store_id` (`store_id`),
+  CONSTRAINT `fk_pilot_deferred_advances_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`),
+  CONSTRAINT `fk_pilot_deferred_advances_store_id` FOREIGN KEY (`store_id`) REFERENCES `cash_stores` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='سلف الطيارين المؤجلة بتقسيط شهري — الرصيد المتبقي محسوب من المدفوعات';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

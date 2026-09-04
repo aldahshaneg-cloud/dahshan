@@ -766,6 +766,8 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
           <div class="form-group"><label>القسط الشهري</label><input type="text" inputmode="decimal" id="dfMonthly" placeholder="مثال: 500" oninput="previewDefPlan()" /></div>
           <div class="form-group"><label>يبدأ الخصم من شهر</label><input type="month" id="dfStart" onchange="previewDefPlan()" /></div>
           <div class="form-group full"><label>ملاحظة (اختياري)</label><input type="text" id="dfNote" placeholder="سبب السلفة" /></div>
+          <div class="form-group full" id="dfStoreWrap"><label>من الخزنة</label><select id="dfStore"><option value="">— بدون حركة خزنة (تسجيل بس) —</option></select>
+            <div style="font-size:.76rem;color:var(--muted);margin-top:4px;line-height:1.7">لو اخترت خزنة، مبلغ السلفة هيتسجّل <b>حركة منصرف</b> منها فورًا باسم الطيار — والإلغاء بيرجّعه بحركة وارد.</div></div>
         </div>
         <div id="dfPlan" style="font-size:.82rem;color:var(--muted);line-height:1.9;min-height:22px"></div>
         <div id="dfError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
@@ -1745,7 +1747,7 @@ async function bootAccounts() {
       <td class="idx">${i + 1}</td>
       <td><b>${ esc(names[String(a.pilotId)] || "—") }</b></td>
       <td style="font-size:.8rem">${ esc(a.advanceDate || "—") }</td>
-      <td class="num">${ paMoney(a.amount) }</td>
+      <td class="num">${ paMoney(a.amount) }${ a.storeName ? `<div class="sh" style="font-size:.7rem;color:var(--muted);font-weight:400">💰 من ${ esc(a.storeName) }</div>` : "" }</td>
       <td class="num">${ paMoney(a.monthly) }</td>
       <td style="font-size:.8rem">${ esc(a.startMonth) }</td>
       <td class="num"><input class="pa-in" style="max-width:90px" value="${ esc(a.monthDue) }" ${locked ? "readonly" : ""}
@@ -2903,10 +2905,15 @@ async function bootAccounts() {
     const d = new Date(y, m, 1);
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
   }
-  window.openPaAdvance = function(presetPilot) {
+  window.openPaAdvance = async function(presetPilot) {
     if (!paCan('act.deferred')) { showToast("مالكش صلاحية تسجيل السلف المؤجلة — كلّم الإدارة", "error"); return; }
     const ps = window._paData?.pilots || [];
     if (!ps.length) { showToast("مفيش طيارين", "error"); return; }
+    let stores = [];
+    try { stores = (await PA_API.get("/api/cash-stores")).items || []; } catch (e) {}
+    $("dfStore").innerHTML = `<option value="">— بدون حركة خزنة (تسجيل بس) —</option>`
+      + stores.map(s => `<option value="${ esc(s.id) }">${ esc(s.name) }${ s.branchName ? " — " + esc(s.branchName) : " — الإدارة" } (${ paMoney(s.balance) })</option>`).join("");
+    $("dfStore").value = "";
     $("dfPilot").innerHTML = ps.map(p => `<option value="${ esc(p.pilotId) }">${ esc(p.name) }${ p.branchName ? " — " + esc(p.branchName) : "" }</option>`).join("");
     $("dfPilot").value   = presetPilot ? String(presetPilot) : String(ps[0].pilotId);
     $("dfDate").value    = bizToday();
@@ -2943,11 +2950,12 @@ async function bootAccounts() {
     if (monthly > amount) { err.textContent = "القسط أكبر من السلفة نفسها"; return; }
     if (!startMonth) { err.textContent = "حدّد الشهر اللي يبدأ منه الخصم"; return; }
     try {
+      const cashStoreId = $("dfStore").value || null;
       await PA_API.post("/api/pilot-accounting/deferred", {
-        pilotId, amount, monthly, startMonth, advanceDate: $("dfDate").value, note: $("dfNote").value.trim(),
+        pilotId, amount, monthly, startMonth, advanceDate: $("dfDate").value, note: $("dfNote").value.trim(), cashStoreId,
       });
       closeModal("def");
-      showToast("تم حفظ السلفة المؤجلة", "success");
+      showToast(cashStoreId ? "اتسجّلت السلفة وخرجت من الخزنة 💸" : "تم حفظ السلفة المؤجلة", "success");
       loadPilotAcct();
     } catch (e) { err.textContent = "تعذّر الحفظ: " + (e.message || ""); }
   };
@@ -2957,7 +2965,9 @@ async function bootAccounts() {
       .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
   };
   window.paDeleteAdvance = function(id) {
-    if (!confirm("تحذف السلفة دي بأقساطها كلها؟ الأقساط اللي اتخصمت من الشهور اللي فاتت هترجع تظهر في الرواتب.")) return;
+    const a = (window._paData?.deferred || []).find(x => String(x.id) === String(id));
+    const back = a?.storeName ? `\nالمبلغ (${ paMoney(a.amount) }) هيرجع لخزنة «${ a.storeName }» بحركة وارد.` : "";
+    if (!confirm("تحذف السلفة دي بأقساطها كلها؟ الأقساط اللي اتخصمت من الشهور اللي فاتت هترجع تظهر في الرواتب." + back)) return;
     PA_API.del(`/api/pilot-accounting/deferred/${id}`)
       .then(() => { showToast("اتشالت", "success"); loadPilotAcct(); })
       .catch(e => showToast("تعذّر الحذف: " + (e.message || ""), "error"));

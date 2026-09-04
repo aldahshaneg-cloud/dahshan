@@ -557,13 +557,33 @@ class PilotAccountingController
 
     private function deferredWire(array $deferred, string $ym): array
     {
+        /* اسم الخزنة يظهر في الشاشة — «من خزنة X» — عشان المحاسب يعرف الفلوس خرجت منين */
+        $storeIds = [];
+        foreach ($deferred as $recs) {
+            foreach ($recs as $r) {
+                if (! empty($r['store_id'])) {
+                    $storeIds[(int) $r['store_id']] = true;
+                }
+            }
+        }
+        $storeNames = [];
+        if ($storeIds) {
+            $ph = implode(',', array_fill(0, count($storeIds), '?'));
+            foreach (DB::select("SELECT id, name FROM cash_stores WHERE id IN ({$ph})", array_keys($storeIds)) as $st) {
+                $storeNames[(int) $st->id] = (string) $st->name;
+            }
+        }
         $out = [];
         foreach ($deferred as $pid => $recs) {
             foreach ($recs as $r) {
                 $c = W::deferredForMonth($r, $ym, $r['_pays'] ?? []);
+                $sid = ! empty($r['store_id']) ? (int) $r['store_id'] : null;
                 $out[] = [
                     'id'          => (int) $r['id'],
                     'pilotId'     => (int) $pid,
+                    'storeId'     => $sid,
+                    'storeName'   => $sid !== null ? ($storeNames[$sid] ?? null) : null,
+                    'txnId'       => ! empty($r['txn_id']) ? (int) $r['txn_id'] : null,
                     'advanceDate' => $r['advance_date'],
                     'amount'      => round((float) $r['amount'], 2),
                     'monthly'     => round((float) $r['monthly'], 2),
@@ -630,37 +650,107 @@ class PilotAccountingController
         $date = trim((string) ($b['advanceDate'] ?? ''));
         $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : substr($start, 0, 7) . '-01';
 
-        $id = (int) ($b['id'] ?? 0);
+        $actor   = $request->actorOrFail();
+        $storeId = (int) ($b['cashStoreId'] ?? 0);
+        $id      = (int) ($b['id'] ?? 0);
         if ($id > 0) {
+            $cur = DB::selectOne('SELECT pilot_id, amount, txn_id FROM pilot_deferred_advances WHERE id = ?', [$id]);
+            if (! $cur) {
+                throw ApiException::notFound('السلفة غير موجودة');
+            }
+            /* الفلوس خرجت من الخزنة بمبلغ معيّن لطيار معيّن — تغييرهم هيخلّي الخزنة تكذب.
+               القسط والبداية والملاحظة عادي. عايز تغيّر المبلغ؟ الغيها (بترجع للخزنة) وسجّلها تاني. */
+            if ($cur->txn_id !== null && (abs((float) $cur->amount - $amount) > 0.004 || (int) $cur->pilot_id !== $pilotId)) {
+                throw new ApiException('السلفة دي خرجت من الخزنة فعلًا — مينفعش تغيّر مبلغها أو طيارها. الغيها (الفلوس بترجع للخزنة) وسجّلها من جديد', 409);
+            }
             DB::update(
                 'UPDATE pilot_deferred_advances
                     SET pilot_id = ?, advance_date = ?, amount = ?, monthly = ?, start_month = ?, note = ?
                   WHERE id = ?',
                 [$pilotId, $date, $amount, $monthly, $start, $note ?: null, $id]
             );
-        } else {
+
+            return ApiResponse::out(['ok' => true, 'id' => $id]);
+        }
+
+        if ($storeId <= 0) {
+            /* من غير خزنة: تسجيل محاسبي بس (سلفة قديمة اتصرفت قبل النظام مثلًا) */
             DB::insert(
                 'INSERT INTO pilot_deferred_advances
                    (pilot_id, advance_date, amount, monthly, start_month, note, created_by, created_at)
                  VALUES (?,?,?,?,?,?,?,?)',
-                [$pilotId, $date, $amount, $monthly, $start, $note ?: null,
-                 $request->actorOrFail()->username, WireTime::nowDb()]
+                [$pilotId, $date, $amount, $monthly, $start, $note ?: null, $actor->username, WireTime::nowDb()]
             );
-            $id = (int) DB::getPdo()->lastInsertId();
+
+            return ApiResponse::out(['ok' => true, 'id' => (int) DB::getPdo()->lastInsertId()]);
         }
 
-        return ApiResponse::out(['ok' => true, 'id' => $id]);
+        /* من خزنة: السلفة فلوس خرجت فعلًا — حركة منصرف بنفس اللحظة، والسجل بيشاور عليها */
+        $store = DB::selectOne('SELECT id, name, branch_id FROM cash_stores WHERE id = ?', [$storeId]);
+        if (! $store) {
+            throw ApiException::notFound('الخزنة غير موجودة');
+        }
+        if ($actor->role === 'branch' && (int) ($store->branch_id ?? 0) !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('الخزنة دي مش على فرعك');
+        }
+        $pilot = DB::selectOne('SELECT name, assigned_branch_id FROM pilots WHERE id = ?', [$pilotId]);
+        $now   = WireTime::nowDb();
+        $id = DB::transaction(function () use ($storeId, $amount, $pilotId, $pilot, $date, $monthly, $start, $note, $actor, $now): int {
+            $sRow = DB::select('SELECT id, balance FROM cash_stores WHERE id = ? FOR UPDATE', [$storeId])[0];
+            if ((float) $sRow->balance < $amount) {
+                throw new ApiException('رصيد الخزنة (' . number_format((float) $sRow->balance, 2) . ') مايكفيش لسلفة ' . number_format($amount, 2));
+            }
+            DB::update('UPDATE cash_stores SET balance = balance - ? WHERE id = ?', [$amount, $storeId]);
+            DB::insert(
+                'INSERT INTO cash_transactions (store_id, type, amount, reason, notes, related_pilot_id, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [$storeId, 'out', $amount, mb_substr('سلفة مؤجلة: ' . ($pilot->name ?? $pilotId), 0, 190),
+                 $note !== '' ? mb_substr($note, 0, 500) : null, $pilotId,
+                 $pilot && $pilot->assigned_branch_id !== null ? (int) $pilot->assigned_branch_id : null, $actor->username, $now]
+            );
+            $txnId = (int) DB::getPdo()->lastInsertId();
+            DB::insert(
+                'INSERT INTO pilot_deferred_advances
+                   (pilot_id, advance_date, amount, monthly, start_month, note, store_id, txn_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)',
+                [$pilotId, $date, $amount, $monthly, $start, $note ?: null, $storeId, $txnId, $actor->username, $now]
+            );
+
+            return (int) DB::getPdo()->lastInsertId();
+        });
+
+        return ApiResponse::out(['ok' => true, 'id' => $id, 'fromStore' => true]);
     }
 
     /** DELETE /api/pilot-accounting/deferred/{id} — الإدارة بس */
     public function deferredDelete(Request $request, string $id): JsonResponse
     {
-        $this->need($this->aclOf($request->actorOrFail()), 'act.deferred', 'على السلف المؤجلة');
-        $request->actorOrFail();
-        $n = DB::delete('DELETE FROM pilot_deferred_advances WHERE id = ?', [(int) $id]);
-        if (! $n) {
-            throw ApiException::notFound('السلفة غير موجودة');
-        }
+        $actor = $request->actorOrFail();
+        $this->need($this->aclOf($actor), 'act.deferred', 'على السلف المؤجلة');
+        $aid = (int) $id;
+        DB::transaction(function () use ($aid, $actor): void {
+            $rec = DB::select('SELECT a.*, p.name AS pilot_name, p.assigned_branch_id
+                                 FROM pilot_deferred_advances a LEFT JOIN pilots p ON p.id = a.pilot_id
+                                WHERE a.id = ? FOR UPDATE', [$aid])[0] ?? null;
+            if (! $rec) {
+                throw ApiException::notFound('السلفة غير موجودة');
+            }
+            /* السلفة اللي خرجت من الخزنة مابتتمسحش في صمت — الفلوس بترجع بحركة وارد
+               مكتوب عليها إنها إلغاء، فسجل الخزنة بيحكي القصة كاملة. */
+            if ($rec->txn_id !== null && $rec->store_id !== null) {
+                DB::select('SELECT id FROM cash_stores WHERE id = ? FOR UPDATE', [(int) $rec->store_id]);
+                DB::update('UPDATE cash_stores SET balance = balance + ? WHERE id = ?', [(float) $rec->amount, (int) $rec->store_id]);
+                DB::insert(
+                    'INSERT INTO cash_transactions (store_id, type, amount, reason, notes, related_pilot_id, branch_id, created_by, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?)',
+                    [(int) $rec->store_id, 'in', (float) $rec->amount,
+                     mb_substr('إلغاء سلفة مؤجلة #' . $aid . ': ' . ($rec->pilot_name ?? $rec->pilot_id), 0, 190),
+                     null, (int) $rec->pilot_id, $rec->assigned_branch_id !== null ? (int) $rec->assigned_branch_id : null,
+                     $actor->username, WireTime::nowDb()]
+                );
+            }
+            DB::delete('DELETE FROM pilot_deferred_advances WHERE id = ?', [$aid]);
+        });
 
         return ApiResponse::ok();
     }
