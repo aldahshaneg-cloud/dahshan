@@ -1455,10 +1455,11 @@ class PilotAccountingController
         $auto    = $this->staffAutoMatrix(array_column($staff, 'username'), $ym);
         $entries = $this->staffEntriesOf($ym, array_map(fn ($u) => (int) $u['id'], $staff));
 
-        /* سعر الساعة الموحّد بتاع الطيارين مايسريش على الموظفين —
-           موظف من غير سعر ساعة أجره بالساعة صفر، صريحة مش بالوراثة. */
+        /* سعر الساعة الافتراضي بيسري على الموظفين كمان (قرار صاحب النظام
+           2026-09-04: «خلي الموظفين ياخدوا السعر الافتراضي لو سعرهم فاضي»).
+           كان مقفول قبل كده عمدًا — دلوقتي نفس قاعدة الطيارين: سعره لو
+           أكبر من صفر، وإلا الافتراضي من الإعدادات. */
         $staffSet = $set;
-        $staffSet['hourRate'] = 0.0;
 
         $out = [];
         foreach ($staff as $u) {
@@ -1497,7 +1498,9 @@ class PilotAccountingController
                 'role'       => $u['role'],
                 'branchId'   => $u['branch_id'] !== null ? (int) $u['branch_id'] : null,
                 'branchName' => $u['branch_name'],
-                'hourRate'   => round((float) $u['hour_rate'], 2),
+                // السعر الساري فعلًا (بتاعه أو الافتراضي) — والواجهة بتعرضه في ملخص الموظف
+                'hourRate'   => round(W::hourRateOf(['hour_rate' => $u['hour_rate']], $set), 2),
+                'ownHourRate' => round((float) $u['hour_rate'], 2),
                 'monthlySalary'  => round((float) $u['monthly_salary'], 2),
                 'paidLeaveDays'  => (int) $u['paid_leave_days'],
                 'days'       => $days,
