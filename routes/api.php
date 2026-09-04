@@ -348,6 +348,11 @@ Route::get('pilot-accounting/settings', [PilotAccountingController::class, 'sett
    فبيفضلوا للإدارة — قرارات مالية زي ما التعليق فوق بيقول. */
 Route::post('pilot-accounting/entry', [PilotAccountingController::class, 'entrySave'])
     ->middleware('role:admin,branch,accountant');
+/* 💸 صرف الرواتب من الخزنة على الأرقام المعتمدة بعد القفل (2026-09-04) */
+Route::post('pilot-accounting/payout', [PilotAccountingController::class, 'payoutSave'])
+    ->middleware('role:admin,branch,accountant');
+Route::delete('pilot-accounting/payout/{id}', [PilotAccountingController::class, 'payoutDelete'])
+    ->middleware('role:admin,branch,accountant');
 /* أوردرات الطيار في يوم بعمولة كل أوردر — الضغط على اسم الطيار في الشيت (2026-09-04) */
 Route::get('pilot-accounting/pilot-orders', [PilotAccountingController::class, 'pilotOrders'])
     ->middleware('role:admin,branch,accountant');

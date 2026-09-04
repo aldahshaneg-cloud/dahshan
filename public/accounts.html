@@ -33,10 +33,11 @@
   --sidebar-w: 236px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
   color-scheme: dark;
 }
+/* ☀️ الوضع النهاري المميز — نفس لوحة home.html (رملي دافي + أحمر أغمق) */
 html.light {
-  --sky: #d1172a; --sky-d: #a30f20; --night: #eff2f5; --panel: #ffffff;
-  --card: #ffffff; --border: #dfe3e7; --text: #111b21; --muted: #667781;
-  --green: #15803d; --red: #d1172a; --purple: #7c3aed; --orange: #c2410c;
+  --sky: #c8102e; --sky-d: #9b0b22; --night: #f4efe7; --panel: #fbf8f2;
+  --card: #ffffff; --border: #e4dccf; --text: #1e1a16; --muted: #75695c;
+  --green: #15803d; --red: #c8102e; --purple: #6d28d9; --orange: #c2410c;
   --blue: #1d4ed8; --teal: #0f766e;
   color-scheme: light;
 }
@@ -810,6 +811,34 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
     </div>
   </div>
 
+  <!-- صرف راتب من الخزنة -->
+  <div class="modal" id="modal-payout">
+    <div class="modal-box" style="max-width:520px">
+      <div class="modal-head">
+        <div class="modal-title" id="payTitle">💸 صرف راتب</div>
+        <button class="modal-close" onclick="closeModal('payout')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="sum-block" style="margin-top:0" id="paySummary"></div>
+        <div id="payLockNote" class="warn-box" style="margin-top:12px;display:none">🔒 الصرف بيتم على الأرقام المعتمدة — اقفل الشهر الأول من زرار «اقفل الشهر».</div>
+        <div id="payForm" style="margin-top:14px">
+          <div class="form-grid">
+            <div class="form-group full"><label>من خزنة</label><select id="payStore"></select></div>
+            <div class="form-group"><label>المبلغ</label><input type="text" inputmode="decimal" id="payAmount" /></div>
+            <div class="form-group"><label>ملاحظة (اختياري)</label><input type="text" id="payNote" placeholder="مثال: دفعة أولى" /></div>
+          </div>
+          <div class="info-box" style="margin-bottom:8px">هتتسجّل حركة <b>منصرف</b> في الخزنة المختارة بنفس المبلغ، وتظهر في صفحة الخزنة وفي لوحة الإدارة.</div>
+        </div>
+        <div id="payHistory"></div>
+        <div id="payError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" id="paySaveBtn" onclick="savePayout()">💸 صرف</button>
+        <button class="btn-ghost" onclick="closeModal('payout')">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <!-- حركة خزنة: عهدة/وارد أو منصرف -->
   <div class="modal" id="modal-trtxn">
     <div class="modal-box" style="max-width:480px">
@@ -985,7 +1014,8 @@ window.showToast = function (msg, type) {
 };
 
 /* الثيم — مفتاح خاص بالبرنامج ده عشان مايتصادمش مع باقي التطبيقات */
-if (localStorage.getItem("accounts-theme") === "light") document.documentElement.classList.add("light");
+/* مفتاح مشترك بين تطبيقات المجموعة (dahshan-theme) والقديم احتياطي */
+if ((localStorage.getItem("dahshan-theme") || localStorage.getItem("accounts-theme")) === "light") document.documentElement.classList.add("light");
 function syncTheme() {
   const light = document.documentElement.classList.contains("light");
   if ($("themeIcon"))  $("themeIcon").textContent  = light ? "🌙" : "☀️";
@@ -994,6 +1024,7 @@ function syncTheme() {
 window.toggleTheme = function () {
   const lt = document.documentElement.classList.toggle("light");
   localStorage.setItem("accounts-theme", lt ? "light" : "dark");
+  localStorage.setItem("dahshan-theme", lt ? "light" : "dark");
   syncTheme();
 };
 syncTheme();
@@ -1627,7 +1658,7 @@ async function bootAccounts() {
       const owes = Number(t.netDue) < 0;
       return `<tr>
         <td class="idx">${i + 1}</td>
-        <td><b>${ esc(p.name) }</b> ${ paCan('page.pilot') ? `<button class="btn-ghost btn-xs no-print" onclick="openPilotSheet('${ escJs(p.pilotId) }')">كشف</button>` : "" }</td>
+        <td><b>${ esc(p.name) }</b> ${ paCan('page.pilot') ? `<button class="btn-ghost btn-xs no-print" onclick="openPilotSheet('${ escJs(p.pilotId) }')">كشف</button>` : "" }${ payoutCell(d, "pilot", p.pilotId, t.netDue) }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(p.branchName || "—") }</td>
         <td class="num">${ paMoney(t.hours) }</td>
         <td class="num">${ paNum(t.worked) }</td>
@@ -1897,7 +1928,7 @@ async function bootAccounts() {
       const t = u.totals || {};
       return `<tr>
         <td class="idx">${i + 1}</td>
-        <td><b>${ esc(u.name || u.username) }</b></td>
+        <td><b>${ esc(u.name || u.username) }</b>${ payoutCell(d, "staff", u.userId, t.netDue) }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(paRole(u.role)) }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(u.branchName || "—") }</td>
         <td class="num">${ paMoney(t.hours) }</td>
@@ -2614,6 +2645,73 @@ async function bootAccounts() {
       await PA_API.post("/api/pilot-commission-adjustments", { pilotId: _ordCtx.pilotId, amount, reason, effectiveDate: _ordCtx.data?.date });
       showToast("اتضافت", "success");
       await afterCommissionChange();
+    } catch (e) { showToast("تعذّر: " + (e.message || ""), "error"); }
+  };
+
+  /* ═══════════ 💸 صرف الرواتب من الخزنة ═══════════
+     الصرف على الأرقام المعتمدة بس (الشهر مقفول). كل صرفة حركة `out` في نفس
+     خزن الإدارة — فالخزنة بتعرف إن الرواتب خرجت. المبلغ افتراضيًا الباقي من الصافي. */
+  function payoutsFor(d, refId) { return (d?.payouts || {})[String(refId)] || []; }
+  function payoutCell(d, kind, refId, netDue) {
+    if (netDue === undefined || netDue === null) return "";
+    const list = payoutsFor(d, refId);
+    const paid = list.reduce((a, x) => a + (Number(x.amount) || 0), 0);
+    const rem = Math.round(((Number(netDue) || 0) - paid) * 100) / 100;
+    const canPay = paCan('act.payout') && !!d.locked;
+    let badge = "";
+    if (paid > 0.004 && rem <= 0.004) badge = `<span class="badge bg-green" title="اتصرف ${ paMoney(paid) }">✓ اتصرف</span>`;
+    else if (paid > 0.004) badge = `<span class="badge bg-orange" title="اتصرف ${ paMoney(paid) }">باقي ${ paMoney(rem) }</span>`;
+    const btn = (canPay && rem > 0.004) || (paCan('act.payout') && list.length)
+      ? `<button class="btn-ghost btn-xs no-print" onclick="openPayout('${ kind }','${ escJs(refId) }')">💸 ${ list.length ? "الصرف" : "صرف" }</button>` : "";
+    return (badge || btn) ? ` <span style="white-space:nowrap">${ badge } ${ btn }</span>` : "";
+  }
+  let _payCtx = null;
+  window.openPayout = async function(kind, refId) {
+    const d = kind === "pilot" ? window._paData : window._stData;
+    const row = kind === "pilot" ? (d?.pilots || []).find(p => String(p.pilotId) === String(refId)) : (d?.staff || []).find(u => String(u.userId) === String(refId));
+    if (!d || !row) return;
+    const list = payoutsFor(d, refId);
+    const paid = list.reduce((a, x) => a + (Number(x.amount) || 0), 0);
+    const rem = Math.round(((Number(row.totals?.netDue) || 0) - paid) * 100) / 100;
+    _payCtx = { kind, refId, d, rem };
+    $("payTitle").textContent = `💸 صرف راتب ${ row.name || row.username } · ${ monthLabel(d.month) }`;
+    let stores = [];
+    try { stores = (await PA_API.get("/api/cash-stores")).items || []; } catch (e) {}
+    $("payStore").innerHTML = stores.map(s => `<option value="${ esc(s.id) }">${ esc(s.name) }${ s.branchName ? " — " + esc(s.branchName) : " — الإدارة" } (${ paMoney(s.balance) })</option>`).join("") || `<option value="">— مافيش خزن —</option>`;
+    $("payAmount").value = rem > 0 ? rem.toFixed(2) : "";
+    $("payNote").value = "";
+    $("payError").textContent = "";
+    $("paySummary").innerHTML = `<div class="sum-row calc"><div class="sl">صافي الراتب المعتمد</div><div class="sv" style="color:var(--green)">${ paMoney(row.totals?.netDue) }</div></div>
+      <div class="sum-row"><div class="sl">اتصرف قبل كده</div><div class="sv" style="color:var(--orange)">${ paMoney(paid) }</div></div>
+      <div class="sum-row grand"><div class="sl">الباقي</div><div class="sv">${ paMoney(rem) }</div></div>`;
+    $("payHistory").innerHTML = list.length ? `<div class="pa-sec-sub" style="margin:10px 0 4px">الصرفات السابقة</div>` + list.map(x => `<div class="sum-row" style="padding:6px 10px"><div class="sl" style="font-size:.8rem">${ paMoney(x.amount) } من ${ esc(x.storeName || "—") }<div class="sh">${ esc(x.paidAt ? new Date(x.paidAt).toLocaleString("ar-EG") : "") }${ x.paidBy ? " · " + esc(x.paidBy) : "" }${ x.note ? " · " + esc(x.note) : "" }</div></div>${ window._paAcl?.isAdmin ? `<button class="btn-red btn-xs" onclick="deletePayout(${ Number(x.id) })">إلغاء</button>` : "" }</div>`).join("") : "";
+    $("payForm").style.display = (rem > 0.004 && d.locked) ? "" : "none";
+    $("payLockNote").style.display = d.locked ? "none" : "";
+    openModal("payout");
+  };
+  window.savePayout = async function() {
+    if (!_payCtx) return;
+    const err = $("payError"); err.textContent = "";
+    const amount = Number($("payAmount").value), cashStoreId = $("payStore").value;
+    if (!(amount > 0)) { err.textContent = "اكتب مبلغ أكبر من صفر"; return; }
+    if (amount > _payCtx.rem + 0.004) { err.textContent = `المبلغ أكبر من الباقي (${ paMoney(_payCtx.rem) })`; return; }
+    if (!cashStoreId) { err.textContent = "اختار الخزنة"; return; }
+    const btn = $("paySaveBtn"); btn.disabled = true;
+    try {
+      await PA_API.post("/api/pilot-accounting/payout", { month: _payCtx.d.month, kind: _payCtx.kind, refId: _payCtx.refId, amount, cashStoreId, note: $("payNote").value.trim() });
+      closeModal("payout"); showToast("اتصرف من الخزنة ✓", "success");
+      window._trStores = [];   // الخزنة تتجاب تاني أول ما تتفتح
+      if (_payCtx.kind === "pilot") await loadPilotAcct(); else { window._stData = null; await loadStaff(); }
+    } catch (e) { err.textContent = e.message || "تعذّر الصرف"; }
+    finally { btn.disabled = false; }
+  };
+  window.deletePayout = async function(id) {
+    if (!confirm("تلغي الصرفة دي؟ الفلوس هترجع للخزنة بحركة وارد.")) return;
+    try {
+      await PA_API.del("/api/pilot-accounting/payout/" + id);
+      closeModal("payout"); showToast("اتلغت ورجعت للخزنة", "success");
+      window._trStores = [];
+      if (_payCtx?.kind === "pilot") await loadPilotAcct(); else { window._stData = null; await loadStaff(); }
     } catch (e) { showToast("تعذّر: " + (e.message || ""), "error"); }
   };
 

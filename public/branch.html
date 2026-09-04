@@ -6927,10 +6927,11 @@
       --green: #22c55e; --red: #e8192c; --purple: #a855f7; --orange: #f97316;
       --sidebar-w: 230px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
     }
+    /* ☀️ الوضع النهاري المميز — نفس لوحة home.html (رملي دافي + أحمر أغمق) */
     :root.light {
-      --sky: #d1172a; --sky-d: #a30f20; --night: #eff2f5; --panel: #ffffff;
-      --card: #ffffff; --border: #dfe3e7; --text: #111b21; --muted: #667781;
-      --green: #15803d; --red: #d1172a; --purple: #7c3aed; --orange: #c2410c;
+      --sky: #c8102e; --sky-d: #9b0b22; --night: #f4efe7; --panel: #fbf8f2;
+      --card: #ffffff; --border: #e4dccf; --text: #1e1a16; --muted: #75695c;
+      --green: #15803d; --red: #c8102e; --purple: #6d28d9; --orange: #c2410c;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font); background: var(--night); color: var(--text); }
@@ -8792,7 +8793,9 @@
 <script>
   function toggleTheme() {
     document.documentElement.classList.toggle("light");
-    localStorage.setItem("tiar-branch-theme", document.documentElement.classList.contains("light") ? "light" : "dark");
+    const mode = document.documentElement.classList.contains("light") ? "light" : "dark";
+    localStorage.setItem("dahshan-theme", mode);   // مشترك بين تطبيقات المجموعة
+    localStorage.setItem("tiar-branch-theme", mode);
   }
   function toggleSidebar() {
     const sb = document.getElementById("sidebar");
@@ -8809,7 +8812,8 @@
     btn.addEventListener("click", () => { if (window.innerWidth <= 900) closeSidebar(); });
   });
   (function() {
-    if (localStorage.getItem("tiar-branch-theme") === "light") document.documentElement.classList.add("light");
+    const mode = localStorage.getItem("dahshan-theme") || localStorage.getItem("tiar-branch-theme");
+    if (mode === "light") document.documentElement.classList.add("light");
   })();
 </script>
 

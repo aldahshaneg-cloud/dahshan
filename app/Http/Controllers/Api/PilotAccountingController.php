@@ -257,6 +257,7 @@ class PilotAccountingController
             'countedDays' => $counted,
             'pilots'      => $out,
             'closeout'    => $closeout,
+            'payouts'     => $this->payoutsOf($ym, 'pilot'),
             /* 🔐 السلف المؤجلة شاشة لوحدها — لو مقفولة مابتخرجش أصلًا */
             'deferred'    => $this->can($acl, 'page.deferred') ? $this->deferredWire($deferred, $ym) : [],
             /* الواجهة بتبني شاشتها من دي — مصدر واحد للمفاتيح */
@@ -1253,6 +1254,154 @@ class PilotAccountingController
     }
 
     /* ═══════════════════════════════════════════════════════════
+       💸 صرف الرواتب من الخزنة
+       (طلب صاحب النظام 2026-09-04 بعد مراجعة «إيه الناقص عشان يُعتمد عليه»)
+       كل صرفة = صف في pilot_acct_payouts + حركة `out` في نفس خزن الإدارة،
+       فالخزنة بتعرف إن الرواتب خرجت. الصرف على الأرقام **المعتمدة** بس:
+       الشهر لازم يكون مقفول (له لقطة) عشان الصافي مايتغيّرش بعد الصرف.
+    ═══════════════════════════════════════════════════════════ */
+
+    /** صرفات الشهر: [refId => [ {id, amount, storeId, storeName, note, paidBy, paidAt}, ... ]] */
+    private function payoutsOf(string $ym, string $kind): array
+    {
+        $out = [];
+        foreach (DB::select(
+            'SELECT p.*, s.name AS store_name FROM pilot_acct_payouts p LEFT JOIN cash_stores s ON s.id = p.store_id
+              WHERE p.month = ? AND p.kind = ? ORDER BY p.id',
+            [$ym, $kind]
+        ) as $r) {
+            $out[(string) (int) $r->ref_id][] = [
+                'id'        => (int) $r->id,
+                'amount'    => round((float) $r->amount, 2),
+                'storeId'   => (int) $r->store_id,
+                'storeName' => $r->store_name,
+                'txnId'     => $r->txn_id !== null ? (int) $r->txn_id : null,
+                'note'      => (string) ($r->note ?? ''),
+                'paidBy'    => $r->paid_by,
+                'paidAt'    => WireTime::toWire((string) $r->paid_at),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * POST /api/pilot-accounting/payout — {month, kind: pilot|staff, refId, amount, cashStoreId, note?}
+     * الشهر لازم يكون مقفول، والمبلغ ≤ الباقي من الصافي المعتمد، والخزنة رصيدها يكفي.
+     */
+    public function payoutSave(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $acl   = $this->aclOf($actor);
+        $this->need($acl, 'act.payout', 'على صرف الرواتب');
+        $b     = $request->json()->all();
+        $ym    = $this->monthArg((string) ($b['month'] ?? ''));
+        $kind  = (string) ($b['kind'] ?? 'pilot');
+        $refId = (int) ($b['refId'] ?? 0);
+        $amount = round((float) ($b['amount'] ?? 0), 2);
+        $storeId = (int) ($b['cashStoreId'] ?? 0);
+        $note   = trim((string) ($b['note'] ?? ''));
+        if (! in_array($kind, ['pilot', 'staff'], true) || $refId <= 0) {
+            throw new ApiException('حدّد الطيار أو الموظف');
+        }
+        if ($amount <= 0) {
+            throw new ApiException('المبلغ لازم يكون أكبر من صفر');
+        }
+
+        /* الأرقام المعتمدة = اللقطة. من غير قفل الصافي ممكن يتغيّر بعد ما الفلوس خرجت. */
+        $snap = $this->snapshotFor($ym, null);
+        if (! $this->monthLocked($ym, null) || $snap === null) {
+            throw new ApiException('اقفل الشهر الأول — الصرف بيتم على الأرقام المعتمدة بعد القفل', 409);
+        }
+        $rows = $kind === 'pilot' ? ($snap['payload']['month']['pilots'] ?? []) : ($snap['payload']['staff']['staff'] ?? []);
+        $row = null;
+        foreach ($rows as $r) {
+            if ((int) ($kind === 'pilot' ? $r['pilotId'] : $r['userId']) === $refId) {
+                $row = $r;
+                break;
+            }
+        }
+        if (! $row) {
+            throw ApiException::notFound($kind === 'pilot' ? 'الطيار مش في تقفيلة الشهر ده' : 'الموظف مش في تقفيلة الشهر ده');
+        }
+        $branchId = $row['branchId'] !== null ? (int) $row['branchId'] : null;
+        if ($actor->role === 'branch' && $branchId !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('مش من فرعك');
+        }
+        if ($acl['branches'] && ! in_array((int) $branchId, $acl['branches'], true)) {
+            throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+        }
+        $netDue = round((float) ($row['totals']['netDue'] ?? 0), 2);
+        $paid   = (float) (DB::select('SELECT COALESCE(SUM(amount),0) s FROM pilot_acct_payouts WHERE month = ? AND kind = ? AND ref_id = ?', [$ym, $kind, $refId])[0]->s ?? 0);
+        $remaining = round($netDue - $paid, 2);
+        if ($remaining <= 0.004) {
+            throw new ApiException('الراتب ده اتصرف بالكامل');
+        }
+        if ($amount > $remaining + 0.004) {
+            throw new ApiException('المبلغ أكبر من الباقي من الصافي المعتمد (' . number_format($remaining, 2) . ' ج.م)');
+        }
+        $store = DB::selectOne('SELECT id, name, branch_id FROM cash_stores WHERE id = ?', [$storeId]);
+        if (! $store) {
+            throw ApiException::notFound('الخزنة غير موجودة');
+        }
+        if ($actor->role === 'branch' && (int) ($store->branch_id ?? 0) !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('الخزنة دي مش على فرعك');
+        }
+
+        $name = (string) ($row['name'] ?? $row['username'] ?? $refId);
+        $now  = WireTime::nowDb();
+        $id = DB::transaction(function () use ($storeId, $amount, $ym, $kind, $refId, $name, $note, $branchId, $actor, $now): int {
+            $s = DB::select('SELECT id, balance FROM cash_stores WHERE id = ? FOR UPDATE', [$storeId])[0];
+            if ((float) $s->balance < $amount) {
+                throw new ApiException('رصيد الخزنة (' . number_format((float) $s->balance, 2) . ') مايكفيش لصرف ' . number_format($amount, 2));
+            }
+            DB::update('UPDATE cash_stores SET balance = balance - ? WHERE id = ?', [$amount, $storeId]);
+            DB::insert(
+                'INSERT INTO cash_transactions (store_id, type, amount, reason, notes, related_pilot_id, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [$storeId, 'out', $amount, mb_substr(($kind === 'pilot' ? 'صرف راتب ' : 'صرف مرتب موظف ') . $ym . ': ' . $name, 0, 190),
+                 $note !== '' ? mb_substr($note, 0, 500) : null, $kind === 'pilot' ? $refId : null, $branchId, $actor->username, $now]
+            );
+            $txnId = (int) DB::getPdo()->lastInsertId();
+            DB::insert(
+                'INSERT INTO pilot_acct_payouts (month, kind, ref_id, amount, store_id, txn_id, note, paid_by, paid_at, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)',
+                [$ym, $kind, $refId, $amount, $storeId, $txnId, $note !== '' ? $note : null, $actor->username, $now, $now]
+            );
+
+            return (int) DB::getPdo()->lastInsertId();
+        });
+
+        return ApiResponse::out(['ok' => true, 'id' => $id, 'paid' => round($paid + $amount, 2), 'remaining' => round($remaining - $amount, 2)]);
+    }
+
+    /** DELETE /api/pilot-accounting/payout/{id} — إلغاء صرفة: الفلوس بترجع للخزنة بحركة `in` */
+    public function payoutDelete(Request $request, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $this->need($this->aclOf($actor), 'act.payout', 'على صرف الرواتب');
+        $pid = (int) $id;
+        DB::transaction(function () use ($pid, $actor): void {
+            $p = DB::select('SELECT * FROM pilot_acct_payouts WHERE id = ? FOR UPDATE', [$pid])[0] ?? null;
+            if (! $p) {
+                throw ApiException::notFound('الصرفة غير موجودة');
+            }
+            DB::select('SELECT id FROM cash_stores WHERE id = ? FOR UPDATE', [(int) $p->store_id]);
+            DB::update('UPDATE cash_stores SET balance = balance + ? WHERE id = ?', [(float) $p->amount, (int) $p->store_id]);
+            $now = WireTime::nowDb();
+            DB::insert(
+                'INSERT INTO cash_transactions (store_id, type, amount, reason, notes, related_pilot_id, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [(int) $p->store_id, 'in', (float) $p->amount, mb_substr('إلغاء صرف راتب ' . $p->month . ' (صرفة #' . $pid . ')', 0, 190),
+                 null, $p->kind === 'pilot' ? (int) $p->ref_id : null, null, $actor->username, $now]
+            );
+            DB::delete('DELETE FROM pilot_acct_payouts WHERE id = ?', [$pid]);
+        });
+
+        return ApiResponse::ok();
+    }
+
+    /* ═══════════════════════════════════════════════════════════
        📸 لقطة الشهر المقفول
     ═══════════════════════════════════════════════════════════ */
 
@@ -1391,6 +1540,7 @@ class PilotAccountingController
             'countedDays' => $d['countedDays'] ?? 0,
             'pilots'      => $pilots,
             'closeout'    => $closeout,
+            'payouts'     => $this->payoutsOf($d['month'], 'pilot'),   // الصرف حي — مش من اللقطة
             'deferred'    => ($acl['keys']['page.deferred'] ?? null) === true ? $deferred : [],
             'acl'         => ['keys' => (object) $acl['keys'], 'branches' => $acl['branches'],
                               'full' => $acl['full'], 'isAdmin' => $actor->role === 'admin'],
@@ -1424,6 +1574,7 @@ class PilotAccountingController
             'daysInMonth' => $d['daysInMonth'] ?? 0,
             'countedDays' => $d['countedDays'] ?? 0,
             'staff'       => $staff,
+            'payouts'     => $this->payoutsOf((string) ($d['month'] ?? $snap['payload']['month']['month']), 'staff'),
             'acl'         => ['keys' => (object) $acl['keys'], 'branches' => $acl['branches'],
                               'full' => $acl['full'], 'isAdmin' => $actor->role === 'admin'],
         ]);
@@ -1838,6 +1989,7 @@ class PilotAccountingController
             'daysInMonth' => $nd,
             'countedDays' => $counted,
             'staff'       => $out,
+            'payouts'     => $this->payoutsOf($ym, 'staff'),
             'acl'         => ['keys' => (object) $acl['keys'], 'branches' => $acl['branches'],
                               'full' => $acl['full'], 'isAdmin' => $actor->role === 'admin'],
         ]);

@@ -1229,6 +1229,26 @@ CREATE TABLE `pilot_acct_day_summaries` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_acct_payouts` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `kind` enum('pilot','staff') NOT NULL COMMENT 'طيار أو موظف',
+  `ref_id` bigint(20) unsigned NOT NULL COMMENT 'pilots.id أو users.id حسب kind',
+  `amount` decimal(12,2) NOT NULL,
+  `store_id` bigint(20) unsigned NOT NULL COMMENT 'الخزنة اللي اتصرف منها',
+  `txn_id` bigint(20) unsigned DEFAULT NULL COMMENT 'حركة الخزنة (cash_transactions.id)',
+  `note` varchar(500) DEFAULT NULL,
+  `paid_by` varchar(190) DEFAULT NULL,
+  `paid_at` datetime NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_pilot_acct_payouts_month_ref` (`month`,`kind`,`ref_id`),
+  KEY `fk_pilot_acct_payouts_store_id` (`store_id`),
+  CONSTRAINT `fk_pilot_acct_payouts_store_id` FOREIGN KEY (`store_id`) REFERENCES `cash_stores` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='صرف رواتب تقفيل الطيارين والموظفين من الخزنة — كل صرفة بحركة خزنة';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `pilot_acct_perms` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL COMMENT 'صاحب الصلاحية',

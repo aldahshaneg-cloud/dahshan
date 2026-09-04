@@ -25,10 +25,11 @@
     /* عشان ساعة المتصفح ومنتقي التاريخ يطلعوا بلون الثيم */
     color-scheme: dark; --pick-invert: 1;
   }
+  /* ☀️ الوضع النهاري المميز — نفس لوحة home.html (رملي دافي + أحمر أغمق) */
   :root.light {
-    --sky: #d1172a; --sky-d: #a30f20; --night: #eff2f5; --panel: #ffffff;
-    --card: #ffffff; --border: #dfe3e7; --text: #111b21; --muted: #667781;
-    --green: #15803d; --red: #d1172a; --purple: #7c3aed; --orange: #c2410c;
+    --sky: #c8102e; --sky-d: #9b0b22; --night: #f4efe7; --panel: #fbf8f2;
+    --card: #ffffff; --border: #e4dccf; --text: #1e1a16; --muted: #75695c;
+    --green: #15803d; --red: #c8102e; --purple: #6d28d9; --orange: #c2410c;
     --blue: #1d4ed8; --teal: #0f766e;
     color-scheme: light; --pick-invert: 0;
   }
@@ -940,11 +941,12 @@ window.closeModal = t => { $("modal-" + t)?.classList.remove("open"); document.b
 window.toggleTheme = function() {
   const light = document.documentElement.classList.toggle("light");
   localStorage.setItem("tiar-rd-theme", light ? "light" : "dark");
+  localStorage.setItem("dahshan-theme", light ? "light" : "dark");   // مشترك بين تطبيقات المجموعة
   $("themeIcon").textContent  = light ? "🌙" : "☀️";
   $("themeLabel").textContent = light ? "الوضع الليلي" : "الوضع النهاري";
 };
 (function initTheme() {
-  if (localStorage.getItem("tiar-rd-theme") === "light") {
+  if ((localStorage.getItem("dahshan-theme") || localStorage.getItem("tiar-rd-theme")) === "light") {
     document.documentElement.classList.add("light");
     document.addEventListener("DOMContentLoaded", () => {
       $("themeIcon").textContent = "🌙"; $("themeLabel").textContent = "الوضع الليلي";

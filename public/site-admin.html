@@ -15,6 +15,11 @@
 :root{--ink:#08080a;--ink2:#0f0f12;--card:#141417;--line:#232329;
   --red:#e8192c;--red-d:#8e0f1c;--txt:#fff;--muted:#8e8e97;
   --green:#22c55e;--orange:#f59e0b;--blue:#3b82f6;--r:14px}
+/* ☀️ الوضع النهاري المميز للمجموعة — نفس لوحة home.html (مفتاح dahshan-theme المشترك) */
+:root.light{--ink:#f4efe7;--ink2:#fbf8f2;--card:#ffffff;--line:#e4dccf;
+  --red:#c8102e;--red-d:#9b0b22;--txt:#1e1a16;--muted:#75695c;
+  --green:#15803d;--orange:#c2410c;--blue:#1d4ed8}
+.themeBtn{background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px 11px;cursor:pointer;font:inherit;font-size:13px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:var(--ink);color:var(--txt);font-family:'Tajawal',system-ui,sans-serif;line-height:1.7}
 img{max-width:100%;display:block}
@@ -240,6 +245,7 @@ header{position:sticky;top:0;z-index:50;background:rgba(8,8,10,.9);backdrop-filt
     <img src="assets/logo.png" alt="" />
     <div style="font-weight:800;font-size:15px">لوحة تحكم الموقع</div>
     <div class="who"><b id="uName">—</b><span id="uMail">—</span></div>
+    <button class="themeBtn" id="themeBtn" title="الوضع النهاري / الليلي">☀️</button>
     <button class="out" id="outBtn">خروج</button>
   </div></header>
 
@@ -474,6 +480,14 @@ $("gBtn").onclick = async () => {
   } catch (e) { $("gateErr").textContent = e.message || "تعذّر الدخول"; }
 };
 $("outBtn").onclick = async () => { try { await API.logout(); } catch (e) {} location.reload(); };
+/* الثيم — المفتاح المشترك بين تطبيقات المجموعة */
+(function () {
+  const sync = () => { const b = $("themeBtn"); if (b) b.textContent = document.documentElement.classList.contains("light") ? "🌙" : "☀️"; };
+  try { if (localStorage.getItem("dahshan-theme") === "light") document.documentElement.classList.add("light"); } catch (e) {}
+  sync();
+  const b = $("themeBtn");
+  if (b) b.onclick = () => { const lt = document.documentElement.classList.toggle("light"); try { localStorage.setItem("dahshan-theme", lt ? "light" : "dark"); } catch (e) {} sync(); };
+})();
 (async function () {
   try {
     const d = await API.me();

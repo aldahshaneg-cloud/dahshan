@@ -19,10 +19,11 @@
    الوضع الفاتح هو الافتراضي لأنه أريح للنظر في الشغل الطويل.
 ══════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#eff2f5; --panel:#ffffff; --hover:#f5f6f6; --active:#f0f2f5;
-  --line:#e9edef; --line2:#d1d7db;
-  --txt:#111b21; --muted:#667781; --soft:#8696a0;
-  --brand:#d1172a; --brand-d:#a30f20; --brand-soft:rgba(209,23,42,.09);
+  /* ☀️ الوضع النهاري المميز للمجموعة — رملي دافي بدل الرمادي المزرق */
+  --bg:#f4efe7; --panel:#ffffff; --hover:#f7f2ea; --active:#efe8dd;
+  --line:#e4dccf; --line2:#d3c9b8;
+  --txt:#1e1a16; --muted:#75695c; --soft:#8a7f72;
+  --brand:#c8102e; --brand-d:#9b0b22; --brand-soft:rgba(200,16,46,.09);
   --green:#15803d; --green-soft:rgba(21,128,61,.1);
   --orange:#c2410c; --orange-soft:rgba(194,65,12,.1);
   --blue:#1d4ed8;
@@ -266,13 +267,15 @@ const S = { customers: [], orders: [], zones: [], branches: {}, wallets: {},
             stats: {} };
 
 /* ── الثيم: الفاتح افتراضي (أريح للنظر)، والاختيار بيتحفظ ── */
-if (localStorage.getItem("cust-theme") === "dark") document.documentElement.classList.add("dark");
+/* المفتاح المشترك dahshan-theme بيغلب — اختيار المستخدم في أي تطبيق بيمشي هنا */
+if ((localStorage.getItem("dahshan-theme") || localStorage.getItem("cust-theme")) === "dark") document.documentElement.classList.add("dark");
 const syncTheme = () => $("themeBtn").textContent =
   document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
 syncTheme();
 $("themeBtn").onclick = () => {
   const dark = document.documentElement.classList.toggle("dark");
   localStorage.setItem("cust-theme", dark ? "dark" : "light");
+  localStorage.setItem("dahshan-theme", dark ? "dark" : "light");
   syncTheme();
 };
 

@@ -134,6 +134,11 @@ class RouteCoverage extends Command
            القديم مكانش فيه القسم ده للشركة خالص — التقفيلة كانت شهرية بس
            (pilot_monthly_closeouts) ومفيهاش شيت يومي ولا سلف مؤجلة. */
 
+        'POST /api/pilot-accounting/payout' =>
+            'صرف راتب طيار/موظف من الخزنة على صافي اللقطة المعتمدة (الشهر لازم يكون مقفول) — صف في pilot_acct_payouts + حركة out في cash_transactions (طلب 2026-09-04)',
+        'DELETE /api/pilot-accounting/payout/{}' =>
+            'إلغاء صرفة راتب — الفلوس بترجع للخزنة بحركة in مرتبطة',
+
         'GET /api/pilot-accounting/pilot-orders' =>
             'أوردرات الطيار في اليوم التجاري بعمولة كل أوردر (التلقائية والمكتوبة) — شاشة «اضغط على الطيار تشوف أوردراته وتحط العمولة» (طلب 2026-09-04). الكتابة على pilot-commission-adjustments الموجود',
 

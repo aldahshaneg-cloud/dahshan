@@ -576,6 +576,8 @@ final class PilotAccountingWire
                 ['act.deferred', 'تسجيل وتعديل وتحصيل السلف المؤجلة'],
                 ['act.lock',     'قفل الشهر وفتحه'],
                 ['act.settings', 'تعديل إعدادات البرنامج'],
+                /* صرف الراتب من الخزنة (طلب صاحب النظام 2026-09-04) — فلوس بتخرج فعلًا، للإدارة افتراضيًا */
+                ['act.payout',   'صرف الرواتب من الخزنة'],
             ]],
         ];
     }
@@ -621,7 +623,7 @@ final class PilotAccountingWire
      *
      * يعني: الافتراضي = اللي بيقدر يعمله دلوقتي بالظبط. لا أكتر ولا أقل.
      */
-    public const ADMIN_ONLY_KEYS = ['act.deferred', 'act.lock', 'act.settings'];
+    public const ADMIN_ONLY_KEYS = ['act.deferred', 'act.lock', 'act.settings', 'act.payout'];
 
     /** الافتراضي لمن مالوش صف: كل حاجة ماعدا المحجوز للإدارة */
     public static function defaultPermKeys(): array
