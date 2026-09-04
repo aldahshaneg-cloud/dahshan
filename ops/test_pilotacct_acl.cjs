@@ -94,8 +94,9 @@ const footCells = (id) => {
   const fn = cut('getElementById("' + id + '").innerHTML', '</tr>`;');
   return (fn.match(/<td[\s>]/g) || []).length;
 };
-ok('paDailyFoot فيه ١٥ خانة', footCells('paDailyFoot') === 15, String(footCells('paDailyFoot')));
-ok('paPilotFoot فيه ١٥ خانة', footCells('paPilotFoot') === 15, String(footCells('paPilotFoot')));
+/* ١٦ من 2026-09-04: عمود «سلّم للخزنة» (col.handed) بعد صافي الخدمة */
+ok('paDailyFoot فيه ١٦ خانة', footCells('paDailyFoot') === 16, String(footCells('paDailyFoot')));
+ok('paPilotFoot فيه ١٦ خانة', footCells('paPilotFoot') === 16, String(footCells('paPilotFoot')));
 ok('paMonthFoot فيه ١٥ خانة', footCells('paMonthFoot') === 15, String(footCells('paMonthFoot')));
 
 /* ══ 3) محرّك الصلاحيات ══ */

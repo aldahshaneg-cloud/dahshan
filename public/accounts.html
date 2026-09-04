@@ -127,6 +127,8 @@ tbody tr:hover { background: rgba(232,25,44,.035); }
 .idx { color: var(--muted); font-size: .77rem; }
 tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-top: 2px solid var(--border); }
 .pa-tot { font-weight: 800; font-size: .82rem; font-variant-numeric: tabular-nums; }
+/* خانة للقراءة بس (سلّم للخزنة) — من حركات الخزنة، مش بتتعدّل من الشيت */
+.pa-ro { background: rgba(29,78,216,.04); font-variant-numeric: tabular-nums; }
 
 .badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; background: rgba(136,136,136,.13); color: var(--muted); }
 .pa-badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; white-space: nowrap; background: rgba(139,147,167,.14); color: var(--muted); }
@@ -415,9 +417,10 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
         <th>عدد الأوردرات</th><th>إجمالي الخدمة</th>
         <th>خدمة الطيار<div class="pa-sub">عمولته</div></th>
         <th>صافي الخدمة<div class="pa-sub">إجمالي − خدمة</div></th>
+        <th>سلّم للخزنة<div class="pa-sub">تحصيل + عهدة − عمولته</div></th>
         <th>سلف</th><th>خصومات</th><th>حوافز</th><th style="min-width:120px">ملاحظات</th>
       </tr></thead>
-      <tbody id="paDailyBody"><tr><td colspan="15" class="empty-row">جاري التحميل…</td></tr></tbody>
+      <tbody id="paDailyBody"><tr><td colspan="16" class="empty-row">جاري التحميل…</td></tr></tbody>
       <tfoot id="paDailyFoot"></tfoot>
     </table></div>
     <div id="paDailySum"></div>
@@ -442,10 +445,10 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
         <th style="width:52px">اليوم</th><th style="width:70px"></th>
         <th>ساعة الحضور</th><th>خروج مؤقت</th><th>رجوع</th><th>ساعة الانصراف</th>
         <th>عدد ساعات العمل</th><th>عدد الأوردرات</th><th>إجمالي الخدمة</th>
-        <th>خدمة الطيار</th><th>صافي الخدمة</th><th>سلف</th><th>خصومات</th><th>حوافز</th>
+        <th>خدمة الطيار</th><th>صافي الخدمة</th><th>سلّم للخزنة</th><th>سلف</th><th>خصومات</th><th>حوافز</th>
         <th style="min-width:120px">ملاحظات</th>
       </tr></thead>
-      <tbody id="paPilotBody"><tr><td colspan="15" class="empty-row">اختر طيارًا</td></tr></tbody>
+      <tbody id="paPilotBody"><tr><td colspan="16" class="empty-row">اختر طيارًا</td></tr></tbody>
       <tfoot id="paPilotFoot"></tfoot>
     </table></div>
     <div id="paPilotSummary"></div>
@@ -1161,10 +1164,10 @@ async function bootAccounts() {
   const PA_GRID = {
     daily: { body: 'paDailyBody', cols:
       [null, null, 'col.in', 'col.bout', 'col.bin', 'col.out', 'col.hours', 'col.orders',
-       'col.svc', 'col.psvc', 'col.net', 'col.adv', 'col.ded', 'col.bonus', 'col.note'] },
+       'col.svc', 'col.psvc', 'col.net', 'col.handed', 'col.adv', 'col.ded', 'col.bonus', 'col.note'] },
     pilot: { body: 'paPilotBody', cols:
       [null, null, 'col.in', 'col.bout', 'col.bin', 'col.out', 'col.hours', 'col.orders',
-       'col.svc', 'col.psvc', 'col.net', 'col.adv', 'col.ded', 'col.bonus', 'col.note'] },
+       'col.svc', 'col.psvc', 'col.net', 'col.handed', 'col.adv', 'col.ded', 'col.bonus', 'col.note'] },
     month: { body: 'paMonthBody', cols:
       [null, null, null, 'mon.hours', 'mon.hours', 'mon.orders', 'mon.hourPay',
        'mon.commission', 'mon.salary', 'mon.leave', 'mon.bonus', 'mon.adv',
@@ -1432,6 +1435,13 @@ async function bootAccounts() {
       ${locked ? "" : `onclick="openPaPerms('${ escJs(pid) }',${day})"`} onkeydown="cellKey(event)" /></td>`;
   }
 
+  /* 💵 «سلّم للخزنة» للقراءة بس — جاية من حركات الخزنة الحقيقية (تحصيل +
+     ردّ عهدة − عمولته)، والتعديل مكانه الخزنة نفسها مش الشيت. */
+  function paReadCell(row, field) {
+    const v = row[field];
+    const n = Number(v) || 0;
+    return `<td class="pa-ro"><span style="display:block;text-align:center;font-weight:700;color:${ n < 0 ? "var(--red)" : n > 0 ? "var(--blue)" : "var(--muted)" }">${ v === undefined || v === null ? "—" : paMoney(n) }</span></td>`;
+  }
   function paRowCells(pid, row) {
     return paCell(pid, row.day, "in", row)
       + paPermCell(pid, row.day, row, "out")
@@ -1442,6 +1452,7 @@ async function bootAccounts() {
       + paCell(pid, row.day, "svc", row, { money: true })
       + paCell(pid, row.day, "psvc", row, { money: true })
       + paCell(pid, row.day, "net", row, { money: true })
+      + paReadCell(row, "handed")
       + paCell(pid, row.day, "adv", row, { money: true })
       + paCell(pid, row.day, "ded", row, { money: true })
       + paCell(pid, row.day, "bonus", row, { money: true })
@@ -1460,7 +1471,7 @@ async function bootAccounts() {
       `تقفيل يومي · ${day} ${paWeekday(d.month, day)} · ${monthLabel(d.month)} · ${bName}`;
 
     const ps = d.pilots || [];
-    if (!ps.length) { body.innerHTML = `<tr><td colspan="15" class="empty-row">مفيش طيارين</td></tr>`; $("paDailyFoot").innerHTML = ""; $("paDailySum").innerHTML = ""; return; }
+    if (!ps.length) { body.innerHTML = `<tr><td colspan="16" class="empty-row">مفيش طيارين</td></tr>`; $("paDailyFoot").innerHTML = ""; $("paDailySum").innerHTML = ""; return; }
 
     body.innerHTML = ps.map((p, i) => {
       const row = (p.days || [])[day - 1] || { day };
@@ -1477,6 +1488,7 @@ async function bootAccounts() {
         <td class="pa-tot">${ paMoney(t("hours")) }</td><td class="pa-tot">${ paNum(t("orders")) }</td>
         <td class="pa-tot">${ paMoney(t("svc")) }</td><td class="pa-tot">${ paMoney(t("psvc")) }</td>
         <td class="pa-tot" style="color:var(--green)">${ paMoney(t("net")) }</td>
+        <td class="pa-tot" style="color:var(--blue)">${ paMoney(t("handed")) }</td>
         <td class="pa-tot">${ paMoney(t("adv")) }</td><td class="pa-tot">${ paMoney(t("ded")) }</td>
         <td class="pa-tot">${ paMoney(t("bonus")) }</td><td></td></tr>`;
 
@@ -1596,7 +1608,7 @@ async function bootAccounts() {
     if (!d) return;
     const pid = document.getElementById("paPilotSelect").value;
     const p = (d.pilots || []).find(x => String(x.pilotId) === String(pid));
-    if (!p) { body.innerHTML = `<tr><td colspan="15" class="empty-row">اختر طيارًا</td></tr>`; $("paPilotFoot").innerHTML = ""; $("paPilotSummary").innerHTML = ""; $("paPilotTitle").textContent = ""; return; }
+    if (!p) { body.innerHTML = `<tr><td colspan="16" class="empty-row">اختر طيارًا</td></tr>`; $("paPilotFoot").innerHTML = ""; $("paPilotSummary").innerHTML = ""; $("paPilotTitle").textContent = ""; return; }
 
     const t = p.totals || {};
     document.getElementById("paPilotTitle").textContent =
@@ -1614,6 +1626,7 @@ async function bootAccounts() {
         <td class="pa-tot">${ paMoney(t.hours) }</td><td class="pa-tot">${ paNum(t.orders) }</td>
         <td class="pa-tot">${ paMoney(t.svc) }</td><td class="pa-tot">${ paMoney(t.psvc) }</td>
         <td class="pa-tot" style="color:var(--green)">${ paMoney(t.net) }</td>
+        <td class="pa-tot" style="color:var(--blue)">${ t.handed === undefined ? "" : paMoney(t.handed) }</td>
         <td class="pa-tot">${ paMoney(t.adv) }</td><td class="pa-tot">${ paMoney(t.ded) }</td>
         <td class="pa-tot">${ paMoney(t.bonus) }</td><td></td></tr>`;
 
@@ -1638,6 +1651,7 @@ async function bootAccounts() {
         lines.push(`<div class="sum-row"><div class="sl">قسط سلفة مؤجلة${ Number(t.deferredLeft) > 0 ? `<div class="sh">الباقي بعد الشهر ده ${ paMoney(t.deferredLeft) }</div>` : "" }</div><div class="sv" style="color:var(--orange)">− ${ paMoney(t.deferredDue) }</div></div>`);
       }
     }
+    if (has("handed")) lines.push(`<div class="sum-row"><div class="sl">سلّم للخزنة خلال الشهر<div class="sh">تحصيل الأوردرات + ردّ العهدة − عمولته اليومية — من حركات الخزنة، مش بيدخل حسبة الراتب</div></div><div class="sv" style="color:var(--blue)">${ paMoney(t.handed) }</div></div>`);
     if (has("netDue")) lines.push(`<div class="sum-row grand"><div class="sl">${ owes ? "عليه (مسحوب زيادة)" : "صافي الراتب" }</div><div class="sv" style="color:${ owes ? "var(--red)" : "var(--green)" }">${ paMoney(Math.abs(Number(t.netDue) || 0)) }</div></div>`);
     document.getElementById("paPilotSummary").innerHTML = lines.length
       /* السلف المؤجلة بتتسجّل من شاشتها بس (صاحب النظام 2026-09-04) — مفيش زرار هنا */
@@ -3036,16 +3050,16 @@ async function bootAccounts() {
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 30));
     XLSX.writeFile(wb, fileName);
   }
-  const HEAD = ["ساعة الحضور", "خروج مؤقت", "رجوع", "ساعة الانصراف", "عدد ساعات العمل", "عدد الأوردرات", "إجمالي الخدمة", "خدمة الطيار", "صافي الخدمة", "سلف", "خصومات", "حوافز", "ملاحظات"];
+  const HEAD = ["ساعة الحضور", "خروج مؤقت", "رجوع", "ساعة الانصراف", "عدد ساعات العمل", "عدد الأوردرات", "إجمالي الخدمة", "خدمة الطيار", "صافي الخدمة", "سلّم للخزنة", "سلف", "خصومات", "حوافز", "ملاحظات"];
   const permX = (row, side) => (row.perms || []).map(p => p[side]).filter(Boolean).join(" ، ");
-  const rowX  = r => [r.in ?? "", permX(r, "out"), permX(r, "in"), r.out ?? "", fmt2(r.hours), r.orders ?? 0, fmt2(r.svc), fmt2(r.psvc), fmt2(r.net), fmt2(r.adv), fmt2(r.ded), fmt2(r.bonus), r.note ?? ""];
+  const rowX  = r => [r.in ?? "", permX(r, "out"), permX(r, "in"), r.out ?? "", fmt2(r.hours), r.orders ?? 0, fmt2(r.svc), fmt2(r.psvc), fmt2(r.net), fmt2(r.handed), fmt2(r.adv), fmt2(r.ded), fmt2(r.bonus), r.note ?? ""];
   window.exportDaily = function() {
     const d = window._paData; if (!d) return;
     const day = Number($("paDaySelect").value) || 1;
     const aoa = [[`تقفيل يومي — ${day} ${paWeekday(d.month, day)} — ${monthLabel(d.month)}`], ["الاسم", ...HEAD]];
-    const t = { hours: 0, orders: 0, svc: 0, psvc: 0, net: 0, adv: 0, ded: 0, bonus: 0 };
+    const t = { hours: 0, orders: 0, svc: 0, psvc: 0, net: 0, handed: 0, adv: 0, ded: 0, bonus: 0 };
     (d.pilots || []).forEach(p => { const r = (p.days || [])[day - 1] || {}; aoa.push([p.name, ...rowX(r)]); Object.keys(t).forEach(k => { t[k] += Number(r[k]) || 0; }); });
-    aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
+    aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.handed), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
     /* بلوك التقفيل لكل فرع في اليوم — نفس سطور الشاشة */
     (d.closeout?.branches || []).forEach(b => {
       const c = (b.days || [])[day - 1]; if (!c) return;
@@ -3070,7 +3084,7 @@ async function bootAccounts() {
     const t = p.totals || {};
     const aoa = [[`${p.name} — ${p.branchName || ""} — ${monthLabel(d.month)}`], ["اليوم", ...HEAD]];
     (p.days || []).forEach(r => aoa.push([r.day, ...rowX(r)]));
-    aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders ?? 0, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
+    aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders ?? 0, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.handed), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
     aoa.push([]);
     aoa.push([`عدد ساعات العمل × ${fmt2(t.hourRate)}`, fmt2(t.hourPay)]);
     aoa.push(["العمولة المستحقة", fmt2(t.commission)]);

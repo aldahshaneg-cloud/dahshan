@@ -879,11 +879,41 @@ class BoardController
                 return 0.0;
             }
 
+            $pilot   = $this->lockPilot((int) $shift['pilot_id']);
+            $storeIn = $request->input('cashStoreId');
+
+            return $this->payShiftCommission(
+                $shiftId, $pilot, (int) $shift['branch_id'] ?: null, $actor, WireTime::nowDb(),
+                $storeIn ? $this->intId($storeIn) : null
+            );
+        });
+
+        return ApiResponse::out(['ok' => true, 'commissionPaid' => $payout]);
+    }
+
+    /**
+     * 💸 صرف عمولة الوردية من الخزنة — مرة واحدة لكل وردية.
+     *
+     * بيندهها `shiftSettlement` (زرار «تطبيق وحفظ» في التقرير) و`shiftEnd`
+     * (طلب صاحب النظام 2026-09-04: «العمولة مش على الشهر — بتتسلم في نفس
+     * اليوم»: الطيار بياخد عمولته من اللي معاه وبيسلّم الباقي، فالخزنة
+     * بتسجّل التحصيل كامل وخروج العمولة في نفس اللحظة).
+     *
+     * بيرجّع المبلغ اللي اتصرف (صفر لو مافيش عمولة). لازم تتنده جوه
+     * معاملة، وبعد ما صف الوردية اتقفل FOR UPDATE.
+     */
+    private function payShiftCommission(
+        int $shiftId,
+        array $pilot,
+        ?int $branchId,
+        Actor $actor,
+        string $now,
+        ?int $storeId,
+    ): float {
             /* عمولة الوردية = نفس معادلة buildMonthlyData بالحرف: الأوردرات
                العادية بنسبة الطيار (المتسلّم بس) + الـoverride بمبلغه لأي
                حالة (عمولة «من جيب الشركة» على مرتجع بتدخل هنا). الأوردرات
                بتتقفل FOR UPDATE لأننا بنكتب فلوس على أساس أسعارها. */
-            $pilot = $this->lockPilot((int) $shift['pilot_id']);
             $agg = (array) DB::selectOne(
                 "SELECT SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN 1 ELSE 0 END) AS plain_cnt,
                         SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN o.total_delivery_price ELSE 0 END) AS plain_price,
@@ -906,18 +936,16 @@ class BoardController
                 return 0.0;
             }
 
-            $cashStoreIn = $request->input('cashStoreId');
-            if (! $cashStoreIn) {
+            if (! $storeId) {
                 throw new ApiException('اختر الخزنة اللي هتتصرف منها عمولة الوردية');
             }
-            $now = WireTime::nowDb();
             $this->applyCashTxn(
-                $this->intId($cashStoreIn),
+                $storeId,
                 'out',
                 $total,
                 'عمولة وردية الطيار: ' . $pilot['name'],
                 (int) $pilot['id'],
-                (int) $shift['branch_id'] ?: null,
+                $branchId,
                 $actor->username,
                 $now
             );
@@ -934,13 +962,10 @@ class BoardController
                     SET a.paid_amount = a.amount, a.paid_at = ?, a.paid_store_id = ?
                   WHERE o.shift_id = ? AND a.kind = 'override' AND a.pilot_id = o.pilot_id
                     AND a.amount > a.paid_amount",
-                [$now, $this->intId($cashStoreIn), $shiftId]
+                [$now, $storeId, $shiftId]
             );
 
             return $total;
-        });
-
-        return ApiResponse::out(['ok' => true, 'commissionPaid' => $payout]);
     }
 
     /**
@@ -967,7 +992,7 @@ class BoardController
         $shiftId = $this->intId($id);
 
         try {
-            [$deliveredCount, $undeliveredCount, $settledCount, $custodyReturned, $custodyCarried] = DB::transaction(
+            [$deliveredCount, $undeliveredCount, $settledCount, $custodyReturned, $custodyCarried, $commissionPaid] = DB::transaction(
                 function () use ($request, $actor, $shiftId): array {
                     $row = DB::select('SELECT * FROM shifts WHERE id = ? FOR UPDATE', [$shiftId])[0] ?? null;
                     if (! $row) {
@@ -1057,8 +1082,24 @@ class BoardController
                        من نفس المسار الموجود من غير أي معادلة جديدة. */
                     $this->applyShiftCommission($request, $shiftId, $pilot, $branchId, $actor, $now);
 
-                    // 2) بنود التقفيلة على الوردية (لو اتبعتت) + القفل
+                    /* 1.7) 💰 العمولة «في نفس اليوم» — طلب صاحب النظام 2026-09-04:
+                       «العمولة مش على الشهر، بتتسلم في نفس اليوم». الطيار معاه
+                       العهدة + تحصيل الأوردرات، بياخد عمولته منهم وبيسلّم الباقي
+                       (عهدة 3000 + تحصيل 30 − عمولة 8 = يسلّم 3022). الخزنة بتسجّل
+                       التحصيل كامل (فوق) وخروج العمولة هنا من نفس الخزنة — فرصيدها
+                       بيطلع 3022 بالظبط. من غير خزنة تحصيل ولا ردّ عهدة لازم
+                       المشرف يحدّد خزنة العمولة. «على الشهر» = زي زمان: تتحسب في
+                       التقفيلة الشهرية. */
                     $settle = fn ($v, $cur) => in_array($v, ['daily', 'monthly'], true) ? $v : $cur;
+                    $commSettleNow  = $settle($request->input('commissionSettle'), $shift['commission_settle']);
+                    $commissionPaid = 0.0;
+                    if ($commSettleNow === 'daily' && $shift['commission_paid_at'] === null) {
+                        $commStoreIn = $request->input('commissionStoreId') ?: ($cashStoreIn ?: null);
+                        $commStore   = $commStoreIn ? $this->intId($commStoreIn) : $retStore;
+                        $commissionPaid = $this->payShiftCommission($shiftId, $pilot, $branchId, $actor, $now, $commStore);
+                    }
+
+                    // 2) بنود التقفيلة على الوردية (لو اتبعتت) + القفل
                     DB::update(
                         'UPDATE shifts SET bonus_amount = ?, bonus_reason = ?, deduction_amount = ?, deduction_reason = ?,
                     advance_amount = ?, advance_reason = ?,
@@ -1088,7 +1129,7 @@ class BoardController
                     // 3) تحرير الطيار بالكامل (زي إزالة الطيار من اللوحة) + إزاحة الدور
                     $this->releasePilot($pilot);
 
-                    return [$deliveredCount, $undeliveredCount, $settledCount, $retAmount, $balNow];
+                    return [$deliveredCount, $undeliveredCount, $settledCount, $retAmount, $balNow, $commissionPaid];
                 }
             );
         } catch (ApiException $e) {
@@ -1106,6 +1147,8 @@ class BoardController
             /* إثبات إخلاء الطرف — التقرير بيطبعه */
             'custodyReturned'  => $custodyReturned,
             'custodyCarried'   => $custodyCarried,
+            /* العمولة اللي خرجت من الخزنة مع الإنهاء (في نفس اليوم) — التقرير بيقفل عليها */
+            'commissionPaid'   => $commissionPaid,
         ]);
     }
 
@@ -3576,8 +3619,30 @@ class BoardController
             [$shiftId]
         ));
 
+        /* 💵 حساب التسليم (طلب صاحب النظام 2026-09-04): «المفروض يظهر للمشرف
+           ياخد كام من الطيار». بنقرا من حركات الخزنة المربوطة بالطيار في
+           نافذة الوردية — تحصيل الأوردرات وردّ العهدة داخلين وعمولته خارجة —
+           فاللي يسلّمه فعلًا = تحصيل + عهدة − عمولة. */
+        $cashRows = array_map(fn ($r) => (array) $r, DB::select(
+            'SELECT type, amount, reason FROM cash_transactions
+              WHERE related_pilot_id = ? AND created_at BETWEEN ? AND ?',
+            [$pilotId, $from, $to]
+        ));
+        $cashSum = fn (string $type, string $prefix): float => round(array_sum(array_map(
+            fn ($r) => $r['type'] === $type && str_starts_with((string) $r['reason'], $prefix) ? (float) $r['amount'] : 0.0,
+            $cashRows)), 2);
+        $cashCollected = $cashSum('in', 'تحصيل من الطيار');
+        $cashCustody   = $cashSum('in', 'ردّ عهدة');
+        $cashComm      = $cashSum('out', 'عمولة وردية');
+
         return ApiResponse::out([
             'ok'      => true,
+            'cash'    => [
+                'collected'      => $cashCollected,
+                'custodyReturned' => $cashCustody,
+                'commissionPaid'  => $cashComm,
+                'handed'         => round($cashCollected + $cashCustody - $cashComm, 2),
+            ],
             'custody' => [
                 /* استلم = تسليم عهدة له · ردّ = رجّع للخزنة (بما فيها
                    ردّ التقفيلة) · التسوية = فرق تحصيل الأوردرات */

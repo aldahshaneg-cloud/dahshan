@@ -6632,6 +6632,17 @@
                 </div>`).join("") || `<div style="font-size:.78rem;color:var(--muted)">مافيش أوردرات في الوردية دي</div>`
             }</div>
             <div style="font-size:.72rem;color:var(--muted)">«حسب حساب الطيار» = مافيش أي تعديل. غير كده بيتسجّل لكل أوردر متسلّم وبيدخل مستحقاته.</div>
+            <!-- 💵 طلب صاحب النظام 2026-09-04: العمولة في نفس اليوم — الطيار بياخدها من اللي معاه -->
+            <div style="margin-top:10px;font-size:.78rem;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+              <span style="color:var(--muted)">تسوية العمولة:</span>
+              <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="_seCommSettle" value="daily" checked style="accent-color:var(--sky)" /> 🗓️ في نفس اليوم — بياخدها من اللي معاه</label>
+              <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="_seCommSettle" value="monthly" style="accent-color:var(--sky)" /> 📆 على الشهر</label>
+            </div>
+            <div id="_seHandWrap" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px;font-size:.8rem">
+              <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">عمولته التقريبية</span><b id="_seCommEst">—</b></div>
+              <div style="display:flex;justify-content:space-between;gap:8px;font-size:.95rem;margin-top:5px"><span style="font-weight:800">💵 يسلّم للخزنة دلوقتي</span><b id="_seHandNet" style="color:var(--green)">—</b></div>
+              <div style="font-size:.7rem;color:var(--muted);margin-top:3px">= المحصَّل من الأوردرات + العهدة المرجّعة − عمولته (لو في نفس اليوم)</div>
+            </div>
           </div>
           <div style="display:flex;gap:10px;margin-top:12px">
             <button id="_shiftEndConfirm" style="flex:1;background:var(--red);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">✅ تسوية وإنهاء الوردية</button>
@@ -6674,10 +6685,41 @@
         const el = document.getElementById("_seCustodyProjected");
         if (el) el.textContent = projected.toFixed(2) + " ج.م";
         if (!_seCustodyEdited) _seCustodyInput.value = projected ? projected.toFixed(2) : "";
+        if (typeof _seRecalcHand === "function") _seRecalcHand();
       }
       document.getElementById("_seCollectAmount")?.addEventListener("input", recalcSeCustody);
       recalcSeCustody();
 
+      /* 💵 يسلّم للخزنة دلوقتي = المحصَّل + العهدة المرجّعة − عمولته (لو «في نفس اليوم»)
+         — نفس المعادلة اللي السيرفر بينفّذها في /end: تحصيل داخل، عهدة داخلة، عمولة خارجة. */
+      function _seCommEstimate() {
+        const mode = document.getElementById("_seCommMode")?.value || "keep";
+        const v = Number(document.getElementById("_seCommValue")?.value) || 0;
+        const delivered = [...pendingSettlementOrders];
+        activeOrders.forEach((o, idx) => {
+          const choice = box.querySelector(`input[name="_se_${idx}"]:checked`)?.value || "delivered";
+          if (choice === "delivered") delivered.push(o);
+        });
+        return delivered.reduce((s, o) => {
+          if (mode === "percent") return s + (Number(o.totalDeliveryPrice) || 0) * v / 100;
+          if (mode === "fixed") return s + v;
+          if (mode === "custom") { const inp = box.querySelector(`[data-commorder="${ o.id }"]`); return s + (inp && inp.value !== "" ? (Number(inp.value) || 0) : pilotCommissionFor(pilot, o)); }
+          return s + pilotCommissionFor(pilot, o);
+        }, 0);
+      }
+      function _seRecalcHand() {
+        const collected = ((box.querySelector("input[name='_seCashCollect']:checked")?.value || "no") === "yes" ? (Number(document.getElementById("_seCollectAmount")?.value) || 0) : 0);
+        const custody = Number(document.getElementById("_seCustodyReturn")?.value) || 0;
+        const settle = box.querySelector("input[name='_seCommSettle']:checked")?.value || "daily";
+        const est = _seCommEstimate();
+        const hand = collected + custody - (settle === "daily" ? est : 0);
+        const e1 = document.getElementById("_seCommEst"); if (e1) e1.textContent = est.toFixed(2) + " ج.م" + (settle === "daily" ? "" : " (على الشهر — مش بتتخصم دلوقتي)");
+        const e2 = document.getElementById("_seHandNet"); if (e2) e2.textContent = hand.toFixed(2) + " ج.م";
+      }
+      ["_seCommValue", "_seCustodyReturn", "_seCollectAmount", "_seCollectedAmount"].forEach(id => document.getElementById(id)?.addEventListener("input", _seRecalcHand));
+      box.querySelectorAll("[data-commorder]").forEach(i => i.addEventListener("input", _seRecalcHand));
+      box.querySelectorAll("input[name='_seCommSettle']").forEach(r => r.addEventListener("change", _seRecalcHand));
+      document.getElementById("_seCommMode").addEventListener("change", _seRecalcHand);
       document.getElementById("_seCommMode").addEventListener("change", function() {
         document.getElementById("_seCommValue").style.display =
           (this.value === "percent" || this.value === "fixed") ? "block" : "none";
@@ -6745,6 +6787,7 @@
 
           /* 💰 العمولة */
           const commMode = document.getElementById("_seCommMode").value;
+          const commSettle = box.querySelector("input[name='_seCommSettle']:checked")?.value || "daily";
           let commission = null;
           if (commMode === "percent" || commMode === "fixed") {
             const v = Number(document.getElementById("_seCommValue").value);
@@ -6774,6 +6817,9 @@
             custodyReturn: custodyAmount > 0 ? { amount: custodyAmount, cashStoreId: custodyStore } : null,
             allowCustodyCarry,
             commission,
+            /* 💵 العمولة «في نفس اليوم» بتخرج من خزنة التحصيل (أو خزنة ردّ العهدة) مع الإنهاء */
+            commissionSettle: commSettle,
+            commissionStoreId: document.getElementById("_seCollectStoreId")?.value || custodyStore || null,
           });
         } catch(e) {
           showToast("خطأ: " + e.message, "error");
@@ -6797,7 +6843,13 @@
           showToast(`⚠️ اتقفلت بترحيل ${Number(endRes.custodyCarried).toFixed(2)} ج عهدة على الطيار`, "error");
         showToast("تمّ إنهاء وردية الطيار — وأصبح متاحًا لأي فرع ✓", "success");
         const shift = (window._allShiftsData || window._shiftsData || []).find(s => s.id === shiftId);
-        showShiftReport({ id: shiftId, ...(shift || {}), status: "ended", endedAt: now, pilotId: pilot.id, pilotName: pilot.name }, pilot);
+        const paidNow = Number(endRes.commissionPaid) || 0;
+        if (paidNow > 0) showToast(`💸 عمولة الوردية ${ paidNow.toFixed(2) } ج — الطيار أخدها من اللي معاه وسلّم الباقي`, "success");
+        /* التقرير بيتبني من كاش الورديات (قبل الإنهاء) — بنحقن اختيار التسوية والصرف اللي لسه حاصلين */
+        showShiftReport({ id: shiftId, ...(shift || {}),
+          ...(settlementBody?.commissionSettle ? { commissionSettle: settlementBody.commissionSettle } : {}),
+          ...(paidNow > 0 ? { commissionPaidAmount: paidNow, commissionPaidAt: now } : {}),
+          status: "ended", endedAt: now, pilotId: pilot.id, pilotName: pilot.name }, pilot);
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     }
 
@@ -6852,7 +6904,7 @@
       // اختيار تسوية كل بند: "daily" = يتصرف/يتخصم في نفس اليوم (يدخل مستحق
       // الوردية ولا يتكرر في الشهرية) | "monthly" = يتأجل للتقفيلة الشهرية.
       // الافتراضي "daily" حفاظًا على سلوك تقفيلة الوردية القديم.
-      const commissionSettle = shift.commissionSettle || "monthly";
+      const commissionSettle = shift.commissionSettle || "daily";   // العمولة في نفس اليوم (2026-09-04)
       const bonusSettle      = shift.bonusSettle      || "monthly";
       const deductionSettle  = shift.deductionSettle  || "monthly";
       const advanceSettle    = shift.advanceSettle    || "monthly";
@@ -6879,7 +6931,9 @@
 
     // مجموعة أزرار اختيار تسوية البند: "في نفس اليوم" أو "على الشهر"
     function _settleRadiosHtml(name, cur) {
-      const c = cur === "daily" ? "daily" : "monthly"; // الافتراضي: على الشهر
+      /* الافتراضي (طلب صاحب النظام 2026-09-04): العمولة «في نفس اليوم» — الطيار بياخدها
+         من اللي معاه وقت التقفيلة — والبونص والخصم والسلفة «على الشهر». */
+      const c = cur === "daily" || cur === "monthly" ? cur : (name === "srCommissionSettle" ? "daily" : "monthly");
       return `<div style="margin-top:6px;font-size:.74rem;color:var(--muted);display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <span>التسوية:</span>
         <label style="cursor:pointer;display:inline-flex;gap:4px;align-items:center"><input type="radio" name="${name}" value="daily" ${c === "daily" ? "checked" : ""} onchange="recomputeShiftDue()"> 🗓️ في نفس اليوم</label>
@@ -6912,6 +6966,47 @@
       data.pilotFinalDue = daily;
       const el = document.getElementById("srFinalDue");
       if (el) el.textContent = `${ daily.toFixed(2) } ج.م`;
+      recomputeShiftHand();
+    };
+
+    /* 💵 حساب التسليم — «ياخد كام من الطيار» (طلب صاحب النظام 2026-09-04):
+       الطيار معاه العهدة + تحصيل الأوردرات، بياخد عمولته منهم (لو «في نفس اليوم»)
+       وبيسلّم الباقي: عهدة 3000 + تحصيل 30 − عمولة 8 = 3022. تحت السطر المحسوب
+       بيبان المسجّل في الخزنة فعلًا من closeout-details عشان الفرق يبان فورًا. */
+    window.recomputeShiftHand = function() {
+      const data = window._lastShiftReportData;
+      if (!data || !document.getElementById("srHandNet")) return;
+      const det = (window._lastCloseoutDetails && String(window._lastCloseoutDetails.shiftId) === String(data.shift.id)) ? window._lastCloseoutDetails.data : null;
+      const money = v => (Number(v) || 0).toFixed(2) + " ج.م";
+      const cS = data.commissionPaidAt ? "daily" : (data.commissionSettle || "daily");
+      const bS = data.bonusSettle || "monthly", dS = data.deductionSettle || "monthly", aS = data.advanceSettle || "monthly";
+      const revenue = (Number(data.totalRevenue) || 0) + (Number(data.returnFareTotal) || 0);
+      const custody = det ? (Number(det.custody?.closeReturned) || 0) : null;
+      const comm   = cS === "daily" ? (Number(data.totalCommission) || 0) : 0;
+      const bonusD = bS === "daily" ? (Number(data.bonusAmount) || 0) : 0;
+      const dedD   = dS === "daily" ? (Number(data.deductionAmount) || 0) : 0;
+      const advD   = aS === "daily" ? (Number(data.advanceAmount) || 0) : 0;
+      const net = revenue + (custody || 0) - comm - bonusD + dedD - advD;
+      const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+      set("srHandRevenue", money(revenue));
+      set("srHandCustody", custody === null ? "…" : money(custody));
+      set("srHandComm", money(comm));
+      set("srHandCommNote", cS === "daily" ? "(في نفس اليوم — بياخدها من اللي معاه)" : "(على الشهر — مابتتخصمش دلوقتي)");
+      const extras = [];
+      if (bonusD) extras.push(`<div class="od-info-block" style="margin-top:6px"><span class="od-info-label">− بونص في نفس اليوم</span><span class="od-info-val">${ money(bonusD) }</span></div>`);
+      if (dedD)   extras.push(`<div class="od-info-block" style="margin-top:6px"><span class="od-info-label">+ خصم في نفس اليوم</span><span class="od-info-val">${ money(dedD) }</span></div>`);
+      if (advD)   extras.push(`<div class="od-info-block" style="margin-top:6px"><span class="od-info-label">− سلفة في نفس اليوم</span><span class="od-info-val">${ money(advD) }</span></div>`);
+      const ex = document.getElementById("srHandExtras"); if (ex) ex.innerHTML = extras.join("");
+      set("srHandNet", money(net));
+      const act = document.getElementById("srHandActual");
+      if (act) {
+        const c = det?.cash;
+        if (!c) act.textContent = "";
+        else {
+          const diff = Math.round(((Number(c.handed) || 0) - net) * 100) / 100;
+          act.innerHTML = `المسجّل في الخزنة فعلًا: تحصيل ${ money(c.collected) } + عهدة ${ money(c.custodyReturned) } − عمولة ${ money(c.commissionPaid) } = <b style="color:${ Math.abs(diff) < 0.01 ? "var(--green)" : "var(--red)" }">${ money(c.handed) }</b>${ Math.abs(diff) < 0.01 ? " ✓" : ` — فرق ${ money(Math.abs(diff)) }${ diff < 0 ? " (لسه ماتسجّلش في الخزنة — «تطبيق وحفظ» أو التحصيل)" : "" }` }`;
+        }
+      }
     };
 
     window.showShiftReport = async function(shift, pilot) {
@@ -7010,8 +7105,15 @@
             <button onclick="applyShiftBonusDeduction()" style="margin-top:10px;width:100%;background:var(--orange);color:#fff;border:none;padding:9px;border-radius:8px;font-weight:700;cursor:pointer">✔️ تطبيق وحفظ</button>
           </div>
           <div class="od-card" style="margin-top:14px;border:2px solid var(--green)">
-            <div class="od-card-title">💵 المستحق صرفه للطيار في نفس اليوم</div>
-            <div class="od-info-block"><span class="od-info-label">مجموع البنود المُسوّاة «في نفس اليوم»</span><span class="od-info-val" id="srFinalDue" style="color:var(--green);font-weight:800;font-size:1.05rem">${ esc(data.pilotFinalDue.toFixed(2)) } ج.م</span></div>
+            <div class="od-card-title">💵 حساب التسليم — ياخد كام من الطيار</div>
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">الطيار معاه العهدة + تحصيل الأوردرات، بياخد عمولته منهم وبيسلّم الباقي — مثال: عهدة 3000 + تحصيل 30 − عمولة 8 = يسلّم 3022.</div>
+            <div class="od-info-block"><span class="od-info-label">تحصيل الأوردرات (الناتج + مرتجعات مدفوعة)</span><span class="od-info-val" id="srHandRevenue">…</span></div>
+            <div class="od-info-block" style="margin-top:6px"><span class="od-info-label">+ عهدة رجعت للخزنة عند التقفيلة</span><span class="od-info-val" id="srHandCustody">…</span></div>
+            <div class="od-info-block" style="margin-top:6px"><span class="od-info-label">− عمولة الطيار <span id="srHandCommNote" style="color:var(--muted);font-weight:400"></span></span><span class="od-info-val" id="srHandComm" style="color:var(--sky)">…</span></div>
+            <div id="srHandExtras"></div>
+            <div class="od-info-block" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span class="od-info-label" style="font-weight:800">= صافي اللي يسلّمه الطيار للخزنة</span><span class="od-info-val" id="srHandNet" style="color:var(--green);font-weight:800;font-size:1.05rem">…</span></div>
+            <div id="srHandActual" style="margin-top:6px;font-size:.76rem;color:var(--muted);line-height:1.7"></div>
+            <div class="od-info-block" style="margin-top:10px"><span class="od-info-label">مستحق صرفه للطيار في نفس اليوم<div style="font-size:.7rem;color:var(--muted);font-weight:400">بونص / خصم / سلفة مُعلّمة «في نفس اليوم»</div></span><span class="od-info-val" id="srFinalDue" style="color:var(--green);font-weight:800">${ esc(data.pilotFinalDue.toFixed(2)) } ج.م</span></div>
           </div>
           <div style="display:flex;gap:10px;margin-top:16px">
             <button onclick="printShiftReport()" style="flex:1;background:var(--sky);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">🖨️ طباعة</button>
@@ -7023,6 +7125,7 @@
         </div>`;
       document.body.appendChild(box);
       /* التفاصيل بتتحمّل بعد الفتح — التقرير مش مستنيها */
+      recomputeShiftHand();
       _loadShiftCloseoutDetails(shift.id);
     };
 
@@ -7046,6 +7149,7 @@
       }
       /* الطبع بياخد من الكاش ده بدل نداء تاني */
       window._lastCloseoutDetails = { shiftId: String(shiftId), data: d };
+      recomputeShiftHand();
       const c = d.custody || {};
       const money = v => (Number(v) || 0).toFixed(2);
       const custodyRows = (c.rows || []).map(r => `

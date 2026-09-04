@@ -338,6 +338,30 @@ class PilotAccountingController
             unset($cell);
         }
 
+        /* ── 1ب) 💵 اللي سلّمه الطيار للخزنة فعلًا (طلب صاحب النظام 2026-09-04:
+           «المفروض الشغل يظهر في تقفيلة الطيارين») — حركات الخزنة المربوطة
+           بالطيار: تحصيل الأوردرات وردّ العهدة داخلين، وعمولته «في نفس اليوم»
+           خارجة. الصافي = اللي دخل الخزنة من إيده في يوم الشغل ده. الحركة
+           بتتنسب ليوم شغلها بنفس قاعدة الورديات (bizMoment). */
+        foreach (DB::select(
+            "SELECT related_pilot_id AS pilot_id, type, amount, created_at
+               FROM cash_transactions
+              WHERE related_pilot_id IN ({$ph}) AND type IN ('in', 'out')
+                AND created_at >= ? AND created_at < ?",
+            array_merge($ids, [$from, $to])
+        ) as $ct) {
+            $ct = (array) $ct;
+            $bm = W::bizMoment($ct['created_at'], $ds);
+            if (! $bm) {
+                continue;
+            }
+            $day  = (int) substr($bm['date'], 8, 2);
+            $cell = &$m[(int) $ct['pilot_id']][$day];
+            $cell ??= self::emptyCell();
+            $cell['handed'] += $ct['type'] === 'in' ? (float) $ct['amount'] : -(float) $ct['amount'];
+            unset($cell);
+        }
+
         // ── 2) الأوردرات المسلَّمة: العدد وإجمالي الخدمة ──
         $orders = DB::select(
             "SELECT id, pilot_id, delivered_at, total_delivery_price
@@ -463,6 +487,7 @@ class PilotAccountingController
                 $m[$pid][$day]['svc']       = round($c['svc'], 2);
                 $m[$pid][$day]['psvc']      = round($c['psvc'], 2);
                 $m[$pid][$day]['psvcCarry'] = round($c['psvcCarry'], 2);
+                $m[$pid][$day]['handed']    = round($c['handed'], 2);
             }
         }
 
@@ -473,6 +498,8 @@ class PilotAccountingController
     {
         return ['in' => null, 'out' => null, 'hours' => 0.0, 'orders' => 0, 'svc' => 0.0,
                 'psvc' => 0.0, 'adv' => 0.0, 'ded' => 0.0, 'bonus' => 0.0,
+                // اللي سلّمه للخزنة فعلًا في اليوم (تحصيل + عهدة − عمولته)
+                'handed' => 0.0,
                 // المرحّل للشهر — منفصل عن المعروض
                 'psvcCarry' => 0.0, 'advCarry' => 0.0, 'dedCarry' => 0.0, 'bonusCarry' => 0.0,
                 'commMonthly' => false,

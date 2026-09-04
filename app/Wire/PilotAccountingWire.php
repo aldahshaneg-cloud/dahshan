@@ -375,6 +375,8 @@ final class PilotAccountingWire
             'adv'    => $adv,
             'ded'    => $ded,
             'bonus'  => $bonus,
+            // 💵 اللي سلّمه للخزنة فعلًا في اليوم — من حركات الخزنة، مش بيتعدّل بالإيد
+            'handed' => round((float) ($auto['handed'] ?? 0), 2),
             // المرحّل للشهر — اللي لسه مستحق بعد تصفية الوردية اليومية
             'carry'  => $carry,
             'note'   => (string) ($entry['note'] ?? ''),
@@ -426,7 +428,7 @@ final class PilotAccountingWire
     public static function monthTotals(array $days, array $pilot, array $opts): array
     {
         $t = ['hours' => 0.0, 'orders' => 0, 'svc' => 0.0, 'psvc' => 0.0,
-              'net' => 0.0, 'adv' => 0.0, 'ded' => 0.0, 'bonus' => 0.0, 'worked' => 0];
+              'net' => 0.0, 'adv' => 0.0, 'ded' => 0.0, 'bonus' => 0.0, 'handed' => 0.0, 'worked' => 0];
 
         /* 🔴 مجموعتين مختلفتين عن قصد:
              • `$t[...]`      = اللي حصل في الشهر كله — ده **عرض**.
@@ -444,6 +446,7 @@ final class PilotAccountingWire
             $t['adv']    += (float) $d['adv'];
             $t['ded']    += (float) $d['ded'];
             $t['bonus']  += (float) $d['bonus'];
+            $t['handed'] += (float) ($d['handed'] ?? 0);
             foreach (['psvc','adv','ded','bonus'] as $k) {
                 $c[$k] += (float) ($d['carry'][$k] ?? 0);
             }
@@ -451,7 +454,7 @@ final class PilotAccountingWire
                 $t['worked']++;
             }
         }
-        foreach (['hours','svc','psvc','net','adv','ded','bonus'] as $k) {
+        foreach (['hours','svc','psvc','net','adv','ded','bonus','handed'] as $k) {
             $t[$k] = round($t[$k], 2);
         }
         foreach ($c as $k => $v) {
@@ -538,6 +541,7 @@ final class PilotAccountingWire
                 ['col.svc',    'إجمالي الخدمة'],
                 ['col.psvc',   'خدمة الطيار (عمولته)'],
                 ['col.net',    'صافي الخدمة'],
+                ['col.handed', 'سلّم للخزنة'],
                 ['col.adv',    'سلف'],
                 ['col.ded',    'خصومات'],
                 ['col.bonus',  'حوافز'],
@@ -644,7 +648,7 @@ final class PilotAccountingWire
                 'label' => 'مشرف فرع — يسجّل بس',
                 'keys'  => ['page.daily', 'page.pilot',
                     'col.in', 'col.bout', 'col.bin', 'col.out', 'col.hours',
-                    'col.orders', 'col.adv', 'col.ded', 'col.bonus', 'col.note',
+                    'col.orders', 'col.handed', 'col.adv', 'col.ded', 'col.bonus', 'col.note',
                     /* اللي المشرف بيكتبه ويسلّمه: الخارجي والمصاريف والمستلم — من غير
                        أجر الساعات ولا صافي الفرع (زي مشرفي دمشق على Firebase) */
                     'blk.ext', 'blk.exp', 'blk.cash', 'blk.adv', 'blk.recon',
@@ -780,6 +784,7 @@ final class PilotAccountingWire
             'adv'    => 'col.adv',
             'ded'    => 'col.ded',
             'bonus'  => 'col.bonus',
+            'handed' => 'col.handed',
             'note'   => 'col.note',
         ];
         foreach ($map as $field => $key) {
@@ -840,6 +845,7 @@ final class PilotAccountingWire
             'deferredLeft'  => 'mon.deferred',
             'gross'         => 'mon.net',
             'netDue'        => 'mon.net',
+            'handed'        => 'col.handed',
         ];
         foreach ($map as $field => $key) {
             if (($keys[$key] ?? null) !== true) {

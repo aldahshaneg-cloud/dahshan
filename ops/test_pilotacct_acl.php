@@ -125,7 +125,7 @@ register_shutdown_function(function (): void {
         'perms' => [['out' => '12:00', 'in' => '12:30']],
         'hours' => 9.5, 'orders' => 14, 'svc' => 210.0, 'psvc' => 84.0,
         'net' => 126.0, 'adv' => 50.0, 'ded' => 5.0, 'bonus' => 20.0,
-        'note' => 'نص سري', 'carry' => [], 'edited' => [], 'auto' => [],
+        'note' => 'نص سري', 'handed' => 3022.0, 'carry' => [], 'edited' => [], 'auto' => [],
     ];
 
     /* 🔴 كل حقل في الصف لازم يكون: يا إما مربوط بمفتاح، يا إما في القايمة
@@ -170,7 +170,7 @@ register_shutdown_function(function (): void {
         array_keys($c2['auto']) === array_keys($rowFull['auto'])
         && $c2['edited'] === $rowFull['edited']);
 
-    $money = ['svc', 'psvc', 'net', 'adv', 'ded', 'bonus'];
+    $money = ['svc', 'psvc', 'net', 'adv', 'ded', 'bonus', 'handed'];
     foreach ($money as $f) {
         ok("  «{$f}» اتشال", ! array_key_exists($f, $cut));
     }
@@ -182,7 +182,7 @@ register_shutdown_function(function (): void {
     $pairs = ['col.in' => 'in', 'col.out' => 'out', 'col.hours' => 'hours',
               'col.orders' => 'orders', 'col.svc' => 'svc', 'col.psvc' => 'psvc',
               'col.net' => 'net', 'col.adv' => 'adv', 'col.ded' => 'ded',
-              'col.bonus' => 'bonus', 'col.note' => 'note'];
+              'col.bonus' => 'bonus', 'col.handed' => 'handed', 'col.note' => 'note'];
     $bad = [];
     foreach ($pairs as $key => $field) {
         $r = $W::filterDay($row, [$key => true]);
