@@ -1640,8 +1640,8 @@ async function bootAccounts() {
     }
     if (has("netDue")) lines.push(`<div class="sum-row grand"><div class="sl">${ owes ? "عليه (مسحوب زيادة)" : "صافي الراتب" }</div><div class="sv" style="color:${ owes ? "var(--red)" : "var(--green)" }">${ paMoney(Math.abs(Number(t.netDue) || 0)) }</div></div>`);
     document.getElementById("paPilotSummary").innerHTML = lines.length
-      ? `<div class="sum-block"><div class="sum-head">حساب الراتب</div>${ lines.join("") }</div>
-         ${ paCan('act.deferred') ? `<div style="margin-top:14px" class="no-print"><button class="btn-ghost" onclick="openPaAdvance('${ escJs(p.pilotId) }')">➕ تسجيل سلفة مؤجلة لـ${ esc(p.name) }</button> <button class="btn-ghost" onclick="switchPaTab('deferred')">📋 كل السلف المؤجلة</button></div>` : "" }`
+      /* السلف المؤجلة بتتسجّل من شاشتها بس (صاحب النظام 2026-09-04) — مفيش زرار هنا */
+      ? `<div class="sum-block"><div class="sum-head">حساب الراتب</div>${ lines.join("") }</div>`
       : "";
   };
 
