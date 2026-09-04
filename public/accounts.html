@@ -173,6 +173,14 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
 .pa-pick { cursor: pointer; caret-color: transparent; }
 /* الخانة اللي فيها تدخّل بشري — بتتلوّن عشان تفرق عن رقم النظام */
 .pa-edited { background: rgba(249,115,22,.10); box-shadow: inset 2px 0 0 var(--orange); }
+/* اسم الطيار / رقم اليوم — بيفتح أوردرات اليوم وعمولة كل أوردر */
+.pilot-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.pilot-link:hover { color: var(--sky); }
+.ord-tbl td { padding: 6px 8px; font-size: .84rem; }
+.ord-in { width: 96px; background: var(--night); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; color: var(--text); text-align: center; font-weight: 700; outline: none; }
+.ord-in:focus { border-color: var(--sky); }
+.ord-in.edited { border-color: var(--orange); background: rgba(249,115,22,.08); }
+.ord-reason { min-width: 140px; background: var(--night); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; color: var(--text); outline: none; font-size: .8rem; }
 .saving-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--orange);
   margin-inline-start: 6px; vertical-align: middle; opacity: 0; transition: opacity .2s; }
 .saving-dot.on { opacity: 1; }
@@ -736,6 +744,21 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
     </div>
   </div>
 
+  <!-- أوردرات الطيار في اليوم — عمولة كل أوردر -->
+  <div class="modal" id="modal-orders">
+    <div class="modal-box" style="max-width:960px">
+      <div class="modal-head">
+        <div class="modal-title" id="ordTitle">أوردرات الطيار</div>
+        <button class="modal-close" onclick="closeModal('orders')">✕</button>
+      </div>
+      <div class="modal-body" id="ordBody"><div class="empty-row">جاري التحميل…</div></div>
+      <div class="modal-foot">
+        <button class="btn-ghost" onclick="closeModal('orders')">إغلاق</button>
+        <span id="ordFootNote" style="font-size:.78rem;color:var(--muted)"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- منتقي الوقت العربي -->
   <div class="modal" id="modal-timepicker">
     <div class="modal-box" style="max-width:340px">
@@ -1280,7 +1303,7 @@ async function bootAccounts() {
     body.innerHTML = ps.map((p, i) => {
       const row = (p.days || [])[day - 1] || { day };
       return `<tr${ row.openShift ? ' title="وردية لسه مفتوحة — الساعات ناقصة"' : "" }><td class="lbl idx">${i + 1}</td>
-        <td class="lbl" style="font-weight:600;min-width:140px">${ esc(p.name) }${ row.openShift ? ' <span class="badge bg-blue">مفتوحة</span>' : "" }</td>
+        <td class="lbl" style="font-weight:600;min-width:140px"><span class="pilot-link" title="أوردرات اليوم وعمولة كل أوردر" onclick="openPilotOrders('${ escJs(p.pilotId) }',${day})">${ esc(p.name) }</span>${ row.openShift ? ' <span class="badge bg-blue">مفتوحة</span>' : "" }</td>
         ${ paRowCells(p.pilotId, row) }</tr>`;
     }).join("");
 
@@ -1419,7 +1442,7 @@ async function bootAccounts() {
     const today = bizToday();
 
     body.innerHTML = (p.days || []).map(row => `<tr class="${ `${d.month}-${String(row.day).padStart(2, "0")}` === today ? "today-row" : "" }">
-        <td class="lbl" style="font-weight:700">${ row.day }</td>
+        <td class="lbl" style="font-weight:700"><span class="pilot-link" title="أوردرات اليوم وعمولة كل أوردر" onclick="openPilotOrders('${ escJs(p.pilotId) }',${ row.day })">${ row.day }</span></td>
         <td class="lbl idx">${ esc(paWeekday(d.month, row.day)) }</td>
         ${ paRowCells(p.pilotId, row) }</tr>`).join("");
 
@@ -2355,6 +2378,114 @@ async function bootAccounts() {
       save: periods => PA_API.post("/api/pilot-accounting/perms", { month: window._paData.month, pilotId, day, periods })
         .then(loadPilotAcct)
     });
+  };
+
+  /* ═══════════ أوردرات الطيار في اليوم — عمولة كل أوردر ═══════════
+     الضغط على اسم الطيار (الشيت اليومي) أو رقم اليوم (كشف الطيار) بيفتح
+     أوردرات اليوم التجاري: العمولة التلقائية من معادلة الطيار، وخانة تكتب
+     فيها عمولة الأوردر بالإيد (override) بسبب — بتتحفظ على مسار
+     pilot-commission-adjustments الموجود وبتدخل التقفيلة فورًا. */
+  let _ordCtx = { pilotId: null, day: null };
+  window.openPilotOrders = async function(pilotId, day) {
+    _ordCtx = { pilotId, day };
+    $("ordTitle").textContent = "أوردرات الطيار";
+    $("ordBody").innerHTML = `<div class="empty-row">جاري التحميل…</div>`;
+    $("ordFootNote").textContent = "";
+    openModal("orders");
+    await loadPilotOrders();
+  };
+  async function loadPilotOrders() {
+    const { pilotId, day } = _ordCtx;
+    if (!pilotId) return;
+    let d;
+    try {
+      d = await PA_API.get(`/api/pilot-accounting/pilot-orders?month=${ encodeURIComponent(window._paData.month) }&pilotId=${ encodeURIComponent(pilotId) }&day=${ day }`);
+    } catch (e) {
+      $("ordBody").innerHTML = `<div class="warn-box">${ esc(e.message || "تعذّر التحميل") }</div>`;
+      return;
+    }
+    _ordCtx.data = d;
+    $("ordTitle").textContent = `📦 ${ d.pilot.name } · يوم ${ d.day } ${ paWeekday(d.month, d.day) } · ${ monthLabel(d.month) }`;
+    const rule = d.pilot.commissionType === "percent"
+      ? `نسبة ${ paMoney(d.pilot.commissionValue) }% من سعر التوصيل`
+      : `مبلغ ثابت ${ paMoney(d.pilot.commissionValue) } للأوردر`;
+    const w = !!d.canWrite;
+    const rows = (d.orders || []).map((o, i) => {
+      const ov = o.override;
+      const paid = ov && Number(ov.paidAmount) > 0.004;
+      return `<tr>
+        <td class="idx">${ i + 1 }</td>
+        <td dir="ltr" style="font-weight:700">${ esc(o.orderNum) }</td>
+        <td style="font-size:.8rem;color:var(--muted)">${ esc(fmtTimeAr(o.time) || "—") }</td>
+        <td>${ esc(o.receiver || o.sender || "—") }<div class="pa-sub">${ esc(o.zone || "") }</div></td>
+        <td><span class="badge ${ o.status === "delivered" ? "bg-green" : "bg-orange" }">${ esc(o.statusAr) }</span></td>
+        <td class="num">${ paMoney(o.price) }</td>
+        <td class="num" style="color:var(--muted)">${ paMoney(o.autoCommission) }</td>
+        <td class="num"><input class="ord-in${ ov ? " edited" : "" }" inputmode="decimal" id="ordAmt-${ o.orderId }" value="${ ov ? Number(ov.amount).toFixed(2) : "" }" placeholder="${ Number(o.autoCommission).toFixed(2) }" ${ w ? "" : "readonly" } onkeydown="if(event.key==='Enter')saveOrderCommission(${ o.orderId })" /></td>
+        <td><input class="ord-reason" id="ordWhy-${ o.orderId }" value="${ esc(ov ? ov.reason : "") }" placeholder="السبب" ${ w ? "" : "readonly" } onkeydown="if(event.key==='Enter')saveOrderCommission(${ o.orderId })" /></td>
+        <td style="white-space:nowrap">${ w ? `<button class="add-btn btn-xs" onclick="saveOrderCommission(${ o.orderId })">💾 حفظ</button>${ ov ? ` <button class="btn-ghost btn-xs" title="رجوع للعمولة التلقائية" onclick="resetOrderCommission(${ ov.id }, ${ paid ? "true" : "false" })">↺ تلقائي</button>` : "" }` : "" }${ paid ? `<div class="pa-sub" style="color:var(--orange)">اتصرف منها كاش ${ paMoney(ov.paidAmount) }</div>` : "" }</td>
+      </tr>`;
+    }).join("");
+    const extras = (d.extras || []).map(x => `<tr>
+        <td class="idx">—</td><td colspan="4">${ esc(x.reason) }<div class="pa-sub">عمولة بلا أوردر${ x.createdBy ? " · " + esc(x.createdBy) : "" }</div></td>
+        <td></td><td></td><td class="num" style="font-weight:700">${ paMoney(x.amount) }</td><td></td>
+        <td>${ w && !(Number(x.paidAmount) > 0.004) ? `<button class="btn-ghost btn-xs" onclick="resetOrderCommission(${ x.id }, false)">🗑 حذف</button>` : (Number(x.paidAmount) > 0.004 ? `<div class="pa-sub" style="color:var(--orange)">اتصرفت كاش</div>` : "") }</td>
+      </tr>`).join("");
+    $("ordBody").innerHTML = `
+      <div class="info-box" style="margin-bottom:12px">عمولة الطيار ده: <b>${ esc(rule) }</b>. اكتب رقم في خانة <b>العمولة</b> عشان تغلب المعادلة لأوردر بعينه (لازم سبب)، وسيبها فاضية عشان يرجع للتلقائي. المكتوب بالإيد بيتلوّن ويدخل التقفيلة فورًا.</div>
+      <div class="table-wrap"><table class="ord-tbl">
+        <thead><tr><th style="width:30px">#</th><th>رقم الأوردر</th><th>الوقت</th><th>المستلم / المنطقة</th><th>الحالة</th><th class="num">سعر التوصيل</th><th class="num">التلقائية</th><th class="num">العمولة</th><th>السبب</th><th></th></tr></thead>
+        <tbody>${ rows || `<tr><td colspan="10" class="empty-row">مفيش أوردرات للطيار ده في اليوم ده</td></tr>` }${ extras }</tbody>
+        <tfoot><tr><td></td><td style="font-weight:800">الإجمالي</td><td></td><td>${ paNum(d.totals.orders) } أوردر</td><td></td><td></td><td class="num pa-tot" style="color:var(--muted)">${ paMoney(d.totals.auto) }</td><td class="num pa-tot" style="color:var(--green)">${ paMoney(d.totals.commission) }</td><td></td><td></td></tr></tfoot>
+      </table></div>
+      ${ w ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+        <span style="font-size:.82rem;font-weight:700">➕ عمولة بلا أوردر (تعويض شكوى مثلًا):</span>
+        <input class="ord-in" id="ordExtraAmt" inputmode="decimal" placeholder="المبلغ" />
+        <input class="ord-reason" id="ordExtraWhy" placeholder="السبب" style="flex:1" />
+        <button class="btn-ghost btn-xs" onclick="addExtraCommission()">إضافة</button></div>` : "" }`;
+    $("ordFootNote").textContent = w ? "" : "عرض بس — كتابة العمولة للإدارة ومدير الفرع.";
+  }
+  async function afterCommissionChange() {
+    await loadPilotOrders();
+    try { await loadPilotAcct(); } catch (e) {}
+  }
+  window.saveOrderCommission = async function(orderId) {
+    const amtEl = $("ordAmt-" + orderId), whyEl = $("ordWhy-" + orderId);
+    const raw = (amtEl?.value || "").trim();
+    const o = (_ordCtx.data?.orders || []).find(x => x.orderId === orderId);
+    if (raw === "") {
+      if (o?.override) return resetOrderCommission(o.override.id, Number(o.override.paidAmount) > 0.004);
+      showToast("اكتب مبلغ العمولة", "error"); return;
+    }
+    const amount = Number(raw);
+    if (!(amount >= 0)) { showToast("المبلغ لازم يكون صفر أو أكتر", "error"); return; }
+    const reason = (whyEl?.value || "").trim();
+    if (!reason) { showToast("اكتب سبب التعديل — ده مبلغ بيدخل مستحقات الطيار", "error"); whyEl?.focus(); return; }
+    try {
+      await PA_API.post("/api/pilot-commission-adjustments", { pilotId: _ordCtx.pilotId, orderId, amount, reason });
+      showToast("اتحفظت العمولة", "success");
+      await afterCommissionChange();
+    } catch (e) { showToast("تعذّر الحفظ: " + (e.message || ""), "error"); }
+  };
+  window.resetOrderCommission = async function(adjId, paid) {
+    if (paid) { showToast("العمولة دي اتصرف منها كاش من الخزنة — التعديل من شاشة الخزنة في الإدارة", "error"); return; }
+    if (!confirm("ترجّع للعمولة التلقائية؟")) return;
+    try {
+      await PA_API.del("/api/pilot-commission-adjustments/" + encodeURIComponent(adjId));
+      showToast("رجعت للتلقائي", "success");
+      await afterCommissionChange();
+    } catch (e) { showToast("تعذّر: " + (e.message || ""), "error"); }
+  };
+  window.addExtraCommission = async function() {
+    const amount = Number(($("ordExtraAmt")?.value || "").trim());
+    const reason = ($("ordExtraWhy")?.value || "").trim();
+    if (!(amount > 0)) { showToast("اكتب المبلغ", "error"); return; }
+    if (!reason) { showToast("اكتب السبب", "error"); return; }
+    try {
+      await PA_API.post("/api/pilot-commission-adjustments", { pilotId: _ordCtx.pilotId, amount, reason, effectiveDate: _ordCtx.data?.date });
+      showToast("اتضافت", "success");
+      await afterCommissionChange();
+    } catch (e) { showToast("تعذّر: " + (e.message || ""), "error"); }
   };
 
   /* ═══════════ السلف المؤجلة — فورم بدل prompt ═══════════ */

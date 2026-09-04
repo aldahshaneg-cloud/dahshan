@@ -812,6 +812,117 @@ class PilotAccountingController
     }
 
     /* ═══════════════════════════════════════════════════════════
+       📦 أوردرات الطيار في يوم — عشان العمولة تتحط على كل أوردر لوحده
+       (طلب صاحب النظام 2026-09-04: «إذا ضغطت على أي موظف تظهر صفحة بها
+       كل الأوردرات لكي أستطيع وضع العمولة لكل أوردر»).
+    ═══════════════════════════════════════════════════════════ */
+
+    /**
+     * GET /api/pilot-accounting/pilot-orders?month=&pilotId=&day=
+     *
+     * أوردرات الطيار في اليوم التجاري (المسلَّمة والمرتجعة) مع عمولة كل
+     * واحد: التلقائية من معادلة الطيار، والـoverride المكتوب لو موجود.
+     * الكتابة نفسها على مسار pilot-commission-adjustments الموجود — مافيش
+     * معادلة تانية هنا: نفس Commission::forPilot اللي التقفيلة بتحسب بيها.
+     */
+    public function pilotOrders(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $ym    = $this->monthArg((string) $request->query('month', ''));
+        $pid   = (int) $request->query('pilotId', 0);
+        $day   = (int) $request->query('day', 0);
+        if ($day < 1 || $day > W::daysInMonth($ym)) {
+            throw new ApiException('اليوم مش في الشهر ده');
+        }
+        $acl = $this->aclOf($actor);
+        if (! $this->can($acl, 'page.daily') && ! $this->can($acl, 'page.pilot')) {
+            throw ApiException::forbidden('مالكش صلاحية عرض الشيت — كلّم الإدارة');
+        }
+        $this->pilotInScope($actor, $pid);
+        $pilot = (array) DB::selectOne('SELECT id, name, commission_type, commission_value FROM pilots WHERE id = ?', [$pid]);
+
+        $set  = $this->settings();
+        $ds   = $set['dayStartHour'];
+        $date = sprintf('%s-%02d', $ym, $day);
+        [$from, $to] = W::bizWindowUtc($date, $ds);
+
+        $orders = array_map(fn ($r) => (array) $r, DB::select(
+            "SELECT o.id, o.order_num, o.status, o.delivered_at, o.undelivered_at, o.total_delivery_price,
+                    o.pieces_count, o.sender_name,
+                    d.receiver_name, d.zone_name
+               FROM orders o
+               LEFT JOIN order_deliveries d ON d.order_id = o.id AND d.parcel_no = 1
+              WHERE o.pilot_id = ?
+                AND ((o.status = 'delivered' AND o.delivered_at >= ? AND o.delivered_at < ?)
+                  OR (o.status = 'undelivered' AND o.undelivered_at >= ? AND o.undelivered_at < ?))
+              ORDER BY COALESCE(o.delivered_at, o.undelivered_at), o.id",
+            [$pid, $from, $to, $from, $to]
+        ));
+
+        $ids = array_map(fn ($o) => (int) $o['id'], $orders);
+        $ovr = [];
+        if ($ids) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            foreach (DB::select("SELECT id, order_id, amount, reason, paid_amount, created_by FROM pilot_commission_adjustments WHERE kind = 'override' AND order_id IN ({$ph})", $ids) as $a) {
+                $ovr[(int) $a->order_id] = (array) $a;
+            }
+        }
+        $extras = array_map(fn ($a) => [
+            'id' => (int) $a->id, 'amount' => round((float) $a->amount, 2), 'reason' => (string) $a->reason,
+            'paidAmount' => round((float) $a->paid_amount, 2), 'createdBy' => $a->created_by,
+        ], DB::select("SELECT id, amount, reason, paid_amount, created_by FROM pilot_commission_adjustments
+                        WHERE kind = 'extra' AND pilot_id = ? AND effective_date = ? ORDER BY id", [$pid, $date]));
+
+        $STATUS = ['delivered' => 'تم التسليم', 'undelivered' => 'لم يتم التوصيل'];
+        $out = [];
+        $tAuto = 0.0;
+        $tEff = 0.0;
+        foreach ($orders as $o) {
+            $oid  = (int) $o['id'];
+            $auto = $o['status'] === 'delivered' ? W::orderCommission($o, $pilot, []) : 0.0;
+            $ov   = $ovr[$oid] ?? null;
+            $eff  = $ov ? round((float) $ov['amount'], 2) : $auto;
+            $bm   = W::bizMoment($o['delivered_at'] ?: $o['undelivered_at'], $ds);
+            $tAuto += $auto;
+            $tEff  += $eff;
+            $out[] = [
+                'orderId'        => $oid,
+                'orderNum'       => (string) ($o['order_num'] ?: $oid),
+                'status'         => $o['status'],
+                'statusAr'       => $STATUS[$o['status']] ?? $o['status'],
+                'time'           => $bm['hm'] ?? null,
+                'sender'         => (string) ($o['sender_name'] ?? ''),
+                'receiver'       => (string) ($o['receiver_name'] ?? ''),
+                'zone'           => (string) ($o['zone_name'] ?? ''),
+                'price'          => round((float) $o['total_delivery_price'], 2),
+                'pieces'         => (int) ($o['pieces_count'] ?? 1),
+                'autoCommission' => $auto,
+                'commission'     => $eff,
+                'override'       => $ov ? ['id' => (int) $ov['id'], 'amount' => round((float) $ov['amount'], 2),
+                                           'reason' => (string) $ov['reason'], 'paidAmount' => round((float) $ov['paid_amount'], 2),
+                                           'createdBy' => $ov['created_by']] : null,
+            ];
+        }
+        foreach ($extras as $x) {
+            $tEff += $x['amount'];
+        }
+
+        return ApiResponse::out([
+            'ok'       => true,
+            'month'    => $ym,
+            'day'      => $day,
+            'date'     => $date,
+            'pilot'    => ['id' => $pid, 'name' => $pilot['name'],
+                           'commissionType' => $pilot['commission_type'], 'commissionValue' => round((float) $pilot['commission_value'], 2)],
+            'orders'   => $out,
+            'extras'   => $extras,
+            'totals'   => ['auto' => round($tAuto, 2), 'commission' => round($tEff, 2), 'orders' => count($out)],
+            /* الكتابة على pilot-commission-adjustments للإدارة ومدير الفرع بس (بيدخل المستحقات فعلًا) */
+            'canWrite' => in_array($actor->role, ['admin', 'branch'], true) && $this->can($acl, 'act.edit') && ! $this->monthLocked($ym, null),
+        ]);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
        💰 بلوك تقفيلة الفرع اليومي — نفس بلوك «تقفيل روح دمشق» بدون النسبة
     ═══════════════════════════════════════════════════════════ */
 
