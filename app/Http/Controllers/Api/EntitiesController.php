@@ -108,20 +108,41 @@ class EntitiesController
     {
         $actor = $request->actorOrFail();
 
-        $sql = "SELECT p.*, b.name AS assigned_branch_name, u.username,
+        $sql = "SELECT p.*, b.name AS assigned_branch_name, hb.name AS home_branch_name, u.username,
                        (SELECT COUNT(*) FROM orders o
                          WHERE o.pilot_id = p.id AND o.status = 'delivering') AS active_orders
                   FROM pilots p
                   LEFT JOIN branches b ON b.id = p.assigned_branch_id
+                  LEFT JOIN branches hb ON hb.id = p.home_branch_id
                   LEFT JOIN users u ON u.pilot_id = p.id";
 
-        $vals = [];
+        $vals  = [];
+        $where = [];
+
+        /* 🗄️ المؤرشفين مستبعدين **افتراضيًا** — دي القايمة اللي كل اللوحات
+           بتشتغل عليها (الدور · التحميل · الخريطة). `?archived=1` بيرجّعهم
+           لوحدهم لصفحة «الطيارين المؤرشفين». */
+        $arch = (string) $request->query('archived', '');
+        $where[] = $arch === '1' ? 'p.archived_at IS NOT NULL' : 'p.archived_at IS NULL';
+
+        /* 🔒 مشرف الفرع مقفول على فرعه — كان بيقدر يشيل `?branchId=` ويسحب
+           **كل طياري الشركة** بعهدتهم ومرتباتهم ومواقعهم الحيّة. */
         $branchId = $request->query('branchId');
-        if ($branchId !== null && $branchId !== '') {
-            $sql .= ' WHERE p.assigned_branch_id = ?';
-            $vals[] = (int) $branchId;
+        if ($actor->role === 'branch') {
+            $branchId = (int) ($actor->branchId ?? 0);
+            if ($branchId === 0) {
+                throw ApiException::forbidden('حسابك مش مربوط بفرع');
+            }
         }
-        $sql .= ' ORDER BY p.name';
+        if ($branchId !== null && $branchId !== '') {
+            /* الثابت **أو** الجاري: الطيار اللي قافل ورديته لازم يفضل
+               باين لفرعه (assigned بيبقى NULL ساعتها)، والطيار اللي جاي
+               دعم النهارده لازم يبان للفرع اللي شغّال فيه. */
+            $where[] = '(p.home_branch_id = ? OR p.assigned_branch_id = ?)';
+            $vals[]  = (int) $branchId;
+            $vals[]  = (int) $branchId;
+        }
+        $sql .= ' WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name';
 
         // مشرف الطيارين بياخد الكارت بلا عهدة/مرتب/عمولة — شوف CoreWire::pilotFor
         return PollableList::items(array_map(
@@ -571,10 +592,26 @@ class EntitiesController
             ? $this->intId($b['sourceBranchId'])
             : ($actor->role === 'branch' ? $actor->branchId : null);
 
-        DB::insert(
-            'INSERT INTO zones (area_name, price, delivery_branch_id, source_branch_id, created_at) VALUES (?,?,?,?,?)',
-            [$areaName, $price, $deliveryBranchId, $sourceBranchId, WireTime::nowDb()]
-        );
+        /* 🔴 القيد `UNIQUE (area_name, delivery_branch_id)`. من غير
+           المصيدة دي الخطأ كان بيوصل للمعالج العام ويرجع «خطأ في
+           قاعدة البيانات» — رسالة مابتقولش الغلط ولا الحل، فالمستخدم
+           بيعيد نفس الإدخال. حصل فعلًا أول يوم شغل: ٨ محاولات لنفس
+           المنطقتين في سجل 2026-09-01. */
+        try {
+            DB::insert(
+                'INSERT INTO zones (area_name, price, delivery_branch_id, source_branch_id, created_at) VALUES (?,?,?,?,?)',
+                [$areaName, $price, $deliveryBranchId, $sourceBranchId, WireTime::nowDb()]
+            );
+        } catch (QueryException $e) {
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                /* 409 مش 400: الواجهة بتفرّق التكرار عن أي فشل تاني
+                   بالحالة (e.status === 409) مش بمطابقة نص الرسالة —
+                   عشان إعادة صياغة الرسالة ماترجّعش الباج بصمت. */
+                throw new ApiException('«' . $areaName . '» موجودة قبل كده في نفس فرع التوصيل — غيّر الاسم أو اختار فرع تاني', 409);
+            }
+            Log::error('zones_create: ' . $e->getMessage());
+            throw new ApiException('خطأ أثناء حفظ المنطقة', 500);
+        }
 
         return ApiResponse::out(['ok' => true, 'id' => (int) DB::getPdo()->lastInsertId()]);
     }
@@ -629,7 +666,17 @@ class EntitiesController
         }
 
         $vals[] = $id;
-        DB::update('UPDATE zones SET ' . implode(', ', $fields) . ' WHERE id = ?', $vals);
+        /* نفس القيد بيضرب عند التعديل كمان: تغيير الاسم لاسم موجود
+           في نفس الفرع بيرمي 1062. */
+        try {
+            DB::update('UPDATE zones SET ' . implode(', ', $fields) . ' WHERE id = ?', $vals);
+        } catch (QueryException $e) {
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                throw new ApiException('في منطقة بنفس الاسم في نفس فرع التوصيل — غيّر الاسم');
+            }
+            Log::error('zones_update: ' . $e->getMessage());
+            throw new ApiException('خطأ أثناء تعديل المنطقة', 500);
+        }
 
         return ApiResponse::ok();
     }
@@ -642,9 +689,19 @@ class EntitiesController
      *
      * 1451 = FK constraint — المنطقة متعلّق بيها أوردرات/عملاء.
      */
-    public function zonesDelete(string $id): JsonResponse
+    public function zonesDelete(Request $request, string $id): JsonResponse
     {
-        $id = $this->intId($id);
+        $actor = $request->actorOrFail();
+        $id    = $this->intId($id);
+
+        /* 🔒 كان `DELETE ... WHERE id = ?` على طول — مشرف أي فرع بيمسح
+           منطقة أي فرع تاني (والمنطقة بتحدّد السعر والفرع المسؤول).
+           `zonesUpdate` فيه الحارس ده من زمان — الحذف بس اللي كان فالت. */
+        $zone = DB::select('SELECT * FROM zones WHERE id = ? LIMIT 1', [$id])[0] ?? null;
+        if (! $zone) {
+            throw ApiException::notFound('المنطقة غير موجودة');
+        }
+        $this->assertZoneInScope($actor, (array) $zone);
 
         try {
             $n = DB::delete('DELETE FROM zones WHERE id = ?', [$id]);
@@ -680,11 +737,21 @@ class EntitiesController
             throw new ApiException('نوع العمولة غير صالح (percent أو fixed)');
         }
 
+        /* 🔴 الفرع الثابت كان **بيتجاهل خالص** في الإنشاء: الواجهة بتبعته
+           والسيرفر بيرميه، فالطيار الجديد بيطلع بلا فرع والموظف مش فاهم ليه.
+           `assignedBranchId` بيتقبل كمرادف قديم عشان أي واجهة ما اتحدّثتش. */
+        $homeIn = $b['homeBranchId'] ?? $b['assignedBranchId'] ?? null;
+        $homeBranchId = ($homeIn !== null && $homeIn !== '') ? $this->intId($homeIn) : null;
+        if ($homeBranchId !== null && $this->branchName($homeBranchId) === null) {
+            throw ApiException::notFound('الفرع غير موجود');
+        }
+
         DB::insert(
             'INSERT INTO pilots (name, phone1, phone2, card_num, vehicle_no, address,
+                                 home_branch_id,
                                  commission_type, commission_value, monthly_salary, required_daily_hours,
                                  notes, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 $name,
                 trim((string) ($b['phone1'] ?? '')) ?: null,
@@ -692,6 +759,7 @@ class EntitiesController
                 trim((string) ($b['cardNum'] ?? '')) ?: null,
                 trim((string) ($b['vehicleNo'] ?? '')) ?: null,
                 trim((string) ($b['address'] ?? '')) ?: null,
+                $homeBranchId,
                 $commissionType,
                 (float) ($b['commissionValue'] ?? 0),
                 (float) ($b['monthlySalary'] ?? 0),
@@ -712,11 +780,26 @@ class EntitiesController
      */
     public function pilotsUpdate(Request $request, string $id): JsonResponse
     {
-        $id = $this->intId($id);
-        $b = $this->stripPilotMoney($request, $this->body($request));
+        $actor = $request->actorOrFail();
+        $id    = $this->intId($id);
+        $b     = $this->stripPilotMoney($request, $this->body($request));
 
-        if (! (DB::select('SELECT * FROM pilots WHERE id = ?', [$id])[0] ?? null)) {
+        $cur = DB::select('SELECT * FROM pilots WHERE id = ?', [$id])[0] ?? null;
+        if (! $cur) {
             throw ApiException::notFound('الطيار غير موجود');
+        }
+
+        /* 🔒 مشرف الفرع كان بيعدّل بيانات **أي** طيار في الشركة — بما فيها
+           فرعه الثابت (يعني يسحبه لفرعه). الفحص على الفرع الثابت **والجاري**:
+           الطيار اللي جاي دعم مؤقت لفرعك لسه مش طيارك. */
+        if ($actor->role === 'branch') {
+            $mine = (int) ($actor->branchId ?? 0);
+            $home = $cur->home_branch_id !== null ? (int) $cur->home_branch_id : 0;
+            if ($mine === 0 || $mine !== $home) {
+                throw ApiException::forbidden('الطيار ده مش تابع لفرعك');
+            }
+            // ومايقدرش ينقله لفرع تاني — النقل الدائم له مساره وموافقته
+            unset($b['homeBranchId'], $b['branchId'], $b['assignedBranchId']);
         }
 
         $map = [
@@ -748,7 +831,10 @@ class EntitiesController
             $vals[] = (string) $b['commissionType'];
         }
         // 🔴 فلوس: القيمة بتتخزّن كما هي بلا حد أدنى/أقصى — زي الأصل بالحرف
-        foreach (['commissionValue' => 'commission_value', 'monthlySalary' => 'monthly_salary'] as $wire => $col) {
+        // سعر الساعة اتضاف 2026-09-01: التقفيلة بتحسب بيه ومكانش له أي
+        // نقطة كتابة — ١٤ من ١٥ طيار على الإنتاج بسعر صفر عشان كده.
+        foreach (['commissionValue' => 'commission_value', 'monthlySalary' => 'monthly_salary',
+                  'hourRate' => 'hour_rate'] as $wire => $col) {
             if (array_key_exists($wire, $b)) {
                 $fields[] = "$col = ?";
                 $vals[] = (float) $b[$wire];
@@ -758,13 +844,23 @@ class EntitiesController
             $fields[] = 'required_daily_hours = ?';
             $vals[] = $b['requiredDailyHours'] !== null ? (float) $b['requiredDailyHours'] : null;
         }
-        if (array_key_exists('assignedBranchId', $b)) {
-            $abid = $b['assignedBranchId'] !== null ? $this->intId($b['assignedBranchId']) : null;
-            if ($abid !== null && $this->branchName($abid) === null) {
+        if (array_key_exists('paidLeaveDays', $b)) {
+            $fields[] = 'paid_leave_days = ?';
+            $vals[] = max(0, (int) $b['paidLeaveDays']);
+        }
+        /* 🔴 الفرع اللي بيتبعت من مودال الطيار هو **الفرع الثابت** —
+           مش الجاري. الجاري بيتحدّد لوحده وقت فتح الوردية، ولو كتبناه من
+           هنا كنا بنقول للنظام إن الطيار شغّال دلوقتي وهو مش فاتح وردية.
+           `assignedBranchId` بيتقبل كمرادف قديم لنفس المعنى. */
+        $homeKey = array_key_exists('homeBranchId', $b) ? 'homeBranchId'
+                 : (array_key_exists('assignedBranchId', $b) ? 'assignedBranchId' : null);
+        if ($homeKey !== null) {
+            $hb = ($b[$homeKey] !== null && $b[$homeKey] !== '') ? $this->intId($b[$homeKey]) : null;
+            if ($hb !== null && $this->branchName($hb) === null) {
                 throw ApiException::notFound('الفرع غير موجود');
             }
-            $fields[] = 'assigned_branch_id = ?';
-            $vals[] = $abid;
+            $fields[] = 'home_branch_id = ?';
+            $vals[] = $hb;
         }
         if (! $fields) {
             throw new ApiException('مفيش حاجة تتعدل');
@@ -792,7 +888,10 @@ class EntitiesController
      */
     private function stripPilotMoney(Request $request, array $b): array
     {
-        if ($request->actorOrFail()->role !== 'pilot_supervisor') {
+        /* 🔒 اتوسّعت لتشمل `branch` كمان (2026-09-01): مشرف الفرع كان بيقدر
+           يغيّر مرتب وعمولة أي طيار — ودي شغل الإدارة والمحاسبة، مش الفرع.
+           (الكول سنتر اتشال من المسار كله في routes/api.php.) */
+        if (! in_array($request->actorOrFail()->role, ['pilot_supervisor', 'branch'], true)) {
             return $b;
         }
 
@@ -802,22 +901,129 @@ class EntitiesController
     }
 
     /** DELETE /api/pilots/{id} — الأدمن بس (أضيق من الإنشاء/التعديل عن قصد) */
+    /**
+     * DELETE /api/pilots/{id} — 🗄️ **مقفول عمدًا. البديل: الأرشفة.**
+     *
+     * قرار صاحب النظام 2026-09-01: «بدل مسحه، ينتفي لصفحة تانية عشان يبقى
+     * غير فعّال، وأي بيانات مرتبطة بيه ماتأثرش على البيانات السابقة».
+     *
+     * والحذف مكانش شغّال أصلًا: `pilots` عليه **١٨ مفتاح أجنبي** كلها
+     * RESTRICT (أوردرات · ورديات · عهدة · حركات نقدية · تقفيلات شهرية ·
+     * أذونات · طلبات إرجاع)، **وكل طيار عنده حساب دخول مربوط**
+     * (`users.pilot_id`) — فحتى الطيار اللي مالوش ولا أوردر مكانش بيتحذف.
+     * ولو اشتغل كان هيفضّي التقارير المالية بأثر رجعي: اسم الطيار مبصوم
+     * على أوردرات وحركات عهدة وتقفيلات.
+     *
+     * المسار سايبينه مسجّل بنفس الميدلوير بدل ما يتشال من `routes/api.php`:
+     * `route:coverage` بيفضل 219/219، وأي واجهة قديمة مكاشة بتاخد رسالة
+     * عربية واضحة بدل 404 مبهمة.
+     *
+     * الحارس: php ops/test_pilot_archive.php
+     */
     public function pilotsDelete(string $id): JsonResponse
     {
-        $id = $this->intId($id);
+        $this->intId($id);
 
-        try {
-            $n = DB::delete('DELETE FROM pilots WHERE id = ?', [$id]);
-            if ($n === 0) {
+        throw ApiException::forbidden('الحذف اتلغى — استخدم «أرشفة الطيار» عشان بياناته التاريخية ماتضيعش');
+    }
+
+    /**
+     * POST /api/pilots/{id}/archive — 🗄️ نفي الطيار للأرشيف (الأدمن بس).
+     *
+     * الأرشفة **مش حذف**: الصف بيفضل مكانه بكل روابطه، وبيتشال من
+     * الاستعلامات التشغيلية بس (`pilotsList` · لوحة الفرع · الدور).
+     * أوردراته وتقفيلاته وحركات عهدته بتفضل زي ما هي بالاسم.
+     *
+     * 🔒 تلات حرّاس قبل الأرشفة — كلهم بيمنعوا فلوس أو شغل يعلّق في الهوا:
+     *  • وردية مفتوحة → لازم تتقفل بتسويتها من الفرع الأول
+     *  • عهدة ≠ صفر   → لازم تتصفّى الأول (قرار صاحب النظام صراحةً)
+     *  • أوردرات جارية → لازم تتسلّم أو تترجّع
+     *
+     * وبيقفل **حساب الدخول** معاه (`users.blocked = 1`): من غير كده الطيار
+     * يفتح التطبيق ويفتح وردية ويرجع يظهر في الدور من تاني.
+     *
+     * وبيحرّره من الفرع الجاري والدور (`assigned_branch_id`/`queue_no`)،
+     * و`home_branch_id` **بيفضل** — هو تاريخه، وبيتستخدم لو رجع للخدمة.
+     */
+    public function pilotsArchive(Request $request, string $id): JsonResponse
+    {
+        $actor   = $request->actorOrFail();
+        $pilotId = $this->intId($id);
+
+        DB::transaction(function () use ($pilotId, $actor): void {
+            $p = DB::select('SELECT * FROM pilots WHERE id = ? FOR UPDATE', [$pilotId])[0] ?? null;
+            if (! $p) {
                 throw ApiException::notFound('الطيار غير موجود');
             }
-        } catch (QueryException $e) {
-            if ((int) ($e->errorInfo[1] ?? 0) === 1451) {
-                throw new ApiException('الطيار مرتبط ببيانات (حساب/أوردرات/ورديات) — ممنوع حذفه');
+            if ($p->archived_at !== null) {
+                throw new ApiException('الطيار مؤرشف بالفعل');
             }
-            Log::error('pilots_delete: ' . $e->getMessage());
-            throw new ApiException('خطأ أثناء حذف الطيار', 500);
-        }
+
+            $openShift = DB::select(
+                "SELECT id FROM shifts WHERE pilot_id = ? AND status = 'active' LIMIT 1", [$pilotId]
+            );
+            if ($openShift) {
+                throw new ApiException('الطيار عنده وردية مفتوحة — اقفلها بتسويتها الأول');
+            }
+
+            /* المقارنة بعتبة قرش مش بـ`!= 0`: العمود decimal بيرجع string،
+               وفروق التقريب في التسويات بتسيب كسور صغيرة. نفس عتبة
+               `applyCustodyDelta`. */
+            $custody = (float) $p->custody_balance;
+            if (abs($custody) >= 0.005) {
+                throw new ApiException('الطيار عليه عهدة ' . number_format($custody, 2) . ' ج.م — سوّيها الأول');
+            }
+
+            $activeOrders = (int) (DB::select(
+                "SELECT COUNT(*) AS n FROM orders WHERE pilot_id = ? AND status = 'delivering'", [$pilotId]
+            )[0]->n ?? 0);
+            if ($activeOrders > 0) {
+                throw new ApiException("الطيار عليه {$activeOrders} أوردر جاري — سلّمها أو رجّعها الأول");
+            }
+
+            DB::update(
+                'UPDATE pilots SET archived_at = ?, archived_by = ?, assigned_branch_id = NULL,
+                                   status = NULL, queue_no = NULL, break_started_at = NULL,
+                                   leave_type = NULL, leave_reason = NULL, leave_forced = 0
+                  WHERE id = ?',
+                [WireTime::nowDb(), $actor->username, $pilotId]
+            );
+
+            // حساب الدخول — من غير القفل ده بيرجع يفتح وردية ويظهر تاني
+            DB::update('UPDATE users SET blocked = 1 WHERE pilot_id = ?', [$pilotId]);
+        });
+
+        return ApiResponse::ok();
+    }
+
+    /**
+     * POST /api/pilots/{id}/unarchive — رجوع الطيار للخدمة (الأدمن بس).
+     *
+     * بيرجّع `assigned_branch_id` لفرعه الثابت — نفس اللي `releasePilot`
+     * بتعمله عند قفل الوردية (شوف قاعدة «فرع الطيار الثابت»). و`status`
+     * بيفضل `NULL` يعني «مافيش وردية مفتوحة» — الفرع هو اللي بيفتحها.
+     */
+    public function pilotsUnarchive(string $id): JsonResponse
+    {
+        $pilotId = $this->intId($id);
+
+        DB::transaction(function () use ($pilotId): void {
+            $p = DB::select('SELECT * FROM pilots WHERE id = ? FOR UPDATE', [$pilotId])[0] ?? null;
+            if (! $p) {
+                throw ApiException::notFound('الطيار غير موجود');
+            }
+            if ($p->archived_at === null) {
+                throw new ApiException('الطيار فعّال بالفعل');
+            }
+
+            DB::update(
+                'UPDATE pilots SET archived_at = NULL, archived_by = NULL,
+                                   assigned_branch_id = home_branch_id
+                  WHERE id = ?',
+                [$pilotId]
+            );
+            DB::update('UPDATE users SET blocked = 0 WHERE pilot_id = ?', [$pilotId]);
+        });
 
         return ApiResponse::ok();
     }
@@ -857,8 +1063,9 @@ class EntitiesController
             $id = DB::transaction(function () use ($b, $username, $password, $role, $branchId): int {
                 DB::insert(
                     'INSERT INTO users (username, password_hash, role, name, branch_id, pilot_id, sender_id,
-                                        shop_name, shop_phone, shop_phone2, shop_address, created_at)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                                        shop_name, shop_phone, shop_phone2, shop_address,
+                                        hour_rate, monthly_salary, paid_leave_days, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         $username,
                         password_hash($password, PASSWORD_DEFAULT),
@@ -871,6 +1078,9 @@ class EntitiesController
                         trim((string) ($b['shopPhone'] ?? '')) ?: null,
                         trim((string) ($b['shopPhone2'] ?? '')) ?: null,
                         trim((string) ($b['shopAddress'] ?? '')) ?: null,
+                        round((float) ($b['hourRate'] ?? 0), 2),
+                        round((float) ($b['monthlySalary'] ?? 0), 2),
+                        max(0, (int) ($b['paidLeaveDays'] ?? 0)),
                         WireTime::nowDb(),
                     ]
                 );
@@ -944,11 +1154,47 @@ class EntitiesController
                 $vals[] = $b[$wire] !== null ? $this->intId($b[$wire]) : null;
             }
         }
+        /* 💵 رواتب الموظف — تقفيلة الموظفين بتحسب منهم. فلوس: بتتخزّن
+           كما هي بلا حد أدنى/أقصى، زي عمولة الطيار بالحرف. */
+        foreach (['hourRate' => 'hour_rate', 'monthlySalary' => 'monthly_salary'] as $wire => $col) {
+            if (array_key_exists($wire, $b)) {
+                $fields[] = "$col = ?";
+                $vals[] = round((float) $b[$wire], 2);
+            }
+        }
+        if (array_key_exists('paidLeaveDays', $b)) {
+            $fields[] = 'paid_leave_days = ?';
+            $vals[] = max(0, (int) $b['paidLeaveDays']);
+        }
         foreach (['shopName' => 'shop_name', 'shopPhone' => 'shop_phone',
                   'shopPhone2' => 'shop_phone2', 'shopAddress' => 'shop_address'] as $wire => $col) {
             if (array_key_exists($wire, $b)) {
+                $val = trim((string) ($b[$wire] ?? ''));
+
+                /* 🔴 `shop_name` و`shop_address` بقوا **شرط تشغيل** لتطبيق
+                   المحل من 2026-08-31 (بوابة إكمال البيانات بتفتح إجباري
+                   لو أي واحد فيهم فاضي، ومالهاش زرار إغلاق).
+
+                   الفورم بيبعت الحقول دي **دايمًا** حتى لو فاضية، فأدمن
+                   بيفتح «تعديل» عشان يظبط رقم تليفون وبيفضّي خانة العنوان
+                   بالغلط كان بيكتب NULL — والمحل يلاقي نفسه مقفول تاني يوم
+                   ومش عارف ليه. الفاضي هنا = «ماتلمسش»، مش «امسح».
+                   نفس منطق الباسورد الفاضي فوق في نفس الدالة.
+                   (الهاتفين لسه بيتمسحوا عادي — التاني اختياري أصلًا،
+                   والأول مش شرط لفتح التطبيق.) */
+                if ($val === '' && in_array($col, ['shop_name', 'shop_address'], true)) {
+                    continue;
+                }
+
+                /* والحد الأدنى حرفين زي مسار المحل بالظبط: اسم من حرف واحد
+                   من الإدارة كان بيخلي البوابة تعرضه مقفول وترفض الحفظ
+                   (`name.length < 2`) — بوابة مالهاش مخرج نهائيًا. */
+                if ($col === 'shop_name' && mb_strlen($val) < 2) {
+                    throw new ApiException('اسم المحل لازم يكون حرفين على الأقل');
+                }
+
                 $fields[] = "$col = ?";
-                $vals[] = trim((string) ($b[$wire] ?? '')) ?: null;
+                $vals[] = $val !== '' ? $val : null;
             }
         }
 
@@ -998,6 +1244,28 @@ class EntitiesController
         );
 
         return ApiResponse::out(['ok' => true, 'blocked' => (bool) $blocked]);
+    }
+
+    /**
+     * POST /api/users/{id}/price-edit — {enabled} — الأدمن بس.
+     *
+     * 🏪 طلب صاحب النظام 2026-09-03: تعديل سعر التوصيل في بوابة المحلات
+     * (زيادة أو نقصان) خاصية بتتفتح لمحلات معيّنة. البوابة الحقيقية في
+     * OrdersController::deliveryPrice — الحقل هنا هو المفتاح بس.
+     * لحسابات المحلات فقط؛ أي دور تاني = خطأ واضح.
+     */
+    public function usersPriceEdit(Request $request, string $id): JsonResponse
+    {
+        $actor  = $request->actorOrFail();
+        $id     = $this->intId($id);
+        $target = $this->fetchUserGuarded($id, $actor);
+        if (($target['role'] ?? '') !== 'store') {
+            throw new ApiException('خاصية تعديل السعر لحسابات المحلات بس');
+        }
+        $on = ! empty($this->body($request)['enabled']) ? 1 : 0;
+        DB::update('UPDATE users SET can_edit_price = ? WHERE id = ?', [$on, $id]);
+
+        return ApiResponse::out(['ok' => true, 'canEditPrice' => (bool) $on]);
     }
 
     /**

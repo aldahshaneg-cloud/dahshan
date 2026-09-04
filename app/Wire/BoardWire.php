@@ -80,6 +80,10 @@ final class BoardWire
             'bonusSettle'      => $r['bonus_settle'] ?: 'daily',
             'deductionSettle'  => $r['deduction_settle'] ?: 'daily',
             'advanceSettle'    => $r['advance_settle'] ?: 'daily',
+            /* 💵 صرف عمولة الوردية كاش من الخزنة (طلب 2026-09-03) —
+               وجود التاريخ = اتصرفت، والواجهة بتقفل الرجوع لشهري */
+            'commissionPaidAmount' => (float) ($r['commission_paid_amount'] ?? 0),
+            'commissionPaidAt'     => WireTime::toWire($r['commission_paid_at'] ?? null),
         ];
     }
 
@@ -241,11 +245,20 @@ final class BoardWire
 
         $responded = [];
         $resolvedAt = null;
+        /* أسباب الرفض — الفرع الطالب لازم يشوفها. مصفوفة مش قيمة واحدة
+           لأن الإنذار العام ممكن يترفض من أكتر من فرع وكل واحد له سببه. */
+        $rejections = [];
         foreach ($responses as $resp) {
             $x = CoreWire::row($resp);
             $responded[(string) (int) $x['branch_id']] = true;
             if ($x['response'] === 'accepted') {
                 $resolvedAt = WireTime::toWire($x['responded_at']);
+            } elseif ($x['response'] === 'rejected') {
+                $rejections[] = [
+                    'branchId'    => (int) $x['branch_id'],
+                    'reason'      => $x['reason'] ?? null,
+                    'respondedAt' => WireTime::toWire($x['responded_at']),
+                ];
             }
         }
 
@@ -254,15 +267,23 @@ final class BoardWire
             'requestingBranchName' => $r['requesting_branch_name'] ?? null,
             // broadcast = مفيش فرع محدد مطلوب منه الدعم
             'broadcast'  => $r['from_branch_id'] === null,
-            'fromBranchId' => $r['from_branch_id'] !== null ? (int) $r['from_branch_id'] : null,
+            'fromBranchId'   => $r['from_branch_id'] !== null ? (int) $r['from_branch_id'] : null,
+            'fromBranchName' => $r['from_branch_name'] ?? null,
             'notes'      => $r['notes'] ?? '',
             'status'     => $r['status'],
             'respondedBranches' => $responded ?: new stdClass(),
+            'rejections' => $rejections,
             'requestedAt' => WireTime::toWire($r['created_at']),
             'acceptedByBranchId'   => $r['accepted_by_branch_id'] !== null ? (int) $r['accepted_by_branch_id'] : null,
             'acceptedByBranchName' => $r['accepted_by_branch_name'] ?? null,
             'pilotId'    => $r['pilot_id'] !== null ? (int) $r['pilot_id'] : null,
             'pilotName'  => $r['pilot_name'] ?? null,
+            'pilotPhone' => $r['pilot_phone'] ?? null,
+            /* عهدة الطيار وأوردراته الشغّالة — الفرعين بيشوفوهم قبل القرار.
+               صاحب النظام اختار «تحذير واضح والنقل يعدّي»، فدي بيانات
+               للتحذير مش مانع. */
+            'pilotCustody'      => isset($r['pilot_custody']) ? (float) $r['pilot_custody'] : null,
+            'pilotActiveOrders' => isset($r['pilot_active_orders']) ? (int) $r['pilot_active_orders'] : 0,
             'resolvedAt' => $resolvedAt,
         ];
     }

@@ -148,16 +148,59 @@ class PublicSiteController
      */
     public function coverage(): JsonResponse
     {
-        $zones = DB::select('SELECT area_name, price FROM zones ORDER BY area_name');
+        /* 🔴 جدول `zones` صف لكل **مسار**: (الفرع اللي بيشيل الشحنة →
+           المنطقة اللي بيوصّلها). فالمنطقة الواحدة بتتكرر مرة لكل فرع —
+           139 منطقة بيطلعوا 417 صف.
+
+           الرد القديم كان `SELECT area_name, price` من غير أي تجميع، يعني
+           بيرمي الـ417 صف زي ما هم. النتيجة على الموقع: جدول الأسعار
+           بيعرض «6 اكتوبر — 30 جنيه» تلات مرات ورا بعض من غير أي فرق
+           باين، والصفحة الرئيسية بتقول «417 منطقة» وهي 139.
+
+           بقى فيه مفتاحين:
+             • `zones`  — منطقة واحدة لكل اسم (العدّاد وشرايط الرئيسية).
+             • `routes` — الصفوف بالتفصيل بـ`from`/`to`، عشان صفحة الأسعار
+               تقدر تقول للعميل «من فين لفين» بدل اسم مكرر بلا معنى.
+
+           `zones` اتساب بنفس شكله (`name`/`price`) عشان الرئيسية
+           مااتلمستش — الجديد إضافة مش تغيير. */
+        $rows = DB::select(
+            'SELECT z.area_name, z.price, b.name AS from_branch
+               FROM zones z
+               JOIN branches b ON b.id = z.delivery_branch_id
+              WHERE b.paused = 0 AND TRIM(z.area_name) <> \'\'
+              ORDER BY b.name, z.area_name'
+        );
+
+        $routes = [];
+        $byArea = [];
+        foreach ($rows as $r) {
+            $area  = (string) $r->area_name;
+            $price = (float) $r->price;
+
+            $routes[] = [
+                // «من» = الفرع اللي هيشيل الشحنة، «إلى» = منطقة التسليم
+                'from'  => (string) $r->from_branch,
+                'to'    => $area,
+                'price' => $price,
+            ];
+
+            /* أقل سعر للمنطقة + أعلى سعر: دلوقتي كل المسارات بنفس السعر،
+               بس لو اتفرّقوا بعدين الواجهة تعرف تقول «من كذا لكذا» بدل
+               ما تعرض رقم واحد وتكدب. */
+            if (! isset($byArea[$area])) {
+                $byArea[$area] = ['min' => $price, 'max' => $price];
+            } else {
+                $byArea[$area]['min'] = min($byArea[$area]['min'], $price);
+                $byArea[$area]['max'] = max($byArea[$area]['max'], $price);
+            }
+        }
 
         $out = [];
-        foreach ($zones as $z) {
-            // منطقة باسم فاضي بتتشال — صفوف قديمة مرحّلة كانت بتطلع كارت فاضي
-            if (trim((string) $z->area_name) === '') {
-                continue;
-            }
-            $out[] = ['name' => $z->area_name, 'price' => (float) $z->price];
+        foreach ($byArea as $name => $p) {
+            $out[] = ['name' => $name, 'price' => $p['min'], 'priceMax' => $p['max']];
         }
+        usort($out, fn ($a, $b) => strcmp($a['name'], $b['name']));
 
         /* الفروع الموقوفة (`paused = 1`) مش محسوبة — العدد ده بيتعرض على
            الموقع كـ«عدد فروعنا»، والفرع الموقوف مش بيستقبل شحنات أصلًا. */
@@ -166,6 +209,7 @@ class PublicSiteController
         return ApiResponse::out([
             'ok'          => true,
             'zones'       => $out,
+            'routes'      => $routes,
             'branchCount' => $branchCount,
         ]);
     }

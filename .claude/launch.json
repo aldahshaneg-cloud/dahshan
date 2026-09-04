@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "dahshan",
-      "runtimeExecutable": "C:\\xampp\\php\\php.exe",
+      "runtimeExecutable": "C:\php83\php.exe",
       "runtimeArgs": ["artisan", "serve", "--host=127.0.0.1", "--port=8000"],
       "port": 8000
     }

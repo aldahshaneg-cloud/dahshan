@@ -5,6 +5,7 @@ use App\Http\Middleware\BroadcastActor;
 use App\Http\Middleware\ResolveApiActor;
 use App\Http\Middleware\TolerantJsonBody;
 use App\Support\ApiResponse;
+use App\Support\ErrorAlert;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
@@ -135,6 +136,22 @@ return Application::configure(basePath: dirname(__DIR__))
             || $e instanceof AuthenticationException
             || $e instanceof NotFoundHttpException
         ));
+
+        /*
+         * 🚨 تنبيه الأعطال — بيتنده على **نفس** مجموعة الأعطال اللي بتتسجّل
+         * في اللوج (الفلتر اللي فوق هو اللي بيحدّدها)، فالأخطاء المتوقعة
+         * زي «بيانات ناقصة» أو «مش مصرّح» مابتوصلش هنا أصلًا.
+         *
+         * ليه أصلًا: باج `Undefined variable $codAllowed` قعد 3 أيام على
+         * الإنتاج والعملاء مش عارفين يعملوا أوردر، وكان مكتوب في اللوج من
+         * أول لحظة — بس محدش بيفتح اللوج. السجل اللي محدش بيقراه مش إنذار.
+         *
+         * `ErrorAlert::capture` **مابترميش** أبدًا (كل جواها try/catch صامت)
+         * عشان مايحصلش إن التنبيه نفسه يدفن العطل الأصلي.
+         */
+        $exceptions->report(function (Throwable $e): void {
+            ErrorAlert::capture($e, request());
+        });
         $exceptions->render(function (Throwable $e, Request $request) {
             /* مسار تفويض البث (/broadcasting/auth) سايب بره بادئة /api عشان
                بوابة route:coverage، بس بيرد JSON زي باقي الـAPI — فبنضمّه

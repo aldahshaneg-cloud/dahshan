@@ -236,6 +236,12 @@ section.alt{background:var(--ink2)}
 .app-card{background:var(--card);border:1px solid var(--line);border-radius:18px;
   padding:28px 22px;text-align:center;transition:.25s;display:flex;flex-direction:column}
 .app-card:hover{border-color:rgba(232,25,44,.45);transform:translateY(-4px)}
+/* شرط التشغيل والرابط البديل — تحت زرار التحميل. صغيّرين عن قصد:
+   معلومة بتلزم لما تلزم، مش عنوان يزاحم الزرار. */
+.app-card .app-note{font-size:11.5px;color:var(--muted);line-height:1.7;margin-top:10px}
+.app-card .app-alt{display:inline-block;margin-top:7px;font-size:11.5px;font-weight:700;
+  color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.app-card .app-alt:hover{color:var(--red)}
 .app-card .ic{width:66px;height:66px;border-radius:20px;display:grid;place-items:center;
   font-size:31px;background:rgba(232,25,44,.12);color:var(--red);margin:0 auto 16px}
 .app-card h3{font-size:18.5px;font-weight:800;margin-bottom:7px}
@@ -765,6 +771,7 @@ footer .cr{color:#4d4d56;font-size:12.5px}
     <div>
       <h2 class="site-footer__title">الشركة</h2>
       <div class="site-footer__links">
+        <a class="site-footer__link" href="profile.html">بروفايل الشركة</a>
         <a class="site-footer__link" href="contact.html">تواصل معنا</a>
         <a class="site-footer__link" href="index.html#join">انضم إلينا</a>
         <a class="site-footer__link" href="privacy.html">سياسة الخصوصية</a>
@@ -830,7 +837,8 @@ function applyInfo() {
   const tel  = real("phone",    INFO.phone);
   const wnum = real("whatsapp", INFO.whatsapp);
   const mail = real("email",    INFO.email);
-  const wa   = wnum ? `https://wa.me/${wnum}` : "";
+  // الرقم متخزّن محليًا (01…) وwa.me بيقبل الدولي بس — SupportNums.intl بيحوّله
+  const wa   = wnum ? `https://wa.me/${SupportNums.intl(wnum)}` : "";
 
   setLink("cTel",  tel,           tel  ? "tel:" + tel      : "");
   setLink("cWa",   wnum ? "+" + wnum : "", wa);
@@ -868,8 +876,32 @@ const APP_DEF = {
   customer: { icon:"📱", name:"تطبيق العملاء", def:"customer.html", desc:"سجّل طلبك، تابعه لحظيًا، واحفظ عناوينك ومستلمينك.", label:"تحميل التطبيق" },
   /* الافتراضي بقى رابط الـAPK المرفوع على السيرفر — كان فاضي فالكارت
      كان بيعرض «قريبًا». لوحة تحكم الموقع لسه بتقدر تدهسه (نفس منطق
-     باقي النظام: افتراضي في الكود + تحكّم من اللوحة). */
-  pilot   : { icon:"🛵", name:"تطبيق الطيار",  def:"downloads/dahshan-pilot-latest.apk", desc:"للطيارين: استلام الطلبات، الخريطة، والورديات.", label:"تحميل التطبيق" },
+     باقي النظام: افتراضي في الكود + تحكّم من اللوحة).
+
+     🔴 الرابط ده بقى النسخة **الشاملة** (فيها معالج 64 و32 مع بعض).
+     قبل كده كان arm64 بس، فالطيار على تليفون قديم بـ32-بت كان بينزّله
+     والتثبيت يترفض من غير سبب مفهوم — ونسخة الـ32-بت موجودة في المجلد
+     من زمان بس مكانش ليها رابط في الموقع خالص.
+
+     `note` و`alt` بيتعرضوا تحت الزرار. متحطّهمش في `desc` عشان لوحة
+     تحكّم الموقع بتقدر تدهس `url` و`label` — إنما دول جوه الكود. */
+  pilot   : { icon:"🛵", name:"تطبيق الطيار",  def:"downloads/dahshan-pilot-latest.apk",
+              desc:"للطيارين: استلام الطلبات، الخريطة، والورديات.", label:"تحميل التطبيق",
+              note:"يحتاج أندرويد 7 أو أحدث · للموبايلات الحديثة (64 بت) · حوالي 40 ميجا",
+              /* المقاس مكتوب عن قصد: الطيار غالبًا على بيانات موبايل.
+
+                 🔴 الرابط بقى يوديّ لبناء **arm64 مقسّم** مش «شامل»
+                 (2026-09-01): الشامل بياخد versionCode بلا إزاحة فبيقع تحت
+                 كل بناء مقسّم منشور، وأندرويد بيرفضه كرجوع لنسخة أقدم —
+                 وده اللي خلّى الرابطين الاتنين يفشلوا على موبايلات الطيارين
+                 اللي عليها 2.5.1. الحارس: node ops/test_apk_release.cjs
+
+                 ⚠️ ولأن الأساسي بقى arm64، النص لازم يقول كده صراحةً:
+                 الموبايل القديم (32 بت) مش هيركّبه. والبديل تحت (armeabi-v7a)
+                 هو الحل الشامل الحقيقي — بيشتغل على القديم **والحديث**،
+                 فهو المخرج لأي واحد التثبيت وقف معاه. */
+              alt:{ url:"downloads/dahshan-pilot-32bit.apk",
+                    label:"موبايلك قديم أو التثبيت مش راضي يكمّل؟ نزّل نسخة 32 بت (37 ميجا)" } },
   store   : { icon:"🏪", name:"برنامج المحلات", def:"store.html", desc:"لأصحاب المحلات: سجّل شحناتك وتابع تحصيلاتك وتقفيلاتك.", label:"تحميل التطبيق" }
 };
 function withInstallFlag(url, key) {
@@ -884,8 +916,14 @@ function renderApps(cfg) {
     if (v.on === false) return "";
     const url = withInstallFlag((v.url || d.def || "").trim(), k);
     const label = (v.label || d.label).trim();
+    /* الملاحظة والرابط البديل بيبانوا مع الزرار بس — كارت «قريبًا»
+       مالوش لازمة يقول شروط تشغيل لحاجة لسه مانزلتش. */
+    const note = d.note ? `<div class="app-note">${esc(d.note)}</div>` : "";
+    const alt  = d.alt && d.alt.url
+      ? `<a class="app-alt" href="${esc(d.alt.url)}">${esc(d.alt.label)}</a>` : "";
     return `<div class="app-card"><div class="ic">${d.icon}</div><h3>${esc(d.name)}</h3><p>${esc(d.desc)}</p>${
-      url ? `<a class="go" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ""}>${esc(label)}</a>` : `<div class="soon">قريبًا</div>`}</div>`;
+      url ? `<a class="go" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ""}>${esc(label)}</a>${note}${alt}`
+          : `<div class="soon">قريبًا</div>`}</div>`;
   }).join("");
 }
 function renderPartners(list, title) {
@@ -1094,6 +1132,7 @@ $("pilotForm").addEventListener("submit", async e => {
 
 <!-- نصوص الصفحة القابلة للتحرير (data-cms) — بيتحمّل مؤجّل فبيشتغل بعد
      السكربت اللي فوق، والقيم المحفوظة بتدهس الافتراضي المكتوب في الـHTML. -->
+<script src="assets/js/support-numbers.js"></script>
 <script src="assets/js/site-cms.js" defer></script>
 
 </body>

@@ -55,6 +55,8 @@ final class CustomerWire
             'defaultBranchId'   => $r['default_branch_id'] !== null ? (int) $r['default_branch_id'] : null,
             'defaultBranchName' => $r['branch_name'] ?? null,
             'profileCompleted'  => (bool) $r['profile_completed'],
+            // فتح تعديل سعر التوصيل — زي المحلات (طلب 2026-09-02)
+            'canEditPrice'      => (int) ($r['can_edit_price'] ?? 0) === 1,
             'blocked'           => (bool) $r['blocked'],
             'blockedAt'         => WireTime::toWire($r['blocked_at']),
             'blockedBy'         => $r['blocked_by'],

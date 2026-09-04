@@ -103,8 +103,15 @@
       return d.url;
     },
 
-    login: function (username, password) {
-      return request("POST", "/api/login", { username: username, password: password }, { quiet401: true });
+    /* `app` = كود التطبيق اللي الصفحة دي بتمثّله (callcenter/branch/admin…).
+       السيرفر بيرفض الدخول لو الحساب مش مصرّح له بيه — القفل الحقيقي هناك،
+       وده بس بيقوله إحنا فين. الصفحات اللي مابتبعتوش بتشتغل زي الأول
+       (تطبيق الطيار المنشور بينده نفس المسار من غيره). */
+    login: function (username, password, app) {
+      var body = { username: username, password: password };
+      if (app) body.app = app;
+
+      return request("POST", "/api/login", body, { quiet401: true });
     },
     logout: function () {
       return request("POST", "/api/logout", {}, { quiet401: true, noPoke: true });
@@ -130,6 +137,10 @@
     this.useSince = options.useSince !== false;
     // اللوحة تقدر تضيّق السقف الزمني لنداء خفيف بتعرفه (options.timeoutMs)
     this.timeoutMs = options.timeoutMs || 0;
+    /* البولر اللي رنينه مهم (أوردرات الفرع) لازم يفضل شغّال حتى والتاب
+       ورا — من غيره لو الويبسوكت وقع، المشرف على تاب تاني مايسمعش أي
+       حاجة خالص. الافتراضي false فباقي البولرات بتوفّر زي ما هي. */
+    this.hiddenTick = !!options.hiddenTick;
     this._since = 0;
     this._timer = null;
     this._stopped = false;
@@ -146,7 +157,7 @@
     this._tick = function () { self.tick(); };
     if (options.immediate !== false) this.tick();
     this._timer = setInterval(function () {
-      if (document.hidden) return; // التاب ورا — وفّر على السيرفر
+      if (document.hidden && !self.hiddenTick) return; // التاب ورا — وفّر على السيرفر
       self.tick();
     }, this.interval);
   }

@@ -43,10 +43,15 @@ final class OrderNumber
      * وده كان بيدّي **id الصف** بدل 1 في أول شحنة كل يوم (اتصلح 2026-08-19).
      * الترحيل لازم يقرا العدّاد صراحةً بعد الـupsert.
      */
-    public static function format(string $branchCode, int $dailyCount, ?int $ts = null): string
+    public static function format(string $branchCode, int $dailyCount, ?int $ts = null, ?string $dayCompact = null): string
     {
         $code = $branchCode !== '' ? $branchCode : 'ORD';
-        $day  = substr(self::cairoDayKeyCompact($ts), 2);   // YYMMDD
+        /* 🔴 `$dayCompact` لازم يتبعت من مسارات الإنشاء وهو **نفس** مفتاح
+           عدّاد اليوم — من غيره الرقم المطبوع ممكن يخالف العدّاد اللي
+           اتزوّد: بعد اعتماد اليوم التجاري (BizDay — أوردر الساعة 00:32
+           يومه امبارح) المفتاح بقى تجاري والتاريخ الميلادي هنا كان
+           هيطلع يوم مختلف عن عدّاده. */
+        $day = substr($dayCompact ?? self::cairoDayKeyCompact($ts), 2);   // YYMMDD
 
         return $code . '-' . $day . '-' . str_pad((string) $dailyCount, 3, '0', STR_PAD_LEFT);
     }

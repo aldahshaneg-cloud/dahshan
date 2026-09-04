@@ -8,6 +8,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\BroadcastsOrders;
 use App\Http\Controllers\Concerns\NotifiesOrderReceivers;
 use App\Support\ApiResponse;
+use App\Support\BizDay;
 use App\Support\OrderNumber;
 use App\Support\PollableList;
 use App\Support\WireTime;
@@ -448,10 +449,52 @@ class CustomerAppController
         )->c ?? 0);
     }
 
-    /** المقابل لـ customer_valid_phone() — مصري: 10 أرقام بعد 1، وصفر اختياري */
+    /**
+     * سعر توصيل الطرد لعميل التطبيق (طلب صاحب النظام 2026-09-02):
+     * العميل المفتوح له `can_edit_price` من إدارة العملاء بيتعامل زي
+     * المحل بالظبط (OrdersController::deliveryPrice) — يرفع السعر ولا
+     * ينزل عن سعر المنطقة. غير كده سعر الزون إجباري وأي zonePrice مبعوت
+     * بيتتجاهل بصمت (نفس فلسفة بوابة التحصيل: الأوردر يعدّي عادي).
+     */
+    private static function customerDeliveryPrice(array $c, array $d, array $zone, int $no): float
+    {
+        $floor = (float) $zone['price'];
+        if ((int) ($c['can_edit_price'] ?? 0) !== 1) {
+            return $floor;
+        }
+        $sent = isset($d['zonePrice']) && $d['zonePrice'] !== '' ? (float) $d['zonePrice'] : null;
+        if ($sent === null) {
+            return $floor;
+        }
+        // نفس هامش float بتاع مسار المحلات بالحرف
+        if ($sent < $floor - 0.001) {
+            throw new ApiException(
+                'سعر التوصيل للطرد رقم ' . $no . ' لا يقل عن '
+                . rtrim(rtrim(number_format($floor, 2, '.', ''), '0'), '.') . ' ج.م'
+            );
+        }
+
+        return $sent;
+    }
+
+    /** إحداثية من الجسم — الفاضي والمفقود بيرجعوا null (زي floatOrNull) */
+    private static function coord(mixed $v): ?float
+    {
+        return $v !== null && $v !== '' ? (float) $v : null;
+    }
+
+    /**
+     * موبايل مصري (01 + ٩ أرقام والصفر اختياري) **أو أرضي مصري** بكود
+     * المحافظة (يبدأ 02–09، ٩ أو ١٠ أرقام بصفر إجباري). فيه مستلمين
+     * مالهمش غير تلفون أرضي والطيار بيتصل بيه عادي — رسايل الواتساب
+     * أصلًا بتتفلتر للموبايل بس في OrderRecipients فمفيش حاجة بتضيع
+     * بصمت. لازم تفضل نفس قاعدة validPhone في customer.html.
+     */
     private static function validPhone(string $p): bool
     {
-        return (bool) preg_match('/^0?1[0-9]{9}$/', str_replace([' ', '-'], '', $p));
+        $d = str_replace([' ', '-'], '', $p);
+
+        return (bool) (preg_match('/^0?1[0-9]{9}$/', $d) || preg_match('/^0[2-9][0-9]{7,8}$/', $d));
     }
 
     public function profileUpdate(Request $request): JsonResponse
@@ -699,6 +742,34 @@ class CustomerAppController
         return ApiResponse::ok(['items' => self::addressesFetch((int) $c['id'])]);
     }
 
+    /**
+     * DELETE /api/customer/receivers/{id} — شيل مستلم محفوظ.
+     *
+     * الحذف بيشيل الاختصار بس — الأوردرات القديمة اللي راحت للمستلم ده
+     * مابتتلمسش، لأن بياناتها متخزّنة في `order_deliveries` نفسها.
+     * الشرط على `customer_id` هو الحارس: محدش يمسح مستلم حد تاني.
+     */
+    public function receiversDelete(Request $request, string $id): JsonResponse
+    {
+        $c = $this->customerRequire($request);
+
+        $n = DB::delete(
+            'DELETE FROM customer_saved_receivers WHERE id = ? AND customer_id = ?',
+            [(int) $id, (int) $c['id']]
+        );
+        if ($n === 0) {
+            throw new ApiException('المستلم غير موجود', 404);
+        }
+
+        $rows = DB::select(
+            'SELECT * FROM customer_saved_receivers WHERE customer_id = ?
+              ORDER BY created_at DESC, id DESC LIMIT 50',
+            [(int) $c['id']]
+        );
+
+        return ApiResponse::ok(['items' => array_map([CustomerAppWire::class, 'savedReceiver'], $rows)]);
+    }
+
     /* ═══════════════════════════════════════════════════════════════
        المستلمون المحفوظون — قايمة + upsert بالتليفون (saveReceiver القديمة)
     ═══════════════════════════════════════════════════════════════ */
@@ -868,30 +939,97 @@ class CustomerAppController
         $branchId   = (int) $senderZone['delivery_branch_id'];
         $branchCode = (string) $senderZone['_branch_code'] ?: 'ORD';
 
+        /* 🔴 بيانات الراسل: العميل بيكتبها في خطوة ١ والمسار ده كان
+           بيتجاهلها بالكامل وبيبني صف المُرسِل من صف العميل في الجلسة.
+           السيناريو اللي الفورم متعمل عشانه — إن العميل يرتّب شحنة نيابة
+           عن حد تاني — كان بيوصل الطيار باسم ورقم صاحب الحساب مش اللي
+           هيسلّمه الشحنة، وبيوديه لعنوان تاني غير اللي اتكتب.
+
+           القاعدة: المكتوب في الفورم بيغلب، والمحفوظ في البروفايل/العنوان
+           هو الاحتياطي. والرقم بيتفحص زي أي رقم في النظام. */
+        $sName = mb_substr(trim((string) ($b['senderName'] ?? '')), 0, 190);
+        $sPhone = trim((string) ($b['senderPhone'] ?? ''));
+        if ($sPhone !== '' && ! self::validPhone($sPhone)) {
+            throw new ApiException('رقم المُرسِل غير صحيح');
+        }
+        $sPhone2 = trim((string) ($b['senderPhone2'] ?? ''));
+        if ($sPhone2 !== '' && ! self::validPhone($sPhone2)) {
+            throw new ApiException('الرقم الاحتياطي للمُرسِل غير صحيح');
+        }
+        $sAddr = mb_substr(trim((string) ($b['senderAddress'] ?? '')), 0, 190);
+        $sLat  = self::coord($b['senderLat'] ?? null);
+        $sLng  = self::coord($b['senderLng'] ?? null);
+        $geoSrc = trim((string) ($b['geoSrc'] ?? '')) ?: null;
+
+        $senderName   = $sName !== '' ? $sName : ($c['display_name'] ?: 'عميل التطبيق');
+        $senderPhone  = $sPhone !== '' ? $sPhone : $c['phone1'];
+        $senderPhone2 = $sPhone2 !== '' ? $sPhone2 : $c['phone2'];
+        $senderAddr   = $sAddr !== '' ? $sAddr : ($addr ? $addr['full_address'] : null);
+        // الدبوس اللي العميل سحبه بيغلب دبوس العنوان المحفوظ
+        $senderLat = $sLat ?? ($addr['lat'] ?? null);
+        $senderLng = $sLng ?? ($addr['lng'] ?? null);
+        if ($geoSrc === null && $sLat !== null && $sLng !== null) {
+            $geoSrc = 'customer-pin';
+        }
+
         $now = WireTime::nowDb();
 
+        /* 🔁 مانع التكرار — نفس قاعدة OrdersController::store (2026-09-02):
+           العميل اللي شاف «تعذّر الإرسال» بعد حفظ ناجح (زي واقعة receipt
+           is not defined) وضغط تاني بياخد نفس الأوردرات بعلامة duplicate
+           بدل نسخة جديدة بيدفع فيها مرتين. */
+        $clientRefIn = (string) ($b['clientRef'] ?? '');
+        $clientRef   = preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/', $clientRefIn) ? $clientRefIn : null;
+        if ($clientRef !== null) {
+            $dupIds = array_map(
+                fn ($r) => (int) $r->id,
+                DB::select('SELECT id FROM orders WHERE client_ref LIKE ? ORDER BY id', [$clientRef . '#%'])
+            );
+            if ($dupIds) {
+                return ApiResponse::ok([
+                    'order'     => self::outOrder($c, OrderWire::full($dupIds[0])),
+                    'orders'    => array_map(fn (int $oid) => self::outOrder($c, OrderWire::full($oid)), $dupIds),
+                    'duplicate' => true,
+                ]);
+            }
+        }
+
         try {
-            $orderId = DB::transaction(function () use (
-                $c, $cid, $b, $deliveriesIn, $addr, $senderZoneId, $branchId, $branchCode, $now
-            ): int {
+            /* 🔴 `$codAllowed` **لازم** يفضل في القايمة دي.
+               اتنسي منها فرمى `Undefined variable $codAllowed` عند سطر
+               بناء الطرد، والمعاملة كانت بتقع فالعميل مايقدرش يعمل أوردر
+               خالص. ظهر في سجل الإنتاج 2026-08-27 الساعة 12:18 وقت ما
+               صاحب النظام كان بيجرّب التطبيق. */
+            $orderIds = DB::transaction(function () use (
+                $c, $cid, $b, $deliveriesIn, $addr, $senderZoneId, $branchId, $branchCode, $now, $codAllowed,
+                $senderName, $senderPhone, $senderPhone2, $senderAddr, $senderLat, $senderLng, $geoSrc, $clientRef
+            ): array {
                 /* الترقيم الذري اليومي لكل فرع (نفس قاعدة orders_create):
                    الزيادة في جملة upsert واحدة، وبعدين قراية صريحة للعدّاد.
                    ⚠️ ممنوع LAST_INSERT_ID() هنا — في مسار الإدخال الجديد
                    (أول شحنة للفرع في اليوم) MySQL بيدوس عليها بالـid
                    المتولّد فأول رقم كان بيطلع = id الصف. (اتصلح 2026-08-19.)
                    الـFOR UPDATE على القراية منقول بالحرف من الأصل. */
-                $dayKey = OrderNumber::cairoDayKeyCompact();
-                DB::insert(
-                    'INSERT INTO order_counters (branch_id, day_key, counter, created_at)
-                     VALUES (?,?,1,?)
-                     ON DUPLICATE KEY UPDATE counter = counter + 1',
-                    [$branchId, $dayKey, $now]
-                );
-                $cnt = DB::select(
-                    'SELECT counter FROM order_counters WHERE branch_id = ? AND day_key = ? FOR UPDATE',
-                    [$branchId, $dayKey]
-                );
-                $orderNum = OrderNumber::format($branchCode, (int) ($cnt[0]->counter ?? 0));
+                /* 🔴 اليوم التجاري مش الميلادي (بلاغ 2026-09-02) — نفس قاعدة
+                   مسار الموظفين: أوردر بعد نص الليل تبع يوم امبارح التجاري. */
+                $dayKey = BizDay::keyCompact();
+                /* الترقيم بقى دالة تتنادى لكل أوردر ناتج — مع «كل طرد =
+                   أوردر بذاته» الطلب الواحد ممكن يستهلك أكتر من رقم. */
+                $allocOrderNum = function () use ($branchId, $dayKey, $now, $branchCode): string {
+                    DB::insert(
+                        'INSERT INTO order_counters (branch_id, day_key, counter, created_at)
+                         VALUES (?,?,1,?)
+                         ON DUPLICATE KEY UPDATE counter = counter + 1',
+                        [$branchId, $dayKey, $now]
+                    );
+                    $cnt = DB::select(
+                        'SELECT counter FROM order_counters WHERE branch_id = ? AND day_key = ? FOR UPDATE',
+                        [$branchId, $dayKey]
+                    );
+
+                    // نفس مفتاح العدّاد بالحرف — الرقم المطبوع لازم يطابق عدّاده
+                    return OrderNumber::format($branchCode, (int) ($cnt[0]->counter ?? 0), null, $dayKey);
+                };
 
                 // الطرود: snapshot الزون + جمع الفلوس
                 $zoneCache  = [];
@@ -913,10 +1051,24 @@ class CustomerAppController
                     if ($recvName === '') {
                         throw new ApiException('اكتب اسم المستلم لكل طرد');
                     }
-                    // ⚠️ التحقق من رقم المستلم **إجباري هنا** — على عكس
-                    // orders_create بتاع الموظفين. سبب: منظومة الثقة بتبني
-                    // على الرقم، وأوردر التطبيق مالوش موظف يراجعه.
-                    if ($recvPhone === '' || ! self::validPhone($recvPhone)) {
+
+                    /* 🔴 وضع «مش معايا بيانات المستلم»: العميل بيرفع صورة
+                       الريسيت والبيانات عليها. الواجهة بتبعت الرقم فاضي
+                       (customer.html) — والشرط اللي تحت كان بيرفض الفاضي
+                       دايمًا، فالوضع ده كان **بيفشل 100% من المرات** وخانة
+                       التليفون مخفية أصلًا فمفيش طريقة العميل يخرج من
+                       الحلقة. العمود «receiver_from_receipt» موجود في
+                       المخطط من الأصل ومحدش كان بيكتبه.
+
+                       الرقم لسه إجباري في الوضع العادي — منظومة الثقة
+                       بتبني عليه وأوردر التطبيق مالوش موظف يراجعه. */
+                    $fromReceipt = ! empty($d['fromReceipt']);
+                    if (! $fromReceipt) {
+                        if ($recvPhone === '' || ! self::validPhone($recvPhone)) {
+                            throw new ApiException('رقم المستلم غير صحيح في الطرد رقم ' . $no);
+                        }
+                    } elseif ($recvPhone !== '' && ! self::validPhone($recvPhone)) {
+                        // لو كتب رقم مع الريسيت لازم يكون صحيح
                         throw new ApiException('رقم المستلم غير صحيح في الطرد رقم ' . $no);
                     }
                     $zoneId = isset($d['zoneId']) && $d['zoneId'] !== '' && $d['zoneId'] !== null
@@ -931,9 +1083,11 @@ class CustomerAppController
 
                     /* snapshot الزون: الاسم والسعر بيتخزّنوا على الطرد نفسه
                        عشان تغيير تسعيرة المنطقة بعدين مايغيّرش أوردر قديم.
-                       ⚠️ هنا **السعر من الزون إجباري** — مفيش قبول لـ
-                       zonePrice من الجسم زي مسار الموظفين، عشان العميل
-                       مايسعّرش أوردره بنفسه. */
+                       ⚠️ السعر من الزون إجباري لعموم العملاء. الاستثناء
+                       (2026-09-02): عميل مفتوح له `can_edit_price` من
+                       إدارة العملاء بيتعامل زي المحل بالظبط — يبعت
+                       zonePrice بشرط مايقلش عن سعر المنطقة. البوابة هنا
+                       على السيرفر: قفل خانة الواجهة مش حماية. */
                     $parcels[] = [
                         'parcel_no'       => $no,
                         'receiver_name'   => $recvName,
@@ -941,7 +1095,7 @@ class CustomerAppController
                         'receiver_phone2' => trim((string) ($d['receiverPhone2'] ?? '')) ?: null,
                         'zone_id'         => $zoneId,
                         'zone_name'       => (string) $zone['area_name'],
-                        'zone_price'      => (float) $zone['price'],
+                        'zone_price'      => self::customerDeliveryPrice($c, $d, $zone, $no),
                         /* 🔴 الحارس هنا مش في الواجهة: الواجهة بتقفل الخانة بس
                            أي حد يقدر يبعت الحقل مباشرة للـAPI. العميل الجديد
                            بياخد صفر مهما بعت — من غير رسالة خطأ عشان الأوردر
@@ -949,75 +1103,150 @@ class CustomerAppController
                         'order_price'     => $codAllowed ? (float) ($d['orderPrice'] ?? 0) : 0.0,
                         'address'         => trim((string) ($d['address'] ?? '')) ?: null,
                         'note'            => trim((string) ($d['note'] ?? '')) ?: null,
+                        /* 🔴 التلاتة دول كانوا بيتبعتوا من التطبيق وبيترموا:
+                           • from_receipt — الشارة اللي بتقول للفرع والطيار
+                             إن البيانات على الصورة.
+                           • lat/lng — العميل بيحدّد نقطة التسليم على
+                             الخريطة، والقيمة كانت بتضيع فخريطة التتبّع
+                             بتفضل بلا دبوس وصول.
+                           • images — خطوة «المرفقات» كلها كانت بلا أثر:
+                             الصور بترفع على /api/upload وتفضل يتيمة على
+                             الديسك ومحدش يشوفها. */
+                        'from_receipt'    => $fromReceipt ? 1 : 0,
+                        'lat'             => self::coord($d['lat'] ?? null),
+                        'lng'             => self::coord($d['lng'] ?? null),
+                        'geo_src'         => trim((string) ($d['geoSrc'] ?? '')) ?: null,
+                        'images'          => is_array($d['images'] ?? null) ? $d['images'] : [],
                     ];
                 }
-                // 🔴 فلوس: مجموع خام من غير round() — منقول بالحرف
-                $totalPrice   = array_sum(array_column($parcels, 'zone_price'));
-                $storePrepaid = array_sum(array_column($parcels, 'order_price'));
+                /* ═══ 🔴 قرار صاحب النظام 2026-09-01: كل طرد = أوردر منفرد بذاته ═══
+                   نفس قاعدة مسار الموظفين (OrdersController::store): حسابات
+                   الطيار بتعد الأوردرات مش الطرود. العميل بيكتب كل المستلمين
+                   مرة واحدة زي ما هو متعوّد، والسيرفر بيفرّق تلقائيًا —
+                   أوردر مستقل بترقيمه وفلوسه لكل طرد، جوه نفس المعاملة. */
+                $reqPieces = max(1, (int) ($b['piecesCount'] ?? 1));
+                $orderIds  = [];
+                foreach ($parcels as $pi => $p) {
+                    $orderNum = $allocOrderNum();
 
-                DB::insert(
-                    'INSERT INTO orders
-                       (order_num, branch_id, sender_name, sender_phone, sender_phone2, sender_address,
-                        sender_zone_id, sender_lat, sender_lng,
-                        status, status_since, created_at,
-                        total_delivery_price, store_prepaid,
-                        source, added_by, added_by_role,
-                        customer_id, customer_name, customer_phone,
-                        pieces_count, qr_code, notes)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                    [
-                        $orderNum, $branchId,
-                        $c['display_name'] ?: 'عميل التطبيق',
-                        $c['phone1'], $c['phone2'],
-                        ($addr ? $addr['full_address'] : null) ?: $c['address'],
-                        $senderZoneId,
-                        $addr && $addr['lat'] !== null ? (float) $addr['lat'] : ($c['lat'] !== null ? (float) $c['lat'] : null),
-                        $addr && $addr['lng'] !== null ? (float) $addr['lng'] : ($c['lng'] !== null ? (float) $c['lng'] : null),
-                        'processing', $now, $now,
-                        $totalPrice, $storePrepaid,
-                        'customer',
-                        $c['legacy_key'] ?: ('customer#' . $cid),   // زي القديم: added_by = uid العميل
-                        'customer',
-                        $cid, $c['display_name'], $c['phone1'],
-                        count($parcels), $orderNum,
-                        trim((string) ($b['notes'] ?? '')) ?: null,
-                    ]
-                );
-                $orderId = (int) DB::getPdo()->lastInsertId();
+                    DB::insert(
+                        'INSERT INTO orders
+                           (order_num, branch_id, origin_branch_id, sender_name, sender_phone, sender_phone2, sender_address,
+                            sender_zone_id, sender_lat, sender_lng, geo_src,
+                            status, status_since, created_at,
+                            total_delivery_price, store_prepaid,
+                            source, added_by, added_by_role,
+                            customer_id, customer_name, customer_phone,
+                            pieces_count, qr_code, notes, client_ref)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [
+                            /* 🔴 `origin_branch_id` اتنسي هنا لما اتضاف في
+                               OrdersController — فأوردرات تطبيق العميل كانت
+                               بتتسجّل بلا فرع أصلي، ومع نقل الطيار بين الفروع
+                               كان الفرع اللي أنشأ الأوردر بيضيع خالص. */
+                            $orderNum, $branchId, $branchId,
+                            /* المكتوب في الفورم بيغلب، والمحفوظ احتياطي —
+                               اتحسبوا فوق قبل المعاملة. */
+                            $senderName,
+                            $senderPhone, $senderPhone2,
+                            $senderAddr ?: $c['address'],
+                            $senderZoneId,
+                            $senderLat !== null ? (float) $senderLat : ($c['lat'] !== null ? (float) $c['lat'] : null),
+                            $senderLng !== null ? (float) $senderLng : ($c['lng'] !== null ? (float) $c['lng'] : null),
+                            $geoSrc,
+                            'processing', $now, $now,
+                            // فلوس الأوردر = فلوس طرده هو: سعر توصيل زونه وعهدته
+                            $p['zone_price'], $p['order_price'],
+                            'customer',
+                            $c['legacy_key'] ?: ('customer#' . $cid),   // زي القديم: added_by = uid العميل
+                            'customer',
+                            $cid, $c['display_name'], $c['phone1'],
+                            /* 🔴 عدد القطع = اللي كتبه العميل في العدّاد (piecesCount)
+                               — بيخص الأوردر الواحد. مع التفريق مافيش تفصيلة
+                               قطع لكل طرد، فالعدّاد بيتسجّل لما يكون فيه طرد
+                               واحد بس، وغير كده كل أوردر ناتج بياخد ١. */
+                            count($parcels) === 1 ? $reqPieces : 1,
+                            $orderNum,
+                            /* 📝 ملاحظة الأوردر الناتج = ملاحظة طرده هو ثم العامة (نفس
+                               قاعدة OrdersController — طلب 2026-09-03: «كل ملاحظة
+                               خاصة بطرد») */
+                            OrdersController::orderNotesFor($p['note'] ?? null, $b['notes'] ?? null),
+                            // اللاحقة #رقم-الطرد عشان المفتاح الفريد يسمح بالتفريق
+                            $clientRef !== null ? $clientRef . '#' . $pi : null,
+                        ]
+                    );
+                    $orderId    = (int) DB::getPdo()->lastInsertId();
+                    $orderIds[] = $orderId;
 
-                foreach ($parcels as $p) {
                     DB::insert(
                         'INSERT INTO order_deliveries
                            (order_id, parcel_no, receiver_name, receiver_phone, receiver_phone2,
-                            zone_id, zone_name, zone_price, order_price, address, note, status, created_at)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                            receiver_from_receipt, zone_id, zone_name, zone_price, order_price,
+                            address, note, status, lat, lng, geo_src, created_at)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         [
-                            $orderId, $p['parcel_no'], $p['receiver_name'], $p['receiver_phone'], $p['receiver_phone2'],
-                            $p['zone_id'], $p['zone_name'], $p['zone_price'], $p['order_price'],
-                            $p['address'], $p['note'], 'processing', $now,
+                            // parcel_no ثابت ١ — الأوردر الناتج طرده واحد بطبيعته
+                            $orderId, 1, $p['receiver_name'], $p['receiver_phone'], $p['receiver_phone2'],
+                            $p['from_receipt'], $p['zone_id'], $p['zone_name'], $p['zone_price'], $p['order_price'],
+                            $p['address'], $p['note'], 'processing', $p['lat'], $p['lng'], $p['geo_src'], $now,
                         ]
                     );
+                    // صور الطرد — نفس جدول ونفس شكل مسار الموظفين
+                    $did = (int) DB::getPdo()->lastInsertId();
+                    foreach ($p['images'] as $url) {
+                        $url = trim((string) $url);
+                        if ($url !== '') {
+                            DB::insert(
+                                'INSERT INTO order_images (delivery_id, url, created_at) VALUES (?,?,?)',
+                                [$did, mb_substr($url, 0, 500), $now]
+                            );
+                        }
+                    }
                 }
 
-                // أوردر جديد جاي من تطبيق العميل — لوحة الفرع اللي `branchId`
-                // بتاعه اتحدد من زون الاستلام هي اللي هتشوفه
-                $this->broadcastOrder($orderId);
+                foreach ($orderIds as $oid) {
+                    // أوردر جديد جاي من تطبيق العميل — لوحة الفرع اللي `branchId`
+                    // بتاعه اتحدد من زون الاستلام هي اللي هتشوفه
+                    $this->broadcastOrder($oid);
 
-                /* رسالة الواتساب للمستلمين. ⚠️ المسار ده بيفرض رقم مستلم
-                   صالح لكل طرد فوق (`validPhone`)، فقواعد التخطّي بتاعة
-                   «مفيش رقم» و«رقم مش صالح» عمليًا مابتتحققش هنا — بتفضل
-                   شغّالة لأن الأوردر ممكن يتعدّل بعدين من مسار الموظفين. */
-                $this->notifyOrderReceivers($orderId);
+                    /* رسالة الواتساب للمستلمين. ⚠️ المسار ده بيفرض رقم مستلم
+                       صالح لكل طرد فوق (`validPhone`)، فقواعد التخطّي بتاعة
+                       «مفيش رقم» و«رقم مش صالح» عمليًا مابتتحققش هنا — بتفضل
+                       شغّالة لأن الأوردر ممكن يتعدّل بعدين من مسار الموظفين.
+                       كل أوردر ناتج بيبعت لمستلمه هو برقمه هو — مفيش تكرار. */
+                    $this->notifyOrderReceivers($oid);
+                }
 
-                return $orderId;
+                return $orderIds;
             });
         } catch (QueryException $e) {
+            /* سباق مانع التكرار: ضغطتان بنفس clientRef في نفس اللحظة —
+               التانية وقعت على uq_orders_client_ref. بنرجّع أوردرات الأولى. */
+            if ($clientRef !== null && str_contains($e->getMessage(), 'uq_orders_client_ref')) {
+                $dupIds = array_map(
+                    fn ($r) => (int) $r->id,
+                    DB::select('SELECT id FROM orders WHERE client_ref LIKE ? ORDER BY id', [$clientRef . '#%'])
+                );
+                if ($dupIds) {
+                    return ApiResponse::ok([
+                        'order'     => self::outOrder($c, OrderWire::full($dupIds[0])),
+                        'orders'    => array_map(fn (int $oid) => self::outOrder($c, OrderWire::full($oid)), $dupIds),
+                        'duplicate' => true,
+                    ]);
+                }
+            }
             // نفس catch(PDOException) في الأصل — رسالة خاصة بالمسار
             Log::error('customer_order_create: ' . $e->getMessage());
             throw new ApiException('خطأ أثناء حفظ الأوردر — جرّب تاني', 500);
         }
 
-        return ApiResponse::ok(['order' => OrderWire::full($orderId)]);
+        /* `order` فضل بنفس شكله القديم (أول أوردر) عشان العقد مايتكسرش،
+           و`orders` بترجّع كل الناتج من التفريق — شاشة النجاح بتعرض كل
+           الأرقام، وخصم المحفظة بيلف عليهم واحد واحد. */
+        return ApiResponse::ok([
+            'order'  => self::outOrder($c, OrderWire::full($orderIds[0])),
+            'orders' => array_map(fn (int $oid) => self::outOrder($c, OrderWire::full($oid)), $orderIds),
+        ]);
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -1105,6 +1334,235 @@ class CustomerAppController
      * `_myParcels` بيبقى `[0]` لو مفيش طرد مطابق: الواجهة بتعرض أول طرد
      * كـfallback بدل شاشة فاضية.
      */
+    /**
+     * الشحنة الجاية للعميل: مكان **المُرسِل** بيتصفّر قبل ما يخرج للجهاز.
+     *
+     * ليه: العميل المستلم مالوش أي علاقة بمكان المحل اللي باعت له. المكان
+     * ده كان بيتعرض كدبوس «الاستلام» على خريطة التتبّع، والدبوس اتشال —
+     * بس الإحداثيات كانت لسه بتوصل الجهاز مع **كل** استطلاع (كل ٨ ثواني)
+     * وأي حد يفتح DevTools يشوفها. إخفاء الدبوس بيحلّ العرض؛ التصفير ده
+     * بيحلّ التسريب.
+     *
+     * الدستور نفسه بتاع `incomingMask` تحت: **ممنوع حذف اسم حقل** —
+     * بنصفّر القيمة بس، عشان الواجهة تفضل تلاقي المفاتيح اللي بتقراها.
+     *
+     * اللي **مابيتصفّرش** عن قصد: `senderName` (العميل لازم يعرف الشحنة
+     * جايّاله من مين) و`senderPhone` (بيكلّم المحل لو فيه مشكلة في الطلب).
+     * الاسم والتليفون مابيكشفوش مكان.
+     */
+    private static function hidePickup(array $o): array
+    {
+        /* `senderZoneName` كان ناجي من القايمة دي — وهو اسم **منطقة**
+           المحل. مش إحداثيات بالظبط، بس بيحدّد المكان لحد كبير («وسط
+           البلد» · «مصر الجديدة»)، وده نفس اللي بنقفله. */
+        foreach (['senderLat', 'senderLng', 'senderAddress', 'senderPhone', 'senderPhone2',
+                  'senderZoneId', 'senderZoneName'] as $k) {
+            if (array_key_exists($k, $o)) {
+                $o[$k] = null;
+            }
+        }
+        // مشتق من الإحداثيات — لازم يتمشى معاهم وإلا الواجهة تفتكر إن فيه دبوس
+        if (array_key_exists('geoSender', $o)) {
+            $o['geoSender'] = false;
+        }
+
+        return $o;
+    }
+
+    /**
+     * طرد **مش** بتاع العميل ده: القيم بتتفضّى والمفاتيح بتفضل مكانها.
+     *
+     * ليه التفضية مش الحذف من المصفوفة: `_myParcels` بتشاور على **رقم**
+     * الطرد جوه `deliveries`، والواجهة كمان بتعد الطرود عشان تقرر تعرض
+     * رقم الطرد المركّب (`CAI-260829-001-2`) ولا لأ. لو قصّينا المصفوفة
+     * الاتنين يبوظوا: العميل يشوف طرد حد تاني، أو يشوف رقم شحنة ناقص
+     * اللاحقة اللي على الباركود اللي في إيده.
+     *
+     * `parcelNo` بيفضل — ده رقم ترتيبي (1، 2، 3) مش بيانات شخصية.
+     */
+    private static function blankParcel(array $d): array
+    {
+        foreach (['id', 'key', 'receiverId', 'receiverName', 'receiverPhone', 'receiverPhone2',
+                  'zoneId', 'zoneName', 'zonePrice', 'orderPrice', 'address', 'note',
+                  'lat', 'lng', 'status'] as $k) {
+            if (array_key_exists($k, $d)) {
+                $d[$k] = null;
+            }
+        }
+        if (array_key_exists('receiverFromReceipt', $d)) {
+            $d['receiverFromReceipt'] = false;
+        }
+        // مصفوفة مش قيمة — الفاضي بتاعها [] مش null، عشان أي map مايقعش
+        if (array_key_exists('images', $d)) {
+            $d['images'] = [];
+        }
+
+        return $d;
+    }
+
+    /**
+     * الشحنة الجايّة للعميل: كل اللي مش بتاعه بيتفضّى قبل ما يخرج للجهاز.
+     *
+     * 🔴 اللي كان بيتبعت قبل كده لعميل جايّاله طرد في أوردر متعدد الطرود:
+     * **أسماء وتليفونات وعناوين وإحداثيات ومبالغ تحصيل باقي المستلمين**،
+     * زائد شروط المحل المالية مع الشركة. الشاشة كانت بتعرض طرده هو بس،
+     * فالبيانات كانت بتوصل الجهاز ومحدش شايفها — لحد ما حد يفتح أدوات
+     * المطوّر. «مش معروض» مش «مش متبعت».
+     *
+     * التلات مجموعات:
+     *   1) مكان المُرسِل وتليفوناته — hidePickup فوق
+     *   2) فلوس المحل مع الشركة + تليفون صاحب الطلب + ملاحظات المحل للفرع
+     *   3) طرود الناس التانية — بتتفضّى في مكانها
+     *
+     * اللي **بيفضل** عن قصد: اسم المحل (لازم يعرف الشحنة جايّاله من مين)،
+     * ومبلغ التحصيل وسعر التوصيل **بتوع طرده هو** (هو اللي هيدفعهم)،
+     * وقيمة البضاعة والفرع والطيار وكل التوقيتات.
+     *
+     * @param  int[]  $mineIdx  أرقام طرود العميل جوه deliveries
+     */
+    private static function scrubIncoming(array $o, array $mineIdx): array
+    {
+        $o = self::hidePickup($o);
+
+        /* شروط المحل التجارية مع الشركة — مالهاش أي علاقة بالمستلم،
+           والتطبيق مابيقراش أي مفتاح منهم أصلًا (اتأكدت بالبحث في
+           public/customer.html: صفر قراءات). */
+        foreach (['totalDeliveryPrice', 'storePrepaid', 'storePrepaidNote', 'walletUsed',
+                  'netDeliveryPrice', 'customerPhone', 'notes',
+                  /* قيمة البضاعة **للأوردر كله** — في أوردر متعدد الطرود دي
+                     بضاعة ناس تانية معاها. الشاشة بتعرض السطر ده بشرط
+                     (`o.goodsValue ? ... : ""`) فبيختفي لوحده. */
+                  'goodsValue',
+                  // اسم مستخدم الموظف/المحل اللي أكّد التسليم — مالوش لازمة عند العميل
+                  'handedOverBy'] as $k) {
+            if (array_key_exists($k, $o)) {
+                $o[$k] = null;
+            }
+        }
+
+        /* التقييمات: العميل بيقرا تقييمه هو بس (`ratings.customer`).
+           `ratings.store` هو تقييم **المحل للمستلم** — يعني رأي المحل فيه
+           مكتوب بالنص، وكان بيتبعت لنفس الشخص اللي متقيّم فيه. */
+        if (isset($o['ratings']) && is_array($o['ratings'])) {
+            $o['ratings'] = array_key_exists('customer', $o['ratings'])
+                ? ['customer' => $o['ratings']['customer']]
+                : null;
+        }
+
+        $mine = array_flip($mineIdx);
+        foreach (($o['deliveries'] ?? []) as $i => $d) {
+            if (! isset($mine[$i]) && is_array($d)) {
+                $o['deliveries'][$i] = self::blankParcel($d);
+            }
+        }
+
+        return $o;
+    }
+
+    /**
+     * زوج (الأوردر، الطرد) جاهز للخروج في مسار `incoming`.
+     *
+     * صاحب الطلب بياخد الأوردر زي ما هو وأي طرد فيه. اللي جايّاله طرد
+     * بياخد نسخة مقنّعة، **والطرد المرجّع لازم يبقى طرده هو** — الاختيار
+     * بالإندكس (أو الوقوع على أول طرد لما الباركود مالوش لاحقة) كان
+     * بيرجّع طرد حد تاني بالكامل.
+     *
+     * بترجّع null يعني مالوش طرد في الأوردر ده ومش صاحبه = مايشوفش حاجة.
+     *
+     * @param  int|null  $preferParcelNo  رقم الطرد اللي على الباركود لو موجود
+     * @return array{0: array, 1: array}|null
+     */
+    private static function incomingPair(array $c, array $order, array $ownSet, ?int $preferParcelNo): ?array
+    {
+        $parcels = $order['deliveries'] ?? [];
+
+        if (self::ownsOrder($c, $order)) {
+            $d = null;
+            foreach ($parcels as $dd) {
+                if ($preferParcelNo === null || (int) ($dd['parcelNo'] ?? 0) === $preferParcelNo) {
+                    $d = $dd;
+                    break;
+                }
+            }
+            $d ??= $parcels[0] ?? null;
+
+            return $d === null ? null : [$order, $d];
+        }
+
+        $mineIdx = self::mineParcelIdx($order, $ownSet);
+        if (! $mineIdx) {
+            return null;
+        }
+        $pick = $mineIdx[0];
+        if ($preferParcelNo !== null) {
+            foreach ($mineIdx as $i) {
+                if ((int) ($parcels[$i]['parcelNo'] ?? 0) === $preferParcelNo) {
+                    $pick = $i;
+                    break;
+                }
+            }
+        }
+        $scrubbed = self::scrubIncoming($order, $mineIdx);
+
+        return [$scrubbed, $scrubbed['deliveries'][$pick]];
+    }
+
+    /** أرقام طرود العميل جوه الأوردر — فاضية يعني مافيش طرد ليه */
+    private static function mineParcelIdx(array $order, array $variantSet): array
+    {
+        $idx = [];
+        foreach ($order['deliveries'] ?? [] as $i => $d) {
+            if (self::phoneMatches($variantSet, $d['receiverPhone'] ?? null)) {
+                $idx[] = $i;
+            }
+        }
+
+        return $idx;
+    }
+
+    /**
+     * الأوردر ده بتاع العميل نفسه (هو اللي طلبه) ولا شحنة جايّاله؟
+     *
+     * نفس الشرطين اللي في `ownedOrder` بالحرف — متجمّعين هنا عشان أي
+     * مسار جديد يسأل السؤال ده بنفس الإجابة، مش بنسخة تانية من الشرط.
+     */
+    private static function ownsOrder(array $c, array $order): bool
+    {
+        $uid = (string) ($c['legacy_key'] ?? '');
+
+        return ((int) ($order['customerId'] ?? 0) === (int) $c['id'])
+            || ($uid !== '' && ($order['source'] ?? '') === 'customer' && ($order['addedBy'] ?? '') === $uid);
+    }
+
+    /**
+     * البوابة الوحيدة اللي كائن الأوردر بيخرج منها لجهاز العميل.
+     *
+     * أوردره هو → بيخرج زي ما هو. شحنة جايّاله → بيتقنّع.
+     *
+     * كل مسار بيرجّع أوردر لازم يعدّي من هنا. المسارات اللي بترجّع أوردر
+     * العميل نفسه بس (الإنشاء · الإلغاء) بتعدّي كمان — النداء عندها بلا
+     * أثر، والفايدة إن أي مسار جديد بياخد الحماية من غير ما حد يفتكر.
+     */
+    private static function outOrder(array $c, ?array $order): ?array
+    {
+        if ($order === null || self::ownsOrder($c, $order)) {
+            return $order;
+        }
+        $variantSet = array_flip(self::phoneVariants($c['phone1'] ?? null, $c['phone2'] ?? null));
+        $mineIdx = self::mineParcelIdx($order, $variantSet);
+        $out = self::scrubIncoming($order, $mineIdx);
+
+        /* 🔴 العلامتين دول لازم يتحطّوا هنا كمان مش في `annotateOrders` بس.
+           الواجهة بتقرا `_myParcels[0]` عشان تعرف أنهي طرد تعرضه؛ من
+           غيرهم بتقع على `deliveries[0]` — اللي بقى **مفضّى** دلوقتي،
+           فالعميل يشوف كارت فاضي. بيحصل لما التطبيق يفتح من إشعار
+           والقايمة لسه ما وصلتش، فأول بيانات تيجي تبقى من `/track`. */
+        $out['_incoming']  = true;
+        $out['_myParcels'] = $mineIdx ?: [0];
+
+        return $out;
+    }
+
     private static function annotateOrders(array $orders, array $c, array $variants): array
     {
         $variantSet = array_flip($variants);
@@ -1127,6 +1585,11 @@ class CustomerAppController
             }
             $o['_incoming']  = true;
             $o['_myParcels'] = $mineIdx ?: [0];
+            /* كل اللي مش بتاع العميل بيتفضّى هنا — الشرح فوق scrubIncoming.
+               بنمرّر `$mineIdx` الأصلي مش `?: [0]`: لو مافيش طرد ليه
+               (مايحصلش عمليًا — استعلام القايمة نفسه بيختار بمطابقة رقمه)
+               الصح إن كل الطرود تتفضّى مش إن أول طرد بتاع حد تاني يعدّي. */
+            $o = self::scrubIncoming($o, $mineIdx);
         }
         unset($o);
 
@@ -1271,7 +1734,22 @@ class CustomerAppController
         $ownSet      = array_flip($ownVariants);
         $completed   = (int) ($c['profile_completed'] ?? 0) === 1;
 
-        /** الأوردر ده يخص العميل؟ (بحسابه أو برقم تليفونه في أحد الطرود) */
+        /**
+         * الأوردر ده **يخص** العميل؟ (بحسابه أو برقم تليفونه في أحد الطرود)
+         *
+         * 🔴 خلّي بالك من الفرق بين ده وبين `ownsOrder`، وهو الفرق اللي
+         * فتح تسريب: الاتنين بيجاوبوا على سؤالين مختلفين.
+         *
+         *   • `$isOwned` هنا = سؤال **الوصول**: يحق له يفتح الأوردر ده؟
+         *     أيوه، لأن فيه طرد باسمه.
+         *   • `ownsOrder` = سؤال **النطاق**: هو اللي طلب الأوردر ده؟ لأ،
+         *     المحل هو اللي طلبه وهو مجرد مستلم طرد فيه.
+         *
+         * الوصول مابيدّيش نطاق. المسار ده كان بيستعمل إجابة الوصول
+         * للاتنين، فمستلم طرد واحد في أوردر خمس طرود كان بياخد الأوردر
+         * كامل ببيانات الأربعة التانيين. الوصول بيقرّره `$isOwned`،
+         * والنطاق بيقرّره `outOrder`/`scrubIncoming` زي كل مسار تاني.
+         */
         $isOwned = function (array $order) use ($c, $ownSet): bool {
             if ((int) ($order['customerId'] ?? 0) === (int) $c['id']) {
                 return true;
@@ -1346,7 +1824,25 @@ class CustomerAppController
             }
 
             if (! $owned) {
+                /* 🔴 باركود من غير لاحقة طرد على أوردر متعدد الطرود:
+                   مافيش طريقة نعرف أنهي طرد بتاع اللي بيمسح، والوقوع على
+                   أول طرد معناه إننا بندّي غريب اسم وتليفون وعنوان حد
+                   تاني. الرد بيبقى فاضي — الباركود اللي في إيده عليه
+                   اللاحقة أصلًا. */
+                if ($parcelNo === null && count($order['deliveries']) > 1) {
+                    return ApiResponse::ok(['items' => []]);
+                }
                 [$order, $d] = self::incomingMask($order, $d);
+            } else {
+                /* له حق يشوف الأوردر — بس مش بالضرورة كله. لو مش هو اللي
+                   طلبه، بياخد نسخة مفضّى منها كل اللي مش بتاعه، والطرد
+                   المرجّع لازم يبقى **طرده هو** مش اللي وقع عليه الاختيار
+                   بالإندكس. */
+                $pair = self::incomingPair($c, $order, $ownSet, $parcelNo);
+                if ($pair === null) {
+                    return ApiResponse::ok(['items' => []]);
+                }
+                [$order, $d] = $pair;
             }
 
             return ApiResponse::ok(['items' => [['order' => $order, 'd' => $d]]]);
@@ -1389,15 +1885,24 @@ class CustomerAppController
         $items = [];
         foreach (OrderWire::batch($rows) as $order) {
             $owned = $freeSearch === null || $isOwned($order);
-            foreach ($order['deliveries'] as $d) {
-                if (self::phoneMatches($variantSet, $d['receiverPhone'] ?? null)) {
-                    if (! $owned) {
-                        [$mo, $md] = self::incomingMask($order, $d);
-                        $items[] = ['order' => $mo, 'd' => $md];
-                        continue;
-                    }
-                    $items[] = ['order' => $order, 'd' => $d];
+            /* الأوردر بيعدّي على البوابة **مرة واحدة** قبل ما يتوزّع على
+               طروده: صاحب الطلب بياخده زي ما هو، واللي جايّاله طرد بياخد
+               نسخة مفضّى منها كل اللي مش بتاعه. */
+            $out = $owned ? self::outOrder($c, $order) : $order;
+            foreach (($order['deliveries'] ?? []) as $i => $orig) {
+                /* المطابقة على النسخة **الأصلية**: المقنّعة رقم مستلمها
+                   بقى null فمكانش هيطابق حاجة. */
+                if (! self::phoneMatches($variantSet, $orig['receiverPhone'] ?? null)) {
+                    continue;
                 }
+                if (! $owned) {
+                    [$mo, $md] = self::incomingMask($order, $orig);
+                    $items[] = ['order' => $mo, 'd' => $md];
+                    continue;
+                }
+                /* الطرد بيتاخد من النسخة المقنّعة: لو طرده هو، هو زي ما
+                   هو؛ ولو طرد حد تاني طابق بحث حر، بيطلع مفضّى. */
+                $items[] = ['order' => $out, 'd' => $out['deliveries'][$i] ?? $orig];
             }
         }
 
@@ -1445,6 +1950,11 @@ class CustomerAppController
         $c = $this->customerRequire($request, true);
         $order = self::ownedOrder($c, $id);
 
+        /* نفس تقنيع القايمة: `annotateOrders` مابتعدّيش على المسار ده،
+           فالبوابة بتتنده هنا صراحةً. */
+        $isMine = self::ownsOrder($c, $order);
+        $order  = self::outOrder($c, $order);
+
         /* تليفون الطيار وموقعه — بيتقروا **بعد** فحص الملكية عن قصد.
 
            🔴 الموقع بيتكشف **بس** والرحلة فعليًا باتجاه العميل ده:
@@ -1481,6 +1991,15 @@ class CustomerAppController
            العميل ده (الشحنات الجاية ليه) وإلا أول طرد له إحداثيات. */
         $destination = null;
         $variants = self::phoneVariants($c['phone1'] ?? null, $c['phone2'] ?? null);
+        /* 🔴 المقارنة هنا كانت `in_array(..., true)` — مطابقة نص حرفية،
+           بينما كل مكان تاني في الملف بيستخدم `phoneMatches` اللي بيطبّع
+           الرقم (بيشيل المسافات والرموز والصفر البادئ). الفرق ده مش
+           نظري: رقم متخزّن «010 9999 9999» بمسافات — وده شكل شايع جاي
+           من نسخ/لصق أو استيراد — بيعدّي في `phoneMatches` (فالعميل
+           بيدخل على الأوردر عادي) وبيسقط في `in_array`. ساعتها الحلقة
+           كانت بتقع على أول طرد له إحداثيات = **بيت مستلم تاني** كدبوس
+           «مكان التسليم» على خريطة العميل. */
+        $variantSet = array_flip($variants);
         $dRows = DB::select(
             'SELECT receiver_phone, lat, lng FROM order_deliveries WHERE order_id = ? ORDER BY id',
             [(int) $order['id']]
@@ -1490,11 +2009,18 @@ class CustomerAppController
                 continue;
             }
             $pick = ['lat' => (float) $r->lat, 'lng' => (float) $r->lng];
-            if ($variants && in_array((string) $r->receiver_phone, $variants, true)) {
+            if ($variants && self::phoneMatches($variantSet, $r->receiver_phone)) {
                 $destination = $pick;
                 break;
             }
-            $destination ??= $pick;
+            /* 🔴 الوقوع على أول طرد له إحداثيات مسموح **لصاحب الأوردر بس**:
+               كل المستلمين فيه ناسه هو. في الشحنة الجايّة، الوقوع ده معناه
+               إن دبوس «مكان التسليم» على خريطة العميل يبقى **بيت مستلم
+               تاني** — نفس التسريب اللي بنقفله فوق، بس معروض على الخريطة
+               مش مدفون في الرد. لو رقمه ما طابقش، الخريطة تفضل بلا دبوس. */
+            if ($isMine) {
+                $destination ??= $pick;
+            }
         }
 
         return ApiResponse::out([
@@ -1651,7 +2177,7 @@ class CustomerAppController
             return (int) $order['id'];
         });
 
-        return ApiResponse::ok(['order' => OrderWire::full($orderId)]);
+        return ApiResponse::ok(['order' => self::outOrder($c, OrderWire::full($orderId))]);
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -1693,7 +2219,10 @@ class CustomerAppController
             );
         });
 
-        return ApiResponse::ok(['order' => OrderWire::full((int) $order['id'])]);
+        /* 🔴 المسار ده **يوصل له المستلم**: `ownedOrder` بتدّي حق التقييم
+           لصاحب الشحنة الجايّة كمان، فالرد هنا كان بيرجّع الأوردر كامل
+           لعميل مش صاحبه. البوابة لازم تتنده هنا زي أي مخرج تاني. */
+        return ApiResponse::ok(['order' => self::outOrder($c, OrderWire::full((int) $order['id']))]);
     }
 
     /* ═══════════════════════════════════════════════════════════════

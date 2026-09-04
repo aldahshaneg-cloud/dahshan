@@ -324,6 +324,7 @@ CREATE TABLE `custody_transactions` (
   `pilot_id` bigint(20) unsigned NOT NULL COMMENT 'الطيار صاحب العهدة',
   `type` varchar(20) NOT NULL COMMENT 'give=تسليم عهدة, return=ردّ عهدة, order_pending=معلّق أوردر, order_extra=زيادة أوردر',
   `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `reason` varchar(190) DEFAULT NULL COMMENT 'سبب الحركة — إجباري من الواجهة على التسليم والردّ، وتلقائي على حركات التسوية',
   `store_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الخزنة اللي اتحركت منها/ليها النقدية',
   `branch_id` bigint(20) unsigned DEFAULT NULL,
   `created_by` varchar(190) DEFAULT NULL COMMENT 'اسم مستخدم منشئ الحركة',
@@ -432,6 +433,7 @@ CREATE TABLE `customers` (
   `default_zone_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الزون الافتراضي (بيحدد فرع الإرسال)',
   `default_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع الافتراضي المشتق من الزون',
   `profile_completed` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'أكمل بياناته (موبايل + عنوان) بعد أول دخول',
+  `can_edit_price` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'مفتوح له تعديل سعر التوصيل زي المحلات (بحد أدنى سعر المنطقة) — بيتفتح من إدارة العملاء',
   `blocked` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'محظور من استخدام التطبيق',
   `blocked_at` datetime DEFAULT NULL,
   `blocked_by` varchar(190) DEFAULT NULL COMMENT 'مين حظره (اسم/إيميل الموظف)',
@@ -487,6 +489,31 @@ CREATE TABLE `egypt_governorates` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_egypt_governorates_name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='محافظات مصر — بديل القوائم المكررة في الكود';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `error_alerts` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `signature` char(40) NOT NULL COMMENT 'sha1(نوع العطل + الملف + السطر) — مفتاح التجميع',
+  `title` varchar(190) NOT NULL COMMENT 'سطر واحد: نوع العطل ورسالته',
+  `detail` text DEFAULT NULL COMMENT 'التفاصيل وأول 6 إطارات من المكدس',
+  `url` varchar(300) DEFAULT NULL COMMENT 'المسار اللي حصل فيه العطل',
+  `method` varchar(10) DEFAULT NULL,
+  `actor` varchar(190) DEFAULT NULL COMMENT 'المستخدم ودوره وقت العطل',
+  `occurrences` int(11) NOT NULL DEFAULT 1 COMMENT 'عدد مرات التكرار من أول ظهور',
+  `first_seen_at` datetime NOT NULL COMMENT 'أول ظهور (UTC)',
+  `last_seen_at` datetime NOT NULL COMMENT 'آخر ظهور (UTC)',
+  `notified_at` datetime DEFAULT NULL COMMENT 'آخر مرة اتبعت فيها تنبيه — أساس فترة التهدئة',
+  `notify_status` varchar(190) DEFAULT NULL COMMENT 'نتيجة آخر إرسال: المزوّد وحالة كل رقم',
+  `resolved_at` datetime DEFAULT NULL COMMENT 'الإدارة علّمته متصلّح — بيختفي من القايمة النشطة',
+  `resolved_by` varchar(190) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_error_alerts_signature` (`signature`),
+  KEY `idx_error_alerts_last_seen` (`last_seen_at`),
+  KEY `idx_error_alerts_notified` (`notified_at`),
+  KEY `idx_error_alerts_resolved` (`resolved_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='أعطال الإنتاج مجمّعة بالبصمة — أساس تنبيه الواتساب ولوحة الأعطال';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -1023,11 +1050,36 @@ CREATE TABLE `order_transfers` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `order_urges` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `order_id` bigint(20) unsigned NOT NULL COMMENT 'الأوردر اللي المحل بيستعجله',
+  `urged_by` varchar(190) NOT NULL COMMENT 'اسم مستخدم المحل اللي دوس الزرار',
+  `urged_at` datetime NOT NULL COMMENT 'وقت الاستعجال (UTC) — أساس الحد الزمني',
+  `target` varchar(10) NOT NULL COMMENT 'راح لمين: branch = الأوردر لسه في المكتب · pilot = متحمّل على طيار',
+  `branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع وقت الاستعجال',
+  `pilot_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الطيار لو الأوردر كان متحمّل عليه',
+  `note` varchar(190) DEFAULT NULL COMMENT 'ملاحظة اختيارية من المحل',
+  `seen_at` datetime DEFAULT NULL COMMENT 'وقت ما المستهدف فتح التنبيه — NULL = لسه',
+  `seen_by` varchar(190) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_order_urges_order` (`order_id`,`urged_at`),
+  KEY `idx_order_urges_branch` (`branch_id`,`urged_at`),
+  KEY `idx_order_urges_pilot` (`pilot_id`,`urged_at`),
+  KEY `idx_order_urges_seen` (`seen_at`),
+  CONSTRAINT `fk_order_urges_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
+  CONSTRAINT `fk_order_urges_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_order_urges_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='استعجال المحل للأوردر — صف لكل ضغطة، وأساس الحد الزمني وعدّاد الإلحاح';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `orders` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `order_num` varchar(30) NOT NULL COMMENT 'رقم الأوردر — ترقيم يومي بالفرع (من order_counters)',
   `branch_id` bigint(20) unsigned NOT NULL COMMENT 'الفرع المسؤول عن الأوردر',
+  `origin_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع اللي أنشأ الأوردر — مابيتغيّرش مع النقل بين الفروع',
   `sender_id` bigint(20) unsigned DEFAULT NULL COMMENT 'مرجع المُرسِل المحفوظ في جدول senders لو معروف',
   `sender_name` varchar(190) DEFAULT NULL COMMENT 'اسم المُرسِل (snapshot)',
   `sender_phone` varchar(20) DEFAULT NULL,
@@ -1049,9 +1101,12 @@ CREATE TABLE `orders` (
   `updated_at` datetime(3) NOT NULL DEFAULT current_timestamp(3) ON UPDATE current_timestamp(3) COMMENT 'Ø¢Ø®Ø± ØªØ¹Ø¯ÙŠÙ„ â€” Ø£Ø³Ø§Ø³ delta polling (?since)',
   `received_at` datetime DEFAULT NULL COMMENT 'وقت استلام الطيار للطرود من المُرسِل',
   `trip_started_at` datetime DEFAULT NULL COMMENT 'وقت بدء رحلة التوصيل',
+  `handed_over_at` datetime DEFAULT NULL COMMENT 'وقت ما المحل أكّد إنه سلّم الأوردر للطيار — تأكيد الطرف التاني، غير received_at اللي الطيار بيسجّله',
+  `handed_over_by` varchar(190) DEFAULT NULL COMMENT 'مين أكّد التسليم من المحل — اسم المستخدم للمراجعة وقت الخلاف',
   `delivered_at` datetime DEFAULT NULL,
   `undelivered_at` datetime DEFAULT NULL,
   `undelivered_reason` varchar(190) DEFAULT NULL COMMENT 'سبب عدم التسليم',
+  `undelivered_fare_by` varchar(10) DEFAULT NULL COMMENT 'مين دفع التوصيل في المرتجع: receiver=المستلم رفض ودفع · sender=المحل/الراسل دفع · none=محدش استقبل ولا دفع (طلب 2026-09-02)',
   `cancelled_at` datetime DEFAULT NULL,
   `cancelled_by` varchar(190) DEFAULT NULL COMMENT 'مين ألغى الأوردر (اسم/معرّف المستخدم)',
   `cancelled_reason` varchar(190) DEFAULT NULL,
@@ -1075,9 +1130,11 @@ CREATE TABLE `orders` (
   `order_kind` varchar(20) DEFAULT NULL COMMENT 'نوع الأوردر (انظر التعليق فوق العمود)',
   `pieces_count` int(11) NOT NULL DEFAULT 1 COMMENT 'عدد القطع الإجمالي',
   `qr_code` varchar(64) DEFAULT NULL COMMENT 'كود QR للتحقق عند التسليم',
+  `client_ref` varchar(80) DEFAULT NULL COMMENT 'مفتاح مانع التكرار من الواجهة (ref#طرد) — إعادة الإرسال بنفس المفتاح بترجع نفس الأوردر',
   `notes` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_orders_order_num` (`order_num`),
+  UNIQUE KEY `uq_orders_client_ref` (`client_ref`),
   KEY `idx_orders_legacy` (`legacy_key`),
   KEY `idx_orders_branch_status` (`branch_id`,`status`),
   KEY `idx_orders_pilot_status` (`pilot_id`,`status`),
@@ -1094,7 +1151,9 @@ CREATE TABLE `orders` (
   KEY `idx_orders_updated` (`updated_at`),
   KEY `idx_orders_added_by_created` (`added_by`,`created_at`),
   KEY `idx_orders_added_by_updated` (`added_by`,`updated_at`),
+  KEY `idx_orders_origin_branch` (`origin_branch_id`),
   CONSTRAINT `fk_orders_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
+  CONSTRAINT `fk_orders_origin_branch_id` FOREIGN KEY (`origin_branch_id`) REFERENCES `branches` (`id`),
   CONSTRAINT `fk_orders_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
   CONSTRAINT `fk_orders_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`),
   CONSTRAINT `fk_orders_sender_id` FOREIGN KEY (`sender_id`) REFERENCES `senders` (`id`),
@@ -1151,12 +1210,31 @@ CREATE TABLE `party_ratings` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_acct_perms` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) unsigned NOT NULL COMMENT 'صاحب الصلاحية',
+  `perm_keys` longtext DEFAULT NULL COMMENT 'JSON: مفاتيح مسموحة، القيمة true بس هي اللي بتتخزّن',
+  `branches` varchar(190) DEFAULT NULL COMMENT 'الفروع المسموحة (ids بفواصل، فاضي = كل الفروع)',
+  `updated_by` varchar(100) DEFAULT NULL COMMENT 'مين آخر واحد عدّلها',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pilot_acct_perms_user` (`user_id`),
+  CONSTRAINT `fk_pilot_acct_perms_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='صلاحيات برنامج تقفيل الطيارين لكل مستخدم: شاشات وأعمدة وأفعال وفروع';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `pilot_commission_adjustments` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `pilot_id` bigint(20) unsigned NOT NULL COMMENT 'الطيار صاحب العمولة',
   `order_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الأوردر — NULL يعني عمولة بلا أوردر (تعويض شكوى مثلًا)',
   `kind` varchar(16) NOT NULL COMMENT 'override = بديل لعمولة الأوردر · extra = مبلغ مستقل',
   `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'المبلغ بالجنيه',
+  `paid_amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'اللي اتصرف كاش من الخزنة على المبلغ ده (طلب 2026-09-03) — التعديل بيصرف/بيسترجع الفرق، والباقي (amount − paid) هو اللي بيدخل صرف التقفيلة أو الشهرية',
+  `paid_at` datetime DEFAULT NULL COMMENT 'آخر حركة صرف من الخزنة للتعديل ده',
+  `paid_store_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الخزنة اللي اتصرف منها — الاسترجاع بيرجع ليها',
   `reason` varchar(190) DEFAULT NULL COMMENT 'سبب التعديل — الواجهة بتطلبه إجباري',
   `effective_date` date NOT NULL COMMENT 'اليوم اللي بتتحسب فيه — أساس التقفيلة الشهرية',
   `branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'فرع الطيار وقت التعديل — بيه بيتقيّد مدير الفرع',
@@ -1171,6 +1249,79 @@ CREATE TABLE `pilot_commission_adjustments` (
   CONSTRAINT `fk_pca_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_pca_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='تعديلات عمولة الطيار — بديل لعمولة أوردر أو مبلغ مستقل بلا أوردر';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_day_entries` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `pilot_id` bigint(20) unsigned NOT NULL,
+  `day` tinyint(4) NOT NULL COMMENT 'يوم الشهر 1..31 (بداية اليوم من إعداد dayStartHour)',
+  `time_in_override` varchar(8) DEFAULT NULL COMMENT 'ساعة حضور يدوية HH:MM — NULL = من فتح الوردية',
+  `time_out_override` varchar(8) DEFAULT NULL COMMENT 'ساعة انصراف يدوية HH:MM — NULL = من قفل الوردية',
+  `hours_override` decimal(5,2) DEFAULT NULL COMMENT 'ساعات يدوية — NULL = تتحسب من الأوقات ناقص الاستئذان',
+  `orders_override` int(11) DEFAULT NULL COMMENT 'عدد أوردرات يدوي — NULL = المُسلَّم فعليًا في اليوم',
+  `svc_override` decimal(12,2) DEFAULT NULL COMMENT 'إجمالي خدمة يدوي — NULL = مجموع أسعار التوصيل',
+  `psvc_override` decimal(12,2) DEFAULT NULL COMMENT 'خدمة الطيار يدوية — NULL = عمولته المحسوبة',
+  `net_override` decimal(12,2) DEFAULT NULL COMMENT 'صافي الخدمة يدوي — NULL = إجمالي − خدمة الطيار',
+  `advance_extra` decimal(12,2) DEFAULT NULL COMMENT 'سلفة إضافية مكتوبة على الشيت — بتتجمع مع سلف الوردية',
+  `deduction_extra` decimal(12,2) DEFAULT NULL COMMENT 'خصم إضافي مكتوب على الشيت',
+  `bonus_extra` decimal(12,2) DEFAULT NULL COMMENT 'حافز إضافي مكتوب على الشيت',
+  `note` text DEFAULT NULL COMMENT 'ملاحظة اليوم',
+  `updated_by` varchar(190) DEFAULT NULL COMMENT 'آخر من عدّل الصف',
+  `updated_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pilot_day_entries_month_pilot_day` (`month`,`pilot_id`,`day`),
+  KEY `idx_pilot_day_entries_pilot_month` (`pilot_id`,`month`),
+  KEY `idx_pilot_day_entries_month` (`month`),
+  CONSTRAINT `fk_pilot_day_entries_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='الشيت اليومي للطيار — تدخّلات يدوية فوق الأرقام المحسوبة لايف من الورديات والأوردرات';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_day_perms` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_id` bigint(20) unsigned NOT NULL,
+  `perm_out` varchar(8) DEFAULT NULL COMMENT 'وقت الخروج للاستئذان HH:MM',
+  `perm_in` varchar(8) DEFAULT NULL COMMENT 'وقت العودة من الاستئذان HH:MM',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_pilot_day_perms_entry` (`entry_id`),
+  CONSTRAINT `fk_pilot_day_perms_entry_id` FOREIGN KEY (`entry_id`) REFERENCES `pilot_day_entries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='فترات استئذان مكتوبة بالإيد على الشيت اليومي — أبناء خالصين للصف';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_deferred_advances` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `pilot_id` bigint(20) unsigned NOT NULL,
+  `advance_date` date DEFAULT NULL COMMENT 'تاريخ أخذ السلفة',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'إجمالي السلفة',
+  `monthly` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'القسط الشهري الافتراضي — صفر = تتخصم مرة واحدة',
+  `start_month` char(7) NOT NULL COMMENT 'أول شهر خصم YYYY-MM',
+  `note` text DEFAULT NULL,
+  `created_by` varchar(190) DEFAULT NULL COMMENT 'اسم مستخدم اللي سجّل السلفة',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_pilot_deferred_advances_pilot` (`pilot_id`),
+  KEY `idx_pilot_deferred_advances_start` (`start_month`),
+  CONSTRAINT `fk_pilot_deferred_advances_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='سلف الطيارين المؤجلة بتقسيط شهري — الرصيد المتبقي محسوب من المدفوعات';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_deferred_payments` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `advance_id` bigint(20) unsigned NOT NULL,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'القسط المخصوم فعليًا في الشهر ده — override للقسط الافتراضي',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pilot_deferred_payments_advance_month` (`advance_id`,`month`),
+  KEY `idx_pilot_deferred_payments_month` (`month`),
+  CONSTRAINT `fk_pilot_deferred_payments_advance_id` FOREIGN KEY (`advance_id`) REFERENCES `pilot_deferred_advances` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='قسط السلفة المؤجلة لكل شهر — أبناء خالصين للسلفة';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -1223,6 +1374,21 @@ CREATE TABLE `pilot_leave_requests` (
   CONSTRAINT `fk_pilot_leave_requests_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
   CONSTRAINT `fk_pilot_leave_requests_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='طلبات راحة/إجازة/حادث للطيارين + الإيقاف الإجباري (forced_by)';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_month_locks` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'NULL = قفل الشهر لكل الفروع',
+  `locked_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `locked_by` varchar(190) DEFAULT NULL COMMENT 'اسم المستخدم اللي قفل الشهر',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pilot_month_locks_month_branch` (`month`,`branch_id`),
+  KEY `idx_pilot_month_locks_month` (`month`),
+  KEY `fk_pilot_month_locks_branch_id` (`branch_id`),
+  CONSTRAINT `fk_pilot_month_locks_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='قفل الشهر المالي للطيارين: بعده الشيت والتقفيلة قراءة فقط';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -1331,6 +1497,7 @@ CREATE TABLE `pilot_support_responses` (
   `request_id` bigint(20) unsigned NOT NULL COMMENT 'طلب الدعم الأم',
   `branch_id` bigint(20) unsigned NOT NULL COMMENT 'الفرع اللي رد',
   `response` varchar(20) NOT NULL COMMENT 'رد الفرع: accepted/rejected',
+  `reason` varchar(190) DEFAULT NULL COMMENT 'سبب الرفض — إجباري عند الرفض من الواجهة',
   `responded_at` datetime NOT NULL COMMENT 'وقت الرد (UTC)',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
@@ -1375,12 +1542,15 @@ CREATE TABLE `pilots` (
   `card_num` varchar(20) DEFAULT NULL COMMENT 'الرقم القومي',
   `vehicle_no` varchar(20) DEFAULT NULL COMMENT 'رقم لوحة المركبة',
   `address` varchar(190) DEFAULT NULL,
-  `assigned_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع اللي الطيار تابع له',
+  `assigned_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع اللي الطيار شغّال فيه دلوقتي — بيتمسح لما الوردية تتقفل',
+  `home_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'فرع الطيار الثابت — كل وردية بتفتح عليه، والنقل المؤقت مابيغيّرهوش',
   `status` varchar(20) DEFAULT NULL COMMENT 'حالة الطيار الحالية',
   `queue_no` int(11) DEFAULT NULL COMMENT 'ترتيب الطيار في دور الانتظار',
   `status_since` datetime DEFAULT NULL COMMENT 'من إمتى الحالة الحالية',
   `commission_type` varchar(20) DEFAULT NULL COMMENT 'نوع العمولة',
   `commission_value` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'قيمة العمولة حسب النوع',
+  `hour_rate` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'سعر ساعة الطيار — بيدخل في أجر الساعات في التقفيلة',
+  `paid_leave_days` int(11) NOT NULL DEFAULT 0 COMMENT 'رصيد أيام الإجازة المدفوعة في الشهر',
   `custody_balance` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'رصيد العهدة (فلوس مع الطيار للشركة)',
   `monthly_salary` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'المرتب الشهري',
   `required_daily_hours` decimal(4,1) DEFAULT NULL COMMENT 'ساعات العمل اليومية المطلوبة',
@@ -1396,12 +1566,17 @@ CREATE TABLE `pilots` (
   `notes` text DEFAULT NULL,
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `archived_at` datetime DEFAULT NULL COMMENT 'وقت الأرشفة — NULL = طيار فعّال. الأرشفة بديل الحذف: بياناته التاريخية بتفضل مربوطة',
+  `archived_by` varchar(190) DEFAULT NULL COMMENT 'اسم المستخدم اللي أرشفه',
   PRIMARY KEY (`id`),
   KEY `idx_pilots_legacy` (`legacy_key`),
   KEY `idx_pilots_phone1` (`phone1`),
   KEY `idx_pilots_branch_status` (`assigned_branch_id`,`status`),
   KEY `idx_pilots_status` (`status`),
-  CONSTRAINT `fk_pilots_assigned_branch_id` FOREIGN KEY (`assigned_branch_id`) REFERENCES `branches` (`id`)
+  KEY `idx_pilots_home_branch` (`home_branch_id`),
+  KEY `idx_pilots_archived` (`archived_at`),
+  CONSTRAINT `fk_pilots_assigned_branch_id` FOREIGN KEY (`assigned_branch_id`) REFERENCES `branches` (`id`),
+  CONSTRAINT `fk_pilots_home_branch_id` FOREIGN KEY (`home_branch_id`) REFERENCES `branches` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=139 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='الطيارين: البيانات والحالة والعمولة والعهدة والموقع';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1650,10 +1825,14 @@ CREATE TABLE `shifts` (
   `deduction_reason` varchar(190) DEFAULT NULL COMMENT 'سبب الخصم',
   `advance_amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'سلفة الوردية',
   `advance_reason` varchar(190) DEFAULT NULL COMMENT 'سبب السلفة',
-  `commission_settle` varchar(10) NOT NULL DEFAULT 'daily' COMMENT 'تسوية العمولة: daily/monthly',
-  `bonus_settle` varchar(10) NOT NULL DEFAULT 'daily' COMMENT 'تسوية الحافز: daily/monthly',
-  `deduction_settle` varchar(10) NOT NULL DEFAULT 'daily' COMMENT 'تسوية الخصم: daily/monthly',
-  `advance_settle` varchar(10) NOT NULL DEFAULT 'daily' COMMENT 'تسوية السلفة: daily/monthly',
+  `commission_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية العمولة: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
+  `bonus_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية الحافز: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
+  `deduction_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية الخصم: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
+  `advance_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية السلفة: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
+  `commission_paid_amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'عمولة الوردية اللي اتصرفت كاش من الخزنة (طلب 2026-09-03: الفلوس تدخل كاملة والعمولة تخرج بحركة منفصلة)',
+  `commission_paid_at` datetime DEFAULT NULL COMMENT 'وقت صرف العمولة من الخزنة — وجوده بيمنع الصرف مرتين وبيقفل الرجوع لتسوية شهرية',
+  `custody_returned` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'العهدة اللي رجعت للخزنة عند تقفيل الوردية — إثبات إخلاء الطرف',
+  `custody_carried` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'عهدة فضلت على الطيار بعد التقفيل — صفر = أخلى طرف، وأكبر من صفر مايحصلش غير بموافقة الإدارة',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `idx_shifts_legacy` (`legacy_key`),
@@ -1662,7 +1841,7 @@ CREATE TABLE `shifts` (
   KEY `idx_shifts_started_at` (`started_at`),
   CONSTRAINT `fk_shifts_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
   CONSTRAINT `fk_shifts_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ورديات الطيارين: الفتح والقفل والحوافز والخصومات والسلف وطريقة تسويتها';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ورديات الطيارين: الفتح والقفل والحوافز والخصومات والسلف وطريقة تسويتها';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -1694,6 +1873,68 @@ CREATE TABLE `site_settings` (
   UNIQUE KEY `uq_site_settings_key` (`setting_key`)
 ) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='إعدادات الموقع والنظام — ساعات العمل، إصدار تطبيق الطيار، بانر العميل، مهلة الحضور...';
 /*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `staff_day_entries` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `user_id` bigint(20) unsigned NOT NULL COMMENT 'الموظف — حساب دخول من users',
+  `day` tinyint(4) NOT NULL COMMENT 'يوم الشهر 1..31 (يوم الحضور الميلادي بتوقيت القاهرة — مش يوم الطيارين التجاري)',
+  `time_in_override` varchar(8) DEFAULT NULL COMMENT 'ساعة حضور يدوية HH:MM — NULL = من أول جلسة متصفح',
+  `time_out_override` varchar(8) DEFAULT NULL COMMENT 'ساعة انصراف يدوية HH:MM — NULL = من آخر جلسة',
+  `hours_override` decimal(5,2) DEFAULT NULL COMMENT 'ساعات يدوية — NULL = تتحسب من الأوقات ناقص الاستئذان',
+  `advance_extra` decimal(12,2) DEFAULT NULL COMMENT 'سلفة مكتوبة على الشيت',
+  `deduction_extra` decimal(12,2) DEFAULT NULL COMMENT 'خصم مكتوب على الشيت',
+  `bonus_extra` decimal(12,2) DEFAULT NULL COMMENT 'حافز مكتوب على الشيت',
+  `note` text DEFAULT NULL COMMENT 'ملاحظة اليوم',
+  `updated_by` varchar(190) DEFAULT NULL COMMENT 'آخر من عدّل الصف',
+  `updated_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_staff_day_entries_month_user_day` (`month`,`user_id`,`day`),
+  KEY `idx_staff_day_entries_user_month` (`user_id`,`month`),
+  KEY `idx_staff_day_entries_month` (`month`),
+  CONSTRAINT `fk_staff_day_entries_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='الشيت اليومي للموظف — تدخّلات يدوية فوق حضور المتصفح التلقائي';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `staff_day_perms` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_id` bigint(20) unsigned NOT NULL,
+  `perm_out` varchar(8) DEFAULT NULL COMMENT 'وقت الخروج للاستئذان HH:MM',
+  `perm_in` varchar(8) DEFAULT NULL COMMENT 'وقت العودة من الاستئذان HH:MM',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_staff_day_perms_entry` (`entry_id`),
+  CONSTRAINT `fk_staff_day_perms_entry_id` FOREIGN KEY (`entry_id`) REFERENCES `staff_day_entries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='فترات استئذان مكتوبة بالإيد على شيت الموظف — أبناء خالصين للصف';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `store_addresses` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) unsigned NOT NULL COMMENT 'صف المحل في users',
+  `label` varchar(190) DEFAULT NULL COMMENT 'تسمية العنوان (المحل، المخزن...)',
+  `full_address` text DEFAULT NULL,
+  `lat` decimal(10,7) DEFAULT NULL,
+  `lng` decimal(10,7) DEFAULT NULL,
+  `zone_id` bigint(20) unsigned DEFAULT NULL,
+  `branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع المشتق من الزون وقت الحفظ',
+  `is_default` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'العنوان الافتراضي للمحل',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `fk_store_addresses_user_id` (`user_id`),
+  KEY `fk_store_addresses_zone_id` (`zone_id`),
+  KEY `fk_store_addresses_branch_id` (`branch_id`),
+  CONSTRAINT `fk_store_addresses_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
+  CONSTRAINT `fk_store_addresses_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_store_addresses_zone_id` FOREIGN KEY (`zone_id`) REFERENCES `zones` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='دفتر عناوين بوابة المحلات — مرآة customer_addresses (طلب 2026-09-02)';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `store_contacts` (
@@ -1755,7 +1996,11 @@ CREATE TABLE `users` (
   `shop_zone_id` bigint(20) unsigned DEFAULT NULL COMMENT 'منطقة استلام المحل الافتراضية — منها بيتحدد الفرع المسؤول',
   `shop_lat` decimal(10,7) DEFAULT NULL COMMENT 'إحداثيات المحل',
   `shop_lng` decimal(10,7) DEFAULT NULL,
+  `can_edit_price` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'للمحل (role=store): مفتوح له تعديل سعر التوصيل من البوابة زيادة أو نقصان — بيتفتح من إدارة المحلات (طلب 2026-09-03). الافتراضي مقفول والسعر سعر المنطقة',
   `blocked` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'الحساب موقوف',
+  `hour_rate` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'سعر ساعة الموظف — 0 = مافيش أجر بالساعة',
+  `monthly_salary` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'الراتب الشهري — بيتقسم على أيام الشغل في التقفيلة',
+  `paid_leave_days` int(11) NOT NULL DEFAULT 0 COMMENT 'أيام الإجازة المدفوعة شهريًا',
   `blocked_at` datetime DEFAULT NULL COMMENT 'وقت الإيقاف',
   `blocked_by` varchar(190) DEFAULT NULL COMMENT 'مين أوقف الحساب',
   `protected` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'حساب محمي من الحذف/التعديل',
@@ -1777,7 +2022,7 @@ CREATE TABLE `users` (
   CONSTRAINT `fk_users_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`),
   CONSTRAINT `fk_users_sender_id` FOREIGN KEY (`sender_id`) REFERENCES `senders` (`id`),
   CONSTRAINT `fk_users_shop_zone_id` FOREIGN KEY (`shop_zone_id`) REFERENCES `zones` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=329 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='حسابات الدخول لكل التطبيقات';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='حسابات الدخول لكل التطبيقات';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

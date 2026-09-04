@@ -3,7 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0a0b" />
+  <script>
+  /* بيتنفّذ **قبل** أي رسم: من غيره الصفحة بتفتح ليلي لجزء من الثانية
+     قبل ما الجافاسكربت الرئيسي يقرا الاختيار — وميض مزعج في الوضع النهاري. */
+  /* مفيش اختيار محفوظ = ليلي (الافتراضي). من غير السطر ده الصفحة بتفتح
+     نهاري على أي جهاز وضعه نهاري، وده اللي اتبلّغ عنه. */
+  try { var _t = localStorage.getItem("cust-theme") || "dark";
+        if (_t !== "system") document.documentElement.setAttribute("data-theme", _t); } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark"); }
+</script>
+<meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f4f4f6" media="(prefers-color-scheme: light)" />
   <title>الدهشان | تطبيق العملاء</title>
 
   <!-- 🔴 النسخة هنا مش جوه الجافاسكربت عن قصد: فحص التحديث بيجيب الملف ده
@@ -11,7 +21,7 @@
        regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
        نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
        ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
-  <meta name="app-version" content="1.6.1" />
+  <meta name="app-version" content="1.7.1" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -37,7 +47,8 @@
   window.API_NO_REFRESH_BTN = true;
 </script>
 <script src="assets/js/api.js"></script>
-  <script src="assets/js/zonepick.js?v=20260826"></script>
+<script src="assets/js/support-numbers.js"></script>
+  <script src="assets/js/zonepick.js?v=20260830b"></script>
   <!-- منظومة الثقة: البحث الفوري بالتليفون + بادچ السمعة + تقييم المستلم -->
   <script src="assets/js/trust.js"></script>
 
@@ -48,12 +59,54 @@
    الألوان مأخوذة من الموك-أب: أسود عميق + أحمر الدهشان.
 ══════════════════════════════════════════════════════════════ */
 :root{
+  /* ══ اللوحة الليلية — الافتراضية ══ */
   --bg:#0a0a0b; --bg2:#000; --card:#141416; --card2:#1b1b1f; --line:#232328;
   --red:#e8192c; --red2:#ff2d42; --txt:#fff; --muted:#8b8b93;
   --green:#22c55e; --orange:#f59e0b; --blue:#3b82f6;
+  /* التوكنز دي كانت ألوان مكتوبة بالإيد في ١٧ موضع — من غيرها الوضع
+     النهاري كان بيطلع نص فاتح على خلفية فاتحة في نص الشاشات. */
+  --line2:#3a3a42;      /* حدود التركيز ونقط المؤشّر */
+  --dim:#5a5a63;        /* نص التلميح داخل الحقول */
+  --txt2:#d0d0d6;       /* نص ثانوي أفتح من الأساسي */
+  --sunken:#1a1a1d;     /* خلفية غاطسة: الخرايط والمساحات الفاضية */
+  --pop:#26262c;        /* خلفية التولتيب */
+  --shadow:rgba(0,0,0,.5);
   --r:16px; --r2:22px;
   --safe-b: env(safe-area-inset-bottom, 0px);
+  color-scheme:dark;
 }
+
+/* ══ اللوحة النهارية ══
+   متعرّفة مرتين عن قصد:
+   ① تحت الميديا للوضع الافتراضي (نظام) — بحارس `:not([data-theme="dark"])`
+      عشان لو المستخدم اختار ليلي صراحةً وجهازه نهاري، اختياره يغلب.
+   ② تحت `[data-theme="light"]` عشان الاختيار الصريح يشتغل في الاتجاهين.
+   الأحمر اتغمق شوية في النهاري — نفس درجة الليلي على أبيض بتبقى صارخة. */
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f4f6; --bg2:#eaeaee; --card:#fff; --card2:#f7f7f9; --line:#e2e2e8;
+    --red:#c2101f; --red2:#d4142a; --txt:#111114; --muted:#5c5c67;
+    --line2:#c9c9d2; --dim:#7c7c88; --txt2:#3f3f48;
+    /* الدلالية اتغمقت للنهاري: #22c55e و#f59e0b كانوا بيدوا تباين ~2.0
+       على أبيض — يعني نص أخضر أو برتقالي شبه مختفي. */
+    --green:#15803d; --orange:#b45309; --blue:#1d4ed8;
+    --sunken:#edeef1; --pop:#fff; --shadow:rgba(0,0,0,.14);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f4f6; --bg2:#eaeaee; --card:#fff; --card2:#f7f7f9; --line:#e2e2e8;
+  --red:#c2101f; --red2:#d4142a; --txt:#111114; --muted:#5c5c67;
+  --line2:#c9c9d2; --dim:#7c7c88; --txt2:#3f3f48;
+  /* الدلالية اتغمقت للنهاري: #22c55e و#f59e0b كانوا بيدوا تباين ~2.0
+     على أبيض — يعني نص أخضر أو برتقالي شبه مختفي. */
+  --green:#15803d; --orange:#b45309; --blue:#1d4ed8;
+  --sunken:#edeef1; --pop:#fff; --shadow:rgba(0,0,0,.14);
+  color-scheme:light;
+}
+/* التولتيب أبيض في النهاري فمحتاج حد وظل بدل ما يضيع في الخلفية */
+:root[data-theme="light"] #tip,
+:root:not([data-theme="dark"]) #tip{ box-shadow:0 6px 20px var(--shadow) }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--bg2);color:var(--txt);
   font-family:'Tajawal',system-ui,sans-serif;overscroll-behavior-y:none}
@@ -61,9 +114,9 @@ body{max-width:520px;margin:0 auto;min-height:100vh;position:relative;overflow-x
 button,input,select,textarea{font-family:inherit;color:inherit}
 input,select,textarea{background:var(--card2);border:1px solid var(--line);
   border-radius:12px;padding:12px 14px;width:100%;font-size:15px;outline:none}
-input:focus,select,textarea:focus{border-color:#3a3a42}
-input::placeholder,textarea::placeholder{color:#5a5a63}
-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238b8b93' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+input:focus,select:focus,textarea:focus{border-color:var(--line2)}
+input::placeholder,textarea::placeholder{color:var(--dim)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888892' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:left 14px center;padding-left:34px}
 a{color:var(--red);text-decoration:none}
 
@@ -123,7 +176,7 @@ a{color:var(--red);text-decoration:none}
 .sp-sub.out{opacity:0}
 .sp-foot{position:relative;z-index:3;margin-top:auto;padding:0 22px calc(26px + var(--safe-b))}
 .dots{display:flex;gap:7px;justify-content:center;margin-top:16px}
-.dots i{width:7px;height:7px;border-radius:50%;background:#3a3a42;transition:.25s}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line2);transition:.25s}
 .dots i.on{background:var(--red);width:20px;border-radius:4px}
 
 /* ── تسجيل الدخول ───────────────────────────────────────── */
@@ -189,7 +242,7 @@ a{color:var(--red);text-decoration:none}
 .o-item .ob{flex:1;min-width:0}
 .o-item .r1{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .o-item .num{font-size:14px;font-weight:800;direction:ltr}
-.o-item .nm{font-size:13px;color:#d0d0d6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-item .nm{font-size:13px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .o-item .r3{display:flex;gap:10px;font-size:11.5px;color:var(--muted);margin-top:3px}
 .badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
 .b-new{background:rgba(232,25,44,.16);color:#ff6070}
@@ -201,9 +254,9 @@ a{color:var(--red);text-decoration:none}
 .tl{padding:4px 0}
 .tl-row{display:flex;gap:12px;position:relative;padding-bottom:18px}
 .tl-row:last-child{padding-bottom:0}
-.tl-row .dot{width:13px;height:13px;border-radius:50%;background:#2a2a31;flex:none;margin-top:3px;z-index:2}
+.tl-row .dot{width:13px;height:13px;border-radius:50%;background:var(--line2);flex:none;margin-top:3px;z-index:2}
 .tl-row.dn .dot{background:var(--red);box-shadow:0 0 0 4px rgba(232,25,44,.15)}
-.tl-row::before{content:"";position:absolute;right:6px;top:16px;bottom:0;width:1.5px;background:#2a2a31}
+.tl-row::before{content:"";position:absolute;right:6px;top:16px;bottom:0;width:1.5px;background:var(--line2)}
 .tl-row:last-child::before{display:none}
 .tl-row.dn::before{background:var(--red)}
 .tl-row b{font-size:13.5px;font-weight:700;display:block}
@@ -211,14 +264,65 @@ a{color:var(--red);text-decoration:none}
 .tl-row span{font-size:11.5px;color:var(--muted)}
 
 /* ── الخريطة ────────────────────────────────────────────── */
-.map{height:190px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:#1a1a1d}
+.map{height:190px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:var(--sunken)}
 .map.tall{height:100%;border-radius:0;border:none}
-.leaflet-container{background:#1a1a1d;font-family:'Tajawal',sans-serif}
+.leaflet-container{background:var(--sunken);font-family:'Tajawal',sans-serif}
+/* ⚠️ ممنوع فلتر على .leaflet-tile: كان فيه invert بيقلب البلاطات غامقة
+   في الوضع الليلي، وصاحب النظام قرر شيله (2026-09-02) — الخريطة بألوان
+   OSM الطبيعية في الوضعين عشان الشوارع تتقري زي ما الناس متعودة. */
+  /* مفتاح «مش معايا بيانات المستلم» — جوه كل طرد */
+  .rcv-receipt {
+    display: flex; align-items: center; gap: 11px; cursor: pointer;
+    background: var(--card2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px; margin-bottom: 12px;
+  }
+  .rcv-receipt.on { border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.09); }
+  .rcv-receipt input { width: 20px; height: 20px; flex: none; accent-color: var(--red); }
+  .rcv-receipt span { flex: 1; }
+  .rcv-receipt b { font-size: 13px; display: block; }
+  .rcv-receipt small { font-size: 11.5px; color: var(--muted); line-height: 1.6; display: block; }
+  .rcv-receipt .ic { flex: none; font-size: 19px; }
+
+  /* ── صف التنقّل بين الطرود ─────────────────────────────
+     بيسكرول أفقيًا لوحده لما الطرود تكتر، عشان مايلفّش على سطرين
+     ويزقّ الفورم لتحت. */
+  .parcel-tabs {
+    display: flex; align-items: center; gap: 7px;
+    overflow-x: auto; overflow-y: hidden; padding: 3px 2px 10px;
+    scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+  }
+  .parcel-tabs::-webkit-scrollbar { height: 4px; }
+  .parcel-tabs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  /* زر الإضافة أول الصف عشان مكانه مايتغيّرش مع كل طرد بيتضاف */
+  .ptab-add {
+    flex: 0 0 auto; height: 34px; padding: 0 13px;
+    background: transparent; color: var(--red);
+    border: 1px dashed var(--red); border-radius: 10px;
+    font-size: 12.5px; font-weight: 800; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+  }
+  .ptab-add:active { opacity: .7; }
+  .ptab {
+    position: relative; flex: 0 0 auto;
+    min-width: 38px; height: 34px; padding: 0 11px;
+    background: var(--card2); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 10px;
+    font-size: 13px; font-weight: 800; cursor: pointer;
+    font-family: inherit; font-variant-numeric: tabular-nums;
+  }
+  .ptab.active { background: var(--red); color: #fff; border-color: var(--red); }
+  /* النقطة كهرمانية مش حمرا — الأحمر هنا لون الهوية وبيستعمل للزرار
+     النشط، فنقطة حمرا جنبه مكانتش هتتقري كتحذير. */
+  .ptab.bad::after {
+    content: ""; position: absolute; top: -3px; left: -3px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #f59e0b; border: 2px solid var(--bg);
+  }
 .mini-map{height:120px;border-radius:12px;overflow:hidden;border:1px solid var(--line);
-  background:#1a1a1d;display:grid;place-items:center;color:var(--muted);font-size:12px;position:relative}
+  background:var(--sunken);display:grid;place-items:center;color:var(--muted);font-size:12px;position:relative}
 .mini-map .pin{font-size:26px}
 .mini-map .txt{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.72);
-  padding:6px 9px;font-size:11px;color:#d0d0d6;text-align:right}
+  padding:6px 9px;font-size:11px;color:var(--txt2);text-align:right}
 
 /* ── شرائح الاختيار ─────────────────────────────────────── */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -294,7 +398,7 @@ a{color:var(--red);text-decoration:none}
 .nt .go{font-size:11px;color:var(--red);font-weight:700;margin-top:6px;display:inline-block}
 /* صفحة تتبّع الطيار — خريطة بعرض الشاشة وكارت عائم */
 #s-track .trk-wrap{position:relative;flex:1;display:flex;flex-direction:column;min-height:0}
-#s-track .trk-map{flex:1;min-height:60vh;background:#1a1a1d}
+#s-track .trk-map{flex:1;min-height:60vh;background:var(--sunken)}
 #s-track .trk-card{position:absolute;left:12px;right:12px;bottom:calc(14px + var(--safe-b));background:var(--card);
   border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.45);z-index:500}
 #s-track .trk-btn{position:absolute;top:12px;left:12px;z-index:500;width:40px;height:40px;border-radius:12px;
@@ -358,12 +462,16 @@ a{color:var(--red);text-decoration:none}
 .sheet-bd{padding:16px;overflow-y:auto;flex:1}
 
 /* ── توست ───────────────────────────────────────────────── */
+/* التوست طبقة فوق الواجهة مش جزء منها — فبيفضل غامق في الوضعين.
+   `color` مكتوب صراحةً: من غيره بيورث `--txt` اللي بيبقى **غامق** في
+   النهاري، فيطلع نص أسود على خلفية سودا. */
 #toast{position:fixed;bottom:calc(96px + var(--safe-b));right:50%;transform:translateX(50%) translateY(20px);
-  background:#1e1e23;border:1px solid var(--line);padding:12px 18px;border-radius:13px;font-size:13.5px;
-  font-weight:600;z-index:500;opacity:0;transition:.28s;pointer-events:none;max-width:88%;text-align:center}
+  background:#1e1e23;color:#fff;border:1px solid #33333c;padding:12px 18px;border-radius:13px;font-size:13.5px;
+  font-weight:600;z-index:500;opacity:0;transition:.28s;pointer-events:none;max-width:88%;text-align:center;
+  box-shadow:0 10px 30px rgba(0,0,0,.35)}
 #toast.on{opacity:1;transform:translateX(50%) translateY(0)}
-#toast.err{border-color:rgba(232,25,44,.55);background:#2a1416}
-#toast.ok{border-color:rgba(34,197,94,.5);background:#0f2318}
+#toast.err{border-color:rgba(232,25,44,.55);background:#2a1416;color:#ffd7dc}
+#toast.ok{border-color:rgba(34,197,94,.5);background:#123021;color:#c8f5da}
 
 /* ── تحميل ──────────────────────────────────────────────── */
 #boot{position:fixed;inset:0;background:var(--bg2);z-index:900;display:grid;place-items:center}
@@ -372,19 +480,25 @@ a{color:var(--red);text-decoration:none}
 @keyframes sp{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:50px 20px;color:var(--muted)}
 .empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
-.empty b{display:block;font-size:15px;color:#d0d0d6;margin-bottom:5px}
+.empty b{display:block;font-size:15px;color:var(--txt2);margin-bottom:5px}
 .empty span{font-size:12.5px}
 
 /* ── رسالة التوضيح العائمة (tooltip) ────────────────────────
    عنصر واحد بيتنقل في الصفحة كلها — بيظهر بالـ hover على الديسكتوب
    وبالضغط المطوّل على الموبايل. */
-#tip{position:fixed;z-index:1000;background:#26262c;border:1px solid #3a3a42;color:#fff;
+/* شيبات الملء السريع في رأس بطاقة المُرسِل — سطر واحد بيتمرّر أفقيًا
+   بدل ما يلف ويكبّر الرأس. */
+.chips-inline{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;max-width:58%;
+  scrollbar-width:none;-ms-overflow-style:none;padding-bottom:2px}
+.chips-inline::-webkit-scrollbar{display:none}
+.chips-inline .chip{white-space:nowrap;flex:none;font-size:12px;padding:6px 10px}
+#tip{position:fixed;z-index:1000;background:var(--pop);border:1px solid var(--line2);color:var(--txt);
   padding:9px 12px;border-radius:10px;font-size:12.5px;font-weight:600;line-height:1.65;
   max-width:min(280px,84vw);pointer-events:none;opacity:0;visibility:hidden;
   transition:opacity .16s;box-shadow:0 8px 26px rgba(0,0,0,.55);text-align:right;direction:rtl}
 #tip.on{opacity:1;visibility:visible}
-#tip::after{content:"";position:absolute;width:9px;height:9px;background:#26262c;
-  border:1px solid #3a3a42;transform:rotate(45deg);left:calc(50% - 5px)}
+#tip::after{content:"";position:absolute;width:9px;height:9px;background:var(--pop);
+  border:1px solid var(--line2);transform:rotate(45deg);left:calc(50% - 5px)}
 #tip.up::after{bottom:-5.5px;border-top:none;border-left:none}
 #tip.down::after{top:-5.5px;border-bottom:none;border-right:none}
 /* الضغط المطوّل على عنصر عليه شرح ما يفتحش قائمة النسخ */
@@ -473,12 +587,12 @@ a{color:var(--red);text-decoration:none}
       <div class="fld" data-tip="اسمك اللي هيظهر للفرع والطيار في كل طلباتك."><div class="fi">👤</div><div class="fb">
         <b>الاسم بالكامل</b><input id="sutName" placeholder="أدخل اسمك الكامل بالعربي" /></div></div>
       <div class="fld" data-tip="رقمك الأساسي للتواصل معاك في أي طلب. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
-        <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"
+        <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx أو أرضي"
           oninput="lookupMyShipments()" /></div></div>
       <!-- لو الرقم ده مستلم في شحنة موجودة، بنقوله ونعرض نملا بياناته -->
       <div id="sutFound"></div>
       <div class="fld" data-tip="رقم احتياطي نتصل بيه لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
-        <b>رقم إضافي (اختياري)</b><input id="sutPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+        <b>رقم إضافي (اختياري)</b><input id="sutPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx أو أرضي" /></div></div>
       <div class="fld"><div class="fi">✉️</div><div class="fb">
         <b>البريد الإلكتروني</b><input id="sutEmail" disabled /></div></div>
       <div class="card" style="background:rgba(232,25,44,.06);border-color:rgba(232,25,44,.25);display:flex;gap:12px">
@@ -562,6 +676,7 @@ a{color:var(--red);text-decoration:none}
     <button class="btn" style="margin-top:16px" onclick="startNewOrder()">＋ طلب جديد</button>
     <div class="menu-row" onclick="go('orders')"><div class="mi">📦</div><b>طلباتي</b><span class="ch">‹</span></div>
     <div class="menu-row" onclick="go('addresses')"><div class="mi">📍</div><b>العناوين المحفوظة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('clients')"><div class="mi">📇</div><b>عملائي</b><span class="ch" id="clientsCount" style="color:var(--muted);font-size:12.5px"></span></div>
     <div class="menu-row" onclick="go('account')"><div class="mi">👤</div><b>الحساب</b><span class="ch">‹</span></div>
   </div>
 </section>
@@ -582,6 +697,9 @@ a{color:var(--red);text-decoration:none}
           <span class="bub" style="width:26px;height:26px;border-radius:50%;background:var(--red);
             display:grid;place-items:center;font-size:12px;font-weight:800">1</span>
           <b style="font-size:15px">بيانات المُرسِل</b>
+          <!-- شيبات الملء السريع بقت هنا فوق: كانت تحت الحقول، يعني العميل
+               بيكتب بياناته بالإيد الأول وبعدين يكتشف إن فيه زرار بيملاها. -->
+          <div id="sndSaved" style="margin-inline-start:auto"></div>
         </div>
 
         <!-- 🔴 الخانات دي بتفضل **فاضية** عن قصد. صاحب الحساب مش دايمًا هو
@@ -592,7 +710,7 @@ a{color:var(--red);text-decoration:none}
         <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم منه الطيار الشحنة — غالبًا اسمك أو اسم محلك."><div class="fi">👤</div><div class="fb">
           <b>الاسم</b><input id="sndName" placeholder="اسم المُرسِل" /></div></div>
         <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت الاستلام. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
-          <b>رقم الهاتف</b><input id="sndPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+          <b>رقم الهاتف</b><input id="sndPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx أو أرضي" /></div></div>
         <span class="lbl">عنوان الاستلام</span>
         <div id="sndAddrW" data-tip="العنوان اللي الطيار هيروح عليه يستلم الشحنة — اكتب الشارع ورقم العمارة والدور."></div>
         <span class="lbl" style="margin-top:12px">منطقة الاستلام (تحدد الفرع)</span>
@@ -604,7 +722,7 @@ a{color:var(--red);text-decoration:none}
           data-tip="حدّد الدبوس على مكان الاستلام بالظبط. من غيره الطيار بيدوّر بالعنوان المكتوب وممكن يتوه.">📍 تحديد نقطة الاستلام على الخريطة *</button>
         <div id="sndPinState" style="display:none;font-size:11.5px;color:var(--green);
              margin-top:8px;text-align:center;font-weight:600"></div>
-        <div id="sndSaved" style="margin-top:10px"></div>
+        <!-- [اتنقل] شيبات «بياناتي» بقت فوق جنب العنوان -->
       </div>
       <button class="btn" style="margin-top:14px" onclick="wizNext(2)">التالي</button>
     </div>
@@ -616,38 +734,22 @@ a{color:var(--red);text-decoration:none}
           <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
             display:grid;place-items:center;font-size:12px;font-weight:800">2</span>
           <b style="font-size:15px">بيانات المستلم</b>
+          <!-- زرار الإضافة اتنقل لصف أزرار الطرود تحت — بقى جنب أرقام
+               الطرود عشان الإضافة والتنقّل يبقوا في مكان واحد. -->
         </div>
 
-        <!-- وضع "الريسيت": العميل معندوش بيانات المستلم، والعنوان مكتوب
-             على صورة الإيصال. المنطقة تفضل إجبارية لأنها بتحدد السعر.
-             في الوضع ده بيبقى مستلم واحد بس — مفيش بيانات نكرّرها. -->
-        <label class="card" style="display:flex;align-items:center;gap:11px;margin-bottom:12px;
-               background:var(--card2);cursor:pointer;padding:12px"
-               data-tip="فعّلها لو مش معاك بيانات المستلم والعنوان مكتوب على صورة الريسيت. في الحالة دي بيبقى مستلم واحد بس.">
-          <input type="checkbox" id="rcvNoData" style="width:20px;height:20px;flex:none;accent-color:var(--red)" />
-          <span style="flex:1">
-            <b style="font-size:13.5px;display:block">مش معايا بيانات المستلم</b>
-            <span style="font-size:11.5px;color:var(--muted);line-height:1.6">
-              هرفع صورة الريسيت والعنوان مكتوب عليها</span>
-          </span>
-          <span style="font-size:19px">🧾</span>
-        </label>
-
-        <div id="rcvReceiptNote" style="display:none;background:rgba(245,158,11,.1);
-             border:1px solid rgba(245,158,11,.35);border-radius:12px;padding:12px;
-             font-size:12.5px;line-height:1.8;margin-bottom:0">
-          🧾 <b>مطلوب صورة الريسيت</b><br />
-          <span style="color:var(--muted)">هنسيب بيانات المستلم فاضية ونعتمد على الصورة —
-          لازم ترفع صورة واضحة في خطوة المرفقات، والمنطقة تحت إجبارية عشان نحسب سعر التوصيل.</span>
-        </div>
+        <!-- «مش معايا بيانات المستلم» اتنقل **جوه كل طرد** 2026-08-31
+             بطلب صاحب النظام: طرد ممكن يبقى فيه بيانات مستلم وطرد تاني
+             بصورة ريسيت في نفس الطلب. المفتاح العام اتشال خالص —
+             شوف `rcvReceipt-${i}` جوه `receiverBlockHtml`. -->
       </div>
+
+      <!-- صف التنقّل: زر الإضافة أول الصف وبعده زرار لكل طرد.
+           الطرود بقت واحد ظاهر في المرة — التنقّل من هنا مش بالسكرول. -->
+      <div id="rcvTabs" class="parcel-tabs"></div>
 
       <!-- بلوكات المستلمين — بيتبنوا من S.draft.receivers -->
       <div id="rcvBlocks"></div>
-
-      <button class="btn ghost sm" id="addRcvBtn" style="margin-top:12px" onclick="addReceiver()"
-        data-tip="ضيف مستلم تاني لنفس الطلب — الطيار هيعدّي على كل النقط في رحلة واحدة، وسعر التوصيل بيتجمع.">
-        ＋ إضافة طرد لمستلم آخر</button>
 
       <div id="rcvTotal" style="display:none;margin-top:12px"></div>
 
@@ -775,6 +877,20 @@ a{color:var(--red);text-decoration:none}
   </div>
 </section>
 
+<!-- ═══ عملائي — المستلمون المحفوظون ══════════════════════
+     التاجر اللي بيبعت لنفس الناس كل شوية محتاج يشوفهم ويشيل اللي
+     مابيتعاملش معاه. الحفظ نفسه بيحصل تلقائيًا مع كل أوردر. -->
+<section id="s-clients" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>عملائي</h2></div>
+  <div class="scroll pad" style="padding-top:0">
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-bottom:12px">
+      كل عميل بتبعتله بيتحفظ هنا تلقائيًا — اضغط «ابعت له» عشان تبدأ طلب
+      ببياناته جاهزة من غير ما تكتبها تاني.
+    </div>
+    <div id="clientList"></div>
+  </div>
+</section>
+
 <!-- ═══ 12. الإشعارات ═════════════════════════════════════ -->
 <section id="s-notifs" class="screen">
   <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>الإشعارات</h2></div>
@@ -799,6 +915,7 @@ a{color:var(--red);text-decoration:none}
     <div id="accTrust" style="display:none;margin-bottom:12px"></div>
     <div class="menu-row" onclick="openEditProfile()"><div class="mi">👤</div><b>المعلومات الشخصية</b><span class="ch">‹</span></div>
     <div class="menu-row" onclick="go('addresses')"><div class="mi">📍</div><b>العناوين المحفوظة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('clients')"><div class="mi">📇</div><b>عملائي</b><span class="ch">‹</span></div>
     <div class="menu-row" onclick="go('notifs')"><div class="mi">🔔</div><b>الإشعارات</b><span class="ch">‹</span></div>
     <div class="menu-row" onclick="window.open('https://myaccount.google.com/','_blank')">
       <div class="mi">🔐</div><b>إدارة حساب Google</b><span class="ch">‹</span></div>
@@ -806,6 +923,10 @@ a{color:var(--red);text-decoration:none}
       <div class="mi">⬇️</div><b>تثبيت التطبيق على الموبايل</b><span class="ch">‹</span></div>
     <div class="menu-row" id="pushRow" onclick="enablePush()">
       <div class="mi">📢</div><b>تفعيل الإشعارات الفورية</b><span class="ch" id="pushState">‹</span></div>
+    <!-- تبديل الوضع: تلات حالات مش اتنين — «النظام» بيسيب الجهاز يحكم. -->
+    <div class="menu-row" onclick="cycleTheme()">
+      <div class="mi" id="themeIcon">🌙</div><b>مظهر التطبيق</b>
+      <span class="ch" id="themeState" style="color:var(--muted);font-size:12.5px">النظام</span></div>
     <div class="menu-row" onclick="openSupport()"><div class="mi">💬</div><b>الدعم والمساعدة</b><span class="ch">‹</span></div>
     <div class="menu-row" onclick="doAppUpdate()"><div class="mi">🔄</div>
       <b>تحديث التطبيق</b><span class="ch">‹</span></div>
@@ -1006,6 +1127,7 @@ const TIP_HOLD = 500;
 
 /* ── بيانات المحافظات/المدن (منسوخة من بوابة المحل عشان
       العناوين تفضل بنفس الصيغة في كل النظام) ──────────────── */
+const ADDR_DEFAULT = { gov: 'الدقهلية', city: 'المنصورة' };   // الافتراضي لأي عنوان جديد
 const EG_GOVERNORATES = ["القاهرة","الجيزة","الإسكندرية","الدقهلية","البحيرة","الفيوم","الغربية","الإسماعيلية","المنوفية","المنيا","القليوبية","الوادي الجديد","السويس","أسوان","أسيوط","بني سويف","بورسعيد","دمياط","الشرقية","جنوب سيناء","شمال سيناء","الأقصر","قنا","كفر الشيخ","مطروح","سوهاج","البحر الأحمر"];
 
     // مدن/مراكز كل محافظة — تظهر تلقائيًا عند اختيار المحافظة
@@ -1407,7 +1529,14 @@ function renderAddr(containerId, opts = {}) {
     <div style="margin-top:9px"><span class="lbl">العنوان بالتفصيل</span>
       <input id="${containerId}-detail" placeholder="الشارع، رقم العمارة، الدور، الشقة…" /></div>`;
   $(`${containerId}-gov`).addEventListener("change", () => fillCities(containerId));
-  fillCities(containerId);
+  /* عنوان جديد بيفتح على الدقهلية / المنصورة — شوف ADDR_DEFAULT.
+     لو جاي معانا عنوان محفوظ، `setAddr` تحت بتكتب فوقه. */
+  if (!opts.value && !opts.blank) {
+    $(`${containerId}-gov`).value = ADDR_DEFAULT.gov;
+    fillCities(containerId, ADDR_DEFAULT.city);
+  } else {
+    fillCities(containerId);
+  }
   if (opts.value) setAddr(containerId, opts.value);
 }
 function fillCities(containerId, keep) {
@@ -1436,7 +1565,13 @@ function getAddr(containerId) {
 function setAddr(containerId, text) {
   if (!text) return;
   const g = $(`${containerId}-gov`), a = $(`${containerId}-area`), d = $(`${containerId}-detail`);
-  if (!g) return;
+  /* 🔴 الوضع المبسّط (`simple:true`) بيرسم `-detail` بس — نفس منطق getAddr
+     فوق: التفصيل هو العنوان كله. كان `if (!g) return;` يعني الدالة **مابتعملش
+     حاجة** خالص لعنوان المستلم، فأربع مواضع كانت ميتة بصمت: التعبئة من
+     منظومة الثقة · زرار «استخدمه» · شيب «بياناتي» · شيب «مستلمون سابقون».
+     وأخطرهم اللي بيكتب العنوان في الحالة بس — أول مزامنة كانت بتقرا الخانة
+     الفاضية وتمسحه. (اتكشف 2026-09-01.) */
+  if (!g) { if (d) d.value = text; return; }
   let rest = text, gov = "";
   for (const x of EG_GOVERNORATES) {
     if (text.includes(x)) { gov = x; rest = text.replace(x, "").replace(/،\s*$/, "").replace(/^،\s*/, "").trim(); break; }
@@ -1452,7 +1587,7 @@ function setAddr(containerId, text) {
    zones/{id} = { areaName, price, deliveryBranchId, deliveryBranchName }
    الفرع المسؤول عن العميل بيتحدد من zone الاستلام (المُرسِل).
 ══════════════════════════════════════════════════════════════ */
-const zoneBranchId   = z => z.deliveryBranchId || z.branchId || "";
+const zoneBranchId   = z => z.deliveryBranchId || "";   // z.branchId مش على السلك
 /* لو الفرع موقوف مؤقتًا من الإدارة، أوردراته الجديدة بتتسجّل على
    الفرع البديل. بنمشي خطوة واحدة بس عشان لو حصل تحويل دائري
    (أ ← ب و ب ← أ) مايفضلش يلف. */
@@ -1463,7 +1598,7 @@ function routeBranch(id) {
   return (alt && !alt.paused) ? b.failoverBranchId : id;
 }
 const zoneBranchName = z => z.deliveryBranchName || S.branches[zoneBranchId(z)]?.name || "";
-const zoneLabel      = z => z.areaName || z.name || "—";
+const zoneLabel      = z => z.areaName || "—";          // z.name مش على السلك
 
 /* «صف البيت» = المنطقة عند الفرع المالك لها. جدول المناطق بيخزّن نفس
    المنطقة مرة لكل فرع بيوصّل لها، فمن غير الفلتر ده العميل بيشوف نفس
@@ -1500,7 +1635,6 @@ const findZone = id => S.zones.find(z => String(z.id) === String(id)) || null;
 /* ══════════════════════════════════════════════════════════════
    التنقّل بين الشاشات
 ══════════════════════════════════════════════════════════════ */
-const NAV_PAGES = ["home", "orders", "notifs", "account"];
 
 /* إدخال حارس واحد بس فوق نقطة دخول الصفحة.
    من غير أي إدخال، حدث popstate مابيتطلقش أصلًا وهاندلر زر الرجوع (تحت)
@@ -1521,12 +1655,13 @@ function go(page) {
   }
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
   $("s-" + page)?.classList.add("on");
-  const showNav = ["home", "orders", "notifs", "account", "addresses", "detail"].includes(page);
+  const showNav = ["home", "orders", "notifs", "account", "addresses", "clients", "detail"].includes(page);
   $("bottomNav").style.display = showNav ? "flex" : "none";
   document.querySelectorAll(".nav .nb").forEach(b => b.classList.toggle("on", b.dataset.p === page));
   document.querySelectorAll(".scroll").forEach(s => { if (s.closest(".screen")?.classList.contains("on")) s.scrollTop = 0; });
   if (page === "home")      renderHome();
   if (page === "orders")    renderOrders();
+  if (page === "clients")   renderClients();
   if (page === "notifs")    renderNotifs();
   if (page === "account")   renderAccount();
   if (page === "addresses") renderAddresses();
@@ -1695,8 +1830,12 @@ async function loadRefData() {
    site.info = {phone, whatsapp, hours} / workHours / customerBanner */
 function applySiteSettings(s) {
   const info = (s.site && s.site.info) || {};
-  SUPPORT.phone    = info.phone    || "";
-  SUPPORT.whatsapp = info.whatsapp || "";
+  /* قايمة أرقام مش رقم واحد — `SupportNums` بيقع على المفتاح المفرد لو
+     القايمة لسه ما اتحطّتش، فالإعدادات القديمة شغّالة زي ما هي. */
+  SUPPORT.phones    = window.SupportNums ? SupportNums.phones(info) : [];
+  SUPPORT.whatsapps = window.SupportNums ? SupportNums.whatsapps(info) : [];
+  SUPPORT.phone    = SUPPORT.phones.length    ? SUPPORT.phones[0].n    : (info.phone || "");
+  SUPPORT.whatsapp = SUPPORT.whatsapps.length ? SUPPORT.whatsapps[0].n : (info.whatsapp || "");
   SUPPORT.hours    = info.hours    || "";
   S.workHours = s.workHours || null;
   S.banner    = s.customerBanner || null;
@@ -1808,11 +1947,28 @@ function attachListeners() {
     interval: 60000, useSince: false,
     onChange: d => {
       const wasBlocked = !!(S.profile && S.profile.blocked);
+      /* 🔴 حالة بوابة التحصيل **قبل** ما نحدّث S.cod — المقارنة دي هي اللي
+         بتمنع إعادة رسم بلا لزوم. */
+      const wasCodLocked = (typeof codLocked === "function") ? codLocked() : null;
       S.profile = d.customer || S.profile;
       S.wallet  = d.wallet   || S.wallet;
       if (d.cod) S.cod = d.cod;
-      // لو العميل واقف على فورم الطلب والبوابة اتفتحت، الخانة تتحدّث فورًا
-      if (S.page === "new" && typeof renderReceiverBlocks === "function") renderReceiverBlocks();
+      /* لو العميل واقف على فورم الطلب والبوابة اتفتحت، الخانة تتحدّث فورًا.
+         🔴 بس **بشرطين** — الاتنين اتضافوا 2026-09-01 بعد بلاغ «بكتب بيانات
+         المستلم وتتمسح فجأة»:
+         (١) إعادة الرسم بتبني الـHTML من S.draft، والحقول مالهاش oninput،
+             فاللي المستخدم كتبه لسه في الـDOM بس. البولّر ده كان بيرسم كل
+             ٦٠ ثانية **بغض النظر عن إن حاجة اتغيّرت** — فكان بيمسح كتابته
+             وهو بيكتب. دلوقتي مابنرسمش إلا لو البوابة **اتقلبت** فعلًا،
+             وده بيحصل مرة واحدة في عمر الحساب. وده كمان بيحمي الفوكس
+             وموضع المؤشر — حاجة المزامنة لوحدها مابتحلهاش.
+         (٢) وحتى في اللحظة النادرة دي، بنزامن الـDOM للحالة الأول — نفس
+             القاعدة الموثّقة تحت في renderReceiverBlocks. */
+      if (S.page === "new" && typeof renderReceiverBlocks === "function"
+          && wasCodLocked !== null && wasCodLocked !== codLocked()) {
+        if (typeof readReceiverBlocks === "function") readReceiverBlocks();
+        renderReceiverBlocks();
+      }
       if (S.profile.blocked && !wasBlocked) showBlocked();   // اتحظر وهو فاتح
       if (S.page === "home")    renderHome();
       if (S.page === "account") renderAccount();
@@ -1845,6 +2001,8 @@ function attachListeners() {
     interval: 60000, useSince: false,
     onChange: d => {
       S.savedReceivers = d.items || [];
+      renderClientsCount();
+      if (S.page === "clients") renderClients();
       if (S.page === "new") renderSavedPicks();
     },
   }));
@@ -1944,7 +2102,15 @@ function setupNext(step) {
 }
 window.setupNext = setupNext;
 
-function validPhone(p) { return /^0?1[0-9]{9}$/.test(String(p || "").replace(/\s|-/g, "")); }
+/* موبايل مصري (01 + ٩ أرقام والصفر اختياري) **أو أرضي مصري** بكود
+   المحافظة (يبدأ 02–09، ٩ أو ١٠ أرقام بصفر إجباري — 0212345678 /
+   050234567x). فيه عملاء مالهمش غير تلفون أرضي والطيار بيتصل بيه
+   عادي؛ الواتساب أصلًا بيتفلتر سيرفريًا للموبايل بس (OrderRecipients)
+   فمفيش رسالة بتضيع بصمت. */
+function validPhone(p) {
+  const d = String(p || "").replace(/\s|-/g, "");
+  return /^0?1[0-9]{9}$/.test(d) || /^0[2-9][0-9]{7,8}$/.test(d);
+}
 
 async function saveProfile() {
   const zoneId = $("sutZone").value;
@@ -1996,15 +2162,25 @@ window.saveProfile = saveProfile;
 ══════════════════════════════════════════════════════════════ */
 const todayKey = () => new Date().toDateString();
 function renderHome() {
-  $("homeName").textContent = (S.profile?.displayNameAr || "").split(" ")[0] || "بك";
+  /* الاسم **كامل** — كان `.split(" ")[0]` (أول كلمة بس)، ومع الأسماء
+     المركّبة زي «عبد الرحمن» كان بيطلع «مرحبًا عبد». طلب صاحب النظام
+     2026-09-01 بعد ما شافها على الموبايل. الحاوية flex فالاسم الطويل
+     بيلف سطر تاني عادي. */
+  $("homeName").textContent = (S.profile?.displayNameAr || "").trim() || "بك";
   /* الإحصائيات على **كل** الطلبات مش طلبات النهاردة بس. قبل كده كانت
      بتفلتر بتاريخ الإنشاء المحلي، فالعميل اللي بيفتح الصبح يلاقي أصفار
      رغم إن عنده طلب جاري من إمبارح — وكانت بتسيب الطلب «الجديد» (لسه مش
      مُسند) و«لم يتم التوصيل» من غير أي خانة، فالمجموع مايطابقش باقي
      الخانات ويبان كأن الأرقام غلط. */
   const all = S.orders;
-  const st = s => all.filter(o => orderState(o) === s).length;
-  $("stTotal").textContent  = all.length;
+  /* 🔴 الإحصائيات بتعدّ **الطرود** مش الأوردرات: طلب واحد فيه طردين =
+     شحنتين فعليًا للعميل، وكان بيتعدّ واحد. والشحنة الجاية (مش أوردره)
+     بنعدّ طرودها هو بس — `_myParcels` — مش طرود الأوردر كله. */
+  /* 🔴 كل طرد بيتصنّف **لوحده**. الطريقة القديمة (نصنّف الأوردر ونضرب في
+     عدد طروده) كانت بتقول «٣ مسلّمين» لأوردر فيه واحد اتسلّم واتنين لأ. */
+  const rows = all.flatMap(orderRows);
+  const st = s => rows.filter(r => parcelState(r.o, r.d) === s).length;
+  $("stTotal").textContent  = rows.length;
   $("stWay").textContent    = st("new") + st("way");
   $("stDone").textContent   = st("done");
   $("stCancel").textContent = st("cancel") + st("failed");
@@ -2040,7 +2216,24 @@ function renderSupportBar() {
       ${SUPPORT.whatsapp ? `<a href="https://wa.me/${esc(SUPPORT.whatsapp)}" target="_blank"
         rel="noopener" style="text-decoration:none;background:rgba(34,197,94,.16);color:#22c55e;
         padding:9px 13px;border-radius:10px;font-weight:800;font-size:13px">💬</a>` : ""}
-    </div>`;
+    </div>
+    ${extraSupportHtml()}`;
+}
+
+/** باقي أرقام الدعم — شرايط تحت الكارت، فاضية لو رقم واحد بس */
+function extraSupportHtml() {
+  const rest = []
+    .concat((SUPPORT.phones || []).slice(1).map(x => ({ ...x, wa: false })))
+    .concat((SUPPORT.whatsapps || []).slice(1).map(x => ({ ...x, wa: true })));
+  if (!rest.length) return "";
+  return `<div style="display:flex;flex-wrap:wrap;gap:7px;margin:-8px 0 14px">
+    ${rest.map(x => `<a href="${x.wa ? `https://wa.me/${esc(x.n)}` : `tel:${esc(x.n)}`}"
+        ${x.wa ? 'target="_blank" rel="noopener"' : ""}
+        style="text-decoration:none;background:rgba(14,165,233,.09);
+          border:1px solid rgba(14,165,233,.28);color:var(--txt);padding:6px 11px;
+          border-radius:999px;font-size:11.5px;font-weight:700">
+        ${x.wa ? "💬" : "📞"} ${esc(x.label || x.n)}</a>`).join("")}
+  </div>`;
 }
 
 /** تنبيه في الرئيسية إن الاستقبال مقفول — عشان العميل يعرف قبل ما
@@ -2088,10 +2281,21 @@ function renderBanner() {
   el.onclick = link ? () => window.open(link, "_blank", "noopener,noreferrer") : null;
 }
 
+/* 🔴 طرد **العميل نفسه** مش أول طرد في الأوردر.
+   الأوردر ممكن يكون فيه طرود لناس تانية. أخد deliveries[0] كان بيخلّي
+   العميل يشوف **اسم وتليفون وعنوان** حد تاني في شاشة التفاصيل، ودبوس
+   التسليم بتاع حد تاني على خريطة التتبّع. النمط الصح كان موجود أصلًا
+   في قايمة الطلبات (idx = _myParcels[0]) بس مااتعممش. */
+function myParcel(o) {
+  const idx = (o && o._incoming && Array.isArray(o._myParcels) && o._myParcels.length)
+    ? o._myParcels[0] : 0;
+  return (o && o.deliveries && o.deliveries[idx]) || {};
+}
+
 /* حالة الطلب من منظور العميل — مبنية على نفس قيم status
    المستخدمة في تطبيق الطيار ولوحة الإدارة بدون تغييرها. */
 function orderState(o) {
-  const d = (o.deliveries && o.deliveries[0]) || {};
+  const d = myParcel(o);
   const s = o.status || d.status || "";
   if (s === "ملغي") return "cancel";
   if (s === "تم التسليم" || d.status === "تم التسليم") return "done";
@@ -2112,27 +2316,67 @@ const KIND_ICON = { "وثيقة":"📄", "طرد":"📦", "شنطة":"👜", "ك
    طلباتي
 ══════════════════════════════════════════════════════════════ */
 const FILTERS = [["all","الكل"],["new","جديد"],["way","قيد التوصيل"],["done","تم التسليم"],["cancel","ملغي"]];
+/* حالة الطرد من منظور العميل — نفس قاعدة الإشعارات:
+   نهاية الطرد بتغلب على حالة الأوردر، وغير كده بياخد حالة الرحلة.
+   السبب: الطيار بيخرج بالشحنة كلها مرة واحدة (حالة مشتركة)، لكن كل طرد
+   بيتسلّم لوحده (نهاية خاصة). */
+/* حالة الرحلة من **الأوردر لوحده** — من غير ما تلمس أي طرد.
+   لازم تبقى مستقلة: `orderState` بتقرا الطرد الأول، فلو استعملناها
+   كخلفية لطرد تاني بيرث حالة الأول (طرد لسه في الطريق يبان «تم التسليم»
+   لأن أخوه اتسلّم). */
+function tripState(o) {
+  const s = o.status || "";
+  if (s === "ملغي") return "cancel";
+  if (s === "لم يتم التوصيل") return "failed";
+  if (s === "جاري التوصيل" || o.pilotId) return "way";
+  return "new";
+}
+
+/* حالة الطرد: نهايته هو بتغلب، وغير كده بياخد حالة الرحلة المشتركة.
+   الطيار بيخرج بالشحنة كلها مرة واحدة، لكن كل طرد بيتسلّم لوحده. */
+function parcelState(o, d) {
+  if ((o.status || "") === "ملغي") return "cancel";
+  if (d && d.status === "تم التسليم")     return "done";
+  if (d && d.status === "لم يتم التوصيل") return "failed";
+  return tripState(o);
+}
+
+/* كل طرود الأوردر اللي تخص العميل، مع رقم كل واحد.
+   الشحنة الجايّة: طروده هو بس — الأوردر ممكن يكون فيه طرود لناس تانية. */
+function orderRows(o) {
+  const all = o.deliveries || [];
+  if (!all.length) return [{ o, d: {}, idx: 0, of: 1 }];
+  const idx = o._incoming
+    ? (Array.isArray(o._myParcels) && o._myParcels.length ? o._myParcels : [0])
+    : all.map((_, i) => i);
+  const mine = idx.filter(i => all[i]);
+  return mine.map(i => ({ o, d: all[i], idx: i, of: mine.length }));
+}
+
 function renderOrders() {
   $("orderTabs").innerHTML = FILTERS.map(([k, t]) =>
     `<div class="tab ${S.orderFilter === k ? "on" : ""}" data-f="${k}">${t}</div>`).join("");
   $("orderTabs").querySelectorAll(".tab").forEach(t =>
     t.onclick = () => { S.orderFilter = t.dataset.f; renderOrders(); });
 
-  const list = S.orders.filter(o => S.orderFilter === "all" || orderState(o) === S.orderFilter);
-  if (!list.length) {
+  /* 🔴 صف لكل **طرد**: الأوردر اللي فيه تلات طرود بيطلع تلات صفوف
+     بأرقامهم ومستلميهم وأسعارهم. الفلتر بيشتغل على حالة الطرد نفسه،
+     فالطرد اللي اتسلّم بيبان تحت «تم التسليم» وإخوته تحت «قيد التوصيل». */
+  const rows = S.orders.flatMap(orderRows)
+    .filter(r => S.orderFilter === "all" || parcelState(r.o, r.d) === S.orderFilter);
+  if (!rows.length) {
     $("ordersList").innerHTML = `<div class="empty"><i>📦</i><b>لا توجد طلبات</b>
       <span>ابدأ بإنشاء طلبك الأول من زر "طلب جديد"</span></div>`;
     return;
   }
-  $("ordersList").innerHTML = list.map(o => {
-    // في الشحنات الجاية له، بنعرض الطرد بتاعه هو مش أول طرد في الأوردر
-    const idx = o._incoming && o._myParcels ? o._myParcels[0] : 0;
-    const d  = (o.deliveries && o.deliveries[idx]) || {};
-    const m  = STATE_META[orderState(o)];
+  $("ordersList").innerHTML = rows.map(r => {
+    const o = r.o, d = r.d;
+    const m  = STATE_META[parcelState(o, d)] || STATE_META.new;
     const dt = new Date(o.createdAt || 0);
     const isToday = dt.toDateString() === todayKey();
-    // رقم الطرد المركّب لو الأوردر أكتر من طرد — نفس اللي على الباركود
-    const num = (o._incoming && (o.deliveries || []).length > 1 && d.parcelNo)
+    /* الرقم المركّب لما يكون فيه أكتر من طرد — نفس اللي على الباركود
+       ونفس اللي صفحة التتبّع العامة بتقبله. */
+    const num = r.of > 1 && d.parcelNo
       ? `${o.orderNum}-${d.parcelNo}` : (o.orderNum || "—");
     return `<div class="o-item" data-id="${esc(o.id)}">
       <div class="oi">${o._incoming ? "📥" : (KIND_ICON[o.orderKind] || "📦")}</div>
@@ -2140,8 +2384,9 @@ function renderOrders() {
         <div class="r1"><span class="num">#${esc(num)}</span>
           <span class="badge ${m.c}">${m.t}</span></div>
         <div class="nm">${o._incoming
-          ? `<span style="color:#22c55e">شحنة جاية لك</span> — من ${esc(o.senderName || "—")}`
-          : (d.receiverFromReceipt ? "🧾 مستلم من الريسيت" : esc(d.receiverName || "—"))}</div>
+          ? `<span style="color:var(--green)">شحنة جاية لك</span> — من ${esc(o.senderName || "—")}`
+          : (d.receiverFromReceipt ? "🧾 مستلم من الريسيت" : esc(d.receiverName || "—"))}${
+            r.of > 1 ? ` <span style="color:var(--dim)">· طرد ${r.idx + 1} من ${r.of}</span>` : ""}</div>
         <div class="r3"><span>${fmtMoney(d.orderPrice)} ج.م</span>
           <span>${isToday ? "اليوم" : dt.toLocaleDateString("ar-EG")} ${dt.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})}</span></div>
       </div></div>`;
@@ -2157,6 +2402,21 @@ const fmtMoney = v => (Number(v) || 0).toLocaleString("ar-EG");
    (createdAt / pilotId / statusSince / status) عشان ما نحتاجش
    تعديل في تطبيق الطيار أو لوحة الإدارة.
 ══════════════════════════════════════════════════════════════ */
+/* عدد الطرود في الأوردر — الوحدة اللي العميل بيحسب بيها.
+   • أوردره هو  → كل طرود الأوردر.
+   • شحنة جايّاله → طروده هو بس (`_myParcels`)، لأن الأوردر ممكن يكون
+     فيه طرود لناس تانية ومش من حقه يعدّها ولا يشوفها.
+   • أوردر قديم من غير طرود → واحد، عشان مايختفيش من العدّ. */
+function parcelsOf(o) {
+  if (!o) return 0;
+  if (o._incoming) return (o._myParcels || [0]).length || 1;
+  return (o.deliveries || []).length || 1;
+}
+
+/* ⚠️ صف «لم يتم التوصيل» بيتحط فيه سبب بيكتبه الطيار
+   (undeliveredReason). العرض بيعدّي على esc() في detailBody — من غيره
+   سبب فيه وسم HTML بيتنفّذ في متصفح العميل. كل تطبيقات الموظفين
+   بتهرّبه؛ ده كان الموضع الوحيد اللي فاته. */
 function orderTimeline(o) {
   const st = o._state || orderState(o);
   // التوقيتات دي بيكتبها تطبيق الطيار فعليًا (receiveOrder / startTrip /
@@ -2326,7 +2586,7 @@ function renderDetail() {
   const keepStars = sameOrder ? (window._rateStars || 0) : 0;
   window._rateDraftFor = S.currentOrderId;
   window._rateStars = keepStars;
-  const d = (o.deliveries && o.deliveries[0]) || {};
+  const d = myParcel(o);
   const m = STATE_META[orderState(o)];
   const tl = orderTimeline(o);
 
@@ -2341,7 +2601,7 @@ function renderDetail() {
       ${d.receiverFromReceipt ? `
         <b style="font-size:15px">🧾 البيانات على صورة الريسيت</b>
         <div style="font-size:12.5px;color:var(--muted);margin-top:7px">
-          منطقة التسليم: <b style="color:#d0d0d6">${esc(d.zoneName || "—")}</b></div>`
+          منطقة التسليم: <b style="color:var(--txt2)">${esc(d.zoneName || "—")}</b></div>`
       : `
         <b style="font-size:15px">${esc(d.receiverName || "—")}</b>
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;direction:ltr">
@@ -2358,7 +2618,7 @@ function renderDetail() {
       <div class="tl">${tl.map(x => `
         <div class="tl-row ${x.done ? "dn" : "pend"}">
           <div class="dot"></div>
-          <div><b>${x.t}</b><span>${x.at ? fmtTime(x.at) : "—"}</span></div>
+          <div><b>${esc(x.t)}</b><span>${x.at ? fmtTime(x.at) : "—"}</span></div>
         </div>`).join("")}</div>
     </div>
 
@@ -2405,9 +2665,16 @@ function fmtTime(iso) {
          d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
 }
 
-/* خريطة التتبّع: نقطة الاستلام + نقطة التسليم + موقع الطيار اللحظي —
-   Poller كل 8ث على GET /api/customer/orders/{id}/track بيحرك ماركر الطيار
-   (بديل onValue على pilots/{id}/location) */
+/* خريطة التتبّع: **الطيار + نقطة التسليم بس** — Poller كل 8ث على
+   GET /api/customer/orders/{id}/track بيحرك ماركر الطيار.
+
+   🔴 نقطة الاستلام (مكان المُرسِل) **مش** على الخريطة دي، وده مقصود:
+   الصفحة مابتتفتحش أصلًا غير بعد ما الطيار يدوس «بدء الرحلة» — يعني
+   الطرد بقى في إيده وطالع للعميل، ومكان الاستلام خلاص عدّى. عرضه بعد
+   كده مالوش أي فايدة للعميل، ومقابله إننا بنوري عميل **مكان محل**
+   طرف تالت (وفي الشحنات الجاية العميل ما بينهوش علاقة بالمحل ده
+   أصلًا). صاحب النظام طلبها بالنص: «لا يظهر للعميل إلا الطيار ومكان
+   التسليم النهائي». */
 let trackMap, trackPilotUnsub = null;
 /* زرار الذهاب لصفحة التتبّع من التفاصيل — بيظهر بس والرحلة شغّالة:
    نفس شرط السيرفر بالحرف (موقع الطيار مش بيتبعت أصلًا قبلها). */
@@ -2461,18 +2728,16 @@ function renderTrack() {
   _trkUserMoved = false; _trkPilotPos = null; _trkMarker = null;
   _trkActiveRendered = active;
   const gen = ++_trkGen;   // جيل الرسم — رد استطلاع متأخر لأوردر سابق مايكتبش على الخريطة دي
-  const d = (o.deliveries && o.deliveries[0]) || {};
-  const a = (o.senderLat && o.senderLng) ? [o.senderLat, o.senderLng] : null;
+  const d = myParcel(o);
   // إحداثيات التسليم مش في الـwire بتاع الطرد — بتيجي من رد /track (destination)
   let b = (d.lat && d.lng) ? [d.lat, d.lng] : null;
   let destMarker = null;
-  trackMap = L.map(el, { attributionControl: false, zoomControl: false }).setView(b || a || [30.0444, 31.2357], 13);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(trackMap);
+  trackMap = L.map(el, { attributionControl: false, zoomControl: false }).setView(b || [30.0444, 31.2357], 13);
+  // OSM زي باقي النظام — بألوانها الطبيعية في الوضعين (قرار صاحب النظام)
+  L.tileLayer(TILES, { maxZoom: 19 }).addTo(trackMap);
   const pin = txt => L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 26],
     html: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px #000)">${txt}</div>` });
-  if (a) L.marker(a, { icon: pin("🟢") }).addTo(trackMap).bindPopup("الاستلام");
-  if (b) L.marker(b, { icon: pin("📍") }).addTo(trackMap).bindPopup("التسليم");
-  if (a && b) L.polyline([a, b], { color: "#e8192c", weight: 3, dashArray: "6 6" }).addTo(trackMap);
+  if (b) L.marker(b, { icon: pin("📍") }).addTo(trackMap).bindPopup("مكان التسليم");
   L.control.zoom({ position: "topright" }).addTo(trackMap);   // فوق يمين — بعيد عن الكارت العائم
   // العميل حرّك الخريطة بإيده = ما نخطفهاش تاني (dragstart بيطلع من السحب
   // اليدوي بس — setView/fitBounds البرمجية مابتطلّعوش)
@@ -2510,8 +2775,7 @@ function renderTrack() {
       // دبوس التسليم من السيرفر (أول مرة بس)
       if (!destMarker && res.destination && res.destination.lat) {
         b = [res.destination.lat, res.destination.lng];
-        destMarker = L.marker(b, { icon: pin("📍") }).addTo(trackMap).bindPopup("التسليم");
-        if (a) L.polyline([a, b], { color: "#e8192c", weight: 3, dashArray: "6 6" }).addTo(trackMap);
+        destMarker = L.marker(b, { icon: pin("📍") }).addTo(trackMap).bindPopup("مكان التسليم");
       }
       if (res.pilotPhone && o.pilotId) {
         S.pilotCache = S.pilotCache || {};
@@ -2540,7 +2804,13 @@ function renderTrack() {
 
 /* رقم الطيار مش متخزّن على الأوردر — بنجيبه من رد التتبّع ونكاشه */
 const pilotPhoneOf = o => o.pilotId ? (S.pilotCache?.[o.pilotId]?.phone1 || "") : "";
-const waNum = p => "2" + String(p || "").replace(/\D/g, "").replace(/^0/, "");
+/* 💬 رقم واتساب دولي — كان «"2" + الرقم بلا صفر» فبيطلّع 21094183199 بدل
+   201094183199 وواتساب بيقول «رمز الدولة غير صحيح» (بلاغ 2026-09-03 من
+   شاشة تتبّع الطيار). التحويل في مكان واحد: SupportNums.intl — بيفهم
+   الصفر والـ00 والـ20 الجاهزة. */
+const waNum = p => window.SupportNums
+  ? SupportNums.intl(p)
+  : (d => (d.startsWith("20") && d.length >= 11 ? d : "20" + d.replace(/^0/, "")))(String(p || "").replace(/\D/g, ""));
 async function ensurePilotContact(o) {
   if (!o.pilotId) return;
   S.pilotCache = S.pilotCache || {};
@@ -2627,7 +2897,11 @@ function unreadOrders() {
   const list = S.notifs || []; if (!list.length) return S.notifUnread || 0;
   const last = S.notifSeenAt; const seen = new Set();
   list.forEach(n => { if (!last || n.at > last) seen.add(String(n.orderId)); });
-  return seen.size;
+  /* الرقم لازم يطابق عدد الكروت على الشاشة — والكروت بقت لكل طرد.
+     أوردر بتلات طرود = تلات كروت = تلاتة في العدّاد. */
+  let n = 0;
+  seen.forEach(id => { n += Math.max(1, myParcelsOf(id).length); });
+  return n;
 }
 function refreshBadge() {
   const n = S.notifUnread > 0 ? unreadOrders() : 0;
@@ -2641,6 +2915,28 @@ function refreshBadge() {
   if (fb) { fb.style.display = n ? "grid" : "none"; fb.textContent = n > 99 ? "99+" : n; }
   const fw = $("floatBell");
   if (fw) fw.style.display = ["splash", "login", "setup", "new"].includes(S.page) ? "none" : "flex";
+}
+
+/* طرود الأوردر اللي تخص العميل — مع رقم كل طرد وحالته.
+   بترجّع [] لو الأوردر مش موجود في القايمة (الإشعار وصل قبل البيانات). */
+function myParcelsOf(orderId) {
+  const o = (S.orders || []).find(x => String(x.id) === String(orderId));
+  if (!o) return [];
+  const all = o.deliveries || [];
+  if (!all.length) return [];
+  /* الشحنة الجايّة: طروده هو بس */
+  const idx = o._incoming ? (o._myParcels || [0]) : all.map((_, i) => i);
+  return idx.map(i => all[i]).filter(Boolean);
+}
+
+/* نهاية الطرد بتغلب على حالة الأوردر: طرد اتسلّم يفضل «تم التسليم» حتى
+   لو الأوردر لسه بيتحرّك لطرود تانية. و«قيد التنفيذ» معناها لسه ماخلصش
+   — ساعتها بنعرض آخر خطوة مشتركة من إشعار الأوردر. */
+function parcelNotifKey(parcel, orderKey) {
+  const st = parcel?.status;
+  if (st === "تم التسليم")    return "delivered";
+  if (st === "لم يتم التوصيل") return "failed";
+  return orderKey;
 }
 
 function renderNotifs() {
@@ -2668,24 +2964,41 @@ function renderNotifs() {
     });
     const groups = [...byOrder.values()].sort((a, b) => (b.latest.at > a.latest.at ? 1 : -1));
     const STEPS = ["created", "assigned", "received", "out", "delivered"];
-    $("notifList").innerHTML = groups.map(g => {
+
+    /* 🔴 كارت لكل **طرد** مش لكل أوردر: الأوردر اللي فيه تلات طرود بيطلع
+       تلات كروت بأرقامهم (…-1 · …-2 · …-3). الأوردر بطرد واحد بيفضل
+       كارت واحد بالرقم العادي زي ما كان. */
+    const cards = [];
+    groups.forEach(g => {
       const n = g.latest;
-      const m = NOTIF_META[n.key] || { i: "🔔", c: "var(--red)" };
-      const unread = !last || n.at > last;
       const ended = g.keys.has("failed") || g.keys.has("cancel");
-      const dots = STEPS.map(k => {
-        if (ended) return `<i class="bad"></i>`;
-        if (k === "delivered" && g.keys.has("delivered")) return `<i class="ok"></i>`;
-        return `<i class="${g.keys.has(k) ? "on" : ""}"></i>`;
-      }).join("");
-      return `
+      const parcels = myParcelsOf(g.orderId);
+      const multi = parcels.length > 1;
+      /* أوردر بطرد واحد (أو لسه بياناته ما وصلتش) = كارت واحد بالسلوك القديم */
+      const items = multi ? parcels : [null];
+
+      items.forEach((p, i) => {
+        const key = p ? parcelNotifKey(p, n.key) : n.key;
+        const m = NOTIF_META[key] || { i: "🔔", c: "var(--red)" };
+        const title = (NOTIF_META[key] || {}).t || n.title;
+        const unread = !last || n.at > last;
+        const num = multi ? `${g.num || ""}-${p.parcelNo ?? (i + 1)}` : (g.num || "");
+        /* نقط التقدّم: الخطوات المشتركة من الأوردر، وآخر نقطة من الطرد نفسه */
+        const dots = STEPS.map(k => {
+          if (key === "failed" || (ended && !p)) return `<i class="bad"></i>`;
+          if (k === "delivered") return key === "delivered" ? `<i class="ok"></i>` : `<i></i>`;
+          return `<i class="${g.keys.has(k) ? "on" : ""}"></i>`;
+        }).join("");
+        cards.push(`
       <div class="nt ${unread ? "unread" : ""}" data-id="${esc(g.orderId)}">
         <div class="ni" style="background:rgba(232,25,44,.12);color:${m.c}">${m.i}</div>
-        <div style="flex:1;min-width:0"><b>${esc(n.title)}</b>
-          <span>#${esc(g.num || "")} · ${fmtTime(n.at)}</span>
+        <div style="flex:1;min-width:0"><b>${esc(title)}</b>
+          <span>#${esc(num)}${multi ? ` · طرد ${i + 1} من ${parcels.length}` : ""} · ${fmtTime(n.at)}</span>
           <div class="dots">${dots}</div>
-          ${n.key === "out" ? `<span class="go">🗺️ اضغط لمتابعة الطيار على الخريطة</span>` : ""}</div></div>`;
-    }).join("");
+          ${key === "out" ? `<span class="go">🗺️ اضغط لمتابعة الطيار على الخريطة</span>` : ""}</div></div>`);
+      });
+    });
+    $("notifList").innerHTML = cards.join("");
     $("notifList").querySelectorAll(".nt").forEach(el =>
       el.onclick = () => {
         S.currentOrderId = el.dataset.id;
@@ -2721,12 +3034,87 @@ function renderAddresses() {
         <b style="font-size:14px">${esc(a.label || "عنوان")}
           ${a.isDefault ? `<span class="badge b-new" style="margin-right:6px">افتراضي</span>` : ""}</b>
         <div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(a.fullAddress || "")}</div>
-        <div style="font-size:11px;color:#5a5a63;margin-top:2px">${esc(a.zoneName || "")} · ${esc(a.branchName || "")}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">${esc(a.zoneName || "")} · ${esc(a.branchName || "")}</div>
       </div>
       <div class="ico-btn" onclick="editAddr('${esc(a.id)}')">✏️</div>
       <div class="ico-btn" onclick="delAddr('${esc(a.id)}')">🗑️</div>
     </div>`).join("");
 }
+
+/* ══════════════════════════════════════════════════════════════
+   عملائي — المستلمون المحفوظون
+   ──────────────────────────────────────────────────────────────
+   الحفظ بيحصل لوحده على السيرفر مع كل أوردر (upsert بالتليفون في
+   `customer_saved_receivers`). الشاشة دي بتعرضهم وتخلّي التاجر:
+     • يبعت لأي واحد فيهم بضغطة — البيانات بتتملي في الفورم على طول
+     • أو يشيل اللي مابيتعاملش معاه
+   الترتيب من السيرفر: الأحدث الأول، وأقصى 50.
+══════════════════════════════════════════════════════════════ */
+function renderClients() {
+  const list = S.savedReceivers || [];
+  const box = $("clientList"); if (!box) return;
+  if (!list.length) {
+    box.innerHTML = `<div class="empty"><i>📇</i><b>لسه مافيش عملاء محفوظين</b>
+      <span>أول ما تبعت أول طلب، بيانات المستلم هتتحفظ هنا لوحدها</span></div>`;
+    return;
+  }
+  box.innerHTML = list.map(r => `
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <div class="mi" style="width:36px;height:36px;border-radius:10px;background:var(--card2);
+        display:grid;place-items:center;font-size:17px;flex:none">👤</div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:14px">${esc(r.name || "—")}</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px" dir="ltr">${esc(r.phone || "")}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">${esc(r.zoneName || "")}${r.address ? " · " + esc(r.address) : ""}</div>
+      </div>
+      <button class="btn ghost sm" style="padding:7px 12px;font-size:12px;flex:none"
+        onclick="sendToClient('${esc(r.id)}')">ابعت له</button>
+      <div class="ico-btn" onclick="delClient('${esc(r.id)}')">🗑️</div>
+    </div>`).join("");
+}
+
+/* بيفتح طلب جديد وبيملا بيانات المستلم — التاجر مش هيكتبها تاني */
+function sendToClient(id) {
+  const r = (S.savedReceivers || []).find(x => String(x.id) === String(id));
+  if (!r) return;
+  startNewOrder();
+  /* الفورم بيتبني في خطوة واحدة، فبنستنى الرسمة قبل ما نملا */
+  setTimeout(() => {
+    const rc = (S.draft.receivers && S.draft.receivers[0]) || null;
+    if (!rc) return;
+    rc.name    = r.name || "";
+    rc.phone   = r.phone || "";
+    rc.phone2  = r.phone2 || "";
+    rc.address = r.address || "";
+    rc.zoneId  = r.zoneId ?? null;
+    rc.lat     = r.lat ?? null;
+    rc.lng     = r.lng ?? null;
+    renderReceiverBlocks();
+    updateRcvTotal();
+    toast("اتملت بيانات " + (r.name || "العميل"), "ok");
+  }, 260);
+}
+window.sendToClient = sendToClient;
+
+async function delClient(id) {
+  const r = (S.savedReceivers || []).find(x => String(x.id) === String(id));
+  if (!confirm("تشيل " + (r?.name || "العميل") + " من عملائك؟\nالطلبات القديمة مش هتتأثر.")) return;
+  try {
+    const res = await api.del("/api/customer/receivers/" + encodeURIComponent(id));
+    S.savedReceivers = res.items || (S.savedReceivers || []).filter(x => String(x.id) !== String(id));
+    renderClients(); renderClientsCount();
+    toast("اتشال من عملائك", "ok");
+  } catch (e) { toast(e.message || "مااتشالش — جرّب تاني", "err"); }
+}
+window.delClient = delClient;
+
+/* العدّاد جنب الصف في الرئيسية */
+function renderClientsCount() {
+  const el = $("clientsCount"); if (!el) return;
+  const n = (S.savedReceivers || []).length;
+  el.textContent = n ? n + " عميل" : "‹";
+}
+window.renderClients = renderClients;
 
 function openAddrSheet(id) {
   const a = id ? S.addresses.find(x => String(x.id) === String(id)) : null;
@@ -2945,6 +3333,58 @@ async function doAppUpdate(btnId) {
 }
 window.doAppUpdate = doAppUpdate;
 
+/* ══ تحديث ذاتي ══
+   من غيره التطبيق المفتوح في الخلفية بيفضل شغال بالنسخة القديمة
+   للأبد — حصلت فعلًا أول يوم لايف: باج اتصلح واترفع والتليفونات
+   فضلت بتضرب بيه لأن مافيش أي فحص غير الزرار اليدوي. */
+
+let _updBusy = false, _updLastAt = 0;
+
+async function autoUpdateCheck(mode) {
+  if (_updBusy || !navigator.onLine) return;
+  _updBusy = true;
+  try {
+    const latest = await latestVersion();
+    if (latest && latest !== APP_VERSION) {
+      if (mode === "boot") {
+        /* لسه ماكتبش حرف — إعادة تحميل صامتة آمنة. العلامة بتمنع
+           حلقة لو في النص بروكسي بيقدّم نسخة قديمة متكاشية. */
+        let tried = null;
+        try { tried = sessionStorage.getItem("upd-tried"); } catch (_) {}
+        if (tried !== latest) {
+          try { sessionStorage.setItem("upd-tried", latest); } catch (_) {}
+          if ("serviceWorker" in navigator) {
+            try {
+              const rs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(rs.map(r => r.update().catch(() => {})));
+            } catch (_) {}
+          }
+          location.reload();
+          return;
+        }
+      } else {
+        /* راجع للتطبيق وممكن يكون في نص أوردر — إعادة التحميل هنا
+           بتمسح اللي كتبه (فورم العميل بيتمسح بإعادة الرسم). توست
+           بس، والزرار في القايمة أو قفلة وفتحة بيكمّلوا. */
+        toast("فيه نسخة جديدة من التطبيق — اقفله وافتحه تاني أول ما تخلّص 🔄", "ok");
+      }
+    }
+  } catch (_) {}
+  _updBusy = false;
+}
+
+/* عند الإقلاع — متأخر ثانيتين عشان مايزاحمش تحميل البيانات الأولى */
+setTimeout(() => autoUpdateCheck("boot"), 2000);
+
+/* وعند الرجوع للتطبيق من الخلفية — متباعد ١٠ دقايق */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  const now = Date.now();
+  if (now - _updLastAt < 10 * 60 * 1000) return;
+  _updLastAt = now;
+  autoUpdateCheck("visible");
+});
+
 const openAbout = () => openModal("عن التطبيق", `
   <div style="text-align:center;padding:10px 0">
     <img src="assets/logo.png" style="width:170px" alt="" />
@@ -2956,7 +3396,7 @@ const openAbout = () => openModal("عن التطبيق", `
       <button class="btn ghost sm" id="_updBtn" style="margin-top:13px;width:100%"
               onclick="doAppUpdate('_updBtn')">🔄 فحص التحديثات</button>
       <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.8">
-        التطبيق بيحدّث نفسه لوحده أول ما تفتحه ومعاك نت — الزرار ده لو حابب تتأكد بنفسك</div>
+        التطبيق بيحدّث نفسه لوحده أول ما تفتحه ومعاك نت، وبينبّهك لو ظهرت نسخة وانت شغال — الزرار ده لو حابب تتأكد بنفسك</div>
     </div>
   </div>`);
 window.openSupport = openSupport; window.openAbout = openAbout;
@@ -3063,9 +3503,11 @@ function startNewOrder() {
   $("sndPinState").style.display = S.draft.sndLat ? "block" : "none";
   $("sndPinState").innerHTML = S.draft.sndLat ? "✅ نقطة الاستلام محدّدة من بياناتك المحفوظة" : "";
 
-  $("rcvNoData").checked = false;
-  $("rcvNoData").onchange = onReceiverMode;
-  onReceiverMode();                 // بيرسم بلوكات المستلمين جوّه
+  /* المفتاح بقى جوه كل طرد، فمافيش حاجة تتصفّر هنا — البلوكات بتتبني
+     من `S.draft.receivers` وكل مستلم جديد بيبدأ بـ`receipt:false`. */
+  S.activeRcv = 0;
+  renderReceiverBlocks();           // بيرسم بلوكات المستلمين
+  updateAttachHint();
 
 
   $("odCodTotal").value = 0; $("odNote").value = "";
@@ -3105,8 +3547,11 @@ function onSenderZone() {
    (سيرفر أقدم) بنسيب الخانة مفتوحة — الحارس الحقيقي على السيرفر برضه. */
 const codLocked = () => S.cod ? !S.cod.allowed : false;
 
+/* receipt = «مش معايا بيانات المستلم» **للطرد ده لوحده**. بتتبعت
+   للسيرفر باسم `fromReceipt` جوه الطرد، وبتتخزّن في العمود
+   `order_deliveries.receiver_from_receipt`. */
 const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"",
-                               lat:null, lng:null, cod:0, images:[] });
+                               lat:null, lng:null, cod:0, images:[], receipt:false });
 
 /** DOM ← state: بيقرا اللي المستخدم كتبه ويخزّنه قبل إعادة الرسم */
 function readReceiverBlocks() {
@@ -3118,6 +3563,7 @@ function readReceiverBlocks() {
     r.address = getAddr("rcvAddrW-" + i);
     r.zoneId  = $("rcvZone-" + i).value;
     r.cod     = parseFloat($("rcvCod-" + i)?.value) || 0;
+    r.receipt = !!$("rcvReceipt-" + i)?.checked;
   });
 }
 
@@ -3133,18 +3579,37 @@ function receiverBlockHtml(r, i, multi, receipt) {
                    data-tip="حذف الطرد ده من الطلب">🗑️</button>` : ""}
     </div>
 
+    <!-- الملء السريع فوق، قبل أي خانة بتتكتب. كان آخر البلوك — يعني العميل
+         بيكتب بيانات المستلم بالإيد كلها وبعدين يكتشف إن فيه زرار بيملاها.
+         نفس النقلة اللي اتعملت في فورم المُرسِل قبل كده. -->
+    <div id="rcvSaved-${i}" style="margin-bottom:12px;display:${receipt ? "none" : "block"}"></div>
+
+    <!-- المفتاح جوه الطرد: كل طرد بيقرّر لنفسه. الشرح تحته بيتغيّر
+         مع الحالة عشان العميل يعرف إيه المطلوب منه دلوقتي. -->
+    <label class="rcv-receipt${receipt ? " on" : ""}" data-tip="فعّلها للطرد ده لو مش معاك بيانات المستلم والعنوان مكتوب على صورة الريسيت.">
+      <input type="checkbox" id="rcvReceipt-${i}" ${receipt ? "checked" : ""}
+             onchange="onReceiverMode(${i})" />
+      <span>
+        <b>مش معايا بيانات المستلم</b>
+        <small>${receipt
+          ? "🧾 مطلوب صورة ريسيت للطرد ده — العنوان والبيانات هيتقروا منها"
+          : "هرفع صورة الريسيت بدل ما أكتب الاسم والتليفون والعنوان"}</small>
+      </span>
+      <span class="ic">🧾</span>
+    </label>
+
     <div id="rcvFields-${i}" style="display:${receipt ? "none" : "block"}">
       <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم الشحنة."><div class="fi">👤</div><div class="fb">
         <b>الاسم</b><input id="rcvName-${i}" placeholder="اسم المستلم" value="${esc(r.name)}"
           autocomplete="off" autocorrect="off" spellcheck="false" name="rn-${i}-${S.formNonce}" /></div></div>
       <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت التسليم. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
-        <b>رقم الهاتف</b><input id="rcvPhone-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone)}"
+        <b>رقم الهاتف</b><input id="rcvPhone-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx أو أرضي" value="${esc(r.phone)}"
           autocomplete="off" autocorrect="off" name="rp-${i}-${S.formNonce}" /></div></div>
       <!-- منظومة الثقة: بادچ سمعة المستلم بيظهر أول ما الرقم يكتمل -->
       <div id="rcvTrust-${i}" style="display:none;margin:-4px 0 10px"></div>
       <div id="rcvTrustNote-${i}" style="display:none;font-size:11.5px;line-height:1.8;margin:-4px 0 10px"></div>
       <div class="fld" style="margin-bottom:10px" data-tip="رقم احتياطي لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
-        <b>رقم إضافي (اختياري)</b><input id="rcvPhone2-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone2)}" /></div></div>
+        <b>رقم إضافي (اختياري)</b><input id="rcvPhone2-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx أو أرضي" value="${esc(r.phone2)}" /></div></div>
       <span class="lbl">عنوان التسليم</span>
       <div id="rcvAddrW-${i}" data-tip="العنوان اللي الطيار هيسلّم عليه — كل ما يكون أدق كل ما التسليم يبقى أسرع."></div>
     </div>
@@ -3182,26 +3647,90 @@ function receiverBlockHtml(r, i, multi, receipt) {
       <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv',${i})"
         data-tip="حدّد مكان التسليم بالظبط على الخريطة — بيوفّر على الطيار وقت ولفّ.">📍 تحديد الموقع على الخريطة</button>
     </div>
-
-    <div id="rcvSaved-${i}" style="margin-top:10px;display:${receipt ? "none" : "block"}"></div>
   </div>`;
 }
+
+/* ══════════════════════════════════════════════════════
+   التنقّل بين الطرود
+   البلوكات كلها موجودة في الـDOM — الظاهر واحد بس. يعني
+   `readReceiverBlocks` بتقرا المخفي عادي (قيم الـinputs بتفضل).
+══════════════════════════════════════════════════════ */
+
+function rcvCount()  { return (S.draft?.receivers || []).length; }
+function rcvActive() {
+  const n = rcvCount();
+  if (!n) return 0;
+  const a = Number(S.activeRcv || 0);
+  // بنقصّه على المدى — الحذف ممكن يسيب المؤشر بره المصفوفة
+  return (a >= 0 && a < n) ? a : n - 1;
+}
+
+/* نفس الشروط اللي `wizNext` بتتحقق منها بالظبط عند الخروج من خطوة ٢ —
+   لو اتغيّرت هناك لازم تتغيّر هنا، والحارس بيتأكد إن الاتنين متطابقين.
+   بنقرا من الـDOM مش من الحالة عشان النقطة تتحدّث وانت بتكتب. */
+function rcvIsIncomplete(i) {
+  const v = id => ($(id)?.value || "").trim();
+  if (!v("rcvZone-" + i)) return true;
+  // الطرد اللي بصورة ريسيت مالوش حقول مستلم يتحقق منها
+  if ($("rcvReceipt-" + i)?.checked) return false;
+  if (!v("rcvName-" + i)) return true;
+  if (!validPhone(v("rcvPhone-" + i))) return true;
+  return !getAddr("rcvAddrW-" + i).trim();
+}
+
+function renderRcvTabs() {
+  const box = $("rcvTabs"); if (!box) return;
+  const n   = rcvCount();
+  const act = rcvActive();
+  /* النص بقى واحد: الطرد الجديد بيبدأ عادي والعميل بيقرر جواه لو
+     هيبقى بصورة ريسيت — مابقاش قرار على مستوى الطلب. */
+  const addLbl = "＋ طرد آخر";
+
+  let html = `<button type="button" class="ptab-add" onclick="addReceiver()"`
+           + ` data-tip="ضيف طرد تاني — كل طرد بيتسجّل أوردر مستقل برقمه وكوده، وبتدخل بياناتهم كلهم مرة واحدة.">`
+           + `${esc(addLbl)}</button>`;
+  for (let i = 0; i < n; i++) {
+    const cls = ["ptab"];
+    if (i === act) cls.push("active");
+    if (S.rcvChecked && rcvIsIncomplete(i)) cls.push("bad");
+    html += `<button type="button" class="${cls.join(" ")}" title="الطرد ${i + 1}"`
+          + ` onclick="showRcv(${i})">${i + 1}</button>`;
+  }
+  box.innerHTML = html;
+  /* block:"nearest" مهمة — من غيرها المتصفح بيسكرول الصفحة رأسيًا */
+  box.querySelector(".ptab.active")?.scrollIntoView({ inline: "center", block: "nearest" });
+}
+window.renderRcvTabs = renderRcvTabs;
+
+function showRcv(i) {
+  const box = $("rcvBlocks"); if (!box) return;
+  S.activeRcv = i;
+  const act = rcvActive();
+  Array.from(box.children).forEach((el, k) => { el.style.display = (k === act) ? "" : "none"; });
+  renderRcvTabs();
+  /* 🔴 الخريطة بتتبني دلوقتي مش قبل كده: Leaflet جوه `display:none`
+     بيطلع بمقاس صفر ويفضل مكسور حتى بعد الإظهار. */
+  const r = S.draft?.receivers?.[act];
+  if (r) setTimeout(() => showMiniMap("rcvMap-" + act, r.lat, r.lng), 30);
+}
+window.showRcv = showRcv;
 
 /** state ← DOM: بيبني البلوكات من جديد ويرجّع كل القيم مكانها */
 function renderReceiverBlocks() {
   const box = $("rcvBlocks"); if (!box || !S.draft) return;
   const list = S.draft.receivers || (S.draft.receivers = [blankReceiver()]);
-  const receipt = !!S.draft.receiptMode;
   const multi = list.length > 1;
 
-  box.innerHTML = list.map((r, i) => receiverBlockHtml(r, i, multi, receipt)).join("");
+  // كل بلوك بياخد حالته هو — مش حالة الطلب كله
+  box.innerHTML = list.map((r, i) => receiverBlockHtml(r, i, multi, !!r.receipt)).join("");
 
   // ودجت العنوان والمنطقة والخريطة لكل بلوك — لازم بعد ما الـ HTML يتحط
   list.forEach((r, i) => {
     renderAddr("rcvAddrW-" + i, { value: r.address || "", simple: true });
     const sel = $("rcvZone-" + i);
     sel.onchange = () => onReceiverZone(i);
-    showMiniMap("rcvMap-" + i, r.lat, r.lng);
+    // الخريطة للبلوك الظاهر بس — showRcv بتبنيها عند التنقّل
+    if (i === rcvActive()) showMiniMap("rcvMap-" + i, r.lat, r.lng);
     // صور الطرد — كل بلوك له مدخلاته وصوره
     ["rcvCam-" + i, "rcvGal-" + i].forEach(id => {
       const el = $(id); if (!el) return;
@@ -3213,8 +3742,14 @@ function renderReceiverBlocks() {
   refillReceiverZones();
   renderSavedPicks();
   updateRcvTotal();
-  // زرار الإضافة — مالوش لازمة في وضع الريسيت (مفيش بيانات نكرّرها)
-  $("addRcvBtn").style.display = receipt ? "none" : "flex";
+  /* 🔴 الزرار كان بيتخفي في وضع الريسيت بحجة «مفيش بيانات نكرّرها» —
+     وده كان غلط: العميل ممكن يبعت أكتر من طرد لناس مختلفة والعناوين كلها
+     مكتوبة على صور الريسيت. كل طرد ساعتها = منطقة + صورة، والباقي بيتقرا
+     من الصورة. التحقق والإرسال أصلًا بيلفّوا على كل الطرود. */
+  /* التبويب آخر حاجة: بيخفي كل البلوكات غير الظاهر ويرسم الأزرار.
+     لازم بعد `renderSavedPicks` و`updateRcvTotal` عشان البلوكات تكون
+     خلصت بناء قبل ما نقرّر مين يتخفي. */
+  showRcv(rcvActive());
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3321,8 +3856,8 @@ function addParcelSameReceiver(i) {
     // التحصيل والصور مابيتنسخوش — كل طرد له مبلغه وصوره
     cod: 0, images: []
   });
+  S.activeRcv = i + 1;
   renderReceiverBlocks();
-  $("rcvBlocks")?.children[i + 1]?.scrollIntoView({ behavior: "smooth", block: "center" });
   toast("اتضاف طرد تاني لنفس المستلم", "ok");
 }
 window.addParcelSameReceiver = addParcelSameReceiver;
@@ -3330,10 +3865,9 @@ window.addParcelSameReceiver = addParcelSameReceiver;
 function addReceiver() {
   readReceiverBlocks();
   S.draft.receivers.push(blankReceiver());
+  // الطرد الجديد بيتفتح على طول — العميل دوس «طرد آخر» عشان يكتب فيه
+  S.activeRcv = S.draft.receivers.length - 1;
   renderReceiverBlocks();
-  // ننزل على البلوك الجديد عشان المستخدم يشوفه
-  const el = $("rcvBlocks")?.lastElementChild;
-  el?.scrollIntoView({ behavior: "smooth", block: "center" });
   toast("اتضاف مستلم جديد", "ok");
 }
 window.addReceiver = addReceiver;
@@ -3342,20 +3876,25 @@ function removeReceiver(i) {
   readReceiverBlocks();
   if (S.draft.receivers.length <= 1) return;
   S.draft.receivers.splice(i, 1);
+  /* بنروح لجاره: اللي بعده لو موجود، وإلا اللي قبله. `rcvActive`
+     بتقصّ على المدى فالمؤشر مايخرجش بره المصفوفة. */
+  S.activeRcv = Math.min(i, S.draft.receivers.length - 1);
   renderReceiverBlocks();
   toast("اتشال المستلم", "ok");
 }
 window.removeReceiver = removeReceiver;
 
-/* وضع "مش معايا بيانات المستلم" — بنخفي حقول المستلم ونعتمد على صورة
-   الريسيت، والمنطقة تفضل إجبارية لأن سعر التوصيل بيتحسب منها.
-   في الوضع ده بيبقى مستلم واحد بس — مفيش بيانات نوزّعها على أكتر من نقطة. */
-function onReceiverMode() {
-  const on = $("rcvNoData").checked;
+/* «مش معايا بيانات المستلم» — **للطرد ${i} لوحده** من 2026-08-31.
+   بيخفي حقول الاسم والتليفون والعنوان للطرد ده بس، ويخلّي صورة الريسيت
+   إجبارية له. المنطقة بتفضل إجبارية في الحالتين — منها بيتحسب السعر.
+
+   ⚠️ `readReceiverBlocks` الأول: إعادة الرسم بتبني الـHTML من الحالة،
+   فأي حاجة العميل كتبها في أي طرد ولسه مش في الحالة بتضيع من غيرها. */
+function onReceiverMode(i) {
   readReceiverBlocks();
-  S.draft.receiptMode = on;
-  if (on && S.draft.receivers.length > 1) S.draft.receivers = [S.draft.receivers[0]];
-  $("rcvReceiptNote").style.display = on ? "block" : "none";
+  const r = S.draft?.receivers?.[i];
+  if (r) r.receipt = !!$("rcvReceipt-" + i)?.checked;
+  S.activeRcv = i;              // نفضل على نفس الطرد بعد إعادة الرسم
   renderReceiverBlocks();
   updateAttachHint();
 }
@@ -3363,10 +3902,12 @@ window.onReceiverMode = onReceiverMode;
 
 function updateAttachHint() {
   const el = $("attachHint"); if (!el) return;
-  if (S.draft?.receiptMode) {
+  const nR = (S.draft?.receivers || []).filter(r => r.receipt).length;
+  if (nR) {
     el.innerHTML = `<span style="color:var(--orange);font-weight:700">
-      🧾 صورة الريسيت إجبارية لكل طرد</span> — العنوان وبيانات المستلم هيتقروا منها.
-      الصور بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.`;
+      🧾 صورة الريسيت إجبارية لـ${nR === 1 ? "طرد واحد" : nR + " طرود"}</span> — العنوان
+      وبيانات المستلم هيتقروا منها. الصور بتتضاف جوّه الطرد نفسه في خطوة
+      <b>المستلمين</b>.`;
   } else {
     el.style.color = "var(--muted)";
     el.innerHTML = `📷 صور كل طرد بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.`;
@@ -3381,10 +3922,10 @@ function renderAttachSummary() {
   const box = $("attachSummary"); if (!box) return;
   const rs = S.draft?.receivers || [];
   const multi = rs.length > 1;
-  const need = !!S.draft?.receiptMode;
   box.innerHTML = rs.map((r, i) => {
     const n = (r.images || []).filter(x => x.url).length;
-    const bad = need && !n;
+    // الصورة ناقصة = الطرد ده عليه علامة الريسيت ومالوش صورة
+    const bad = !!r.receipt && !n;
     return `<div class="kv" style="align-items:center">
       <span class="k">📦 ${multi ? `الطرد #${i + 1}` : "الطرد"}
         ${r.name ? `<small style="color:var(--muted)"> — ${esc(r.name)}</small>` : ""}</span>
@@ -3406,10 +3947,25 @@ function onReceiverZone(i) {
     if (!z) el.style.display = "none";
     else {
       el.style.display = "block";
-      el.innerHTML = z.price
-        ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;
-            padding:10px;font-size:13px">🚚 سعر التوصيل التقديري: <b>${fmtMoney(z.price)} ج.م</b></div>`
-        : `<div style="font-size:12px;color:var(--muted)">سعر التوصيل هيحدده الفرع</div>`;
+      /* العميل المفتوح له تعديل السعر (إدارة العملاء — 2026-09-02) بياخد
+         خانة قابلة للكتابة بدل الرقم الثابت. القيمة بتتحفظ في r.customPrice
+         مع كل حرف (oninput) — من غيرها أي إعادة رسم كانت هتمسحها
+         (درس customer-form-rerender-wipes). */
+      el.innerHTML = S.profile?.canEditPrice
+        ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;padding:10px;font-size:13px">
+            🚚 سعر التوصيل:
+            <input type="number" id="rcvPriceIn-${i}" min="${z.price || 0}" step="0.5"
+              value="${r.customPrice != null && r.customPrice !== "" ? esc(r.customPrice) : (z.price || "")}"
+              oninput="onCustomPrice(${i})" onblur="onCustomPriceBlur(${i})"
+              style="width:90px;background:var(--card2,#1a1a1a);border:1px solid rgba(34,197,94,.4);
+                     border-radius:8px;color:inherit;padding:6px 8px;font-weight:800;text-align:center" /> ج.م
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">
+              مفتوح لك تعديل السعر — أقل سعر للمنطقة دي ${fmtMoney(z.price || 0)} ج.م</div>
+          </div>`
+        : z.price
+          ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;
+              padding:10px;font-size:13px">🚚 سعر التوصيل التقديري: <b>${fmtMoney(z.price)} ج.م</b></div>`
+          : `<div style="font-size:12px;color:var(--muted)">سعر التوصيل هيحدده الفرع</div>`;
     }
   }
   updateRcvTotal();
@@ -3417,8 +3973,38 @@ function onReceiverZone(i) {
 
 /** إجمالي التوصيل = مجموع سعر منطقة كل طرد — زي تطبيق الفروع */
 function draftDeliveryTotal() {
-  return (S.draft?.receivers || []).reduce((s, r) => s + (findZone(r.zoneId)?.price || 0), 0);
+  return (S.draft?.receivers || []).reduce((s, r) => s + rcvPriceOf(r), 0);
 }
+/* سعر توصيل الطرد الفعلي: سعر المنطقة، إلا لو العميل مفتوح له تعديل
+   السعر (can_edit_price من إدارة العملاء — طلب 2026-09-02) وكتب سعرًا.
+   Math.max = القاعدة نفسها بتاعة المحلات: يرفع ولا ينزل عن سعر المنطقة
+   — والسيرفر بيرفض الأقل برضه (القفل هنا للعرض مش للحماية). */
+function rcvPriceOf(r) {
+  const zp = findZone(r.zoneId)?.price || 0;
+  if (S.profile?.canEditPrice && r.customPrice != null && r.customPrice !== "") {
+    return Math.max(zp, Number(r.customPrice) || 0);
+  }
+  return zp;
+}
+/* oninput جوه قالب innerHTML — لازم على window (نفس درس updateRcvTotal) */
+window.onCustomPrice = function (i) {
+  const r = S.draft?.receivers?.[i]; if (!r) return;
+  const el = $("rcvPriceIn-" + i);
+  r.customPrice = el && el.value !== "" ? el.value : null;
+  updateRcvTotal();
+};
+/* عند مغادرة الخانة: لو كتب أقل من سعر المنطقة بنرجّعه لسعرها بوضوح */
+window.onCustomPriceBlur = function (i) {
+  const r = S.draft?.receivers?.[i]; if (!r) return;
+  const zp = findZone(r.zoneId)?.price || 0;
+  const el = $("rcvPriceIn-" + i);
+  if (el && el.value !== "" && Number(el.value) < zp) {
+    el.value = zp;
+    r.customPrice = zp;
+    toast(`أقل سعر توصيل للمنطقة دي ${fmtMoney(zp)} ج.م — تقدر تزوّد بس`, "err");
+    updateRcvTotal();
+  }
+};
 /* مجموع التحصيل المكتوب على الطرود — بيتعرض في خطوة «بيانات الطلب» */
 function draftCodTotal() {
   const list = S.draft?.receivers || [];
@@ -3474,14 +4060,15 @@ function bumpPieces(n) {
 window.bumpPieces = bumpPieces;
 
 /* اختيار سريع من العناوين المحفوظة / المستلمين السابقين */
+/* الشيبات بقت في رأس البطاقة (سطر واحد جنب العنوان) — فالعرض بقى
+   أفقي متمرّر بدل ما يلف على سطرين ويكسر ارتفاع الرأس. */
 function renderSavedPicks() {
   /* الشرط كان S.addresses.length — يعني شيب «بياناتي» مكانش بيظهر أصلًا
      للعميل اللي مالوش عناوين محفوظة، وهو أكتر واحد محتاجه. */
   if (true) {
     /* «بياناتي» شيب أول القايمة — الخانات بقت فاضية عن قصد (صاحب الحساب
        مش دايمًا هو الراسل)، فده بيرجّع بياناته بضغطة بدل ما يكتبها كل مرة. */
-    $("sndSaved").innerHTML = `<span class="lbl">أو املا بضغطة</span>
-      <div class="chips">
+    $("sndSaved").innerHTML = `<div class="chips chips-inline">
         <div class="chip" data-me="1">👤 بياناتي</div>
         ${S.addresses.map(a =>
         `<div class="chip" data-id="${esc(a.id)}">${esc(a.label)}</div>`).join("")}</div>`;
@@ -3517,17 +4104,39 @@ function renderSavedPicks() {
     });
   } else $("sndSaved").innerHTML = "";
 
-  // شيبس المستلمين السابقين — لكل بلوك مستلم قايمته الخاصة
+  /* شيبس الاختيار السريع لكل بلوك مستلم: «بياناتي» الأول وبعده المستلمون
+     السابقون.
+     🔴 «بياناتي» بيظهر **دايمًا** — صاحب الحساب ممكن يكون هو المستلم (شحنة
+     جاية له). والـreturn المبكر القديم (`if (!picks.length) … return`) كان
+     بيخفي الصف كله عن العميل اللي لسه مابعتش لحد — وهو أكتر واحد محتاج
+     يملا بياناته بضغطة. نفس الغلط اتصلّح في شيب المُرسِل قبل كده. */
   const picks = uniqueReceivers(S.savedReceivers);
   (S.draft?.receivers || []).forEach((_, i) => {
     const box = $("rcvSaved-" + i); if (!box) return;
-    if (!picks.length) { box.innerHTML = ""; return; }
-    box.innerHTML = `<span class="lbl">مستلمون سابقون</span>
-      <div class="chips">${picks.slice(0, 10).map(r =>
+    box.innerHTML = `<span class="lbl">اختيار سريع</span>
+      <div class="chips"><div class="chip" data-me="1">👤 بياناتي</div>${picks.slice(0, 10).map(r =>
         `<div class="chip" data-id="${esc(r.id)}">${esc(r.name || r.phone)}</div>`).join("")}</div>`;
     box.querySelectorAll(".chip").forEach(c => c.onclick = () => {
-      const r = picks.find(x => String(x.id) === c.dataset.id); if (!r) return;
       const t = S.draft.receivers[i]; if (!t) return;
+      /* «بياناتي» — نفس حقول شيب المُرسِل + phone2 (بلوك المستلم عنده خانة
+         ليه، والبروفايل بيرجّعه). */
+      if (c.dataset.me) {
+        const p = S.profile || {};
+        $("rcvName-" + i).value   = p.displayNameAr || "";
+        $("rcvPhone-" + i).value  = p.phone1 || "";
+        /* الاسم والتليفون مضمونين (startNewOrder بترفض من غير ملف مكتمل)،
+           لكن الرقم الإضافي اختياري — فالكتابة غير المشروطة كانت هتمسح رقم
+           العميل كتبه بإيده لو ملفه مالوش رقم تاني. */
+        if (p.phone2) $("rcvPhone2-" + i).value = p.phone2;
+        setAddr("rcvAddrW-" + i, p.address || "");
+        t.lat = p.lat ?? null; t.lng = p.lng ?? null;
+        if (p.defaultZoneId != null) $("rcvZone-" + i).value = String(p.defaultZoneId);
+        onReceiverZone(i);
+        showMiniMap("rcvMap-" + i, p.lat, p.lng);
+        toast("اتملت بياناتك", "ok");
+        return;
+      }
+      const r = picks.find(x => String(x.id) === c.dataset.id); if (!r) return;
       $("rcvName-" + i).value   = r.name || "";
       $("rcvPhone-" + i).value  = r.phone || "";
       $("rcvPhone2-" + i).value = r.phone2 || "";
@@ -3578,16 +4187,24 @@ function wizNext(step) {
       readReceiverBlocks();
       const list = S.draft.receivers || [];
       if (!list.length) return toast("أضف طرد واحد على الأقل", "err");
+      /* من هنا ورايح النقط بتبان على أزرار الطرود الناقصة. قبل أول
+         محاولة بتفضل مطفية — فورم لسه اتفتح مايستاهلش يبان غلطان. */
+      S.rcvChecked = true;
+      renderRcvTabs();
+      /* بينقل الشاشة للطرد الناقص قبل الرسالة. من غير كده الرسالة
+         بتقول «الطرد ٣» والعميل شايف الطرد ١ — الطرود بقت مخفية. */
+      const stop = (i, msg) => { showRcv(i); toast(msg, "err"); return true; };
       // كل بلوك مستلم بيتفحص لوحده — مش الأول بس
       for (let i = 0; i < list.length; i++) {
         const r = list[i];
         const at = list.length > 1 ? ` — الطرد ${i + 1}` : "";
         // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
-        if (!r.zoneId)                return toast("اختر منطقة التسليم" + at, "err");
-        if (!S.draft.receiptMode) {
-          if (!r.name)                return toast("اكتب اسم المستلم" + at, "err");
-          if (!validPhone(r.phone))   return toast("رقم هاتف المستلم غير صحيح" + at, "err");
-          if (!r.address.trim())      return toast("اكتب عنوان التسليم" + at, "err");
+        if (!r.zoneId)                return stop(i, "اختر منطقة التسليم" + at);
+        // الطرد اللي بصورة ريسيت بياناته على الصورة — مش هنطلبها منه
+        if (!r.receipt) {
+          if (!r.name)                return stop(i, "اكتب اسم المستلم" + at);
+          if (!validPhone(r.phone))   return stop(i, "رقم هاتف المستلم غير صحيح" + at);
+          if (!r.address.trim())      return stop(i, "اكتب عنوان التسليم" + at);
         }
       }
     }
@@ -3596,8 +4213,11 @@ function wizNext(step) {
   [1, 2, 3, 4].forEach(n => $("wz-" + n).style.display = n === step ? "block" : "none");
   drawStepper("wizStepper", WIZ_CAPS, step);
   if (step === 1) setTimeout(() => showMiniMap("sndMap", S.draft.sndLat, S.draft.sndLng), 60);
-  if (step === 2) setTimeout(() => (S.draft.receivers || []).forEach((r, i) =>
-                    showMiniMap("rcvMap-" + i, r.lat, r.lng)), 60);
+  /* خريطة الطرد الظاهر بس — الباقي مخفي و Leaflet جواه بيطلع بمقاس صفر */
+  if (step === 2) setTimeout(() => {
+    const a = rcvActive(); const r = S.draft?.receivers?.[a];
+    if (r) showMiniMap("rcvMap-" + a, r.lat, r.lng);
+  }, 60);
   if (step === 4) { updateAttachHint(); renderSummary(); }
   $("s-new").querySelector(".scroll").scrollTop = 0;
 }
@@ -3609,11 +4229,14 @@ function renderSummary() {
   const total = draftDeliveryTotal();
   const allPriced = list.every(r => findZone(r.zoneId)?.price);
   // كل مستلم في سطر لوحده عشان العميل يراجع قبل الإرسال
-  const rcvRows = S.draft.receiptMode
-    ? row("المستلم", "🧾 من صورة الريسيت — " + (zoneLabel(findZone(list[0]?.zoneId) || {}) || "—"))
-    : list.map((r, i) => row(
-        list.length > 1 ? `الطرد ${i + 1}` : "المستلم",
-        `${r.name || "—"} — ${zoneLabel(findZone(r.zoneId) || {}) || "—"}`)).join("");
+  /* الملخّص كان بيعرض `list[0]` بس في وضع الريسيت — بعد ما بقى ينفع
+     أكتر من طرد، ده كان هيخفي باقي الطرود عن مراجعة العميل قبل الإرسال. */
+  /* كل طرد بيتعرض بحالته هو — ممكن يبقى في نفس الطلب طرد باسم مستلم
+     وطرد بصورة ريسيت، فالمراجعة قبل الإرسال لازم توري الفرق. */
+  const rcvRows = list.map((r, i) => row(
+    list.length > 1 ? `الطرد ${i + 1}` : "المستلم",
+    (r.receipt ? "🧾 من صورة الريسيت" : (r.name || "—"))
+      + " — " + (zoneLabel(findZone(r.zoneId) || {}) || "—"))).join("");
   $("summaryCard").innerHTML = `<span class="lbl">ملخّص الطلب</span>
     ${rcvRows}
     ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
@@ -3695,12 +4318,13 @@ async function submitOrder() {
   const receivers = (S.draft.receivers || []).filter(r => r.zoneId);
   if (!sz) { wizNext(1); return toast("اختر منطقة الاستلام", "err"); }
   if (!receivers.length) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
-  /* في وضع الريسيت، الصورة هي المصدر الوحيد لعنوان الطرد — فإجبارية
-     لكل طرد لوحده، مش صورة واحدة للطلب كله زي الأول. */
-  if (S.draft.receiptMode) {
-    const bad = receivers.findIndex(r => !(r.images || []).some(i => i.url));
+  /* الصورة إجبارية **للطرود اللي عليها علامة الريسيت بس** — دي المصدر
+     الوحيد لعنوانها. الطرد اللي كاتب بياناته عادي مايتطلبش منه صورة. */
+  {
+    const bad = receivers.findIndex(r => r.receipt && !(r.images || []).some(i => i.url));
     if (bad !== -1) {
       wizNext(2);
+      showRcv(bad);
       return toast(receivers.length > 1
         ? `لازم ترفع صورة الريسيت للطرد #${bad + 1} — العنوان مكتوب عليها`
         : "لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
@@ -3713,17 +4337,22 @@ async function submitOrder() {
   const branchId   = routeBranch(origBranchId);
   const branchName = S.branches[branchId]?.name || zoneBranchName(sz);
 
-  const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
+  const btn = $("submitBtn");
+  /* بتتقلب لـtrue بمجرد ما السيرفر يرد بنجاح — الـcatch بيقراها عشان
+     مايقولش «تعذّر الإرسال» على أوردر اتسجّل فعلًا. */
+  let orderCreated = false; btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
   try {
     /* الترقيم بقى على السيرفر (عدّاد يومي لكل فرع بمفتاح يوم القاهرة،
        معاملة SQL ذرّية) — POST /api/orders بيرجّع الأوردر برقمه جاهز */
-    const receipt = !!S.draft.receiptMode;
     const note = $("odNote").value.trim();
 
     // طرد لكل مستلم — نفس سكيمة deliveries المستخدمة في لوحة الإدارة
     // وبوابة المحل، فالفرع والطيار بيشوفوا كل النقط من غير أي تعديل عندهم.
     const deliveries = receivers.map((r, idx) => {
       const rz = findZone(r.zoneId);
+      // 🔴 لكل طرد حالته — السيرفر بيقرا `fromReceipt` جوه كل طرد
+      //    ويخزّنها في `order_deliveries.receiver_from_receipt`
+      const receipt = !!r.receipt;
       return {
         // رقم ثابت للطرد جوّه الطلب — منه بيتبني رقم الجزء المفصول لو الفرع
         // حمّل بعض الطرود بس على طيار (مثال: HAL-260805-003-2)
@@ -3733,8 +4362,14 @@ async function submitOrder() {
         // والإدارة وتطبيق الطيار تبقى مفهومة وما تبانش خانة فاضية
         receiverName  : receipt ? "🧾 البيانات على صورة الريسيت" : r.name,
         receiverPhone : receipt ? "" : r.phone,
+        /* 🔴 العلامة دي هي اللي بتخلّي السيرفر يقبل الرقم الفاضي.
+           من غيرها كان بيرفض بـ«رقم المستلم غير صحيح» وخانة
+           التليفون مخفية فمفيش مخرج — الوضع ده كان بيفشل دايمًا. */
+        fromReceipt   : !!receipt,
         receiverPhone2: receipt ? "" : r.phone2,
-        zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
+        /* السعر الفعلي: المكتوب من العميل المفتوح له (≥ سعر المنطقة) أو
+           سعر المنطقة — rcvPriceOf فيها القاعدة والسيرفر بيتحقق برضه */
+        zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rcvPriceOf(r),
         // التحصيل بقى لكل طرد لوحده — كده لو الفرع فرّق الطرود على أكتر من
         // طيار، كل طيار ياخد تحصيل طروده هو بس ومايتحسبش مرتين
         orderPrice: Number(r.cod) || 0,
@@ -3755,7 +4390,15 @@ async function submitOrder() {
     /* POST /api/customer/orders — المسار المخصوص للعميل: بياخد هويته من الجلسة
        نفسها (مايصدّقش customerId من الجسم)، بيتأكد إنه أكمل بياناته، وبيشتق
        الفرع من زون الاستلام سيرفر-سايد، والترقيم ذرّي. */
+    /* 🔁 مفتاح مانع التكرار — ثابت لحد ما حفظ ينجح: لو العميل ضغط تاني
+       بعد خطأ (شاشة أو شبكة)، السيرفر بيرجّع نفس الأوردر بدل نسخة جديدة
+       يدفع فيها مرتين (درس receipt is not defined يوم 2026-09-01). */
+    if (!S._orderClientRef) {
+      S._orderClientRef = (crypto.randomUUID && crypto.randomUUID())
+        || (Date.now().toString(36) + "-" + Math.random().toString(36).slice(2));
+    }
     const res = await api.post("/api/customer/orders", {
+      clientRef   : S._orderClientRef,
       senderName  : $("sndName").value.trim(),
       senderPhone : $("sndPhone").value.trim(),
       /* مابقاش بيتبعت رقم صاحب الحساب هنا: الراسل ممكن يكون شخص تاني
@@ -3783,33 +4426,69 @@ async function submitOrder() {
          زي ما هي في التفاصيل والتقارير. */
       goodsValue: 0
     });
+    /* 🔴 من هنا وتحت: الأوردر **اتسجّل على السيرفر خلاص**. أي رمي بعد
+       السطر ده مشكلة عرض، مش فشل إرسال — والـcatch تحت بتفرّق بيهم. */
+    orderCreated = true;
+    S._orderClientRef = null;
+    if (res.duplicate) toast("الطلب ده كان اتبعت خلاص من شوية ✓ — مافيش نسخة جديدة اتعملت", "ok");
     const saved = res.order;
-    mergeOrders([saved]);
+    /* كل طرد بقى أوردر بذاته (قرار 2026-09-01) — السيرفر بيفرّق تلقائيًا
+       وبيرجّع `orders` بكل الناتج، و`order` فضل أول واحد للعقد القديم. */
+    const allOrders = Array.isArray(res.orders) && res.orders.length ? res.orders : [saved];
+    mergeOrders(allOrders);
 
     /* الخصم من المحفظة **بعد** حفظ الأوردر — معاملة ذرّية على السيرفر
        (use = min(الرصيد, سعر التوصيل) + بصمة walletUsed على الأوردر).
-       لو فشلت: الأوردر موجود بسعره الكامل — مفيش فلوس ضاعت. */
+       لو فشلت: الأوردر موجود بسعره الكامل — مفيش فلوس ضاعت.
+       مع التفريق بنلف على الأوردرات واحد واحد — كل نداء بياخد
+       min(الرصيد المتبقي، سعر الأوردر ده) فالتوزيع بيحصل لوحده. */
     let walletUsed = 0, warning = "";
     if (delivTotal > 0 && (S.wallet?.balance || 0) > 0) {
       try {
-        const w = await api.post(`/api/orders/${saved.id}/apply-wallet`);
-        walletUsed = w.walletUsed || 0;
-        if (S.wallet) S.wallet.balance = w.walletBalance ?? S.wallet.balance;
-        if (w.order) mergeOrders([w.order]);
+        for (const o of allOrders) {
+          const w = await api.post(`/api/orders/${o.id}/apply-wallet`);
+          walletUsed += w.walletUsed || 0;
+          if (S.wallet) S.wallet.balance = w.walletBalance ?? S.wallet.balance;
+          if (w.order) mergeOrders([w.order]);
+          if ((w.walletBalance ?? 1) <= 0) break;   // الرصيد خلص — مفيش داعي لنداءات فاضية
+        }
       } catch (e) {
-        warning = "الأوردر اتسجّل، بس خصم رصيد المحفظة ما تمّش — " + (e.message || "كلّم الإدارة");
+        warning = "الأوردر اتسجّل، بس خصم رصيد المحفظة ما تمّش بالكامل — " + (e.message || "كلّم الإدارة");
       }
     }
 
-    // نحفظ المستلمين للاقتراح في المرات الجاية
-    // (مش في وضع الريسيت — مفيش بيانات نحفظها)
-    if (!receipt) deliveries.forEach(d => saveReceiver(d));
+    /* نحفظ المستلمين للاقتراح في المرات الجاية — وبنتخطّى طرود الريسيت
+       (مفيش بيانات نحفظها).
+       🔴 كان `if (!receipt)` و`receipt` معرّفة بـ`const` **جوه** الـmap
+       فوق — نطاقها البلوك، فالسطر ده كان بيرمي ReferenceError **بعد** ما
+       الأوردر يتسجّل، والـcatch تقول «تعذّر إرسال الطلب» فالعميل يضغط تاني
+       ويعمل أوردر مكرر. حصل لكل أوردر جه من التطبيق يوم 2026-09-01.
+       والريسيت أصلًا خاصية كل طرد لوحده مش الطلب كله. */
+    deliveries.forEach(d => { if (!d.fromReceipt) saveReceiver(d); });
 
     if (warning)         toast(warning, "err");
     else if (walletUsed) toast(`اتخصم ${walletUsed} ج.م من محفظتك 👛`, "ok");
-    showDone(saved.orderNum, saved.deliveries && saved.deliveries.length ? saved.deliveries : deliveries);
+    /* شاشة النجاح: كل طرد بكوده الحقيقي — رقم أوردره المستقل بعد التفريق.
+       طرود السيرفر أدق (فيها zoneName والريسيت)، والمحلي احتياطي. */
+    const doneList = allOrders.flatMap(o =>
+      (o.deliveries && o.deliveries.length ? o.deliveries : [{}])
+        .map(d => ({ ...d, _orderNum: o.orderNum || "" })));
+    showDone(allOrders.length > 1
+      ? allOrders.map(o => o.orderNum).filter(Boolean).join(" · ")
+      : saved.orderNum,
+      doneList.length ? doneList : deliveries);
   } catch (e) {
-    toast("تعذّر إرسال الطلب: " + (e.message || e), "err");
+    /* 🔴 الفرق ده هو اللي بيمنع الأوردرات المكرّرة. لو الإنشاء نجح وبعدين
+       حاجة في العرض رمت، «تعذّر إرسال الطلب» **كدب** — والعميل بيضغط تاني
+       ويدفع مرتين. حصل فعلًا 2026-09-01: أربع أوردرات، اتنين منهم مكرّرين،
+       وكل الطلبات رجعت 200 من السيرفر. */
+    if (orderCreated) {
+      console.error("submitOrder — بعد التسجيل:", e);
+      toast("الطلب اتسجّل ✓ — بس حصلت مشكلة في عرض التأكيد، هتلاقيه في طلباتك", "ok");
+      try { go("orders"); } catch (_) {}
+    } else {
+      toast("تعذّر إرسال الطلب: " + (e.message || e), "err");
+    }
   } finally {
     btn.disabled = false; btn.textContent = "إرسال الطلب";
   }
@@ -3832,6 +4511,9 @@ function saveReceiver(d) {
    (HAL-260805-009-2) — نفس الرقم اللي الطرد بياخده لو الفرع فرّقه على
    طيار لوحده، فالكود بيفضل مطابق للأوردر في كل الحالات. */
 function parcelCodeOf(orderNum, d, total) {
+  /* مع التفريق التلقائي كل طرد بقى أوردر بذاته برقمه هو — الرقم
+     الحقيقي المُلزق على الطرد بيغلب لاحقة التفريق القديمة. */
+  if (d && d._orderNum) return d._orderNum;
   const no = Number(d && d.parcelNo) || 0;
   return (total > 1 && no) ? `${orderNum}-${no}` : orderNum;
 }
@@ -3859,7 +4541,7 @@ function showDone(num, deliveries) {
       <div style="background:var(--card);border:1px solid var(--line);border-radius:16px;
                   padding:14px;margin-bottom:12px">
         ${list.length > 1 ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">
-          📦 الطرد ${i + 1} من ${list.length}</div>` : ""}
+          ${d._orderNum ? "🧾 أوردر" : "📦 الطرد"} ${i + 1} من ${list.length}</div>` : ""}
         <div style="font-weight:800;font-size:14px">${esc(who)}${zone}</div>
         <div style="direction:ltr;font-weight:900;font-size:15px;margin:6px 0 10px">${esc(code)}</div>
         <div class="qr-box" id="qrP${i}" style="margin:0 auto"></div>
@@ -3953,7 +4635,11 @@ function confetti() {
 /* ══════════════════════════════════════════════════════════════
    الخرائط — Leaflet + OpenStreetMap (مجاني، بدون مفتاح API)
 ══════════════════════════════════════════════════════════════ */
-const TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+/* بلاطات OSM المجانية — نفس اللي كل تطبيقات الطاقم بتستخدمه. كانت
+   Carto dark_all وبقت بتطبع «API KEY REQUIRED» على كل بلاطة لما فرضوا
+   مفاتيح API. الخريطة بألوان OSM الطبيعية في الوضعين — كان فيه فلتر
+   بيغمّقها في الليلي وصاحب النظام قرر شيله. */
+const TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const miniMaps = {};
 function showMiniMap(elId, lat, lng) {
   const el = $(elId); if (!el) return;
@@ -4256,6 +4942,86 @@ setTimeout(function bootGuard() {
   if (window._bootBusy) return setTimeout(bootGuard, 2000);
   if ($("boot").style.display !== "none") { $("boot").style.display = "none"; go("splash"); }
 }, 6000);
+/* ══════════════════════════════════════════════════════════════
+   مظهر التطبيق — ليلي · نهاري · النظام
+   ──────────────────────────────────────────────────────────────
+   تلات حالات مش اتنين. «النظام» معناه **مانحطش** `data-theme` خالص،
+   فالـCSS بتسيب `prefers-color-scheme` يحكم. الاختيار الصريح بيحط
+   السمة فتغلب على الجهاز في الاتجاهين.
+
+   الاختيار بيتحفظ في localStorage — وبيتقرا **قبل ما الصفحة تترسم**
+   في سكربت صغير فوق (شوف `<head>`) عشان مايحصلش وميض أبيض.
+══════════════════════════════════════════════════════════════ */
+/* الترتيب هو ترتيب التبديل، وأول واحد هو **الافتراضي**.
+   ليلي أولًا عن قصد: التطبيق أسود من أصله وكل صفحات الموقع سودا،
+   فالافتراضي لازم يطابق ده. «النظام» اختيار متاح مش سلوك مفروض. */
+const THEMES = [
+  { key: "dark",   label: "ليلي",   icon: "🌙" },
+  { key: "light",  label: "نهاري",  icon: "☀️" },
+  { key: "system", label: "النظام", icon: "🌓" },
+];
+
+function applyTheme(key) {
+  const root = document.documentElement;
+  if (key === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", key);
+  try { localStorage.setItem("cust-theme", key); } catch (e) {}
+  const t = THEMES.find(x => x.key === key) || THEMES[0];
+  const ic = $("themeIcon"), st = $("themeState");
+  if (ic) ic.textContent = t.icon;
+  if (st) st.textContent = t.label;
+  /* خانات المنطقة (zonepick) بتتلوّن بستايل مباشر وقت الرسم، فبتتجمّد
+     على الوضع القديم. بنعيد تلوينها هنا — الأبعاد بتفضل زي ما هي. */
+  repaintZonePicks();
+  /* لون شريط المتصفح بيتبع الوضع الفعلي مش الاختيار */
+  const dark = key === "dark" || (key === "system" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
+  const m = document.createElement("meta");
+  m.name = "theme-color"; m.content = dark ? "#0a0a0b" : "#f4f4f6";
+  document.head.appendChild(m);
+}
+
+/* خانات zonepick بتاخد ألوانها كستايل مباشر من الـ<select> وقت الرسم
+   (شوف copyLook في assets/js/zonepick.js)، والستايل المباشر بيغلب على
+   التوكنز. فبعد أي تبديل وضع بنعيد تلوينها من التوكنز الحالية.
+   بنلمس اللون بس — الارتفاع والحشو والحدود بتفضل زي ما نُسخت. */
+function repaintZonePicks() {
+  const cs = getComputedStyle(document.documentElement);
+  const tok = k => cs.getPropertyValue(k).trim();
+  const bg = tok("--card2"), fg = tok("--txt"), ln = tok("--line"), pop = tok("--card");
+  document.querySelectorAll(".zp-in").forEach(el => {
+    el.style.backgroundColor = bg;
+    el.style.color = fg;
+    ["Top", "Right", "Bottom", "Left"].forEach(side => {
+      el.style["border" + side + "Color"] = ln;
+    });
+  });
+  document.querySelectorAll(".zp-pop").forEach(el => {
+    el.style.backgroundColor = pop;
+    el.style.color = fg;
+    el.style.borderColor = ln;
+  });
+}
+window.repaintZonePicks = repaintZonePicks;
+
+function currentTheme() {
+  /* الافتراضي **ليلي** مش «النظام» — شوف التعليق فوق THEMES. */
+  try { return localStorage.getItem("cust-theme") || "dark"; } catch (e) { return "dark"; }
+}
+
+function cycleTheme() {
+  const i = THEMES.findIndex(x => x.key === currentTheme());
+  const next = THEMES[(i + 1) % THEMES.length];
+  applyTheme(next.key);
+  toast("المظهر: " + next.label, "ok");
+}
+window.cycleTheme = cycleTheme;
+window.applyTheme = applyTheme;
+
+/* أول ما الصفحة تجهز، نظبّط الأيقونة والاسم على المحفوظ */
+applyTheme(currentTheme());
+
 </script>
 </body>
 </html>

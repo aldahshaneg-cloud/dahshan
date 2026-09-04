@@ -78,7 +78,14 @@ class ResolveApiActor
         if ($session->get('user_id')) {
             $uid = (int) $session->get('user_id');
 
-            if ($this->isBlocked('users', $uid)) {
+            /* 🔒 الدور والفرع بيتقروا من **القاعدة** مش من الجلسة.
+               قبل كده كانوا لقطة اتحفظت وقت الدخول: الأدمن يضيّق صلاحية
+               موظف (يغيّر دوره أو ينقله فرع) والجلسة المفتوحة بتفضل شغّالة
+               بالصلاحية القديمة لحد ما يخرج ويدخل — يعني التضييق مش بيوصل.
+               الاستعلام ده كان بيتعمل أصلًا لفحص `blocked`، فبنقراهم منه
+               مرة واحدة: **صفر استعلامات زيادة**. */
+            $row = $this->staffRow($uid);
+            if ($row === null || (int) $row->blocked === 1) {
                 $session->flush();
                 $session->invalidate();
                 throw ApiException::blocked();
@@ -86,10 +93,10 @@ class ResolveApiActor
 
             return Actor::staff(
                 userId: $uid,
-                username: (string) $session->get('username', ''),
-                role: (string) $session->get('role', ''),
-                branchId: $session->get('branch_id') !== null ? (int) $session->get('branch_id') : null,
-                name: (string) $session->get('name', ''),
+                username: (string) $row->username,
+                role: (string) $row->role,
+                branchId: $row->branch_id !== null ? (int) $row->branch_id : null,
+                name: (string) ($row->name ?? ''),
             );
         }
 
@@ -118,6 +125,25 @@ class ResolveApiActor
      * القاعدة المهمة: **الصف اللي اتحذف = محظور** — الجلسة ما تكملش.
      * الكاش لدورة الطلب الواحد بس، زي static $cache في الأصل.
      */
+    /**
+     * صف الموظف من القاعدة — مصدر الدور والفرع والحظر مع بعض.
+     *
+     * مكاش ثابت للطلب الواحد زي `isBlocked` بالظبط، فالميدلوير بيضرب
+     * استعلام واحد بدل اتنين.
+     */
+    private function staffRow(int $uid): ?object
+    {
+        static $cache = [];
+        if (array_key_exists($uid, $cache)) {
+            return $cache[$uid];
+        }
+
+        return $cache[$uid] = DB::table('users')
+            ->select('username', 'role', 'branch_id', 'name', 'blocked')
+            ->where('id', $uid)
+            ->first();
+    }
+
     private function isBlocked(string $table, int $id): bool
     {
         static $cache = [];

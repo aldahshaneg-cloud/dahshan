@@ -243,6 +243,12 @@ img{display:block;max-width:100%}
 
 <script src="assets/js/constants.js"></script>
 <script src="assets/js/api.js"></script>
+<script>
+/* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش مصرّح
+   له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل أي دور
+   بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html. */
+var APP_KEY = "customers";
+</script>
 <script src="assets/js/trust-admin.js"></script>
 <script>
 /* اتحول للـ REST API — الجلسة كوكي PHP والبيانات بالاستطلاع */
@@ -287,7 +293,7 @@ window.doLogin = async function () {
   err.textContent = "";
   if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
   try {
-    const res = await API.login(u, p);
+    const res = await API.login(u, p, APP_KEY);
     if (res.user.role !== "admin") {
       await API.logout().catch(() => {});
       err.textContent = "الحساب ده مش مدير — كلّم إدارة النظام."; return;
@@ -580,6 +586,9 @@ function renderPane(id) {
         ${kv("اكتمال البيانات", c.profileCompleted
             ? `<span style="color:var(--green)">مكتملة ✓</span>`
             : `<span style="color:var(--orange)">ناقصة</span>`)}
+        ${kv("تعديل سعر التوصيل", c.canEditPrice
+            ? `<span style="color:var(--green)">مفتوح له ✓ — زي المحلات، بحد أدنى سعر المنطقة</span>`
+            : `<span style="color:var(--muted)">مقفول — السعر من المنطقة إجباري</span>`)}
       </div>
 
       <div class="card">
@@ -589,6 +598,8 @@ function renderPane(id) {
             ${c.blocked ? "✅ ارفع الحظر" : "🚫 احظر العميل"}</button>
           <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
           <button class="btn" data-act="zone">📍 تغيير المنطقة</button>
+          <button class="btn ${c.canEditPrice ? "danger" : "ok"}" data-act="price">
+            ${c.canEditPrice ? "💰 اقفل تعديل سعر التوصيل" : "💰 افتح تعديل سعر التوصيل"}</button>
           <button class="btn danger" data-act="del">🗑️ حذف الحساب</button>
         </div>
       </div>
@@ -861,6 +872,7 @@ $("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
 function act(a, c) {
   if (a === "block")    return askBlock(c);
   if (a === "edit")     return askEdit(c);
+  if (a === "price")    return askPriceEdit(c);
   if (a === "zone")     return askZone(c);
   if (a === "del")      return askDelete(c);
   if (a === "rate")     return askRate(c);
@@ -907,6 +919,30 @@ async function doBlock(c, on) {
   } catch (e) { toast("تعذّر: " + (e?.message || e)); }
 }
 
+/* ══ فتح/قفل تعديل سعر التوصيل — زي المحلات (طلب 2026-09-02) ══
+   القفل بيتشال من غير تأكيد (زي رفع الحظر)؛ الفتح بتأكيد لأنه
+   بيدّي العميل صلاحية تسعير بيتحاسب عليها الطيار والفرع. */
+function askPriceEdit(c) {
+  if (c.canEditPrice) return doPriceEdit(c, false);
+  openM("فتح تعديل سعر التوصيل", `
+    <p style="font-size:13.5px;line-height:1.9;margin-bottom:16px">
+      هتفتح لـ<b>${esc(nameOf(c))}</b> إمكانية تغيير سعر التوصيل من التطبيق؟<br>
+      <span style="color:var(--muted);font-size:12.5px">نفس قاعدة المحلات بالظبط:
+      يقدر <b>يرفع</b> السعر لكن مش هيقدر ينزل عن سعر المنطقة —
+      والسيرفر بيرفض أي سعر أقل حتى لو اتبعت من برة التطبيق.</span></p>
+    <div style="display:flex;gap:9px">
+      <button class="btn ok" id="okBtn">💰 افتح الخاصية</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = () => { closeM(); doPriceEdit(c, true); };
+}
+async function doPriceEdit(c, on) {
+  try {
+    const d = await API.post(`/api/customers/${c.id}/price-edit`, { enabled: on });
+    applyCustomer(d.customer);
+    toast(on ? "اتفتح له تعديل السعر ✓ — هتظهر له خانة السعر في الطلب الجديد" : "اتقفل تعديل السعر ✓");
+  } catch (e) { toast("تعذّر: " + (e?.message || e)); }
+}
+
 function askEdit(c) {
   openM("تعديل بيانات العميل", `
     <div class="f"><label>الاسم</label><input id="eName" value="${esc(nameOf(c))}" /></div>
@@ -920,7 +956,9 @@ function askEdit(c) {
   $("okBtn").onclick = async () => {
     const name = $("eName").value.trim(), p1 = $("ePh1").value.trim();
     if (!name) return $("eErr").textContent = "اكتب اسم العميل";
-    if (p1 && !/^0?1[0-9]{9}$/.test(p1.replace(/[\s-]/g, "")))
+    // موبايل أو أرضي مصري (يبدأ 02–09، ٩–١٠ أرقام) — نفس قاعدة السيرفر
+    if (p1 && !/^0?1[0-9]{9}$/.test(p1.replace(/[\s-]/g, ""))
+           && !/^0[2-9][0-9]{7,8}$/.test(p1.replace(/[\s-]/g, "")))
       return $("eErr").textContent = "رقم الهاتف غير صحيح";
     try {
       const d = await API.put(`/api/customers/${c.id}`, {

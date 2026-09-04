@@ -1,0 +1,4494 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <script>
+  /* بيتنفّذ **قبل** أي رسم: من غيره الصفحة بتفتح ليلي لجزء من الثانية
+     قبل ما الجافاسكربت الرئيسي يقرا الاختيار — وميض مزعج في الوضع النهاري. */
+  /* مفيش اختيار محفوظ = ليلي (الافتراضي). من غير السطر ده الصفحة بتفتح
+     نهاري على أي جهاز وضعه نهاري، وده اللي اتبلّغ عنه. */
+  try { var _t = localStorage.getItem("cust-theme") || "dark";
+        if (_t !== "system") document.documentElement.setAttribute("data-theme", _t); } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark"); }
+</script>
+<meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f4f4f6" media="(prefers-color-scheme: light)" />
+  <title>الدهشان | تطبيق العملاء</title>
+
+  <!-- 🔴 النسخة هنا مش جوه الجافاسكربت عن قصد: فحص التحديث بيجيب الملف ده
+       من السيرفر ويقرا منه النسخة بمحلّل HTML. لو كانت ثابت JS كنا هنحتاج
+       regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
+       نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
+       ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
+  <meta name="app-version" content="1.6.1" />
+  <link rel="manifest" href="customer-manifest.json" />
+  <script src="install.js" defer></script>
+  <link rel="icon" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="الدهشان" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+  <!-- طبقة REST الموحدة (fetch بجلسة كوكي + Poller) — بديل SDK فايربيز -->
+  <script>
+  /* 🔴 لافتة «تحديث · محدّث الآن» اتشالت من تطبيق العميل خالص (طلب صاحب
+     النظام). api.js بيركّبها تلقائيًا في كل اللوحات، وهي مفيدة للموظف اللي
+     عايز يعرف إن الشاشة محدّثة — لكن العميل مش شغلته، وكانت بتقع فوق البار
+     السفلي وتغطّي تبويبين.
+     التحديث نفسه **مابيتأثرش**: الاستطلاع كل ٨ث شغّال، وpokeAll بتتنده فور
+     الرجوع للتطبيق (visibilitychange في api.js)، وفيه إشعارات ستارة فورية.
+     لوحات الموظفين بتفضل باللافتة عادي — العلم ده بيخص الصفحة دي بس. */
+  window.API_NO_REFRESH_BTN = true;
+</script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/support-numbers.js"></script>
+  <script src="assets/js/zonepick.js?v=20260830b"></script>
+  <!-- منظومة الثقة: البحث الفوري بالتليفون + بادچ السمعة + تقييم المستلم -->
+  <script src="assets/js/trust.js"></script>
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   الدهشان — تطبيق العميل
+   صفحة واحدة موبايل-first على نفس قاعدة بيانات النظام (aldahshaneg).
+   الألوان مأخوذة من الموك-أب: أسود عميق + أحمر الدهشان.
+══════════════════════════════════════════════════════════════ */
+:root{
+  /* ══ اللوحة الليلية — الافتراضية ══ */
+  --bg:#0a0a0b; --bg2:#000; --card:#141416; --card2:#1b1b1f; --line:#232328;
+  --red:#e8192c; --red2:#ff2d42; --txt:#fff; --muted:#8b8b93;
+  --green:#22c55e; --orange:#f59e0b; --blue:#3b82f6;
+  /* التوكنز دي كانت ألوان مكتوبة بالإيد في ١٧ موضع — من غيرها الوضع
+     النهاري كان بيطلع نص فاتح على خلفية فاتحة في نص الشاشات. */
+  --line2:#3a3a42;      /* حدود التركيز ونقط المؤشّر */
+  --dim:#5a5a63;        /* نص التلميح داخل الحقول */
+  --txt2:#d0d0d6;       /* نص ثانوي أفتح من الأساسي */
+  --sunken:#1a1a1d;     /* خلفية غاطسة: الخرايط والمساحات الفاضية */
+  --pop:#26262c;        /* خلفية التولتيب */
+  --shadow:rgba(0,0,0,.5);
+  --r:16px; --r2:22px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  color-scheme:dark;
+}
+
+/* ══ اللوحة النهارية ══
+   متعرّفة مرتين عن قصد:
+   ① تحت الميديا للوضع الافتراضي (نظام) — بحارس `:not([data-theme="dark"])`
+      عشان لو المستخدم اختار ليلي صراحةً وجهازه نهاري، اختياره يغلب.
+   ② تحت `[data-theme="light"]` عشان الاختيار الصريح يشتغل في الاتجاهين.
+   الأحمر اتغمق شوية في النهاري — نفس درجة الليلي على أبيض بتبقى صارخة. */
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f4f6; --bg2:#eaeaee; --card:#fff; --card2:#f7f7f9; --line:#e2e2e8;
+    --red:#c2101f; --red2:#d4142a; --txt:#111114; --muted:#5c5c67;
+    --line2:#c9c9d2; --dim:#7c7c88; --txt2:#3f3f48;
+    /* الدلالية اتغمقت للنهاري: #22c55e و#f59e0b كانوا بيدوا تباين ~2.0
+       على أبيض — يعني نص أخضر أو برتقالي شبه مختفي. */
+    --green:#15803d; --orange:#b45309; --blue:#1d4ed8;
+    --sunken:#edeef1; --pop:#fff; --shadow:rgba(0,0,0,.14);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f4f6; --bg2:#eaeaee; --card:#fff; --card2:#f7f7f9; --line:#e2e2e8;
+  --red:#c2101f; --red2:#d4142a; --txt:#111114; --muted:#5c5c67;
+  --line2:#c9c9d2; --dim:#7c7c88; --txt2:#3f3f48;
+  /* الدلالية اتغمقت للنهاري: #22c55e و#f59e0b كانوا بيدوا تباين ~2.0
+     على أبيض — يعني نص أخضر أو برتقالي شبه مختفي. */
+  --green:#15803d; --orange:#b45309; --blue:#1d4ed8;
+  --sunken:#edeef1; --pop:#fff; --shadow:rgba(0,0,0,.14);
+  color-scheme:light;
+}
+/* التولتيب أبيض في النهاري فمحتاج حد وظل بدل ما يضيع في الخلفية */
+:root[data-theme="light"] #tip,
+:root:not([data-theme="dark"]) #tip{ box-shadow:0 6px 20px var(--shadow) }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg2);color:var(--txt);
+  font-family:'Tajawal',system-ui,sans-serif;overscroll-behavior-y:none}
+body{max-width:520px;margin:0 auto;min-height:100vh;position:relative;overflow-x:hidden}
+button,input,select,textarea{font-family:inherit;color:inherit}
+input,select,textarea{background:var(--card2);border:1px solid var(--line);
+  border-radius:12px;padding:12px 14px;width:100%;font-size:15px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--line2)}
+input::placeholder,textarea::placeholder{color:var(--dim)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888892' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:left 14px center;padding-left:34px}
+a{color:var(--red);text-decoration:none}
+
+/* ── الشاشات ─────────────────────────────────────────────── */
+.screen{display:none;min-height:100vh;flex-direction:column}
+.screen.on{display:flex}
+.pad{padding:16px}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(96px + var(--safe-b))}
+
+/* ── هيدر ────────────────────────────────────────────────── */
+.hd{display:flex;align-items:center;gap:12px;padding:16px 16px 10px;position:sticky;top:0;
+  background:linear-gradient(180deg,var(--bg2) 70%,transparent);z-index:20}
+.hd h2{margin:0;font-size:19px;font-weight:800;flex:1}
+.hd .sub{font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+.ico-btn{width:38px;height:38px;border-radius:12px;background:var(--card);border:1px solid var(--line);
+  display:grid;place-items:center;cursor:pointer;flex:none;font-size:17px}
+
+/* ── أزرار ──────────────────────────────────────────────── */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:15px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;
+  background:var(--red);color:#fff;box-shadow:0 6px 20px rgba(232,25,44,.28)}
+.btn:active{transform:scale(.985)}
+.btn[disabled]{opacity:.55;box-shadow:none}
+.btn.ghost{background:var(--card);color:var(--txt);border:1px solid var(--line);box-shadow:none}
+.btn.wht{background:#fff;color:#111;box-shadow:0 6px 22px rgba(255,255,255,.12)}
+.btn.sm{padding:11px;font-size:14px;border-radius:12px}
+
+/* ── كروت ───────────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.card+.card{margin-top:12px}
+.lbl{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px;display:block}
+
+/* ── حقل بأيقونة (زي الموك-أب) ──────────────────────────── */
+.fld{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+.fld .fi{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:rgba(232,25,44,.12);color:var(--red);font-size:17px}
+.fld .fb{flex:1;min-width:0}
+.fld .fb b{display:block;font-size:13px;font-weight:700;margin-bottom:2px}
+.fld input,.fld textarea,.fld select{background:transparent;border:none;padding:0;font-size:15px;border-radius:0}
+.fld input:disabled{color:var(--muted)}
+
+/* ── شاشة البداية ───────────────────────────────────────────
+   صورة الهيرو نفسها فيها اللوجو، فما بنحطّش لوجو تاني فوقها
+   عشان ما يتكرّرش. */
+#s-splash{background:#000;position:relative;justify-content:flex-start;overflow:hidden;
+  padding-top:max(2vh,env(safe-area-inset-top,0px))}
+.sp-hero{position:relative;width:100%;flex:none;
+  mask-image:linear-gradient(180deg,#000 60%,transparent 99%);
+  -webkit-mask-image:linear-gradient(180deg,#000 60%,transparent 99%)}
+.sp-copy{position:relative;z-index:3;text-align:center;padding:0 26px;margin-top:-26px;
+  flex:1;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.sp-tag{font-size:21px;font-weight:800;line-height:1.6;transition:opacity .3s}
+.sp-tag.out{opacity:0}
+.sp-sub{font-size:14px;color:var(--muted);font-weight:500;margin-top:8px;
+  line-height:1.7;transition:opacity .3s}
+.sp-sub.out{opacity:0}
+.sp-foot{position:relative;z-index:3;margin-top:auto;padding:0 22px calc(26px + var(--safe-b))}
+.dots{display:flex;gap:7px;justify-content:center;margin-top:16px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line2);transition:.25s}
+.dots i.on{background:var(--red);width:20px;border-radius:4px}
+
+/* ── تسجيل الدخول ───────────────────────────────────────── */
+.why{display:flex;gap:10px;margin-top:18px}
+.why div{flex:1;text-align:center}
+.why .wi{width:44px;height:44px;margin:0 auto 8px;border-radius:14px;display:grid;place-items:center;
+  border:1.5px solid rgba(232,25,44,.45);color:var(--red);font-size:19px}
+.why b{font-size:12.5px;display:block}
+.why span{font-size:11px;color:var(--muted);line-height:1.5;display:block;margin-top:3px}
+.sep{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:20px 0 4px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ── ستيبر ──────────────────────────────────────────────── */
+.stepper{display:flex;align-items:center;margin:6px 0 18px}
+.stepper .st{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+.stepper .bub{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:var(--card2);border:1.5px solid var(--line);color:var(--muted);font-size:13px;font-weight:800}
+.stepper .st.on .bub{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 0 4px rgba(232,25,44,.16)}
+.stepper .st.dn .bub{background:rgba(232,25,44,.18);border-color:var(--red);color:var(--red)}
+.stepper .cap{font-size:10.5px;color:var(--muted);white-space:nowrap}
+.stepper .st.on .cap{color:var(--red);font-weight:700}
+.stepper .bar{flex:1;height:2px;background:var(--line);margin:0 4px;margin-bottom:20px}
+.stepper .bar.on{background:var(--red)}
+
+/* ── الرئيسية ───────────────────────────────────────────── */
+.hello{font-size:21px;font-weight:800}
+/* بانر إعلاني — بتتحكم فيه الإدارة من settings/customerBanner.
+   مخفي تمامًا (display:none) لو مفيش صورة أو active=false عشان
+   ما يسيبش مساحة فاضية فوق الإحصائيات. */
+.banner{display:none;position:relative;width:100%;border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--line);background:var(--card);margin-bottom:14px}
+.banner.on{display:block}
+.banner img{display:block;width:100%;height:auto;object-fit:cover}
+.banner.link{cursor:pointer}
+.banner .cap{position:absolute;bottom:0;left:0;right:0;padding:10px 12px;
+  background:linear-gradient(0deg,rgba(0,0,0,.82),transparent);
+  font-size:13px;font-weight:700;color:#fff;text-align:right}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;
+  display:flex;align-items:center;justify-content:space-between}
+.stat b{font-size:24px;font-weight:900;display:block;line-height:1}
+.stat span{font-size:12px;color:var(--muted)}
+.stat .si{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px}
+.menu-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:15px;margin-top:10px;cursor:pointer}
+.menu-row .mi{width:34px;height:34px;border-radius:10px;background:var(--card2);
+  display:grid;place-items:center;font-size:16px;flex:none}
+.menu-row b{flex:1;font-size:15px;font-weight:700}
+.menu-row .ch{color:#4a4a52;font-size:15px}
+
+/* ── تبويبات ────────────────────────────────────────────── */
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 16px 12px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:8px 16px;border-radius:999px;background:var(--card);border:1px solid var(--line);
+  font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ── عنصر طلب ───────────────────────────────────────────── */
+.o-item{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:13px;margin-bottom:10px;cursor:pointer}
+.o-item .oi{width:44px;height:44px;border-radius:12px;background:var(--card2);
+  display:grid;place-items:center;font-size:20px;flex:none}
+.o-item .ob{flex:1;min-width:0}
+.o-item .r1{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.o-item .num{font-size:14px;font-weight:800;direction:ltr}
+.o-item .nm{font-size:13px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-item .r3{display:flex;gap:10px;font-size:11.5px;color:var(--muted);margin-top:3px}
+.badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.b-new{background:rgba(232,25,44,.16);color:#ff6070}
+.b-way{background:rgba(245,158,11,.16);color:var(--orange)}
+.b-done{background:rgba(34,197,94,.16);color:var(--green)}
+.b-cancel{background:rgba(139,139,147,.16);color:var(--muted)}
+
+/* ── تايم لاين ──────────────────────────────────────────── */
+.tl{padding:4px 0}
+.tl-row{display:flex;gap:12px;position:relative;padding-bottom:18px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row .dot{width:13px;height:13px;border-radius:50%;background:var(--line2);flex:none;margin-top:3px;z-index:2}
+.tl-row.dn .dot{background:var(--red);box-shadow:0 0 0 4px rgba(232,25,44,.15)}
+.tl-row::before{content:"";position:absolute;right:6px;top:16px;bottom:0;width:1.5px;background:var(--line2)}
+.tl-row:last-child::before{display:none}
+.tl-row.dn::before{background:var(--red)}
+.tl-row b{font-size:13.5px;font-weight:700;display:block}
+.tl-row.pend b{color:var(--muted);font-weight:500}
+.tl-row span{font-size:11.5px;color:var(--muted)}
+
+/* ── الخريطة ────────────────────────────────────────────── */
+.map{height:190px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:var(--sunken)}
+.map.tall{height:100%;border-radius:0;border:none}
+.leaflet-container{background:var(--sunken);font-family:'Tajawal',sans-serif}
+.mini-map{height:120px;border-radius:12px;overflow:hidden;border:1px solid var(--line);
+  background:var(--sunken);display:grid;place-items:center;color:var(--muted);font-size:12px;position:relative}
+.mini-map .pin{font-size:26px}
+.mini-map .txt{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.72);
+  padding:6px 9px;font-size:11px;color:var(--txt2);text-align:right}
+
+/* ── شرائح الاختيار ─────────────────────────────────────── */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:9px 15px;border-radius:11px;background:var(--card2);border:1px solid var(--line);
+  font-size:13.5px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--red);border-color:var(--red);color:#fff;font-weight:700}
+.kinds{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kind{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 4px;
+  text-align:center;cursor:pointer}
+.kind.on{background:rgba(232,25,44,.14);border-color:var(--red)}
+.kind i{font-size:20px;font-style:normal;display:block;margin-bottom:4px}
+.kind span{font-size:11px;font-weight:600}
+
+/* ── بلوك المستلم (ممكن أكتر من واحد في نفس الطلب) ────────── */
+.rcv-block{position:relative}
+.rcv-hd{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.rcv-hd .no{width:24px;height:24px;border-radius:50%;background:rgba(232,25,44,.16);color:var(--red);
+  display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.rcv-hd b{flex:1;font-size:14px}
+.rcv-del{width:32px;height:32px;border-radius:9px;flex:none;cursor:pointer;font-size:14px;
+  background:rgba(232,25,44,.1);border:1px solid rgba(232,25,44,.3);color:var(--red)}
+.rcv-del:active{transform:scale(.94)}
+.rcv-copy{flex:none;cursor:pointer;font-size:11.5px;font-weight:700;padding:6px 11px;
+  border-radius:9px;background:var(--card2);border:1px solid var(--line);color:var(--muted);
+  white-space:nowrap;font-family:inherit}
+.rcv-copy:hover{border-color:var(--red);color:var(--red)}
+.rcv-copy:active{transform:scale(.96)}
+.rcv-total{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:rgba(34,197,94,.09);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);
+  padding:13px 15px;font-size:13.5px}
+.rcv-total b{font-size:16px;font-weight:900;color:var(--green)}
+
+/* ── العداد ─────────────────────────────────────────────── */
+.counter{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);
+  border-radius:12px;padding:6px}
+.counter button{width:34px;height:34px;border-radius:9px;background:var(--card);border:1px solid var(--line);
+  font-size:18px;font-weight:800;cursor:pointer;display:grid;place-items:center}
+.counter b{flex:1;text-align:center;font-size:16px;font-weight:800}
+
+/* ── المرفقات ───────────────────────────────────────────── */
+.up-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.up-box{background:var(--card2);border:1.5px dashed var(--line);border-radius:14px;padding:20px 8px;
+  text-align:center;cursor:pointer}
+.up-box i{font-size:24px;font-style:normal;display:block;margin-bottom:7px;color:var(--red)}
+.up-box span{font-size:12.5px;font-weight:600}
+.thumbs{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.thumb{width:74px;height:74px;border-radius:12px;overflow:hidden;position:relative;
+  border:1px solid var(--line);background:var(--card2)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb .x{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;
+  background:var(--red);color:#fff;font-size:12px;display:grid;place-items:center;cursor:pointer}
+.thumb .ld{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;font-size:11px}
+
+/* ── نجاح ───────────────────────────────────────────────── */
+.ok-circle{width:88px;height:88px;border-radius:50%;background:var(--red);display:grid;place-items:center;
+  font-size:44px;margin:0 auto 20px;box-shadow:0 0 0 12px rgba(232,25,44,.1)}
+.qr-box{background:#fff;padding:14px;border-radius:16px;display:inline-block;margin:18px 0}
+.qr-box img,.qr-box canvas{display:block}
+
+/* ── الإشعارات ──────────────────────────────────────────── */
+.nt{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:13px;margin-bottom:10px;cursor:pointer}
+.nt.unread{border-color:rgba(232,25,44,.4);background:linear-gradient(90deg,rgba(232,25,44,.06),var(--card))}
+.nt .ni{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;flex:none}
+.nt b{font-size:13.5px;display:block;margin-bottom:3px}
+.nt span{font-size:11.5px;color:var(--muted)}
+/* كارت الإشعار المجمّع لكل أوردر — شريط تقدّم صغير */
+.nt .dots{display:flex;gap:4px;margin-top:7px}
+.nt .dots i{width:18px;height:4px;border-radius:3px;background:var(--line);display:block}
+.nt .dots i.on{background:var(--red)}
+.nt .dots i.ok{background:var(--green)}
+.nt .dots i.bad{background:var(--orange)}
+.nt .go{font-size:11px;color:var(--red);font-weight:700;margin-top:6px;display:inline-block}
+/* صفحة تتبّع الطيار — خريطة بعرض الشاشة وكارت عائم */
+#s-track .trk-wrap{position:relative;flex:1;display:flex;flex-direction:column;min-height:0}
+#s-track .trk-map{flex:1;min-height:60vh;background:var(--sunken)}
+#s-track .trk-card{position:absolute;left:12px;right:12px;bottom:calc(14px + var(--safe-b));background:var(--card);
+  border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.45);z-index:500}
+#s-track .trk-btn{position:absolute;top:12px;left:12px;z-index:500;width:40px;height:40px;border-radius:12px;
+  background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-size:18px;cursor:pointer}
+/* كارت تفعيل إشعارات الستارة في الرئيسية */
+.push-card{display:flex;gap:12px;align-items:center;background:linear-gradient(90deg,rgba(232,25,44,.10),var(--card));
+  border:1px solid rgba(232,25,44,.35);border-radius:var(--r);padding:12px 14px;margin:4px 0 14px}
+.push-card b{font-size:13.5px;display:block}
+.push-card span{font-size:12px;color:var(--muted);display:block;margin-top:2px}
+.stat{cursor:pointer}
+
+/* ── الحساب ─────────────────────────────────────────────── */
+.avatar{width:66px;height:66px;border-radius:50%;object-fit:cover;background:var(--card2);
+  border:2px solid var(--line)}
+.acc-head{display:flex;align-items:center;gap:14px;padding:6px 0 18px}
+
+/* ── البار السفلي ───────────────────────────────────────── */
+.nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;z-index:60;
+  background:rgba(12,12,14,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+  display:flex;align-items:center;padding:8px 6px calc(8px + var(--safe-b))}
+.nav .nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
+  color:#5c5c65;font-size:10.5px;font-weight:600;padding:4px 0;position:relative}
+.nav .nb i{font-size:19px;font-style:normal}
+.nav .nb.on{color:var(--red)}
+.nav .fab{width:52px;height:52px;border-radius:50%;background:var(--red);color:#fff;font-size:26px;
+  display:grid;place-items:center;flex:none;margin:0 4px;box-shadow:0 6px 20px rgba(232,25,44,.45);
+  cursor:pointer;margin-top:-22px;border:4px solid var(--bg2)}
+.nav .dotb{position:absolute;top:2px;left:calc(50% - 16px);min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;background:var(--red);color:#fff;font-size:9.5px;font-weight:800;
+  display:grid;place-items:center}
+
+/* ── شريط المراجعة المثبّت (خطوة الملخّص) ─────────────────
+   في لوحة الكول سنتر الملخّص عمود جانبي بيفضل ثابت وانت بتملا الفورم.
+   هنا الشاشة عمود واحد بعرض 520px، فمفيش عمود جانبي أصلًا — والمقابل
+   إن الإجماليات وزرار الإرسال يفضلوا مثبّتين تحت وانت بتنزّل تراجع.
+
+   🔴 ليه fixed مش sticky: الأب «‏.scroll» عليه overflow-y:auto، فأي عنصر
+   جوّاه بيبقى sticky بالنسبة له هو — وهو مابيتمررش أصلًا (الصفحة كلها
+   هي اللي بتتمرر لأن «‏.screen» عليها min-height مش height). جرّبنا
+   sticky فعلًا والكارت فضل ماشي مع الصفحة ومااتثبتش.
+
+   نفس مقاسات «‏.nav» بالظبط عشان الشريطين ما يبانوش مختلفين — والـnav
+   أصلًا مخفي في شاشة الطلب الجديد (شوف showNav) فمفيش تعارض. */
+.wiz-bar{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;z-index:60;
+  background:rgba(12,12,14,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + var(--safe-b))}
+.wiz-bar .wb-tot{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  margin-bottom:9px;font-size:12.5px;color:var(--muted)}
+.wiz-bar .wb-tot b{font-size:15px;color:var(--txt)}
+.wiz-bar .wb-btns{display:flex;gap:10px}
+
+/* ── مودال ──────────────────────────────────────────────── */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;
+  align-items:flex-end;justify-content:center}
+.modal.on{display:flex}
+.sheet{background:var(--bg);width:100%;max-width:520px;border-radius:22px 22px 0 0;
+  border-top:1px solid var(--line);max-height:92vh;display:flex;flex-direction:column;
+  padding-bottom:var(--safe-b)}
+.sheet-hd{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--line)}
+.sheet-hd b{flex:1;font-size:16px}
+.sheet-bd{padding:16px;overflow-y:auto;flex:1}
+
+/* ── توست ───────────────────────────────────────────────── */
+/* التوست طبقة فوق الواجهة مش جزء منها — فبيفضل غامق في الوضعين.
+   `color` مكتوب صراحةً: من غيره بيورث `--txt` اللي بيبقى **غامق** في
+   النهاري، فيطلع نص أسود على خلفية سودا. */
+#toast{position:fixed;bottom:calc(96px + var(--safe-b));right:50%;transform:translateX(50%) translateY(20px);
+  background:#1e1e23;color:#fff;border:1px solid #33333c;padding:12px 18px;border-radius:13px;font-size:13.5px;
+  font-weight:600;z-index:500;opacity:0;transition:.28s;pointer-events:none;max-width:88%;text-align:center;
+  box-shadow:0 10px 30px rgba(0,0,0,.35)}
+#toast.on{opacity:1;transform:translateX(50%) translateY(0)}
+#toast.err{border-color:rgba(232,25,44,.55);background:#2a1416;color:#ffd7dc}
+#toast.ok{border-color:rgba(34,197,94,.5);background:#123021;color:#c8f5da}
+
+/* ── تحميل ──────────────────────────────────────────────── */
+#boot{position:fixed;inset:0;background:var(--bg2);z-index:900;display:grid;place-items:center}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--red);
+  border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty i{font-size:44px;font-style:normal;display:block;margin-bottom:12px;opacity:.5}
+.empty b{display:block;font-size:15px;color:var(--txt2);margin-bottom:5px}
+.empty span{font-size:12.5px}
+
+/* ── رسالة التوضيح العائمة (tooltip) ────────────────────────
+   عنصر واحد بيتنقل في الصفحة كلها — بيظهر بالـ hover على الديسكتوب
+   وبالضغط المطوّل على الموبايل. */
+/* شيبات الملء السريع في رأس بطاقة المُرسِل — سطر واحد بيتمرّر أفقيًا
+   بدل ما يلف ويكبّر الرأس. */
+.chips-inline{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;max-width:58%;
+  scrollbar-width:none;-ms-overflow-style:none;padding-bottom:2px}
+.chips-inline::-webkit-scrollbar{display:none}
+.chips-inline .chip{white-space:nowrap;flex:none;font-size:12px;padding:6px 10px}
+#tip{position:fixed;z-index:1000;background:var(--pop);border:1px solid var(--line2);color:var(--txt);
+  padding:9px 12px;border-radius:10px;font-size:12.5px;font-weight:600;line-height:1.65;
+  max-width:min(280px,84vw);pointer-events:none;opacity:0;visibility:hidden;
+  transition:opacity .16s;box-shadow:0 8px 26px rgba(0,0,0,.55);text-align:right;direction:rtl}
+#tip.on{opacity:1;visibility:visible}
+#tip::after{content:"";position:absolute;width:9px;height:9px;background:var(--pop);
+  border:1px solid var(--line2);transform:rotate(45deg);left:calc(50% - 5px)}
+#tip.up::after{bottom:-5.5px;border-top:none;border-left:none}
+#tip.down::after{top:-5.5px;border-bottom:none;border-right:none}
+/* الضغط المطوّل على عنصر عليه شرح ما يفتحش قائمة النسخ */
+[data-tip]{-webkit-touch-callout:none}
+
+/* ── كونفيتي ────────────────────────────────────────────── */
+.cf{position:absolute;width:8px;height:13px;top:-20px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(620deg);opacity:.1}}
+</style>
+</head>
+<body>
+
+<div id="boot"><div class="spin"></div></div>
+<div id="toast"></div>
+
+<!-- ═══ 1. شاشة البداية ═══════════════════════════════════ -->
+<section id="s-splash" class="screen">
+  <!-- دي أول حاجة العميل بيشوفها فبتتحمّل فورًا (من غير lazy)، بس الملف
+       اتصغّر من 2.1 ميجا لـ 200 كيلو -->
+  <img class="sp-hero" src="assets/hero.jpg" alt="الدهشان" decoding="async" onerror="this.style.display='none'" />
+  <div class="sp-copy">
+    <div class="sp-tag" id="spTag">توصيل أسرع.. لكل مكان</div>
+    <div class="sp-sub" id="spSub">شحنتك توصل بأمان في أسرع وقت</div>
+  </div>
+  <div class="sp-foot">
+    <button class="btn" id="splashBtn">ابدأ الآن</button>
+    <div class="dots" id="spDots"><i class="on"></i><i></i><i></i></div>
+  </div>
+</section>
+
+<!-- ═══ 2. تسجيل الدخول ═══════════════════════════════════ -->
+<section id="s-login" class="screen" style="background:#000">
+  <div class="scroll" style="padding-bottom:24px">
+    <div style="position:relative;text-align:center">
+      <img src="assets/hero.jpg" loading="lazy" decoding="async" style="width:100%;
+        mask-image:linear-gradient(180deg,#000 55%,transparent 96%);
+        -webkit-mask-image:linear-gradient(180deg,#000 55%,transparent 96%)"
+        alt="الدهشان" onerror="this.style.display='none'" />
+      <div style="font-size:15px;font-weight:700;margin-top:-34px;position:relative">توصيل أسرع.. لكل مكان</div>
+    </div>
+    <div class="pad" style="margin-top:8px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:26px;font-weight:900">مرحباً بك</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:4px">سجّل الدخول للمتابعة</div>
+      </div>
+      <button class="btn wht" id="googleBtn">
+        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        تسجيل الدخول بواسطة Google
+      </button>
+      <div class="sep">لماذا Google؟</div>
+      <div class="why">
+        <div><div class="wi">🛡️</div><b>آمن وسريع</b><span>حسابك محمي بأعلى معايير الأمان</span></div>
+        <div><div class="wi">👤</div><b>خطوة واحدة فقط</b><span>دخول سريع بدون كلمة مرور</span></div>
+        <div><div class="wi">🔄</div><b>متزامن مع حسابك</b><span>بياناتك محفوظة دائماً</span></div>
+      </div>
+      <div style="text-align:center;margin-top:26px;font-size:12px;color:var(--muted);line-height:1.9">
+        🔒<br />بالمتابعة أنت توافق على<br />
+        <a href="#" onclick="return false">الشروط والأحكام</a> و <a href="#" onclick="return false">سياسة الخصوصية</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 3. استكمال البيانات ═══════════════════════════════ -->
+<section id="s-setup" class="screen">
+  <div class="hd">
+    <div style="flex:1">
+      <h2>استكمال البيانات الشخصية</h2>
+      <div class="sub">لنقدم لك تجربة أفضل وأسرع</div>
+    </div>
+  </div>
+  <div class="scroll pad" style="padding-top:0">
+    <div class="stepper" id="setupStepper"></div>
+
+    <!-- خطوة 1 -->
+    <div id="sut-1">
+      <div style="text-align:center;margin-bottom:16px">
+        <label style="position:relative;display:inline-block;cursor:pointer">
+          <input type="file" id="sutPhotoFile" accept="image/*" hidden />
+          <img id="sutPhoto" class="avatar" style="width:82px;height:82px"
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect fill='%231b1b1f' width='80' height='80'/%3E%3Ccircle cx='40' cy='31' r='14' fill='%234a4a52'/%3E%3Cellipse cx='40' cy='68' rx='23' ry='16' fill='%234a4a52'/%3E%3C/svg%3E" alt="" />
+          <span style="position:absolute;bottom:0;left:0;width:26px;height:26px;border-radius:50%;
+            background:var(--red);display:grid;place-items:center;font-size:12px;border:2px solid var(--bg2)">📷</span>
+        </label>
+      </div>
+      <div class="fld" data-tip="اسمك اللي هيظهر للفرع والطيار في كل طلباتك."><div class="fi">👤</div><div class="fb">
+        <b>الاسم بالكامل</b><input id="sutName" placeholder="أدخل اسمك الكامل بالعربي" /></div></div>
+      <div class="fld" data-tip="رقمك الأساسي للتواصل معاك في أي طلب. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
+        <b>رقم الهاتف</b><input id="sutPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"
+          oninput="lookupMyShipments()" /></div></div>
+      <!-- لو الرقم ده مستلم في شحنة موجودة، بنقوله ونعرض نملا بياناته -->
+      <div id="sutFound"></div>
+      <div class="fld" data-tip="رقم احتياطي نتصل بيه لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
+        <b>رقم إضافي (اختياري)</b><input id="sutPhone2" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+      <div class="fld"><div class="fi">✉️</div><div class="fb">
+        <b>البريد الإلكتروني</b><input id="sutEmail" disabled /></div></div>
+      <div class="card" style="background:rgba(232,25,44,.06);border-color:rgba(232,25,44,.25);display:flex;gap:12px">
+        <div class="fi" style="width:34px;height:34px;border-radius:10px;background:rgba(232,25,44,.14);
+          color:var(--red);display:grid;place-items:center;flex:none">🔐</div>
+        <div><b style="font-size:13.5px">نحن نهتم بخصوصيتك</b>
+          <div style="font-size:11.5px;color:var(--muted);line-height:1.7;margin-top:3px">
+            لن يتم مشاركة بياناتك الشخصية مع أي جهة خارجية. جميع بياناتك محمية وآمنة.</div></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;margin:16px 0;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="sutAgree" style="width:20px;height:20px;flex:none;accent-color:var(--red)" />
+        <span>أوافق على <a href="#" onclick="return false">الشروط والأحكام</a> و<a href="#" onclick="return false">سياسة الخصوصية</a></span>
+      </label>
+      <button class="btn" onclick="setupNext(2)">التالي</button>
+    </div>
+
+    <!-- خطوة 2 -->
+    <div id="sut-2" style="display:none">
+      <span class="lbl">العنوان بالتفصيل</span>
+      <div id="sutAddrW"></div>
+      <div style="margin-top:12px">
+        <div class="map" id="sutMap"></div>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('sut')">📍 تحديد الموقع على الخريطة</button>
+        <div id="sutCoords" style="font-size:11.5px;color:var(--muted);text-align:center;margin-top:7px;direction:ltr"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" onclick="setupNext(1)">السابق</button>
+        <button class="btn" onclick="setupNext(3)">التالي</button>
+      </div>
+    </div>
+
+    <!-- خطوة 3 -->
+    <div id="sut-3" style="display:none">
+      <div class="card" style="margin-bottom:14px">
+        <b style="font-size:14px">منطقة الاستلام</b>
+        <div style="font-size:11.5px;color:var(--muted);line-height:1.7;margin:5px 0 12px">
+          اختر المنطقة اللي هنستلم منها شحناتك — الفرع المسؤول عن خدمتك بيتحدد منها تلقائيًا.
+        </div>
+        <span class="lbl">المنطقة</span>
+        <select id="sutZone" data-zonepick data-tip="المنطقة اللي بنستلم منها شحناتك عادةً — منها بيتحدد الفرع المسؤول عن خدمتك."></select>
+        <div id="sutBranch" style="margin-top:12px;font-size:13px;display:none"></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn ghost" onclick="setupNext(2)">السابق</button>
+        <button class="btn" id="sutSaveBtn" onclick="saveProfile()">حفظ البيانات</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 4. الرئيسية ═══════════════════════════════════════ -->
+<section id="s-home" class="screen">
+  <div class="hd">
+    <div style="flex:1">
+      <div class="hello">مرحبًا <span id="homeName">—</span> 👋</div>
+      <div class="sub">أهلاً بك</div>
+    </div>
+    <div class="ico-btn" onclick="go('notifs')" style="position:relative">🔔
+      <span id="homeBell" class="dotb" style="display:none;position:absolute;top:-5px;left:-5px"></span></div>
+  </div>
+  <div class="scroll pad" style="padding-top:4px">
+    <div class="banner" id="homeBanner"></div>
+    <!-- رصيد المحفظة — العميل لازم يشوفه -->
+    <div id="homeWallet"></div>
+    <!-- خدمة العملاء — ظاهر في الرئيسية مش مخبّي في القائمة -->
+    <div id="homeSupport"></div>
+    <!-- تفعيل إشعارات الستارة — بيظهر بس لو الإذن لسه ما اتاخدش -->
+    <div id="homePush"></div>
+    <div id="closedNotice" style="display:none"></div>
+    <span class="lbl">طلباتك</span>
+    <div class="stats">
+      <div class="stat" onclick="go('orders')"><div><b id="stTotal">0</b><span>إجمالي الطلبات</span></div>
+        <div class="si" style="background:rgba(232,25,44,.14);color:var(--red)">🧾</div></div>
+      <div class="stat" onclick="go('orders')"><div><b id="stWay">0</b><span>قيد التنفيذ</span></div>
+        <div class="si" style="background:rgba(245,158,11,.14);color:var(--orange)">🛵</div></div>
+      <div class="stat" onclick="go('orders')"><div><b id="stDone">0</b><span>تم التسليم</span></div>
+        <div class="si" style="background:rgba(34,197,94,.14);color:var(--green)">✅</div></div>
+      <div class="stat" onclick="go('orders')"><div><b id="stCancel">0</b><span>لم تكتمل</span></div>
+        <div class="si" style="background:rgba(139,139,147,.14);color:var(--muted)">✖️</div></div>
+    </div>
+    <button class="btn" style="margin-top:16px" onclick="startNewOrder()">＋ طلب جديد</button>
+    <div class="menu-row" onclick="go('orders')"><div class="mi">📦</div><b>طلباتي</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('addresses')"><div class="mi">📍</div><b>العناوين المحفوظة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('account')"><div class="mi">👤</div><b>الحساب</b><span class="ch">‹</span></div>
+  </div>
+</section>
+
+<!-- ═══ 5-8. إنشاء طلب جديد ═══════════════════════════════ -->
+<section id="s-new" class="screen">
+  <div class="hd">
+    <div class="ico-btn" onclick="wizBack()">›</div>
+    <h2>إنشاء طلب جديد</h2>
+  </div>
+  <div class="scroll pad" style="padding-top:0">
+    <div class="stepper" id="wizStepper"></div>
+
+    <!-- خطوة 1: المُرسِل -->
+    <div id="wz-1">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span class="bub" style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">1</span>
+          <b style="font-size:15px">بيانات المُرسِل</b>
+          <!-- شيبات الملء السريع بقت هنا فوق: كانت تحت الحقول، يعني العميل
+               بيكتب بياناته بالإيد الأول وبعدين يكتشف إن فيه زرار بيملاها. -->
+          <div id="sndSaved" style="margin-inline-start:auto"></div>
+        </div>
+
+        <!-- 🔴 الخانات دي بتفضل **فاضية** عن قصد. صاحب الحساب مش دايمًا هو
+             الراسل — ساعات بيطلب حاجة تيجي له، فبياناته بتبقى في خانة
+             المستلم مش هنا. التعبئة التلقائية كانت بتفرض عليه إنه الراسل
+             وتخلّيه يمسح بياناته كل مرة. اللي عايز بياناته هنا بيدوس
+             «عناوينك المحفوظة» تحت — دي اختيار مش إجبار. -->
+        <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم منه الطيار الشحنة — غالبًا اسمك أو اسم محلك."><div class="fi">👤</div><div class="fb">
+          <b>الاسم</b><input id="sndName" placeholder="اسم المُرسِل" /></div></div>
+        <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت الاستلام. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
+          <b>رقم الهاتف</b><input id="sndPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" /></div></div>
+        <span class="lbl">عنوان الاستلام</span>
+        <div id="sndAddrW" data-tip="العنوان اللي الطيار هيروح عليه يستلم الشحنة — اكتب الشارع ورقم العمارة والدور."></div>
+        <span class="lbl" style="margin-top:12px">منطقة الاستلام (تحدد الفرع)</span>
+        <select id="sndZone" data-zonepick data-tip="منطقة الاستلام هي اللي بتحدد الفرع المسؤول عن طلبك، ومنها بتظهر مناطق التسليم المتاحة."></select>
+        <div id="sndBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
+        <div class="map" id="sndMap" style="height:130px;margin-top:12px"></div>
+        <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('snd')"
+        data-optional="1"
+          data-tip="حدّد الدبوس على مكان الاستلام بالظبط. من غيره الطيار بيدوّر بالعنوان المكتوب وممكن يتوه.">📍 تحديد نقطة الاستلام على الخريطة *</button>
+        <div id="sndPinState" style="display:none;font-size:11.5px;color:var(--green);
+             margin-top:8px;text-align:center;font-weight:600"></div>
+        <!-- [اتنقل] شيبات «بياناتي» بقت فوق جنب العنوان -->
+      </div>
+      <button class="btn" style="margin-top:14px" onclick="wizNext(2)">التالي</button>
+    </div>
+
+    <!-- خطوة 2: المستلم — بلوك أو أكتر (طلب واحد لأكتر من نقطة تسليم) -->
+    <div id="wz-2" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">2</span>
+          <b style="font-size:15px">بيانات المستلم</b>
+          <!-- نسخة تانية من زرار الإضافة هنا فوق: مع أكتر من طرد، الزرار
+               اللي تحت بيبقى بعيد ولازم تمرير طويل عشان توصله. -->
+          <button class="btn ghost sm" id="addRcvBtnTop" style="margin-inline-start:auto;padding:7px 12px;font-size:12.5px"
+            onclick="addReceiver()">＋ طرد آخر</button>
+        </div>
+
+        <!-- وضع "الريسيت": العميل معندوش بيانات المستلم، والعنوان مكتوب
+             على صورة الإيصال. المنطقة تفضل إجبارية لأنها بتحدد السعر.
+             في الوضع ده بيبقى مستلم واحد بس — مفيش بيانات نكرّرها. -->
+        <label class="card" style="display:flex;align-items:center;gap:11px;margin-bottom:12px;
+               background:var(--card2);cursor:pointer;padding:12px"
+               data-tip="فعّلها لو مش معاك بيانات المستلم والعنوان مكتوب على صورة الريسيت. في الحالة دي بيبقى مستلم واحد بس.">
+          <input type="checkbox" id="rcvNoData" style="width:20px;height:20px;flex:none;accent-color:var(--red)" />
+          <span style="flex:1">
+            <b style="font-size:13.5px;display:block">مش معايا بيانات المستلم</b>
+            <span style="font-size:11.5px;color:var(--muted);line-height:1.6">
+              هرفع صورة الريسيت والعنوان مكتوب عليها</span>
+          </span>
+          <span style="font-size:19px">🧾</span>
+        </label>
+
+        <div id="rcvReceiptNote" style="display:none;background:rgba(245,158,11,.1);
+             border:1px solid rgba(245,158,11,.35);border-radius:12px;padding:12px;
+             font-size:12.5px;line-height:1.8;margin-bottom:0">
+          🧾 <b>مطلوب صورة الريسيت</b><br />
+          <span style="color:var(--muted)">هنسيب بيانات المستلم فاضية ونعتمد على الصورة —
+          لازم ترفع صورة واضحة في خطوة المرفقات، والمنطقة تحت إجبارية عشان نحسب سعر التوصيل.</span>
+        </div>
+      </div>
+
+      <!-- بلوكات المستلمين — بيتبنوا من S.draft.receivers -->
+      <div id="rcvBlocks"></div>
+
+      <button class="btn ghost sm" id="addRcvBtn" style="margin-top:12px" onclick="addReceiver()"
+        data-tip="ضيف مستلم تاني لنفس الطلب — الطيار هيعدّي على كل النقط في رحلة واحدة، وسعر التوصيل بيتجمع.">
+        ＋ إضافة طرد لمستلم آخر</button>
+
+      <div id="rcvTotal" style="display:none;margin-top:12px"></div>
+
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn ghost" onclick="wizNext(1)">السابق</button>
+        <button class="btn" onclick="wizNext(3)">التالي</button>
+      </div>
+    </div>
+
+    <!-- خطوة 3: بيانات الطلب -->
+    <div id="wz-3" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">3</span>
+          <b style="font-size:15px">بيانات الطلب</b>
+        </div>
+        <span class="lbl">نوع الطلب</span>
+        <div class="kinds" id="kindBox" data-tip="نوع الشحنة — بيساعد الطيار يجهّز نفسه (وثيقة صغيرة ولا كرتونة كبيرة)."></div>
+        <!-- كان عمودين (التحصيل + قيمة البضاعة). قيمة البضاعة اتشالت بطلب صاحب
+           النظام فبقى عمود واحد — من غير كده كان هيفضل نص الصف فاضي. -->
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px">
+          <div data-tip="مجموع مبالغ التحصيل المكتوبة على الطرود في الخطوة اللي فاتت. التحصيل بقى لكل طرد لوحده."><span class="lbl">إجمالي التحصيل (ج.م)</span>
+            <input id="odCodTotal" type="text" value="0" readonly
+                   style="color:var(--red);font-weight:800" /></div>
+        </div>
+        <span class="lbl" style="margin-top:14px;display:none">طريقة الدفع</span>
+        <div class="chips" id="payBox" style="display:none" data-tip="«كاش» = سعر التوصيل يتدفع عند التسليم. «مدفوع مسبقًا» = اتدفع قبل كده."></div>
+        <span class="lbl" style="margin-top:14px">عدد القطع</span>
+        <div class="counter" data-tip="عدد القطع في الشحنة كلها.">
+          <button onclick="bumpPieces(1)">＋</button><b id="odPieces">1</b><button onclick="bumpPieces(-1)">－</button>
+        </div>
+        <span class="lbl" style="margin-top:14px">ملاحظات (اختياري)</span>
+        <textarea id="odNote" rows="3" placeholder="اكتب ملاحظتك هنا"
+          data-tip="أي تعليمات للطيار — مثلاً: «اتصل قبل ما توصل» أو «الشقة في الدور الرابع»."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn ghost" onclick="wizNext(2)">السابق</button>
+        <button class="btn" onclick="wizNext(4)">التالي</button>
+      </div>
+    </div>
+
+    <!-- خطوة 4: المرفقات -->
+    <div id="wz-4" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+          <span style="width:26px;height:26px;border-radius:50%;background:var(--red);
+            display:grid;place-items:center;font-size:12px;font-weight:800">4</span>
+          <b style="font-size:15px">المرفقات</b>
+        </div>
+        <!-- الصور بقت لكل طرد جوّه بلوكه في خطوة المستلمين، عشان صور
+             الطرد ما تروحش لطرد تاني. هنا بنعرض ملخّص بس. -->
+        <div id="attachHint" style="font-size:12.5px;color:var(--muted);line-height:1.9">
+          📷 صور كل طرد بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.</div>
+        <div id="attachSummary" style="margin-top:10px"></div>
+      </div>
+      <div class="card" id="summaryCard"></div>
+      <!-- مسافة بقد الشريط المثبّت عشان آخر كارت ما يتغطّاش -->
+      <div style="height:108px"></div>
+
+      <!-- الأزرار اتنقلت هنا (مش اتكرّرت) — الإجماليات فوقها بتتعبّى من renderSummary -->
+      <div class="wiz-bar" id="wizBar">
+        <div class="wb-tot">
+          <span>إجمالي التوصيل <b id="wbDeliv">—</b></span>
+          <span>التحصيل <b id="wbCod">—</b></span>
+        </div>
+        <div class="wb-btns">
+          <button class="btn ghost" onclick="wizNext(3)">السابق</button>
+          <button class="btn" id="submitBtn" onclick="submitOrder()">إرسال الطلب</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 9. تم إنشاء الطلب ═════════════════════════════════ -->
+<section id="s-done" class="screen" style="overflow:hidden;position:relative">
+  <div class="scroll pad" style="display:flex;flex-direction:column;justify-content:center;text-align:center">
+    <div class="ok-circle">✓</div>
+    <div style="font-size:21px;font-weight:900">تم إنشاء الطلب بنجاح</div>
+    <div style="color:var(--muted);font-size:13px;margin-top:8px">رقم الطلب</div>
+    <div id="doneNum" style="font-size:28px;font-weight:900;direction:ltr;margin-top:4px">—</div>
+
+    <!-- باركود لكل طرد لوحده: رقم الطلب + رقم الطرد، مع زرار إرسال للمستلم -->
+    <div id="doneCodes" style="margin-top:14px"></div>
+
+    <div style="font-size:12px;color:var(--muted);margin:10px 0 22px">
+      ابعت لكل مستلم الباركود بتاعه — بيتقرا من الطيار عند التسليم
+    </div>
+    <button class="btn" onclick="go('orders')">الانتقال إلى الطلبات</button>
+    <button class="btn ghost" style="margin-top:10px" onclick="startNewOrder()">إنشاء طلب آخر</button>
+  </div>
+</section>
+
+<!-- ═══ 10. طلباتي ════════════════════════════════════════ -->
+<section id="s-orders" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>طلباتي</h2></div>
+  <div class="tabs" id="orderTabs"></div>
+  <div class="scroll pad" style="padding-top:0"><div id="ordersList"></div></div>
+</section>
+
+<!-- ═══ 11. تفاصيل الطلب ══════════════════════════════════ -->
+<section id="s-detail" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('orders')">›</div><h2>تفاصيل الطلب</h2></div>
+  <div class="scroll pad" style="padding-top:0"><div id="detailBody"></div></div>
+</section>
+
+<!-- ═══ تتبّع الطيار على الخريطة — صفحة مستقلة بتتفتح من الإشعار ومن التفاصيل ═══ -->
+<section id="s-track" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="trackBack()">›</div>
+    <div style="flex:1;min-width:0"><h2 style="margin:0">تتبّع الطيار</h2><div class="sub" id="trackSub">—</div></div></div>
+  <div class="trk-wrap">
+    <div class="trk-map" id="trackMap"></div>
+    <div class="trk-btn" id="trackRecenter" title="تمركز على الطيار" onclick="trackRecenter()">🎯</div>
+    <div class="trk-card" id="trackCard"></div>
+  </div>
+</section>
+
+<!-- ═══ العناوين المحفوظة ═════════════════════════════════ -->
+<section id="s-addresses" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('account')">›</div><h2>العناوين المحفوظة</h2></div>
+  <div class="scroll pad" style="padding-top:0">
+    <button class="btn" onclick="openAddrSheet()">＋ إضافة عنوان جديد</button>
+    <div id="addrList" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ═══ 12. الإشعارات ═════════════════════════════════════ -->
+<section id="s-notifs" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>الإشعارات</h2></div>
+  <div class="scroll pad" style="padding-top:0"><div id="notifList"></div></div>
+</section>
+
+<!-- ═══ الحساب ════════════════════════════════════════════ -->
+<section id="s-account" class="screen">
+  <div class="hd"><div class="ico-btn" onclick="go('home')">›</div><h2>حسابي</h2></div>
+  <div class="scroll pad" style="padding-top:0">
+    <div class="acc-head">
+      <img class="avatar" id="accPhoto" alt=""
+        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect fill='%231b1b1f' width='80' height='80'/%3E%3Ccircle cx='40' cy='31' r='14' fill='%234a4a52'/%3E%3Cellipse cx='40' cy='68' rx='23' ry='16' fill='%234a4a52'/%3E%3C/svg%3E" />
+      <div style="flex:1;min-width:0">
+        <b id="accName" style="font-size:17px">—</b>
+        <div id="accPhone" style="font-size:12.5px;color:var(--muted);margin-top:3px;direction:ltr"></div>
+        <div id="accEmail" style="font-size:12.5px;color:var(--muted);direction:ltr"></div>
+      </div>
+      <div class="ico-btn" onclick="openEditProfile()">✏️</div>
+    </div>
+    <!-- منظومة الثقة: درجة العميل زي ما المحلات بتشوفها -->
+    <div id="accTrust" style="display:none;margin-bottom:12px"></div>
+    <div class="menu-row" onclick="openEditProfile()"><div class="mi">👤</div><b>المعلومات الشخصية</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('addresses')"><div class="mi">📍</div><b>العناوين المحفوظة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="go('notifs')"><div class="mi">🔔</div><b>الإشعارات</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="window.open('https://myaccount.google.com/','_blank')">
+      <div class="mi">🔐</div><b>إدارة حساب Google</b><span class="ch">‹</span></div>
+    <div class="menu-row" id="installRow" onclick="installApp()">
+      <div class="mi">⬇️</div><b>تثبيت التطبيق على الموبايل</b><span class="ch">‹</span></div>
+    <div class="menu-row" id="pushRow" onclick="enablePush()">
+      <div class="mi">📢</div><b>تفعيل الإشعارات الفورية</b><span class="ch" id="pushState">‹</span></div>
+    <!-- تبديل الوضع: تلات حالات مش اتنين — «النظام» بيسيب الجهاز يحكم. -->
+    <div class="menu-row" onclick="cycleTheme()">
+      <div class="mi" id="themeIcon">🌙</div><b>مظهر التطبيق</b>
+      <span class="ch" id="themeState" style="color:var(--muted);font-size:12.5px">النظام</span></div>
+    <div class="menu-row" onclick="openSupport()"><div class="mi">💬</div><b>الدعم والمساعدة</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="doAppUpdate()"><div class="mi">🔄</div>
+      <b>تحديث التطبيق</b><span class="ch">‹</span></div>
+    <div class="menu-row" onclick="openAbout()"><div class="mi">ℹ️</div><b>عن التطبيق</b><span class="ch">‹</span></div>
+    <button class="btn" style="margin-top:20px" onclick="doLogout()">⏻ تسجيل الخروج</button>
+  </div>
+</section>
+
+<!-- ═══ البار السفلي ══════════════════════════════════════ -->
+<!-- جرس ثابت فوق-شمال على كل التبويبات (الهيدر بتاع كل شاشة مختلف،
+     فالجرس العائم أبسط من إننا نضيفه في ٦ هيدرات ونزامنهم) -->
+<div id="floatBell" onclick="go('notifs')" style="display:none;position:fixed;top:calc(10px + var(--safe-t,0px));
+     left:12px;z-index:70;width:42px;height:42px;border-radius:14px;background:var(--card);
+     border:1px solid var(--line);align-items:center;justify-content:center;font-size:19px;
+     box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer">🔔
+  <span id="floatBellDot" class="dotb" style="display:none;position:absolute;top:-5px;left:-5px"></span></div>
+
+<nav class="nav" id="bottomNav" style="display:none">
+  <div class="nb" data-p="home"      onclick="go('home')"><i>🏠</i>الرئيسية</div>
+  <div class="nb" data-p="orders"    onclick="go('orders')"><i>🧾</i>الطلبات</div>
+  <div class="fab" onclick="startNewOrder()">＋</div>
+  <div class="nb" data-p="notifs"    onclick="go('notifs')"><i>🔔</i>الإشعارات
+    <span id="navBadge" class="dotb" style="display:none"></span></div>
+  <div class="nb" data-p="account"   onclick="go('account')"><i>👤</i>الحساب</div>
+</nav>
+
+<!-- ═══ مودال عام ═════════════════════════════════════════ -->
+<div class="modal" id="modal">
+  <div class="sheet">
+    <div class="sheet-hd"><b id="modalTitle"></b><div class="ico-btn" onclick="closeModal()">✕</div></div>
+    <div class="sheet-bd" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ═══ مودال الخريطة ═════════════════════════════════════ -->
+<div class="modal" id="mapModal">
+  <div class="sheet" style="height:88vh">
+    <div class="sheet-hd"><b>تحديد الموقع على الخريطة</b><div class="ico-btn" onclick="closeMapModal()">✕</div></div>
+    <div style="flex:1;position:relative"><div id="pickMap" class="map tall"></div>
+      <button class="ico-btn" onclick="locateMe()" style="position:absolute;bottom:14px;left:14px;z-index:500;
+        width:44px;height:44px;background:#fff;color:#111;border:none">🎯</button>
+    </div>
+    <div class="pad" style="border-top:1px solid var(--line)">
+      <div id="pickAccWarn" style="display:none;background:rgba(245,158,11,.12);
+        border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px;
+        font-size:11.5px;line-height:1.8;margin-bottom:10px"></div>
+      <div id="pickCoords" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px;direction:ltr">—</div>
+      <button class="btn" onclick="confirmMapPick()">حفظ الموقع</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════
+   الاتصال — REST على MariaDB (assets/js/api.js) لكل البيانات.
+   Firebase Auth (دخول جوجل) بيفضل شغال في المتصفح عن قصد — مجاني
+   ومنفصل عن الداتابيز: بنبعت idToken لـ POST /api/customer/login
+   والسيرفر بيتحقق من التوقيع بنفسه وبيفتح جلسة كوكي عادية.
+   صفر firebase-database في الملف ده.
+══════════════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider,
+         signInWithPopup, signInWithRedirect, getRedirectResult }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqDGiMVtZ6PQH522ndXEYCBM37WKcI-ws",
+  authDomain: "aldahshaneg-92f66.firebaseapp.com",
+  projectId: "aldahshaneg-92f66",
+  storageBucket: "aldahshaneg-92f66.firebasestorage.app",
+  messagingSenderId: "164254513529",
+  appId: "1:164254513529:web:8ec9bf526f2b2669d397a8",
+  measurementId: "G-F9R1E5P5GS"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const api  = window.API;
+
+/* ── محفظة العميل: عرض الرصيد (بديل wallet.js القديم — الخصم بقى
+      معاملة ذرية على السيرفر POST /api/orders/{id}/apply-wallet) ── */
+const money = v =>
+  (Number(v) || 0).toLocaleString("ar-EG", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function balanceBarHtml(balance, opts = {}) {
+  const b = Number(balance) || 0;
+  if (!b && !opts.showZero) return "";
+  const pos = b > 0;
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:14px;
+      background:${pos ? "rgba(34,197,94,.11)" : "rgba(232,25,44,.11)"};
+      border:1px solid ${pos ? "rgba(34,197,94,.32)" : "rgba(232,25,44,.32)"};${opts.style || ""}">
+      <span style="font-size:24px">👛</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;opacity:.8">${pos ? "رصيدك في المحفظة" : "مستحق عليك"}</div>
+        <div style="font-size:20px;font-weight:900;direction:ltr;text-align:start;
+          color:${pos ? "#22c55e" : "#e8192c"}">${money(Math.abs(b))} ج.م</div>
+      </div>
+      ${pos ? `<div style="font-size:11.5px;opacity:.75;max-width:130px;line-height:1.6">
+        بيتخصم تلقائيًا من أوردرك الجاي</div>` : ""}
+    </div>`;
+}
+
+/* ── حالة التطبيق ─────────────────────────────────────────── */
+const S = {
+  uid: null, user: null, profile: null,
+  zones: [], branches: {}, orders: [], addresses: [], savedReceivers: [],
+  banner: null, workHours: null,
+  wallet: { balance: 0, txns: [] },
+  notifs: [], notifUnread: 0, notifSeenAt: null,
+  page: "splash", orderFilter: "all", currentOrderId: null,
+  wizStep: 1, setupStep: 1,
+  draft: null, images: [], mapTarget: null, pickLatLng: null,
+  unsub: []      // Pollers شغالة — بتتوقف عند الخروج
+};
+window.S = S;
+
+const $  = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+function toast(msg, kind) {
+  const t = $("toast");
+  t.textContent = msg; t.className = "on " + (kind || "");
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => { t.className = ""; }, 3200);
+}
+window.toast = toast;
+
+/* ══════════════════════════════════════════════════════════════
+   رسالة التوضيح العائمة (tooltip)
+   ──────────────────────────────────────────────────────────────
+   الاستخدام: data-tip="نص التوضيح" على أي عنصر — خلاص.
+   شغّالة بالـ event delegation على الـ document، فأي عنصر بيتضاف
+   ديناميكيًا (زي بلوكات المستلمين) بياخد نفس السلوك تلقائيًا من
+   غير أي ربط إضافي.
+   ديسكتوب: hover.  موبايل: ضغطة مطوّلة 500ms (مفيش hover في اللمس).
+══════════════════════════════════════════════════════════════ */
+const TIP_HOLD = 500;
+(function initTips() {
+  let box = null, holdT = null, curEl = null;
+
+  const el = () => {
+    if (!box) { box = document.createElement("div"); box.id = "tip"; document.body.appendChild(box); }
+    return box;
+  };
+
+  function show(target, text) {
+    if (!text) return;
+    const b = el();
+    b.textContent = text;
+    b.className = "on";                       // نعرضه الأول عشان نقيس مقاسه
+    const r = target.getBoundingClientRect();
+    const bw = b.offsetWidth, bh = b.offsetHeight, gap = 9, pad = 8;
+    // فوق الخانة لو فيه مساحة، وإلا تحتها
+    let place = "up", top = r.top - bh - gap;
+    if (top < pad) { place = "down"; top = r.bottom + gap; }
+    // لو برضه خرج من تحت، نلزّقه جوّه الشاشة
+    if (top + bh > innerHeight - pad) top = Math.max(pad, innerHeight - bh - pad);
+    let left = r.left + r.width / 2 - bw / 2;
+    left = Math.min(Math.max(pad, left), Math.max(pad, innerWidth - bw - pad));
+    b.style.left = left + "px";
+    b.style.top  = top + "px";
+    b.classList.add(place);
+    curEl = target;
+  }
+
+  function hide() {
+    clearTimeout(holdT); holdT = null; curEl = null;
+    if (box) box.className = "";
+  }
+
+  const tipOf = t => (t && t.nodeType === 1 ? t.closest("[data-tip]") : null);
+
+  // ── ديسكتوب ──
+  document.addEventListener("mouseover", e => {
+    const t = tipOf(e.target);
+    if (!t) { if (curEl) hide(); return; }
+    if (t !== curEl) show(t, t.dataset.tip);
+  });
+  document.addEventListener("mouseout", e => {
+    const t = tipOf(e.target);
+    if (t && t === curEl && !t.contains(e.relatedTarget)) hide();
+  });
+
+  // ── موبايل: ضغطة مطوّلة ──
+  document.addEventListener("touchstart", e => {
+    const t = tipOf(e.target);
+    if (!t) { hide(); return; }
+    clearTimeout(holdT);
+    holdT = setTimeout(() => show(t, t.dataset.tip), TIP_HOLD);
+  }, { passive: true });
+
+  // رفع الصباع أو تحريكه أو التمرير = إخفاء
+  ["touchend", "touchcancel", "touchmove", "scroll"].forEach(ev =>
+    document.addEventListener(ev, hide, { passive: true, capture: true }));
+  window.addEventListener("resize", hide);
+})();
+
+/* ── بيانات المحافظات/المدن (منسوخة من بوابة المحل عشان
+      العناوين تفضل بنفس الصيغة في كل النظام) ──────────────── */
+const ADDR_DEFAULT = { gov: 'الدقهلية', city: 'المنصورة' };   // الافتراضي لأي عنوان جديد
+const EG_GOVERNORATES = ["القاهرة","الجيزة","الإسكندرية","الدقهلية","البحيرة","الفيوم","الغربية","الإسماعيلية","المنوفية","المنيا","القليوبية","الوادي الجديد","السويس","أسوان","أسيوط","بني سويف","بورسعيد","دمياط","الشرقية","جنوب سيناء","شمال سيناء","الأقصر","قنا","كفر الشيخ","مطروح","سوهاج","البحر الأحمر"];
+
+    // مدن/مراكز كل محافظة — تظهر تلقائيًا عند اختيار المحافظة
+    const EG_CITIES = {
+          "القاهرة": [
+                "مدينة نصر",
+                "مصر الجديدة",
+                "المعادي",
+                "المقطم",
+                "حلوان",
+                "الزمالك",
+                "وسط البلد",
+                "شبرا",
+                "عين شمس",
+                "المطرية",
+                "حدائق القبة",
+                "الزيتون",
+                "السيدة زينب",
+                "مصر القديمة",
+                "الخليفة",
+                "الوايلي",
+                "الساحل",
+                "روض الفرج",
+                "بولاق",
+                "التجمع الخامس",
+                "الرحاب",
+                "مدينتي",
+                "العبور",
+                "الشروق",
+                "بدر",
+                "15 مايو",
+                "المرج",
+                "السلام",
+                "النزهة",
+                "الأميرية"
+          ],
+          "الجيزة": [
+                "الدقي",
+                "المهندسين",
+                "العجوزة",
+                "إمبابة",
+                "بولاق الدكرور",
+                "الهرم",
+                "فيصل",
+                "6 أكتوبر",
+                "الشيخ زايد",
+                "حدائق الأهرام",
+                "المنيب",
+                "الوراق",
+                "أوسيم",
+                "كرداسة",
+                "البدرشين",
+                "الصف",
+                "أطفيح",
+                "العياط",
+                "الحوامدية",
+                "منشأة القناطر",
+                "أبو النمرس",
+                "الباويطي"
+          ],
+          "الإسكندرية": [
+                "المنتزه",
+                "شرق",
+                "وسط",
+                "غرب",
+                "الجمرك",
+                "العامرية",
+                "برج العرب",
+                "سيدي جابر",
+                "سموحة",
+                "العصافرة",
+                "المندرة",
+                "ميامي",
+                "لوران",
+                "كامب شيزار",
+                "محرم بك",
+                "كرموز",
+                "الدخيلة",
+                "العجمي",
+                "أبو قير",
+                "المعمورة"
+          ],
+          "الدقهلية": [
+                "المنصورة",
+                "طلخا",
+                "ميت غمر",
+                "دكرنس",
+                "أجا",
+                "منية النصر",
+                "السنبلاوين",
+                "الكردي",
+                "بني عبيد",
+                "المنزلة",
+                "تمي الأمديد",
+                "الجمالية",
+                "شربين",
+                "المطرية",
+                "بلقاس",
+                "ميت سلسيل",
+                "جمصة",
+                "محلة دمنة",
+                "نبروه"
+          ],
+          "البحيرة": [
+                "دمنهور",
+                "كفر الدوار",
+                "رشيد",
+                "إدكو",
+                "أبو المطامير",
+                "أبو حمص",
+                "الدلنجات",
+                "المحمودية",
+                "الرحمانية",
+                "إيتاي البارود",
+                "حوش عيسى",
+                "شبراخيت",
+                "كوم حمادة",
+                "بدر",
+                "وادي النطرون",
+                "النوبارية الجديدة"
+          ],
+          "الفيوم": [
+                "الفيوم",
+                "طامية",
+                "سنورس",
+                "إطسا",
+                "إبشواي",
+                "يوسف الصديق",
+                "الفيوم الجديدة"
+          ],
+          "الغربية": [
+                "طنطا",
+                "المحلة الكبرى",
+                "كفر الزيات",
+                "زفتى",
+                "السنطة",
+                "قطور",
+                "بسيون",
+                "سمنود"
+          ],
+          "الإسماعيلية": [
+                "الإسماعيلية",
+                "فايد",
+                "القنطرة شرق",
+                "القنطرة غرب",
+                "التل الكبير",
+                "أبو صوير",
+                "القصاصين الجديدة",
+                "نفيشة"
+          ],
+          "المنوفية": [
+                "شبين الكوم",
+                "منوف",
+                "سرس الليان",
+                "أشمون",
+                "الباجور",
+                "قويسنا",
+                "بركة السبع",
+                "تلا",
+                "الشهداء",
+                "السادات"
+          ],
+          "المنيا": [
+                "المنيا",
+                "العدوة",
+                "مغاغة",
+                "بني مزار",
+                "مطاي",
+                "سمالوط",
+                "المنيا الجديدة",
+                "أبو قرقاص",
+                "ملوي",
+                "دير مواس"
+          ],
+          "القليوبية": [
+                "بنها",
+                "قليوب",
+                "شبرا الخيمة",
+                "القناطر الخيرية",
+                "الخانكة",
+                "كفر شكر",
+                "طوخ",
+                "قها",
+                "العبور",
+                "الخصوص",
+                "شبين القناطر"
+          ],
+          "الوادي الجديد": [
+                "الخارجة",
+                "الداخلة",
+                "الفرافرة",
+                "باريس",
+                "بلاط"
+          ],
+          "السويس": [
+                "السويس",
+                "الأربعين",
+                "عتاقة",
+                "الجناين",
+                "فيصل"
+          ],
+          "أسوان": [
+                "أسوان",
+                "أسوان الجديدة",
+                "دراو",
+                "كوم أمبو",
+                "نصر النوبة",
+                "كلابشة",
+                "إدفو",
+                "الرديسية",
+                "البصيلية",
+                "السباعية",
+                "أبو سمبل"
+          ],
+          "أسيوط": [
+                "أسيوط",
+                "أسيوط الجديدة",
+                "ديروط",
+                "منفلوط",
+                "القوصية",
+                "أبنوب",
+                "أبو تيج",
+                "الغنايم",
+                "ساحل سليم",
+                "البداري",
+                "صدفا"
+          ],
+          "بني سويف": [
+                "بني سويف",
+                "بني سويف الجديدة",
+                "الواسطى",
+                "ناصر",
+                "إهناسيا",
+                "ببا",
+                "سمسطا",
+                "الفشن"
+          ],
+          "بورسعيد": [
+                "بورسعيد",
+                "بورفؤاد",
+                "العرب",
+                "حي الزهور",
+                "حي الضواحي",
+                "حي المناخ",
+                "حي الشرق",
+                "حي الجنوب"
+          ],
+          "دمياط": [
+                "دمياط",
+                "دمياط الجديدة",
+                "رأس البر",
+                "فارسكور",
+                "الزرقا",
+                "السرو",
+                "الروضة",
+                "كفر البطيخ",
+                "عزبة البرج",
+                "كفر سعد"
+          ],
+          "الشرقية": [
+                "الزقازيق",
+                "العاشر من رمضان",
+                "منيا القمح",
+                "بلبيس",
+                "مشتول السوق",
+                "القنايات",
+                "أبو حماد",
+                "القرين",
+                "ههيا",
+                "أبو كبير",
+                "فاقوس",
+                "الصالحية الجديدة",
+                "الإبراهيمية",
+                "ديرب نجم",
+                "كفر صقر",
+                "أولاد صقر",
+                "الحسينية",
+                "صان الحجر",
+                "منشأة أبو عمر"
+          ],
+          "جنوب سيناء": [
+                "الطور",
+                "شرم الشيخ",
+                "دهب",
+                "نويبع",
+                "طابا",
+                "سانت كاترين",
+                "أبو رديس",
+                "أبو زنيمة",
+                "رأس سدر"
+          ],
+          "شمال سيناء": [
+                "العريش",
+                "الشيخ زويد",
+                "رفح",
+                "بئر العبد",
+                "الحسنة",
+                "نخل"
+          ],
+          "الأقصر": [
+                "الأقصر",
+                "الأقصر الجديدة",
+                "إسنا",
+                "أرمنت",
+                "الطود",
+                "الزينية",
+                "البياضية",
+                "القرنة"
+          ],
+          "قنا": [
+                "قنا",
+                "قنا الجديدة",
+                "أبو تشت",
+                "نجع حمادي",
+                "دشنا",
+                "الوقف",
+                "قفط",
+                "نقادة",
+                "فرشوط",
+                "قوص"
+          ],
+          "كفر الشيخ": [
+                "كفر الشيخ",
+                "دسوق",
+                "فوه",
+                "مطوبس",
+                "برج البرلس",
+                "بلطيم",
+                "مصيف بلطيم",
+                "الحامول",
+                "بيلا",
+                "الرياض",
+                "سيدي سالم",
+                "قلين",
+                "سيدي غازي"
+          ],
+          "مطروح": [
+                "مرسى مطروح",
+                "الحمام",
+                "العلمين",
+                "الضبعة",
+                "النجيلة",
+                "سيدي براني",
+                "السلوم",
+                "سيوة"
+          ],
+          "سوهاج": [
+                "سوهاج",
+                "سوهاج الجديدة",
+                "أخميم",
+                "أخميم الجديدة",
+                "البلينا",
+                "المراغة",
+                "المنشأة",
+                "دار السلام",
+                "جرجا",
+                "جهينة الجديدة",
+                "ساقلته",
+                "طما",
+                "طهطا",
+                "الكوثر"
+          ],
+          "البحر الأحمر": [
+                "الغردقة",
+                "رأس غارب",
+                "سفاجا",
+                "القصير",
+                "مرسى علم",
+                "الشلاتين",
+                "حلايب",
+                "الجونة",
+                "سهل حشيش"
+          ]
+    };
+
+/* ══════════════════════════════════════════════════════════════
+   ودجت العنوان — محافظة + مدينة + تفاصيل، بنفس صيغة النص
+   المخزّنة حاليًا ("التفاصيل، المدينة، المحافظة")
+══════════════════════════════════════════════════════════════ */
+/* opts.simple = العنوان بالتفصيل بس من غير محافظة/مدينة.
+   بيتستعمل في بيانات المستلم: منطقة التسليم (rcvZone) هي اللي بتحدد الفرع
+   والسعر فعلًا، والمحافظة/المدينة كانوا تكرار بيطوّل الفورم على العميل. */
+function renderAddr(containerId, opts = {}) {
+  const el = $(containerId); if (!el) return;
+  if (opts.simple) {
+    el.innerHTML = `<span class="lbl">العنوان بالتفصيل</span>
+      <input id="${containerId}-detail" placeholder="الشارع، رقم العمارة، الدور، الشقة…" />`;
+    if (opts.value) { const d = $(`${containerId}-detail`); if (d) d.value = opts.value; }
+    return;
+  }
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+      <div><span class="lbl">المحافظة</span>
+        <select id="${containerId}-gov"><option value="">— اختر —</option>
+        ${EG_GOVERNORATES.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div>
+      <div><span class="lbl">المدينة / الحي</span>
+        <select id="${containerId}-area"><option value="">— اختر المحافظة —</option></select></div>
+    </div>
+    <div style="margin-top:9px"><span class="lbl">العنوان بالتفصيل</span>
+      <input id="${containerId}-detail" placeholder="الشارع، رقم العمارة، الدور، الشقة…" /></div>`;
+  $(`${containerId}-gov`).addEventListener("change", () => fillCities(containerId));
+  /* عنوان جديد بيفتح على الدقهلية / المنصورة — شوف ADDR_DEFAULT.
+     لو جاي معانا عنوان محفوظ، `setAddr` تحت بتكتب فوقه. */
+  if (!opts.value && !opts.blank) {
+    $(`${containerId}-gov`).value = ADDR_DEFAULT.gov;
+    fillCities(containerId, ADDR_DEFAULT.city);
+  } else {
+    fillCities(containerId);
+  }
+  if (opts.value) setAddr(containerId, opts.value);
+}
+function fillCities(containerId, keep) {
+  const g = $(`${containerId}-gov`), c = $(`${containerId}-area`);
+  if (!g || !c) return;
+  const cities = EG_CITIES[g.value] || [];
+  const want = keep !== undefined ? keep : c.value;
+  c.innerHTML = g.value
+    ? `<option value="">— اختر المدينة —</option>` + cities.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join("")
+    : `<option value="">— اختر المحافظة —</option>`;
+  if (want) {
+    if (!cities.includes(want)) {
+      const o = document.createElement("option"); o.value = want; o.textContent = want; c.appendChild(o);
+    }
+    c.value = want;
+  }
+}
+function getAddr(containerId) {
+  // الوضع المبسّط: مفيش محافظة/مدينة — التفصيل هو العنوان كله
+  if (!$(`${containerId}-gov`)) return ($(`${containerId}-detail`)?.value || "").trim();
+  const g = ($(`${containerId}-gov`)?.value || "").trim();
+  const a = ($(`${containerId}-area`)?.value || "").trim();
+  const d = ($(`${containerId}-detail`)?.value || "").trim();
+  return [d, a, g].filter(Boolean).join("، ");
+}
+function setAddr(containerId, text) {
+  if (!text) return;
+  const g = $(`${containerId}-gov`), a = $(`${containerId}-area`), d = $(`${containerId}-detail`);
+  if (!g) return;
+  let rest = text, gov = "";
+  for (const x of EG_GOVERNORATES) {
+    if (text.includes(x)) { gov = x; rest = text.replace(x, "").replace(/،\s*$/, "").replace(/^،\s*/, "").trim(); break; }
+  }
+  g.value = gov; fillCities(containerId, "");
+  const parts = rest.split("،").map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 2) { d.value = parts[0]; fillCities(containerId, parts.slice(1).join("، ")); }
+  else if (parts.length === 1) { d.value = parts[0]; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   المناطق والفروع
+   zones/{id} = { areaName, price, deliveryBranchId, deliveryBranchName }
+   الفرع المسؤول عن العميل بيتحدد من zone الاستلام (المُرسِل).
+══════════════════════════════════════════════════════════════ */
+const zoneBranchId   = z => z.deliveryBranchId || "";   // z.branchId مش على السلك
+/* لو الفرع موقوف مؤقتًا من الإدارة، أوردراته الجديدة بتتسجّل على
+   الفرع البديل. بنمشي خطوة واحدة بس عشان لو حصل تحويل دائري
+   (أ ← ب و ب ← أ) مايفضلش يلف. */
+function routeBranch(id) {
+  const b = S.branches?.[id];
+  if (!b?.paused || !b.failoverBranchId) return id;
+  const alt = S.branches?.[b.failoverBranchId];
+  return (alt && !alt.paused) ? b.failoverBranchId : id;
+}
+const zoneBranchName = z => z.deliveryBranchName || S.branches[zoneBranchId(z)]?.name || "";
+const zoneLabel      = z => z.areaName || "—";          // z.name مش على السلك
+
+/* «صف البيت» = المنطقة عند الفرع المالك لها. جدول المناطق بيخزّن نفس
+   المنطقة مرة لكل فرع بيوصّل لها، فمن غير الفلتر ده العميل بيشوف نفس
+   الاسم 3 مرات بنفس السعر ويختار عشوائي — والاختيار بيقرّر الفرع.
+   sourceBranchId = null معناها الإدارة ضافتها بإيدها → تتحسب بيت. */
+const isHomeZone = z => {
+  const src = z.sourceBranchId, dst = zoneBranchId(z);
+  return src == null || src === "" || String(src) === String(dst);
+};
+
+function fillZoneSelect(sel, { branchId, selected } = {}) {
+  if (!sel) return;
+  let list = S.zones.slice();
+  /* بفرع = قايمة **تسليم** للفرع ده → كل مناطقه.
+     من غير فرع = قايمة **استلام** (منطقة العميل) → صفوف البيت بس،
+     والاسم مرة واحدة (فيه 4 مناطق متسجّلة مرتين بالغلط في القاعدة). */
+  if (branchId) list = list.filter(z => zoneBranchId(z) === branchId);
+  else          list = list.filter(isHomeZone);   // الاستلام: صفوف البيت بس
+  // الاسم مرة واحدة في الحالتين — التسليم مفلتر على فرع واحد أصلًا
+  const seen = new Set();
+  list = list.filter(z => {
+    const k = zoneLabel(z).trim();
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  list.sort((a, b) => zoneLabel(a).localeCompare(zoneLabel(b), "ar"));
+  sel.innerHTML = `<option value="">— اختر المنطقة —</option>` + list.map(z =>
+    `<option value="${esc(z.id)}">${esc(zoneLabel(z))}${z.price ? ` — ${z.price} ج.م` : ""}</option>`).join("");
+  if (selected) sel.value = String(selected);
+}
+/* الـ id بقى رقمي من الـ API بينما قيمة الـ <select> نص — المقارنة بنص موحّد */
+const findZone = id => S.zones.find(z => String(z.id) === String(id)) || null;
+
+/* ══════════════════════════════════════════════════════════════
+   التنقّل بين الشاشات
+══════════════════════════════════════════════════════════════ */
+
+/* إدخال حارس واحد بس فوق نقطة دخول الصفحة.
+   من غير أي إدخال، حدث popstate مابيتطلقش أصلًا وهاندلر زر الرجوع (تحت)
+   كان كود ميّت. لكن دفع إدخال لكل شاشة كان أسوأ: الرجوع وإحنا على
+   الرئيسية بياكل الإدخالات المتكوّمة واحد واحد من غير أي أثر مرئي،
+   فالتطبيق مايقفلش غير بعد ضغطات بعدد كل التنقّلات اللي حصلت.
+   الحل: حارس واحد — قرار الرجوع بيتاخد من S.page مش من عمق التاريخ. */
+function pushBackGuard() {
+  try { if (!history.state?.appGuard) history.pushState({ appGuard: true }, ""); } catch (_) {}
+}
+
+function go(page) {
+  S.page = page;
+  // سيب صفحة التفاصيل = وقّف استطلاع تتبّع الطيار (توفير على السيرفر)
+  if (page !== "track" && typeof trackPilotUnsub !== "undefined" && trackPilotUnsub) {
+    try { trackPilotUnsub.stop(); } catch (_) {}
+    trackPilotUnsub = null;
+  }
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
+  $("s-" + page)?.classList.add("on");
+  const showNav = ["home", "orders", "notifs", "account", "addresses", "detail"].includes(page);
+  $("bottomNav").style.display = showNav ? "flex" : "none";
+  document.querySelectorAll(".nav .nb").forEach(b => b.classList.toggle("on", b.dataset.p === page));
+  document.querySelectorAll(".scroll").forEach(s => { if (s.closest(".screen")?.classList.contains("on")) s.scrollTop = 0; });
+  if (page === "home")      renderHome();
+  if (page === "orders")    renderOrders();
+  if (page === "notifs")    renderNotifs();
+  if (page === "account")   renderAccount();
+  if (page === "addresses") renderAddresses();
+  if (page === "detail")    renderDetail();
+  if (page === "track")     renderTrack();
+  if (page === "account")   renderPushState();
+  // شاشات الدخول مستثناة عشان الرجوع مايلفّش بين splash وlogin
+  if (!["splash", "login"].includes(page)) pushBackGuard();
+}
+window.go = go;
+
+/* ══════════════════════════════════════════════════════════════
+   الدخول بجوجل
+══════════════════════════════════════════════════════════════ */
+const SPLASH_SLIDES = [
+  ["توصيل أسرع.. لكل مكان",  "شحنتك توصل بأمان في أسرع وقت"],
+  ["اطلب من أي مكان",         "حدّد المُرسِل والمستلم والباقي علينا"],
+  ["تابع طلبك لحظة بلحظة",    "من الاستلام لحد باب المستلم"]
+];
+let splashIdx = 0;
+setInterval(() => {
+  if (S.page !== "splash") return;
+  splashIdx = (splashIdx + 1) % SPLASH_SLIDES.length;
+  const [t, s] = SPLASH_SLIDES[splashIdx];
+  const tagEl = $("spTag"), subEl = $("spSub");
+  // fade-out ثم تبديل النص ثم fade-in — عشان ما يظهرش نصّين فوق بعض
+  tagEl.classList.add("out"); subEl.classList.add("out");
+  setTimeout(() => {
+    tagEl.textContent = t; subEl.textContent = s;
+    tagEl.classList.remove("out"); subEl.classList.remove("out");
+  }, 300);
+  document.querySelectorAll("#spDots i").forEach((d, i) => d.classList.toggle("on", i === splashIdx));
+}, 3400);
+
+$("splashBtn").onclick = () => go("login");
+
+$("googleBtn").onclick = async () => {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  try { await signInWithPopup(auth, provider); }
+  catch (e) {
+    // المتصفحات على الموبايل بتمنع الـ popup كتير — نرجع لـ redirect
+    if (String(e.code || "").match(/popup|cancelled|blocked/i)) {
+      try { await signInWithRedirect(auth, provider); return; } catch (_) {}
+    }
+    toast("تعذّر تسجيل الدخول: " + (e.message || e), "err");
+  }
+};
+
+getRedirectResult(auth).catch(() => {});
+
+/* كل تطبيقات النظام على نفس الدومين، وجلسة Firebase Auth مشتركة بين
+   الصفحات كلها. بوابة المحلات بتعمل signInAnonymously، فلو المستخدم فتحها
+   قبل كده على نفس المتصفح، التطبيق ده كان بيلاقي "مستخدم" مسجّل ويعتبره
+   عميل ويعمله حساب بـ UID عشوائي — وده اللي بيخلّي الكمبيوتر والموبايل
+   يبانوا كأن كل واحد على قاعدة بيانات لوحده.
+   العميل هنا لازم يكون داخل بجوجل تحديدًا، وأي جلسة تانية بنتجاهلها. */
+const isGoogleUser = u => !!u && !u.isAnonymous &&
+  (u.providerData || []).some(p => p.providerId === "google.com");
+
+onAuthStateChanged(auth, async user => {
+  detachAll();
+  if (!isGoogleUser(user)) {
+    /* بنصفّي بيانات العميل كلها مش الهوية بس: لو حد سجّل خروج ودخل بحساب
+       تاني على نفس الصفحة، mergeOrders بيدمج مش بيستبدل — فأوردرات العميل
+       الأول كانت بتفضل ظاهرة للتاني ببيانات المستلم ورقمه وعنوانه */
+    S.uid = null; S.user = null; S.profile = null;
+    S.orders = []; S.addresses = []; S.savedReceivers = [];
+    S.notifs = []; S.notifUnread = 0; S.notifSeenAt = null;
+    S.wallet = { balance: 0, txns: [] };
+    S.currentOrderId = null; S.pilotCache = {};
+    /* مسوّدات شاشة التسجيل كمان: دبوس الخريطة اختياري في setupNext، فلو
+       العميل الأول حطّ دبوس أو رفع صورة وخرج، والتاني كمّل تسجيله من غير
+       ما يفتح الخريطة — saveProfile كان بيحفظ إحداثيات بيت الأول وصورته
+       في حساب التاني. و_foundShipment شحنة الأول اللي fillFromShipment
+       بيملا منها. */
+    S.draftLat = null; S.draftLng = null; S.photoUrl = null;
+    window._foundShipment = null;
+    window._bootBusy = false;
+    $("boot").style.display = "none";
+    go("splash");
+    return;
+  }
+  S.uid = user.uid; S.user = user;
+  window._bootBusy = true;   // شبكة أمان الـ6 ثواني ما ترميهوش على الترويج وهو لسه بيحمّل
+
+  /* idToken → السيرفر بيتحقق منه بنفسه وبيفتح جلسة كوكي، وبينشئ
+     صف customers لو أول دخول (uid القديم بيتحفظ في legacy_key) */
+  try {
+    const idToken = await user.getIdToken();
+    const res = await api.post("/api/customer/login", { idToken }, { quiet401: true });
+    S.profile = res.customer || {};
+    S.wallet  = res.wallet || { balance: 0, txns: [] };
+  } catch (e) {
+    window._bootBusy = false;
+    $("boot").style.display = "none";
+    toast("تعذّر تسجيل الدخول: " + (e.message || e), "err");
+    go("login");
+    return;
+  }
+
+  /* بيانات المرجع مش شرط تنجح عشان العميل يشوف طلباته — لو وقعت كنا
+     بنتقطع قبل attachListeners فيلاقي نفسه على شاشة الترويج من غير أي استطلاع */
+  try { await loadRefData(); } catch (_) {}
+  window._bootBusy = false;   // خلصت الشبكة — من هنا وطالع الكود متزامن
+  if (!S.zones.length) toast("تعذّر تحميل بيانات المناطق — جرّب تحدّث الصفحة", "err");
+  attachListeners();
+  $("boot").style.display = "none";
+
+  if (S.profile.blocked) showBlocked();     // الحساب موقوف — فورًا
+  S.booted = true;
+  if (S.profile.profileCompleted) {
+    // هاش وصل من إشعار أثناء الإقلاع (مستمع الـSW) يتطبّق دلوقتي
+    const pending = S.pendingHash; S.pendingHash = null;
+    if (!(pending && applyHashRoute(pending)) && !applyHashRoute()) go("home");
+    pushResync();
+  }
+  else { openSetup(); prefillFromTrackCode(); }
+});
+
+/* الجلسة انتهت على السيرفر → تجديد صامت بنفس دخول جوجل (زي ما القرار
+   المعماري بيقول: onAuthStateChanged بيجدد الجلسة بنفس الطريقة) */
+window._onSessionExpired = async () => {
+  const u = auth.currentUser;
+  if (!u) { go("login"); return; }
+  try {
+    const idToken = await u.getIdToken(true);
+    await api.post("/api/customer/login", { idToken }, { quiet401: true, noPoke: true });
+  } catch (_) { go("login"); }
+};
+
+/* ?t=CODE جاي من صفحة التتبّع اللي فتحها الباركود.
+   بنستخدم بيانات الطرد نفسه (رقم المستلم واسمه وعنوانه) عشان نملا شاشة
+   التسجيل بدل ما العميل يكتبها — اللوكاب بقى على السيرفر. */
+async function prefillFromTrackCode() {
+  const code = new URLSearchParams(location.search).get("t");
+  if (!code) return;
+  let hit = null;
+  try {
+    const res = await api.get("/api/customer/incoming", { code });
+    hit = (res.items || [])[0] || null;
+  } catch (_) {}
+  if (!hit || !hit.d) return;
+  const d = hit.d;
+  if (d.receiverPhone && !$("sutPhone").value.trim()) $("sutPhone").value = d.receiverPhone;
+  window._foundShipment = { id: hit.order.id, order: hit.order, d };
+  renderFoundShipment([hit]);   // بيوري إن فيه شحنة على الرقم ده
+  fillFromShipment();           // وبيملا الاسم والعنوان والمنطقة
+  toast("ملينا بياناتك من الشحنة — راجعها وكمّل تسجيلك", "ok");
+}
+
+async function loadRefData() {
+  // كل نداء بيحمي نفسه — واحد واقع كان بيوقّع التهيئة كلها معاه
+  const [zs, bs, st] = await Promise.all([
+    api.get("/api/zones").catch(() => ({ items: [] })),
+    api.get("/api/branches").catch(() => ({ items: [] })),
+    api.get("/api/settings/site").catch(() => ({ site: {} })),
+  ]);
+  S.zones = zs.items || [];
+  S.branches = {};
+  (bs.items || []).forEach(b => { S.branches[b.id] = b; });
+  applySiteSettings(st.site || {});
+}
+
+/* إعدادات الموقع العامة — نفس مفاتيح settings القديمة:
+   site.info = {phone, whatsapp, hours} / workHours / customerBanner */
+function applySiteSettings(s) {
+  const info = (s.site && s.site.info) || {};
+  /* قايمة أرقام مش رقم واحد — `SupportNums` بيقع على المفتاح المفرد لو
+     القايمة لسه ما اتحطّتش، فالإعدادات القديمة شغّالة زي ما هي. */
+  SUPPORT.phones    = window.SupportNums ? SupportNums.phones(info) : [];
+  SUPPORT.whatsapps = window.SupportNums ? SupportNums.whatsapps(info) : [];
+  SUPPORT.phone    = SUPPORT.phones.length    ? SUPPORT.phones[0].n    : (info.phone || "");
+  SUPPORT.whatsapp = SUPPORT.whatsapps.length ? SUPPORT.whatsapps[0].n : (info.whatsapp || "");
+  SUPPORT.hours    = info.hours    || "";
+  S.workHours = s.workHours || null;
+  S.banner    = s.customerBanner || null;
+  if (S.page === "home") { renderSupportBar(); renderClosedNotice(); renderBanner(); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   شحناتي المسجّلة عند حد تاني
+   ──────────────────────────────────────────────────────────────
+   لو العميل ده كان مستلم في أوردر عمله محل أو فرع أو كول سنتر قبل ما
+   ينزّل التطبيق، بياناته (اسمه وعنوانه) اتسجّلت هناك. أول ما يكتب رقم
+   تليفونه في شاشة التسجيل بنلاقي شحناته ونعرض نملا بياناته منها.
+══════════════════════════════════════════════════════════════ */
+/* اللوكاب بقى على السيرفر: GET /api/customer/incoming?phone= — بديباونس
+   عشان الكتابة في خانة الرقم ما تضربش نداء مع كل حرف */
+let _lookupT = null;
+window.lookupMyShipments = function () {
+  const box = $("sutFound"); if (!box) return;
+  clearTimeout(_lookupT);
+  const phone = $("sutPhone").value.trim();
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) { box.innerHTML = ""; window._foundShipment = null; return; }
+  _lookupT = setTimeout(async () => {
+    let hits = [];
+    try { hits = (await api.get("/api/customer/incoming", { phone })).items || []; }
+    catch (_) {}
+    renderFoundShipment(hits);
+  }, 450);
+};
+
+function renderFoundShipment(hits) {
+  const box = $("sutFound"); if (!box) return;
+  if (!hits.length) { box.innerHTML = ""; window._foundShipment = null; return; }
+  const top = hits[0];
+  window._foundShipment = top;
+  const senderName = top.order.senderName || top.order.customerName || "—";
+  box.innerHTML = `
+    <div class="card" style="background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.3);margin-top:10px">
+      <div style="font-weight:800;font-size:13.5px;color:#22c55e">
+        📦 لقينا ${hits.length > 1 ? `<b>${hits.length}</b> شحنات` : "شحنة"} على الرقم ده
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.9">
+        آخر شحنة من <b>${esc(senderName)}</b>${top.d.zoneName ? ` — ${esc(top.d.zoneName)}` : ""}<br />
+        هتلاقيها في «طلباتي» وتقدر تتابعها بعد ما تكمّل تسجيلك.
+      </div>
+      ${(top.d.receiverName || top.d.address) ? `
+        <button class="btn ghost sm" style="margin-top:10px" onclick="fillFromShipment()">
+          ✨ املا بياناتي من الشحنة
+        </button>` : ""}
+    </div>`;
+}
+
+/* بيملا الاسم والعنوان من اللي المُرسِل سجّله عن العميل */
+window.fillFromShipment = function () {
+  const f = window._foundShipment; if (!f) return;
+  const d = f.d;
+  if (d.receiverName && !d.receiverFromReceipt && !$("sutName").value.trim())
+    $("sutName").value = d.receiverName;
+  if (d.receiverPhone2 && !$("sutPhone2").value.trim())
+    $("sutPhone2").value = d.receiverPhone2;
+  if (d.address && !d.receiverFromReceipt) setAddr("sutAddrW", d.address);
+  // منطقة التسليم اللي اتسجّلت له = منطقته الافتراضية
+  const zs = $("sutZone");
+  if (zs && d.zoneId && [...zs.options].some(o => o.value === String(d.zoneId))) {
+    zs.value = String(d.zoneId);
+    zs.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  if (d.lat && d.lng) { S.draftLat = d.lat; S.draftLng = d.lng; }
+  toast("اتملت بياناتك من الشحنة — راجعها وعدّل لو محتاج", "ok");
+};
+
+/* القايمة بتيجي من السيرفر جاهزة ومعلّمة (_incoming/_myParcels) —
+   الاستطلاع delta بـ ?since فبندمج التغييرات على الموجود بدل الاستبدال */
+function mergeOrders(items) {
+  const by = new Map(S.orders.map(o => [String(o.id), o]));
+  (items || []).forEach(o => {
+    const old = by.get(String(o.id));
+    // ردود الكتابة (إلغاء/تقييم) بترجع الأوردر من غير علامات _incoming — نحافظ عليها
+    if (old && o._incoming === undefined) { o._incoming = old._incoming; o._myParcels = old._myParcels; }
+    by.set(String(o.id), o);
+  });
+  S.orders = [...by.values()]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  refreshBadge();
+  if (S.page === "home")   renderHome();
+  if (S.page === "orders") renderOrders();
+  // فتح من إشعار والطلبات لسه ما حمّلتش — أول ما الطلب يوصل نرسم الخريطة
+  if (S.page === "track") {
+    const cur = (items || []).find(o => String(o.id) === String(S.currentOrderId));
+    // (أ) فتح من إشعار والطلبات لسه ما حمّلتش — أول ما الطلب يوصل نرسم
+    // (ب) الصفحة مفتوحة على «هيظهر أول ما يبدأ رحلته» والرحلة بدأت فعلًا → نتحوّل للحيّة
+    if (cur && (_trkRenderedFor === null || trackActive(cur) !== _trkActiveRendered)) renderTrack();
+  }
+  // شاشة التفاصيل بتتعاد بالكامل — نرسمها بس لو الأوردر المفتوح هو اللي اتغيّر،
+  // عشان تغيير أوردر تاني ما يمسحش تقييم العميل ولا يرجّع زوم الخريطة
+  if (S.page === "detail" &&
+      (items || []).some(o => String(o.id) === String(S.currentOrderId))) renderDetail();
+}
+
+function attachListeners() {
+  // الطلبات (بتاعته + الجايالو) — كل 8 ثواني، بديل onValue على orders
+  S.unsub.push(new api.Poller("/api/customer/orders", {
+    interval: 8000,
+    onChange: d => mergeOrders(d.items),
+  }));
+
+  // البروفايل + المحفظة — الحظر بيتطبق فورًا والرصيد بيتحدّث أول بأول
+  S.unsub.push(new api.Poller("/api/customer/me", {
+    interval: 60000, useSince: false,
+    onChange: d => {
+      const wasBlocked = !!(S.profile && S.profile.blocked);
+      S.profile = d.customer || S.profile;
+      S.wallet  = d.wallet   || S.wallet;
+      if (d.cod) S.cod = d.cod;
+      // لو العميل واقف على فورم الطلب والبوابة اتفتحت، الخانة تتحدّث فورًا
+      if (S.page === "new" && typeof renderReceiverBlocks === "function") renderReceiverBlocks();
+      if (S.profile.blocked && !wasBlocked) showBlocked();   // اتحظر وهو فاتح
+      if (S.page === "home")    renderHome();
+      if (S.page === "account") renderAccount();
+    },
+  }));
+
+  // الإشعارات + عدّاد الجرس — مشتقّة على السيرفر من توقيتات الطلبات
+  S.unsub.push(new api.Poller("/api/customer/notifications", {
+    interval: 15000, useSince: false,
+    onChange: d => {
+      S.notifs      = d.items  || [];
+      S.notifUnread = d.unread || 0;
+      S.notifSeenAt = d.seenAt || null;
+      refreshBadge();
+      if (S.page === "notifs") renderNotifs();
+    },
+  }));
+
+  // العناوين والمستلمون المحفوظون — أي كتابة ناجحة بتعمل pokeAll فبيتحدثوا فورًا
+  S.unsub.push(new api.Poller("/api/customer/addresses", {
+    interval: 60000, useSince: false,
+    onChange: d => {
+      S.addresses = d.items || [];
+      if (S.page === "addresses") renderAddresses();
+      // لو المستخدم واقف على فورم الطلب نحدّث الشيبس من غير ما نمسح كتابته
+      if (S.page === "new") renderSavedPicks();
+    },
+  }));
+  S.unsub.push(new api.Poller("/api/customer/receivers", {
+    interval: 60000, useSince: false,
+    onChange: d => {
+      S.savedReceivers = d.items || [];
+      if (S.page === "new") renderSavedPicks();
+    },
+  }));
+
+  // إعدادات الموقع (دعم/مواعيد الشغل/البانر) — كل دقيقة
+  S.unsub.push(new api.Poller("/api/settings/site", {
+    interval: 60000, useSince: false,
+    onChange: d => applySiteSettings(d.site || {}),
+  }));
+}
+function detachAll() { S.unsub.forEach(p => { try { p.stop(); } catch (_) {} }); S.unsub = []; }
+
+async function doLogout() {
+  if (!confirm("تسجيل الخروج من التطبيق؟")) return;
+  detachAll();
+  // فك اشتراك الإشعارات (عشان عميل تاني على نفس الجهاز مايستلمش إشعاراته) —
+  // بسقف ٤ ثواني: على نت ميت بصمت الطلب بيفضل معلّق وكان زرار الخروج بيتجمّد
+  try { await Promise.race([disablePush(), new Promise(r => setTimeout(r, 4000))]); } catch (_) {}
+  try { await api.logout(); } catch (_) {}
+  await signOut(auth);
+}
+window.doLogout = doLogout;
+
+/* ══════════════════════════════════════════════════════════════
+   استكمال البيانات (3 خطوات)
+══════════════════════════════════════════════════════════════ */
+const SETUP_CAPS = ["البيانات الشخصية", "الموقع على الخريطة", "تمكين الحساب"];
+function drawStepper(elId, caps, cur) {
+  $(elId).innerHTML = caps.map((c, i) => {
+    const n = i + 1;
+    const cls = n === cur ? "on" : (n < cur ? "dn" : "");
+    return `${i ? `<div class="bar ${n <= cur ? "on" : ""}"></div>` : ""}
+      <div class="st ${cls}"><div class="bub">${n < cur ? "✓" : n}</div><div class="cap">${esc(c)}</div></div>`;
+  }).join("");
+}
+
+// الصورة الافتراضية الأصلية من الماركب — بنمسكها مرة واحدة عشان نرجّعها
+const AVATAR_PH = $("sutPhoto").getAttribute("src");
+
+function openSetup() {
+  S.setupStep = 1;
+  $("sutEmail").value = S.user.email || "";
+  $("sutName").value  = S.profile?.displayNameAr || "";
+  $("sutPhone").value = S.profile?.phone1 || "";
+  $("sutPhone2").value= S.profile?.phone2 || "";
+  /* لو مافيش صورة جوجل نرجّع الصورة الافتراضية — من غير كده صورة العميل
+     اللي سجّل قبله على نفس الصفحة بتفضل معروضة للي بعده */
+  $("sutPhoto").src = S.user.photoURL || AVATAR_PH;
+  $("sutFound").innerHTML = "";   // نتيجة بحث شحنات عميل سابق
+  renderAddr("sutAddrW", { value: S.profile?.address || "" });
+  fillZoneSelect($("sutZone"), { selected: S.profile?.defaultZoneId });
+  $("sutZone").onchange = () => {
+    const z = findZone($("sutZone").value);
+    const el = $("sutBranch");
+    if (!z) { el.style.display = "none"; return; }
+    el.style.display = "block";
+    el.innerHTML = `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);
+      border-radius:12px;padding:11px;font-size:13px">🏢 الفرع المسؤول عن خدمتك:
+      <b>${esc(zoneBranchName(z) || "—")}</b></div>`;
+  };
+  setupNext(1);
+  go("setup");
+}
+
+/* الصورة الشخصية — بترفع على Cloudinary وبتتخزن كرابط في البروفايل */
+$("sutPhotoFile").addEventListener("change", async e => {
+  const f = e.target.files?.[0]; e.target.value = "";
+  if (!f) return;
+  $("sutPhoto").src = URL.createObjectURL(f);
+  toast("جاري رفع الصورة…");
+  try {
+    S.photoUrl = await uploadImage(f);
+    $("sutPhoto").src = S.photoUrl;
+    toast("تم رفع الصورة ✅", "ok");
+  } catch (err) {
+    S.photoUrl = null;
+    $("sutPhoto").src = S.user?.photoURL || $("sutPhoto").src;
+    toast(err.message, "err");
+  }
+});
+
+function setupNext(step) {
+  if (step > S.setupStep) {
+    if (S.setupStep === 1) {
+      if (!$("sutName").value.trim())  return toast("اكتب اسمك بالكامل", "err");
+      if (!validPhone($("sutPhone").value)) return toast("رقم هاتف غير صحيح", "err");
+      if (!$("sutAgree").checked)      return toast("لازم توافق على الشروط والأحكام", "err");
+    }
+    if (S.setupStep === 2) {
+      if (!getAddr("sutAddrW").trim()) return toast("اكتب عنوانك", "err");
+    }
+  }
+  S.setupStep = step;
+  [1, 2, 3].forEach(n => $("sut-" + n).style.display = n === step ? "block" : "none");
+  drawStepper("setupStepper", SETUP_CAPS, step);
+  if (step === 2) setTimeout(() => showMiniMap("sutMap", S.draftLat, S.draftLng), 60);
+}
+window.setupNext = setupNext;
+
+function validPhone(p) { return /^0?1[0-9]{9}$/.test(String(p || "").replace(/\s|-/g, "")); }
+
+async function saveProfile() {
+  const zoneId = $("sutZone").value;
+  if (!zoneId) return toast("اختر منطقة الاستلام", "err");
+  const btn = $("sutSaveBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الحفظ…";
+  try {
+    const payload = {
+      displayNameAr: $("sutName").value.trim(),
+      phone1: $("sutPhone").value.trim(),
+      phone2: $("sutPhone2").value.trim(),
+      address: getAddr("sutAddrW"),
+      lat: S.draftLat ?? null, lng: S.draftLng ?? null,
+      defaultZoneId: zoneId,
+      photoURL: S.photoUrl || S.user?.photoURL || ""
+    };
+    // السيرفر بيشتق الفرع من الزون وبيعلّم profileCompleted بنفسه
+    const res = await api.put("/api/customer/profile", payload);
+    S.profile = res.customer || S.profile;
+
+    // نحفظ العنوان ده كعنوان افتراضي في دفتر العناوين
+    if (!S.addresses.length) {
+      try {
+        const ar = await api.post("/api/customer/addresses", {
+          label: "المنزل", fullAddress: payload.address,
+          lat: payload.lat, lng: payload.lng, zoneId, isDefault: true
+        });
+        S.addresses = ar.items || S.addresses;
+      } catch (_) {}
+    }
+    // دلوقتي بقى له رقم محفوظ — نجيب أوردراته فورًا عشان الشحنات الجاية
+    // له (اللي حد تاني عاملها وهو المستلم فيها) تظهر على طول
+    let incoming = 0;
+    try {
+      const od = await api.get("/api/customer/orders");
+      mergeOrders(od.items);
+      incoming = S.orders.filter(o => o._incoming).length;
+    } catch (_) {}
+    toast(incoming
+      ? `تم حفظ بياناتك ✅ — لقينالك ${incoming} شحنة باسمك`
+      : "تم حفظ بياناتك ✅", "ok");
+    go("home");
+  } catch (e) { toast("خطأ في الحفظ: " + e.message, "err"); }
+  finally { btn.disabled = false; btn.textContent = "حفظ البيانات"; }
+}
+window.saveProfile = saveProfile;
+
+/* ══════════════════════════════════════════════════════════════
+   الرئيسية
+══════════════════════════════════════════════════════════════ */
+const todayKey = () => new Date().toDateString();
+function renderHome() {
+  $("homeName").textContent = (S.profile?.displayNameAr || "").split(" ")[0] || "بك";
+  /* الإحصائيات على **كل** الطلبات مش طلبات النهاردة بس. قبل كده كانت
+     بتفلتر بتاريخ الإنشاء المحلي، فالعميل اللي بيفتح الصبح يلاقي أصفار
+     رغم إن عنده طلب جاري من إمبارح — وكانت بتسيب الطلب «الجديد» (لسه مش
+     مُسند) و«لم يتم التوصيل» من غير أي خانة، فالمجموع مايطابقش باقي
+     الخانات ويبان كأن الأرقام غلط. */
+  const all = S.orders;
+  /* 🔴 الإحصائيات بتعدّ **الطرود** مش الأوردرات: طلب واحد فيه طردين =
+     شحنتين فعليًا للعميل، وكان بيتعدّ واحد. والشحنة الجاية (مش أوردره)
+     بنعدّ طرودها هو بس — `_myParcels` — مش طرود الأوردر كله. */
+  const st = s => all.filter(o => orderState(o) === s).reduce((t, o) => t + parcelsOf(o), 0);
+  $("stTotal").textContent  = all.reduce((t, o) => t + parcelsOf(o), 0);
+  $("stWay").textContent    = st("new") + st("way");
+  $("stDone").textContent   = st("done");
+  $("stCancel").textContent = st("cancel") + st("failed");
+  const un = unreadCount();
+  $("homeBell").style.display = un ? "grid" : "none";
+  $("homeBell").textContent = un;
+  renderBanner();
+  renderClosedNotice();
+  renderPushCard();
+  const wb = $("homeWallet");
+  if (wb) wb.innerHTML = balanceBarHtml(S.wallet?.balance, { style: "margin:4px 0 14px" });
+  renderSupportBar();
+}
+
+/** شريط خدمة العملاء في الرئيسية — اتصال وواتساب بضغطة */
+function renderSupportBar() {
+  const el = $("homeSupport"); if (!el) return;
+  if (!SUPPORT.phone && !SUPPORT.whatsapp) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:14px;
+      background:rgba(14,165,233,.09);border:1px solid rgba(14,165,233,.28);margin:0 0 14px">
+      <span style="font-size:22px">🎧</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;color:var(--muted)">خدمة العملاء</div>
+        <div style="font-size:16px;font-weight:900;direction:ltr;text-align:start">
+          ${esc(SUPPORT.phone || "—")}</div>
+        ${SUPPORT.hours ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">
+          ${esc(SUPPORT.hours)}</div>` : ""}
+      </div>
+      ${SUPPORT.phone ? `<a href="tel:${esc(SUPPORT.phone)}" style="text-decoration:none;
+        background:#0ea5e9;color:#fff;padding:9px 13px;border-radius:10px;font-weight:800;
+        font-size:13px">📞 اتصل</a>` : ""}
+      ${SUPPORT.whatsapp ? `<a href="https://wa.me/${esc(SUPPORT.whatsapp)}" target="_blank"
+        rel="noopener" style="text-decoration:none;background:rgba(34,197,94,.16);color:#22c55e;
+        padding:9px 13px;border-radius:10px;font-weight:800;font-size:13px">💬</a>` : ""}
+    </div>
+    ${extraSupportHtml()}`;
+}
+
+/** باقي أرقام الدعم — شرايط تحت الكارت، فاضية لو رقم واحد بس */
+function extraSupportHtml() {
+  const rest = []
+    .concat((SUPPORT.phones || []).slice(1).map(x => ({ ...x, wa: false })))
+    .concat((SUPPORT.whatsapps || []).slice(1).map(x => ({ ...x, wa: true })));
+  if (!rest.length) return "";
+  return `<div style="display:flex;flex-wrap:wrap;gap:7px;margin:-8px 0 14px">
+    ${rest.map(x => `<a href="${x.wa ? `https://wa.me/${esc(x.n)}` : `tel:${esc(x.n)}`}"
+        ${x.wa ? 'target="_blank" rel="noopener"' : ""}
+        style="text-decoration:none;background:rgba(14,165,233,.09);
+          border:1px solid rgba(14,165,233,.28);color:var(--txt);padding:6px 11px;
+          border-radius:999px;font-size:11.5px;font-weight:700">
+        ${x.wa ? "💬" : "📞"} ${esc(x.label || x.n)}</a>`).join("")}
+  </div>`;
+}
+
+/** تنبيه في الرئيسية إن الاستقبال مقفول — عشان العميل يعرف قبل ما
+    يدوس «طلب جديد» مش بعدها */
+function renderClosedNotice() {
+  const el = $("closedNotice"); if (!el) return;
+  if (isOpenNow()) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const w = S.workHours || {};
+  el.style.display = "block";
+  el.innerHTML = `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);
+      border-radius:var(--r);padding:14px 16px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
+      <span style="font-size:24px">${w.closedNow ? "🚫" : "🌙"}</span>
+      <div style="flex:1;font-size:13px;line-height:1.75">
+        <b style="display:block;font-size:14px;margin-bottom:2px">
+          ${w.closedNow ? "استقبال الطلبات متوقف مؤقتًا" : "احنا مقفولين دلوقتي"}</b>
+        <span style="color:var(--muted)">${w.closedNow
+          ? "هنرجع نستقبل قريب — كلّمنا لو الموضوع مستعجل."
+          : `بنستقبل الطلبات من ${ar12(w.from || "09:00")} لحد ${ar12(w.to || "05:00")}`}</span>
+      </div>
+    </div>`;
+}
+
+/* ── البانر الإعلاني ──────────────────────────────────────────
+   البيانات: settings/customerBanner = { imageUrl, linkUrl, title, active }
+   الإدارة بتتحكم فيه من برّه التطبيق ده (تحديث مباشر في فايربيز أو
+   من لوحة هنجهّزها بعدين) — هنا بنقرا ونعرض بس.
+   بنقبل روابط https بس: صورة من مصدر غير آمن هتتحجب في المتصفح،
+   ورابط javascript:/data: ممكن يتنفّذ كود لو حد عدّل العقدة. */
+function safeHttps(u) {
+  try { const x = new URL(String(u || "")); return x.protocol === "https:" ? x.href : ""; }
+  catch (_) { return ""; }
+}
+function renderBanner() {
+  const el = $("homeBanner"); if (!el) return;
+  const b   = S.banner || {};
+  const img = safeHttps(b.imageUrl);
+  // active لازم تكون true صراحةً، والصورة لازم تكون https صحيحة
+  if (b.active !== true || !img) { el.className = "banner"; el.innerHTML = ""; return; }
+  const link  = safeHttps(b.linkUrl);
+  const title = String(b.title || "").trim();
+  el.className = "banner on" + (link ? " link" : "");
+  el.innerHTML = `<img src="${esc(img)}" alt="${esc(title || "إعلان")}"
+      onerror="this.closest('.banner').className='banner'" />
+    ${title ? `<div class="cap">${esc(title)}</div>` : ""}`;
+  el.onclick = link ? () => window.open(link, "_blank", "noopener,noreferrer") : null;
+}
+
+/* 🔴 طرد **العميل نفسه** مش أول طرد في الأوردر.
+   الأوردر ممكن يكون فيه طرود لناس تانية. أخد deliveries[0] كان بيخلّي
+   العميل يشوف **اسم وتليفون وعنوان** حد تاني في شاشة التفاصيل، ودبوس
+   التسليم بتاع حد تاني على خريطة التتبّع. النمط الصح كان موجود أصلًا
+   في قايمة الطلبات (idx = _myParcels[0]) بس مااتعممش. */
+function myParcel(o) {
+  const idx = (o && o._incoming && Array.isArray(o._myParcels) && o._myParcels.length)
+    ? o._myParcels[0] : 0;
+  return (o && o.deliveries && o.deliveries[idx]) || {};
+}
+
+/* حالة الطلب من منظور العميل — مبنية على نفس قيم status
+   المستخدمة في تطبيق الطيار ولوحة الإدارة بدون تغييرها. */
+function orderState(o) {
+  const d = myParcel(o);
+  const s = o.status || d.status || "";
+  if (s === "ملغي") return "cancel";
+  if (s === "تم التسليم" || d.status === "تم التسليم") return "done";
+  if (s === "لم يتم التوصيل" || d.status === "لم يتم التوصيل") return "failed";
+  if (s === "جاري التوصيل" || o.pilotId) return "way";
+  return "new";
+}
+const STATE_META = {
+  new:    { t: "جديد",          c: "b-new" },
+  way:    { t: "قيد التوصيل",   c: "b-way" },
+  done:   { t: "تم التسليم",    c: "b-done" },
+  failed: { t: "لم يتم التوصيل", c: "b-way" },
+  cancel: { t: "ملغي",          c: "b-cancel" }
+};
+const KIND_ICON = { "وثيقة":"📄", "طرد":"📦", "شنطة":"👜", "كرتونة":"🗃️", "أخرى":"🧰" };
+
+/* ══════════════════════════════════════════════════════════════
+   طلباتي
+══════════════════════════════════════════════════════════════ */
+const FILTERS = [["all","الكل"],["new","جديد"],["way","قيد التوصيل"],["done","تم التسليم"],["cancel","ملغي"]];
+function renderOrders() {
+  $("orderTabs").innerHTML = FILTERS.map(([k, t]) =>
+    `<div class="tab ${S.orderFilter === k ? "on" : ""}" data-f="${k}">${t}</div>`).join("");
+  $("orderTabs").querySelectorAll(".tab").forEach(t =>
+    t.onclick = () => { S.orderFilter = t.dataset.f; renderOrders(); });
+
+  const list = S.orders.filter(o => S.orderFilter === "all" || orderState(o) === S.orderFilter);
+  if (!list.length) {
+    $("ordersList").innerHTML = `<div class="empty"><i>📦</i><b>لا توجد طلبات</b>
+      <span>ابدأ بإنشاء طلبك الأول من زر "طلب جديد"</span></div>`;
+    return;
+  }
+  $("ordersList").innerHTML = list.map(o => {
+    // في الشحنات الجاية له، بنعرض الطرد بتاعه هو مش أول طرد في الأوردر
+    const d  = myParcel(o);
+    const m  = STATE_META[orderState(o)];
+    const dt = new Date(o.createdAt || 0);
+    const isToday = dt.toDateString() === todayKey();
+    // رقم الطرد المركّب لو الأوردر أكتر من طرد — نفس اللي على الباركود
+    const num = (o._incoming && (o.deliveries || []).length > 1 && d.parcelNo)
+      ? `${o.orderNum}-${d.parcelNo}` : (o.orderNum || "—");
+    return `<div class="o-item" data-id="${esc(o.id)}">
+      <div class="oi">${o._incoming ? "📥" : (KIND_ICON[o.orderKind] || "📦")}</div>
+      <div class="ob">
+        <div class="r1"><span class="num">#${esc(num)}</span>
+          <span class="badge ${m.c}">${m.t}</span></div>
+        <div class="nm">${o._incoming
+          ? `<span style="color:#22c55e">شحنة جاية لك</span> — من ${esc(o.senderName || "—")}`
+          : (d.receiverFromReceipt ? "🧾 مستلم من الريسيت" : esc(d.receiverName || "—"))}</div>
+        <div class="r3"><span>${fmtMoney(d.orderPrice)} ج.م</span>
+          <span>${isToday ? "اليوم" : dt.toLocaleDateString("ar-EG")} ${dt.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})}</span></div>
+      </div></div>`;
+  }).join("");
+  $("ordersList").querySelectorAll(".o-item").forEach(el =>
+    el.onclick = () => { S.currentOrderId = el.dataset.id; go("detail"); });
+}
+const fmtMoney = v => (Number(v) || 0).toLocaleString("ar-EG");
+
+/* ══════════════════════════════════════════════════════════════
+   تفاصيل الطلب + التتبّع
+   ملاحظة: التايم-لاين مشتق من الحقول الموجودة أصلًا
+   (createdAt / pilotId / statusSince / status) عشان ما نحتاجش
+   تعديل في تطبيق الطيار أو لوحة الإدارة.
+══════════════════════════════════════════════════════════════ */
+/* عدد الطرود في الأوردر — الوحدة اللي العميل بيحسب بيها.
+   • أوردره هو  → كل طرود الأوردر.
+   • شحنة جايّاله → طروده هو بس (`_myParcels`)، لأن الأوردر ممكن يكون
+     فيه طرود لناس تانية ومش من حقه يعدّها ولا يشوفها.
+   • أوردر قديم من غير طرود → واحد، عشان مايختفيش من العدّ. */
+function parcelsOf(o) {
+  if (!o) return 0;
+  if (o._incoming) return (o._myParcels || [0]).length || 1;
+  return (o.deliveries || []).length || 1;
+}
+
+/* ⚠️ صف «لم يتم التوصيل» بيتحط فيه سبب بيكتبه الطيار
+   (undeliveredReason). العرض بيعدّي على esc() في detailBody — من غيره
+   سبب فيه وسم HTML بيتنفّذ في متصفح العميل. كل تطبيقات الموظفين
+   بتهرّبه؛ ده كان الموضع الوحيد اللي فاته. */
+function orderTimeline(o) {
+  const st = o._state || orderState(o);
+  // التوقيتات دي بيكتبها تطبيق الطيار فعليًا (receiveOrder / startTrip /
+  // markDelivered)، فالتايم-لاين هنا حقيقي مش مُستنتج.
+  const rows = [
+    { k: "created",  t: "تم إنشاء الطلب",         at: o.createdAt,                    done: true },
+    { k: "assigned", t: "تم إسناد الطلب لطيار",   at: o.pilotId ? (o.assignedAt || o.statusSince) : null,
+      done: !!o.pilotId },
+    { k: "received", t: "استلم الطيار الشحنة",    at: o.receivedAt,                   done: !!o.receivedAt },
+    { k: "out",      t: "خرج للتوصيل",            at: o.tripStartedAt,                done: !!o.tripStartedAt }
+  ];
+  if (st === "failed")
+    rows.push({ k: "failed", t: "لم يتم التوصيل" + (o.undeliveredReason ? ` — ${o.undeliveredReason}` : ""),
+                at: o.undeliveredAt, done: true });
+  else if (st === "cancel")
+    rows.push({ k: "cancel", t: "تم إلغاء الطلب", at: o.cancelledAt || o.statusSince, done: true });
+  else
+    rows.push({ k: "delivered", t: "تم التسليم", at: o.deliveredAt, done: st === "done" });
+  return rows;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   تقييم الأوردر — بيظهر بعد ما الشحنة تتسلّم
+   ──────────────────────────────────────────────────────────────
+   بيتخزّن في orders/{id}/ratings/customer عشان المحل يقدر يقيّم كمان
+   في خانة منفصلة (ratings/store) من غير ما يمسحوا بعض.
+══════════════════════════════════════════════════════════════ */
+const RATE_LABEL = ["", "سيئة", "مش كويسة", "كويسة", "حلوة", "ممتازة"];
+
+function starsHtml(n, interactive) {
+  return [1,2,3,4,5].map(i => `<span ${interactive ? `onclick="pickStar(${i})"` : ""}
+    class="rt-star" data-i="${i}" style="cursor:${interactive ? "pointer" : "default"};
+    font-size:29px;line-height:1;color:${i <= n ? "#f5b800" : "#3a3a44"}">★</span>`).join("");
+}
+
+function ratingCardHtml(o) {
+  if (orderState(o) !== "done") return "";       // التقييم بعد التسليم بس
+  const r = (o.ratings || {}).customer;
+  if (r) {
+    return `<div class="card">
+      <span class="lbl">تقييمك للطلب</span>
+      <div style="display:flex;gap:3px;margin-top:4px">${starsHtml(r.stars, false)}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">
+        ${RATE_LABEL[r.stars] || ""}${r.note ? ` — ${esc(r.note)}` : ""}</div>
+      <button class="btn ghost sm" style="margin-top:12px" onclick="editRating()">✏️ تعديل التقييم</button>
+    </div>`;
+  }
+  return `<div class="card" id="rateCard">
+    <span class="lbl">قيّم الطلب</span>
+    <div style="font-size:13px;color:var(--muted);margin:2px 0 10px">
+      رأيك بيساعدنا نحسّن الخدمة 🙏</div>
+    <div style="display:flex;gap:3px" id="rateStars">${starsHtml(0, true)}</div>
+    <div id="rateLabel" style="font-size:13px;color:#f5b800;font-weight:700;margin-top:7px;min-height:18px"></div>
+    <textarea id="rateNote" rows="2" placeholder="عايز تضيف حاجة؟ (اختياري)"
+      style="width:100%;margin-top:10px;background:#08080a;border:1px solid var(--line);
+             border-radius:12px;padding:11px 13px;color:inherit;font-family:inherit;
+             font-size:14px;outline:none;resize:none"></textarea>
+    <button class="btn" id="rateBtn" style="margin-top:10px" onclick="submitRating()" disabled>
+      إرسال التقييم</button>
+  </div>`;
+}
+
+window._rateStars = 0;
+window.pickStar = function (n) {
+  window._rateStars = n;
+  const box = $("rateStars"); if (box) box.innerHTML = starsHtml(n, true);
+  const lbl = $("rateLabel"); if (lbl) lbl.textContent = RATE_LABEL[n] || "";
+  const btn = $("rateBtn"); if (btn) btn.disabled = !n;
+};
+
+window.editRating = function () {
+  const o = S.orders.find(x => String(x.id) === String(S.currentOrderId)); if (!o) return;
+  // بنشيل التقييم القديم من العرض عشان الفورم يرجع يبان
+  o.ratings = { ...(o.ratings || {}) }; delete o.ratings.customer;
+  renderDetail();
+};
+
+window.submitRating = async function () {
+  const o = S.orders.find(x => String(x.id) === String(S.currentOrderId)); if (!o) return;
+  const stars = window._rateStars;
+  if (!stars) return;
+  const btn = $("rateBtn"); if (btn) { btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…"; }
+  try {
+    const res = await api.post(`/api/customer/orders/${o.id}/rating`, {
+      stars, note: ($("rateNote")?.value || "").trim()
+    });
+    if (res.order) mergeOrders([{ ...o, ...res.order }]);
+    window._rateStars = 0;
+    toast("شكرًا لتقييمك 🌟", "ok");
+  } catch (e) {
+    toast("تعذّر إرسال التقييم: " + (e.message || e), "err");
+    if (btn) { btn.disabled = false; btn.textContent = "إرسال التقييم"; }
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   تقييم المستلم (منظومة الثقة) — POST /api/orders/{id}/rate-receiver
+   ──────────────────────────────────────────────────────────────
+   صاحب الشحنة هو اللي يقيّم مستلمها بعد ما تخلص (تم التسليم / لم يتم
+   التوصيل). الشحنات الجاية للعميل (_incoming) مالهاش زرار — هو المستلم
+   فيها مش المُرسِل. الـ API بيسمح بتقييم واحد لكل أوردر لكل مُقيِّم.
+══════════════════════════════════════════════════════════════ */
+function rateScope() { return S.profile?.id || S.uid || "me"; }
+
+function receiverRatingHtml(o) {
+  const st = orderState(o);
+  if (st !== "done" && st !== "failed") return "";
+  if (o._incoming) return "";
+  if (!window.Trust) return "";
+
+  const rated = Trust.getRated(rateScope(), o.id);
+  if (rated) {
+    return `<div class="card">
+      <span class="lbl">تقييمك للمستلم</span>
+      <div style="display:flex;gap:3px;margin-top:4px">${Trust.starsView(rated.stars, "22px")}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">
+        ${esc(Trust.RATE_LABEL[rated.stars] || "")}${rated.note ? ` — ${esc(rated.note)}` : ""}</div>
+    </div>`;
+  }
+  return `<div class="card">
+    <span class="lbl">قيّم المستلم</span>
+    <div style="font-size:13px;color:var(--muted);margin:2px 0 10px">
+      تقييمك بيساعد باقي المُرسِلين يعرفوا مين قدامهم 🤝</div>
+    <button class="btn ghost" onclick="rateReceiverOf('${esc(o.id)}')">⭐ قيّم المستلم</button>
+  </div>`;
+}
+
+window.rateReceiverOf = function (orderId) {
+  const o = S.orders.find(x => String(x.id) === String(orderId));
+  if (!o || !window.Trust) return;
+  const parts = (o.deliveries || []).filter(d => d && d.receiverPhone);
+  if (!parts.length) return toast("الطلب ده مالوش رقم مستلم مسجّل", "err");
+
+  Trust.ratingModal({
+    title: "قيّم المستلم",
+    subtitle: `طلب ${o.orderNum || ""} — ${o.status || ""}`,
+    parcels: parts.map((d, i) => ({
+      value: d.id,
+      label: parts.length > 1 ? `طرد ${i + 1} — ${d.receiverName || d.receiverPhone}`
+                              : (d.receiverName || d.receiverPhone)
+    })),
+    onSubmit: async (payload) => {
+      try {
+        const res = await api.post(`/api/orders/${encodeURIComponent(o.id)}/rate-receiver`, payload);
+        Trust.markRated(rateScope(), o.id, { stars: payload.stars, note: payload.note, phone: res.phone });
+        Trust.forget(res.phone);            // السمعة اتغيّرت — الكاش يتنسي
+        toast("شكرًا — التقييم اتسجّل ⭐", "ok");
+      } catch (e) {
+        // اتقيّم قبل كده من جهاز تاني — نثبّت الحالة محليًا
+        if (e && e.status === 409) {
+          Trust.markRated(rateScope(), o.id, { stars: payload.stars, note: payload.note });
+          toast("الطلب ده اتقيّم قبل كده", "err");
+        } else { throw e; }
+      }
+      renderDetail();
+    }
+  });
+};
+
+function renderDetail() {
+  const o = S.orders.find(x => String(x.id) === String(S.currentOrderId));
+  if (!o) { $("detailBody").innerHTML = `<div class="empty"><i>❓</i><b>الطلب غير موجود</b></div>`; return; }
+  /* الشاشة بتتعاد بالكامل من كذا مسار (استطلاع/رقم الطيار) — بنحفظ اللي
+     العميل كاتبه في فورم التقييم ونرجّعه بعد الرسم، وبنصفّره لو فتح أوردر تاني */
+  const sameOrder = String(window._rateDraftFor || "") === String(S.currentOrderId);
+  const keepNote  = sameOrder ? ($("rateNote")?.value || "") : "";
+  const keepStars = sameOrder ? (window._rateStars || 0) : 0;
+  window._rateDraftFor = S.currentOrderId;
+  window._rateStars = keepStars;
+  const d = myParcel(o);
+  const m = STATE_META[orderState(o)];
+  const tl = orderTimeline(o);
+
+  $("detailBody").innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="font-size:20px;font-weight:900;direction:ltr">#${esc(o.orderNum || "—")}</div>
+      <span class="badge ${m.c}">${m.t}</span>
+    </div>
+
+    <div class="card">
+      <span class="lbl">المستلم</span>
+      ${d.receiverFromReceipt ? `
+        <b style="font-size:15px">🧾 البيانات على صورة الريسيت</b>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:7px">
+          منطقة التسليم: <b style="color:var(--txt2)">${esc(d.zoneName || "—")}</b></div>`
+      : `
+        <b style="font-size:15px">${esc(d.receiverName || "—")}</b>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;direction:ltr">
+          <a href="tel:${esc(d.receiverPhone || "")}" style="color:var(--txt)">${esc(d.receiverPhone || "—")}</a>
+          <span style="color:var(--red)">📞</span></div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:7px">📍 ${esc(d.address || "—")}</div>`}
+    </div>
+
+    ${ratingCardHtml(o)}
+    ${receiverRatingHtml(o)}
+
+    <div class="card">
+      <span class="lbl">تتبّع الطلب</span>
+      <div class="tl">${tl.map(x => `
+        <div class="tl-row ${x.done ? "dn" : "pend"}">
+          <div class="dot"></div>
+          <div><b>${esc(x.t)}</b><span>${x.at ? fmtTime(x.at) : "—"}</span></div>
+        </div>`).join("")}</div>
+    </div>
+
+    ${trackCtaHtml(o)}
+
+    <div class="card">
+      <span class="lbl">بيانات الطلب</span>
+      ${row("النوع", (KIND_ICON[o.orderKind] || "📦") + " " + (o.orderKind || "—"))}
+      ${row("عدد القطع", o.piecesCount || 1)}
+      ${row("مبلغ التحصيل", fmtMoney(d.orderPrice) + " ج.م")}
+      ${o.goodsValue ? row("قيمة البضاعة", fmtMoney(o.goodsValue) + " ج.م") : ""}
+      ${row("سعر التوصيل", d.zonePrice ? fmtMoney(d.zonePrice) + " ج.م" : "يحدده الفرع")}
+      ${row("الفرع", o.branchName || "—")}
+      ${o.pilotName ? row("الطيار", o.pilotName) : ""}
+      ${d.note ? row("ملاحظات", d.note) : ""}
+    </div>
+
+    ${(d.images && d.images.length) ? `<div class="card"><span class="lbl">المرفقات</span>
+      <div class="thumbs">${d.images.map(u =>
+        `<a class="thumb" href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt="" /></a>`).join("")}</div></div>` : ""}
+
+    ${["done", "failed", "cancel"].includes(orderState(o)) ? "" : `<div style="display:flex;gap:10px;margin-top:14px">
+      ${pilotPhoneOf(o)
+        ? `<a class="btn" href="tel:${esc(pilotPhoneOf(o))}">📞 اتصال بالطيار</a>
+           <a class="btn ghost" href="https://wa.me/${waNum(pilotPhoneOf(o))}" target="_blank">💬 محادثة</a>`
+        : `<button class="btn ghost" disabled>${o.pilotId ? (S.pilotCache?.[o.pilotId] ? "رقم الطيار غير متاح" : "جاري تحميل رقم الطيار…") : "لم يتم تعيين طيار بعد"}</button>`}
+    </div>`}
+    ${orderState(o) === "new" ? `<button class="btn ghost" style="margin-top:10px;color:var(--red)"
+        onclick="cancelOrder('${esc(o.id)}')">إلغاء الطلب</button>` : ""}`;
+
+  ensurePilotContact(o);
+  // رجّع مسوّدة التقييم (النجوم بترجّع الليبل وزرار الإرسال معاها)
+  if (keepStars) window.pickStar(keepStars);
+  if (keepNote && $("rateNote")) $("rateNote").value = keepNote;
+}
+const row = (k, v) => `<div style="display:flex;justify-content:space-between;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px">
+  <span style="color:var(--muted)">${esc(k)}</span><b>${esc(v)}</b></div>`;
+
+function fmtTime(iso) {
+  const d = new Date(iso); if (isNaN(d)) return "—";
+  const today = d.toDateString() === todayKey();
+  return (today ? "اليوم" : d.toLocaleDateString("ar-EG")) + " " +
+         d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+}
+
+/* خريطة التتبّع: **الطيار + نقطة التسليم بس** — Poller كل 8ث على
+   GET /api/customer/orders/{id}/track بيحرك ماركر الطيار.
+
+   🔴 نقطة الاستلام (مكان المُرسِل) **مش** على الخريطة دي، وده مقصود:
+   الصفحة مابتتفتحش أصلًا غير بعد ما الطيار يدوس «بدء الرحلة» — يعني
+   الطرد بقى في إيده وطالع للعميل، ومكان الاستلام خلاص عدّى. عرضه بعد
+   كده مالوش أي فايدة للعميل، ومقابله إننا بنوري عميل **مكان محل**
+   طرف تالت (وفي الشحنات الجاية العميل ما بينهوش علاقة بالمحل ده
+   أصلًا). صاحب النظام طلبها بالنص: «لا يظهر للعميل إلا الطيار ومكان
+   التسليم النهائي». */
+let trackMap, trackPilotUnsub = null;
+/* زرار الذهاب لصفحة التتبّع من التفاصيل — بيظهر بس والرحلة شغّالة:
+   نفس شرط السيرفر بالحرف (موقع الطيار مش بيتبعت أصلًا قبلها). */
+function trackActive(o) {
+  return !!(o && o.pilotId && o.status === "جاري التوصيل" && o.tripStartedAt);
+}
+function trackCtaHtml(o) {
+  if (trackActive(o))
+    return `<button class="btn" style="margin:2px 0 12px" onclick="openTrack('${esc(o.id)}')">🗺️ تتبّع الطيار على الخريطة</button>`;
+  if (o.pilotId && !["done", "failed", "cancel"].includes(orderState(o)))
+    return `<div class="card" style="text-align:center;color:var(--muted);font-size:13px;line-height:1.7">
+      🛵 هتقدر تتابع الطيار على الخريطة أول ما يبدأ رحلته إليك</div>`;
+  return "";
+}
+function openTrack(id) { S.currentOrderId = id; go("track"); }
+function trackBack() { go("detail"); }
+window.openTrack = openTrack; window.trackBack = trackBack;
+
+/* ── صفحة التتبّع ──────────────────────────────────────────────────
+   خريطة بعرض الشاشة بتفتح **على مكان الطيار** أول ما يوصل (طلب صاحب
+   النظام بالنص)، وبتتابعه طول ما العميل ما حرّكهاش بإيده؛ زرار 🎯
+   بيرجّع التمركز. الاستطلاع كل ٨ث على /track بيحرّك الماركر ويحدّث
+   «آخر تحديث قبل…»، ولو الأوردر اتسلّم أثناء المتابعة الصفحة بتتحوّل
+   لوحدها لرسالة النهاية. */
+let _trkUserMoved = false, _trkPilotPos = null, _trkMarker = null, _trkRenderedFor = null;
+let _trkGen = 0, _trkActiveRendered = null;
+function trackRecenter() {
+  _trkUserMoved = false;
+  if (trackMap && _trkPilotPos) trackMap.setView(_trkPilotPos, Math.max(trackMap.getZoom(), 15));
+}
+window.trackRecenter = trackRecenter;
+
+function renderTrack() {
+  const o = S.orders.find(x => String(x.id) === String(S.currentOrderId));
+  const el = $("trackMap"); if (!el || !window.L) return;
+  if (trackPilotUnsub) { try { trackPilotUnsub.stop(); } catch (_) {} trackPilotUnsub = null; }
+  if (!o) {
+    // الطلبات لسه بتتحمّل (فتح من إشعار والتطبيق مقفول) — mergeOrders هتعيد الرسم
+    _trkRenderedFor = null;
+    $("trackSub").textContent = "جارٍ التحميل…"; $("trackCard").innerHTML = "";
+    return;
+  }
+  _trkRenderedFor = String(o.id);
+  const st = orderState(o);
+  const active = trackActive(o);
+  $("trackSub").textContent = `#${o.orderNum || "—"} · ${STATE_META[st].t}`;
+
+  // الخريطة القديمة بتتشال فعلًا — وإلا كل إعادة رسم بتسيب L.Map حيّة بمستمعيها
+  if (trackMap) { try { trackMap.remove(); } catch (_) {} trackMap = null; }
+  el.innerHTML = ""; el._leaflet_id = null;
+  _trkUserMoved = false; _trkPilotPos = null; _trkMarker = null;
+  _trkActiveRendered = active;
+  const gen = ++_trkGen;   // جيل الرسم — رد استطلاع متأخر لأوردر سابق مايكتبش على الخريطة دي
+  const d = myParcel(o);
+  // إحداثيات التسليم مش في الـwire بتاع الطرد — بتيجي من رد /track (destination)
+  let b = (d.lat && d.lng) ? [d.lat, d.lng] : null;
+  let destMarker = null;
+  trackMap = L.map(el, { attributionControl: false, zoomControl: false }).setView(b || [30.0444, 31.2357], 13);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(trackMap);
+  const pin = txt => L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 26],
+    html: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px #000)">${txt}</div>` });
+  if (b) L.marker(b, { icon: pin("📍") }).addTo(trackMap).bindPopup("مكان التسليم");
+  L.control.zoom({ position: "topright" }).addTo(trackMap);   // فوق يمين — بعيد عن الكارت العائم
+  // العميل حرّك الخريطة بإيده = ما نخطفهاش تاني (dragstart بيطلع من السحب
+  // اليدوي بس — setView/fitBounds البرمجية مابتطلّعوش)
+  trackMap.on("dragstart", () => { _trkUserMoved = true; });
+  setTimeout(() => { try { trackMap.invalidateSize(); } catch (_) {} }, 150);
+
+  const card = html => { $("trackCard").innerHTML = html; };
+  if (!active) {
+    const msg = st === "done" ? "✅ الطلب اتسلّم — شكرًا لثقتك" :
+                (st === "failed" || st === "cancel") ? "الطلب انتهى" :
+                o.pilotId ? "🛵 الطيار هيظهر على الخريطة أول ما يبدأ رحلته إليك" :
+                "⏳ لسه ما اتعيّنش طيار للطلب";
+    card(`<div style="font-size:13.5px;text-align:center;color:var(--muted);line-height:1.7">${msg}</div>`);
+    return;
+  }
+  card(`<div style="display:flex;align-items:center;gap:10px">
+      <div style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:rgba(232,25,44,.14)">🛵</div>
+      <div style="flex:1;min-width:0"><b style="font-size:14px">${esc(o.pilotName || "الطيار")} في الطريق إليك</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px" id="trackAgo">بنحدّد مكانه…</div></div></div>
+    <div style="display:flex;gap:8px;margin-top:10px" id="trackActions"></div>`);
+  const fillActions = () => {
+    const ph = pilotPhoneOf(o); const box = $("trackActions"); if (!box) return;
+    box.innerHTML = ph
+      ? `<a class="btn" href="tel:${esc(ph)}">📞 اتصال</a><a class="btn ghost" href="https://wa.me/${waNum(ph)}" target="_blank">💬 واتساب</a>`
+      : "";
+  };
+  fillActions();
+  const pilotIcon = L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 17],
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:var(--red);display:grid;place-items:center;font-size:18px;box-shadow:0 0 0 6px rgba(232,25,44,.25)">🛵</div>` });
+  let firstFix = true;
+  trackPilotUnsub = new api.Poller(`/api/customer/orders/${o.id}/track`, {
+    interval: 8000, useSince: false,
+    onChange: res => {
+      if (gen !== _trkGen) return;   // رد متأخر لصفحة اتغيّرت — نتجاهله
+      // دبوس التسليم من السيرفر (أول مرة بس)
+      if (!destMarker && res.destination && res.destination.lat) {
+        b = [res.destination.lat, res.destination.lng];
+        destMarker = L.marker(b, { icon: pin("📍") }).addTo(trackMap).bindPopup("مكان التسليم");
+      }
+      if (res.pilotPhone && o.pilotId) {
+        S.pilotCache = S.pilotCache || {};
+        if (!S.pilotCache[o.pilotId]?.phone1) { S.pilotCache[o.pilotId] = { phone1: res.pilotPhone }; fillActions(); }
+      }
+      // حالة الأوردر اتغيّرت (اتسلّم مثلًا) → نعيد الرسم بالحالة الجديدة
+      if (res.order) {
+        mergeOrders([res.order]);
+        if (!trackActive(res.order)) { renderTrack(); return; }
+      }
+      const loc = res.pilotLocation; if (!loc || !loc.lat) return;
+      _trkPilotPos = [loc.lat, loc.lng];
+      if (_trkMarker) _trkMarker.setLatLng(_trkPilotPos);
+      else _trkMarker = L.marker(_trkPilotPos, { icon: pilotIcon, zIndexOffset: 1000 }).addTo(trackMap).bindPopup("الطيار");
+      const ago = loc.updatedAt ? Math.max(0, Math.round((Date.now() - new Date(loc.updatedAt).getTime()) / 1000)) : null;
+      const agoEl = $("trackAgo");
+      if (agoEl) agoEl.textContent = ago === null ? "—" : ago < 60 ? `آخر تحديث قبل ${ago} ثانية` : `آخر تحديث قبل ${Math.round(ago / 60)} دقيقة`;
+      if (!_trkUserMoved) {
+        // أول موقع: الخريطة تفتح على الطيار نفسه — وبعدها نتابعه
+        if (firstFix) trackMap.setView(_trkPilotPos, 15); else trackMap.panTo(_trkPilotPos);
+      }
+      firstFix = false;
+    },
+  });
+}
+
+/* رقم الطيار مش متخزّن على الأوردر — بنجيبه من رد التتبّع ونكاشه */
+const pilotPhoneOf = o => o.pilotId ? (S.pilotCache?.[o.pilotId]?.phone1 || "") : "";
+const waNum = p => "2" + String(p || "").replace(/\D/g, "").replace(/^0/, "");
+async function ensurePilotContact(o) {
+  if (!o.pilotId) return;
+  S.pilotCache = S.pilotCache || {};
+  if (S.pilotCache[o.pilotId]) return;
+  try {
+    const res = await api.get(`/api/customer/orders/${o.id}/track`);
+    S.pilotCache[o.pilotId] = { phone1: res.pilotPhone || "" };
+    if (S.page === "detail" && String(S.currentOrderId) === String(o.id)) renderDetail();
+  } catch (_) {}
+}
+
+/* فورم التقييم القديم (ratingBlock/bindStars/sendRating) اتشال: كان بيترسم
+   تحت ratingCardHtml بنفس id="rateNote" فالإرسال كان بياخد التكستاريا الفاضية
+   بتاعة الكارت الأول، وكان بيقرا o.rating اللي الـAPI مابيرجّعوش (الصح o.ratings.customer)
+   فبيفضل ظاهر فاضي حتى بعد ما العميل يقيّم. التقييم كله بقى في ratingCardHtml. */
+
+/* أسباب الإلغاء — قايمة مقفولة عشان تطلع تقرير مفيد للإدارة بدل نص حر.
+   السيرفر بيخزّنها في orders.cancelled_reason مسبوقة بـ«العميل:». */
+const CANCEL_REASONS = [
+  "غيّرت رأيي — مش محتاج الطلب",
+  "لقيت سعر أحسن",
+  "الطلب اتأخر عليّا",
+  "غلطت في بيانات المستلم",
+  "غلطت في العنوان أو المنطقة",
+  "هطلبه في وقت تاني",
+];
+
+function pickCancelReason() {
+  return new Promise(resolve => {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);display:flex;align-items:flex-end";
+    box.innerHTML = `<div style="background:var(--card);width:100%;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b,0px));max-height:80vh;overflow:auto">
+        <b style="font-size:15.5px;display:block;margin-bottom:4px">ليه بتلغي الطلب؟</b>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">اختيارك بيساعدنا نحسّن الخدمة</div>
+        <div id="_crList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button class="btn ghost" id="_crBack" style="margin-top:14px">رجوع</button>
+      </div>`;
+    const list = box.querySelector("#_crList");
+    CANCEL_REASONS.forEach(r => {
+      const b = document.createElement("button");
+      b.className = "btn ghost"; b.textContent = r;
+      b.style.cssText = "text-align:right;justify-content:flex-start";
+      b.onclick = () => { box.remove(); resolve(r); };
+      list.appendChild(b);
+    });
+    box.querySelector("#_crBack").onclick = () => { box.remove(); resolve(null); };
+    box.onclick = e => { if (e.target === box) { box.remove(); resolve(null); } };
+    document.body.appendChild(box);
+  });
+}
+
+async function cancelOrder(id) {
+  const reason = await pickCancelReason();
+  if (reason === null) return;              // رجع من غير ما يختار = مفيش إلغاء
+  if (!confirm(`إلغاء الطلب؟\nالسبب: ${reason}\nلن تتمكن من التراجع.`)) return;
+  try {
+    const res = await api.post(`/api/customer/orders/${id}/cancel`, { reason });
+    if (res.order) mergeOrders([res.order]);
+    toast("تم إلغاء الطلب", "ok");
+  } catch (e) { toast("تعذّر الإلغاء: " + e.message, "err"); }
+}
+window.cancelOrder = cancelOrder;
+
+/* ══════════════════════════════════════════════════════════════
+   الإشعارات — مشتقّة من حالة الطلبات (بدون FCM في النسخة دي)
+══════════════════════════════════════════════════════════════ */
+const NOTIF_META = {
+  created  : { t: "تم استلام طلبك في الفرع", i: "🧾",   c: "var(--muted)" },
+  assigned : { t: "تم إسناد طلبك لطيار",   i: "🧑‍✈️", c: "var(--red)" },
+  received : { t: "الطيار استلم شحنتك",     i: "📦",   c: "var(--red)" },
+  out      : { t: "الطيار في الطريق إليك",  i: "🛵",   c: "var(--orange)" },
+  delivered: { t: "تم التسليم بنجاح",       i: "✅",   c: "var(--green)" },
+  failed   : { t: "لم يتم التوصيل",         i: "⚠️",   c: "var(--orange)" },
+  cancel   : { t: "تم إلغاء الطلب",         i: "✖️",   c: "var(--muted)" }
+};
+/* الإشعارات بقت مشتقّة على السيرفر (GET /api/customer/notifications)
+   والـ Poller بيحدّث S.notifs/S.notifUnread — هنا العرض بس */
+const unreadCount = () => S.notifUnread || 0;
+
+/* غير المقروء = عدد الأوردرات اللي آخر حالتها أحدث من آخر فتح للصفحة —
+   مطابق لكروت الصفحة (كارت لكل أوردر). الرقم بتاع السيرفر بيعدّ صفوف الحالات
+   فكان بيطلع ٣ والصفحة فيها كارت واحد. */
+function unreadOrders() {
+  const list = S.notifs || []; if (!list.length) return S.notifUnread || 0;
+  const last = S.notifSeenAt; const seen = new Set();
+  list.forEach(n => { if (!last || n.at > last) seen.add(String(n.orderId)); });
+  return seen.size;
+}
+function refreshBadge() {
+  const n = S.notifUnread > 0 ? unreadOrders() : 0;
+  const b = $("navBadge");
+  b.style.display = n ? "grid" : "none"; b.textContent = n > 99 ? "99+" : n;
+  /* الجرس في هيدر الرئيسية كان بيتحدّث لما نكون على الرئيسية بس — والجرس
+     العائم (#floatBell) بيبان على كل التبويبات فبيتحدّث دايمًا. */
+  const hb = $("homeBell");
+  if (hb) { hb.style.display = n ? "grid" : "none"; hb.textContent = n; }
+  const fb = $("floatBellDot");
+  if (fb) { fb.style.display = n ? "grid" : "none"; fb.textContent = n > 99 ? "99+" : n; }
+  const fw = $("floatBell");
+  if (fw) fw.style.display = ["splash", "login", "setup", "new"].includes(S.page) ? "none" : "flex";
+}
+
+function renderNotifs() {
+  const list = S.notifs || [];
+  const last = S.notifSeenAt;
+  if (!list.length) {
+    $("notifList").innerHTML = `<div class="empty"><i>🔔</i><b>لا توجد إشعارات</b>
+      <span>هنبلّغك بأي تحديث على طلباتك</span></div>`;
+  } else {
+    /* 🔴 كارت واحد لكل أوردر. السيرفر بيرجّع صف لكل حالة (إسناد/استلام/
+       خروج/تسليم…) — يعني الأوردر الواحد ٤ صفوف، وبعد كام أوردر الصفحة
+       بتبقى زحمة مش مفهومة. بنجمّع بالأوردر ونعرض **آخر** حالة + شريط
+       تقدّم صغير، فالكارت بيفضل هو هو وحالته بتتغيّر مع الوقت (طلب صاحب
+       النظام بالنص). «غير مقروء» = آخر حالة أحدث من آخر فتح للصفحة. */
+    const byOrder = new Map();
+    list.forEach(n => {
+      const k = String(n.orderId);
+      const g = byOrder.get(k) || { orderId: n.orderId, num: n.num, keys: new Set(), latest: null };
+      g.keys.add(n.key);
+      // الأحدث بأولوية الحالة (نفس ترتيب السيرفر) — الوقت يفضّ التعادل بس
+      const R = { created: 0, assigned: 1, received: 2, out: 3, delivered: 4, failed: 4, cancel: 4 };
+      const rk = k => (R[k] ?? -1);
+      if (!g.latest || rk(n.key) > rk(g.latest.key) || (rk(n.key) === rk(g.latest.key) && n.at > g.latest.at)) g.latest = n;
+      byOrder.set(k, g);
+    });
+    const groups = [...byOrder.values()].sort((a, b) => (b.latest.at > a.latest.at ? 1 : -1));
+    const STEPS = ["created", "assigned", "received", "out", "delivered"];
+    $("notifList").innerHTML = groups.map(g => {
+      const n = g.latest;
+      const m = NOTIF_META[n.key] || { i: "🔔", c: "var(--red)" };
+      const unread = !last || n.at > last;
+      const ended = g.keys.has("failed") || g.keys.has("cancel");
+      const dots = STEPS.map(k => {
+        if (ended) return `<i class="bad"></i>`;
+        if (k === "delivered" && g.keys.has("delivered")) return `<i class="ok"></i>`;
+        return `<i class="${g.keys.has(k) ? "on" : ""}"></i>`;
+      }).join("");
+      return `
+      <div class="nt ${unread ? "unread" : ""}" data-id="${esc(g.orderId)}">
+        <div class="ni" style="background:rgba(232,25,44,.12);color:${m.c}">${m.i}</div>
+        <div style="flex:1;min-width:0"><b>${esc(n.title)}</b>
+          <span>#${esc(g.num || "")} · ${fmtTime(n.at)}</span>
+          <div class="dots">${dots}</div>
+          ${n.key === "out" ? `<span class="go">🗺️ اضغط لمتابعة الطيار على الخريطة</span>` : ""}</div></div>`;
+    }).join("");
+    $("notifList").querySelectorAll(".nt").forEach(el =>
+      el.onclick = () => {
+        S.currentOrderId = el.dataset.id;
+        // «في الطريق إليك» يفتح الخريطة مباشرة — باقي الحالات التفاصيل
+        const g = byOrder.get(String(el.dataset.id));
+        go(g && g.latest.key === "out" ? "track" : "detail");
+      });
+  }
+  // نعلّم الكل كمقروء — بس لو فيه غير مقروء فعلًا (توفير كتابة كل فتح)
+  if (S.notifUnread > 0) {
+    api.post("/api/customer/notifications/seen", {}, { noPoke: true })
+      .then(r => { S.notifSeenAt = r.seenAt || new Date().toISOString(); S.notifUnread = 0;
+                   setTimeout(refreshBadge, 400); })
+      .catch(() => {});
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   العناوين المحفوظة
+══════════════════════════════════════════════════════════════ */
+function renderAddresses() {
+  if (!S.addresses.length) {
+    $("addrList").innerHTML = `<div class="empty"><i>📍</i><b>لا توجد عناوين محفوظة</b>
+      <span>احفظ عناوينك عشان تختارها بسرعة وقت الطلب</span></div>`;
+    return;
+  }
+  const ICO = { "المنزل":"🏠", "العمل":"🏢", "الشغل":"🏢" };
+  $("addrList").innerHTML = S.addresses.map(a => `
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <div class="mi" style="width:36px;height:36px;border-radius:10px;background:var(--card2);
+        display:grid;place-items:center;font-size:17px;flex:none">${ICO[a.label] || "📍"}</div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:14px">${esc(a.label || "عنوان")}
+          ${a.isDefault ? `<span class="badge b-new" style="margin-right:6px">افتراضي</span>` : ""}</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(a.fullAddress || "")}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">${esc(a.zoneName || "")} · ${esc(a.branchName || "")}</div>
+      </div>
+      <div class="ico-btn" onclick="editAddr('${esc(a.id)}')">✏️</div>
+      <div class="ico-btn" onclick="delAddr('${esc(a.id)}')">🗑️</div>
+    </div>`).join("");
+}
+
+function openAddrSheet(id) {
+  const a = id ? S.addresses.find(x => String(x.id) === String(id)) : null;
+  S.editAddrId = id || null;
+  S.draftLat = a?.lat ?? null; S.draftLng = a?.lng ?? null;
+  openModal(a ? "تعديل العنوان" : "إضافة عنوان جديد", `
+    <span class="lbl">اسم العنوان</span>
+    <div class="chips" id="addrLabels" style="margin-bottom:12px">
+      ${["المنزل","العمل","أخرى"].map(l =>
+        `<div class="chip ${((a?.label || "المنزل") === l) ? "on" : ""}" data-v="${l}">${l}</div>`).join("")}
+    </div>
+    <input id="addrLabelCustom" placeholder="اسم مخصص (اختياري)" value="${esc(a && !["المنزل","العمل"].includes(a.label) ? a.label : "")}" />
+    <div style="margin-top:12px"><div id="addrW"></div></div>
+    <span class="lbl" style="margin-top:12px">المنطقة (تحدد الفرع)</span>
+    <select id="addrZone" data-zonepick></select>
+    <div id="addrBranch" style="margin-top:9px;font-size:12.5px;color:var(--muted)"></div>
+    <div class="map" id="addrMap" style="height:140px;margin-top:12px"></div>
+    <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('addr')">📍 تحديد الموقع على الخريطة</button>
+    <label style="display:flex;align-items:center;gap:9px;margin:14px 0;font-size:13.5px">
+      <input type="checkbox" id="addrDefault" ${a?.isDefault ? "checked" : ""}
+        style="width:19px;height:19px;accent-color:var(--red)" /> اجعله العنوان الافتراضي</label>
+    <button class="btn" onclick="saveAddr()">حفظ العنوان</button>`);
+  renderAddr("addrW", { value: a?.fullAddress || "" });
+  fillZoneSelect($("addrZone"), { selected: a?.zoneId });
+  $("addrZone").onchange = () => {
+    const z = findZone($("addrZone").value);
+    $("addrBranch").textContent = z ? "🏢 الفرع: " + (zoneBranchName(z) || "—") : "";
+  };
+  $("addrZone").onchange();
+  document.querySelectorAll("#addrLabels .chip").forEach(c => c.onclick = () => {
+    document.querySelectorAll("#addrLabels .chip").forEach(x => x.classList.remove("on"));
+    c.classList.add("on");
+  });
+  setTimeout(() => showMiniMap("addrMap", S.draftLat, S.draftLng), 60);
+}
+window.openAddrSheet = openAddrSheet;
+window.editAddr = id => openAddrSheet(id);
+
+async function saveAddr() {
+  const zoneId = $("addrZone").value;
+  if (!zoneId) return toast("اختر المنطقة", "err");
+  const full = getAddr("addrW");
+  if (!full.trim()) return toast("اكتب العنوان", "err");
+  const z = findZone(zoneId);
+  const custom = $("addrLabelCustom").value.trim();
+  const label  = custom || document.querySelector("#addrLabels .chip.on")?.dataset.v || "عنوان";
+  const isDefault = $("addrDefault").checked;
+  const payload = {
+    label, fullAddress: full, lat: S.draftLat ?? null, lng: S.draftLng ?? null,
+    zoneId, isDefault
+  };
+  try {
+    // السيرفر بيشتق الفرع من الزون وبيشيل «افتراضي» من الباقي في نفس المعاملة
+    const res = S.editAddrId
+      ? await api.put(`/api/customer/addresses/${S.editAddrId}`, payload)
+      : await api.post("/api/customer/addresses", payload);
+    S.addresses = res.items || S.addresses;
+    if (S.page === "addresses") renderAddresses();
+    closeModal(); toast("تم حفظ العنوان ✅", "ok");
+  } catch (e) { toast("خطأ: " + e.message, "err"); }
+}
+window.saveAddr = saveAddr;
+
+async function delAddr(id) {
+  if (!confirm("حذف العنوان؟")) return;
+  try {
+    const res = await api.del(`/api/customer/addresses/${id}`);
+    S.addresses = res.items || S.addresses.filter(a => String(a.id) !== String(id));
+    if (S.page === "addresses") renderAddresses();
+    toast("تم الحذف", "ok");
+  } catch (e) { toast("تعذّر الحذف: " + e.message, "err"); }
+}
+window.delAddr = delAddr;
+
+/* ══════════════════════════════════════════════════════════════
+   الحساب
+══════════════════════════════════════════════════════════════ */
+function renderAccount() {
+  $("accName").textContent  = S.profile?.displayNameAr || "—";
+  $("accPhone").textContent = S.profile?.phone1 || "";
+  $("accEmail").textContent = S.profile?.email || "";
+  if (S.profile?.photoURL) $("accPhoto").src = S.profile.photoURL;
+  // حالة إشعارات الستارة مصدرها renderPushState (Web Push) — بلوك FCM القديم
+  // كان بيكتب «‹» فوقها مع كل دورة استطلاع /me فالصف يبان «مش مفعّل» وهو مفعّل
+  renderPushState();
+  renderMyTrust();
+}
+
+/* تقييمك عند المحلات — نفس الدرجة اللي أي مُرسِل بيشوفها على رقمك.
+   بنستخدم نفس /api/lookup (الدرجة وعدد الشحنات بيرجعوا لأي طرف)،
+   والكاش جوّه trust.js بيمنع نداء متكرر مع كل فتح للصفحة. */
+async function renderMyTrust() {
+  const box = $("accTrust");
+  if (!box || !window.Trust) return;
+  const phone = S.profile?.phone1 || "";
+  if (Trust.normPhone(phone).length < 7) { box.style.display = "none"; return; }
+  let res = null;
+  try { res = await Trust.lookup(phone); } catch (e) { box.style.display = "none"; return; }
+  if (!res) { box.style.display = "none"; return; }
+  const rep = res.reputation || {};
+  box.style.display = "";
+  box.innerHTML = `<div class="card">
+    <span class="lbl">تقييمك عند المحلات</span>
+    <div style="margin-top:6px">${Trust.badgeHtml(rep, { size: "13px" })}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.8">
+      ${rep.score === null || rep.score === undefined
+        ? "لسه مفيش تاريخ كفاية على رقمك — أول شحنات هي اللي هتبني تقييمك."
+        : `الدرجة محسوبة من ${esc(Trust.shipmentsText(rep.totalOrders) || "شحناتك")}` +
+          ` (${esc(rep.delivered)} اتسلّمت` +
+          (rep.undelivered ? ` و${esc(rep.undelivered)} ما اتسلّمتش` : "") + ")" +
+          (rep.manualCount ? ` + ${esc(rep.manualCount)} تقييم من المُرسِلين.` : ".")}
+      <br>استلامك للشحنات في ميعادها بيحافظ على سمعتك.
+    </div>
+  </div>`;
+}
+
+function openEditProfile() {
+  openModal("المعلومات الشخصية", `
+    <div class="fld"><div class="fi">👤</div><div class="fb"><b>الاسم بالكامل</b>
+      <input id="epName" value="${esc(S.profile?.displayNameAr || "")}" /></div></div>
+    <div class="fld"><div class="fi">📞</div><div class="fb"><b>رقم الهاتف</b>
+      <input id="epPhone" type="tel" value="${esc(S.profile?.phone1 || "")}" /></div></div>
+    <div class="fld"><div class="fi">📱</div><div class="fb"><b>رقم إضافي</b>
+      <input id="epPhone2" type="tel" value="${esc(S.profile?.phone2 || "")}" /></div></div>
+    <div class="fld"><div class="fi">✉️</div><div class="fb"><b>البريد الإلكتروني</b>
+      <input value="${esc(S.profile?.email || "")}" disabled /></div></div>
+    <span class="lbl">العنوان</span><div id="epAddrW"></div>
+    <span class="lbl" style="margin-top:12px">منطقة الاستلام الافتراضية</span>
+    <select id="epZone" data-zonepick></select>
+    <button class="btn" style="margin-top:16px" onclick="saveEditProfile()">حفظ التعديلات</button>`);
+  renderAddr("epAddrW", { value: S.profile?.address || "" });
+  fillZoneSelect($("epZone"), { selected: S.profile?.defaultZoneId });
+}
+window.openEditProfile = openEditProfile;
+
+async function saveEditProfile() {
+  if (!$("epName").value.trim()) return toast("اكتب الاسم", "err");
+  if (!validPhone($("epPhone").value)) return toast("رقم هاتف غير صحيح", "err");
+  const z = findZone($("epZone").value);
+  const payload = {
+    displayNameAr: $("epName").value.trim(),
+    phone1: $("epPhone").value.trim(), phone2: $("epPhone2").value.trim(),
+    address: getAddr("epAddrW"),
+    lat: S.profile?.lat ?? null, lng: S.profile?.lng ?? null
+  };
+  if (z) payload.defaultZoneId = z.id;
+  try {
+    const res = await api.put("/api/customer/profile", payload);
+    S.profile = res.customer || S.profile;
+    closeModal(); renderAccount(); toast("تم الحفظ ✅", "ok");
+  } catch (e) { toast("خطأ في الحفظ: " + e.message, "err"); }
+}
+window.saveEditProfile = saveEditProfile;
+
+/* أرقام خدمة العملاء بتتقرا من settings/site/info — نفس المصدر اللي
+   الموقع العام بيقرا منه، فالمدير بيغيّرها من لوحة تحكم الموقع مرة
+   واحدة وتتحدّث في كل حتة. قبل كده كان الرقم مكتوب ثابت في الكود. */
+const SUPPORT = { phone: "", whatsapp: "", hours: "" };
+
+const openSupport = () => openModal("الدعم والمساعدة", `
+  <div class="card" style="text-align:center">
+    <div style="font-size:34px">🎧</div>
+    <b style="display:block;margin:8px 0 4px">فريق خدمة العملاء</b>
+    <div style="font-size:12.5px;color:var(--muted)">
+      ${SUPPORT.hours ? esc(SUPPORT.hours) : "متاحين لمساعدتك في أي وقت"}</div>
+    ${SUPPORT.phone ? `
+      <div style="font-size:22px;font-weight:900;direction:ltr;margin:12px 0 4px">
+        ${esc(SUPPORT.phone)}</div>
+      <a class="btn" style="margin-top:8px" href="tel:${esc(SUPPORT.phone)}">📞 اتصل بنا</a>` : ""}
+    ${SUPPORT.whatsapp ? `
+      <a class="btn ghost" style="margin-top:9px" target="_blank" rel="noopener"
+         href="https://wa.me/${esc(SUPPORT.whatsapp)}">💬 واتساب</a>` : ""}
+    ${!SUPPORT.phone && !SUPPORT.whatsapp
+      ? `<div style="font-size:12.5px;color:var(--muted);margin-top:12px">
+           أرقام الدعم لسه ماتسجّلتش — كلّم الفرع</div>` : ""}
+  </div>`);
+/* نسخة التطبيق الشغّالة دلوقتي — من الـmeta في <head>. */
+const APP_VERSION =
+  document.querySelector('meta[name="app-version"]')?.content || "—";
+
+/* بيجيب customer.html من السيرفر ويقرا نسخته. cache:"reload" بيتخطّى كاش
+   المتصفح **وكاش الـservice worker** — من غيره ممكن نقارن النسخة بنفسها. */
+async function latestVersion() {
+  const res = await fetch("customer.html?_v=" + Date.now(), { cache: "reload" });
+  const txt = await res.text();
+  const doc = new DOMParser().parseFromString(txt, "text/html");
+  return doc.querySelector('meta[name="app-version"]')?.content || null;
+}
+
+/* فحص التحديث — بيتنده من صف القايمة ومن حوار «عن التطبيق».
+   لو فيه نسخة أحدث: بنجبر الـservice worker يجيب نسخته كمان (وإلا ممكن
+   يفضل مخدّم الشِل القديم) وبعدين نعيد التحميل مرة واحدة. */
+async function doAppUpdate(btnId) {
+  const btn = btnId ? document.getElementById(btnId) : null;
+  const old = btn ? btn.textContent : "";
+  if (btn) { btn.textContent = "بنشوف…"; btn.disabled = true; }
+  try {
+    const latest = await latestVersion();
+    if (latest && latest !== APP_VERSION) {
+      if (btn) btn.textContent = "بننزّل " + latest + "…";
+      toast("فيه نسخة جديدة — بنحدّث", "ok");
+      if ("serviceWorker" in navigator) {
+        try {
+          const rs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(rs.map(r => r.update().catch(() => {})));
+        } catch (_) {}
+      }
+      setTimeout(() => location.reload(), 700);
+      return;
+    }
+    toast("إنت على أحدث نسخة (" + APP_VERSION + ") ✓", "ok");
+  } catch (_) {
+    toast("مفيش نت — جرّب تاني", "err");
+  }
+  if (btn) { btn.textContent = old; btn.disabled = false; }
+}
+window.doAppUpdate = doAppUpdate;
+
+const openAbout = () => openModal("عن التطبيق", `
+  <div style="text-align:center;padding:10px 0">
+    <img src="assets/logo.png" style="width:170px" alt="" />
+    <div style="font-size:13px;color:var(--muted);margin-top:14px;line-height:1.9">
+      تطبيق عملاء الدهشان<br />توصيل أسرع.. لكل مكان</div>
+    <div style="margin-top:16px;padding:13px;border:1px solid var(--line);border-radius:12px">
+      <div style="font-size:12.5px;color:var(--muted)">النسخة الحالية</div>
+      <b style="font-size:20px;direction:ltr;display:block;margin-top:3px">${esc(APP_VERSION)}</b>
+      <button class="btn ghost sm" id="_updBtn" style="margin-top:13px;width:100%"
+              onclick="doAppUpdate('_updBtn')">🔄 فحص التحديثات</button>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.8">
+        التطبيق بيحدّث نفسه لوحده أول ما تفتحه ومعاك نت — الزرار ده لو حابب تتأكد بنفسك</div>
+    </div>
+  </div>`);
+window.openSupport = openSupport; window.openAbout = openAbout;
+
+/* ══════════════════════════════════════════════════════════════
+   مواعيد استقبال الطلبات
+   ──────────────────────────────────────────────────────────────
+   settings/workHours = { from:"09:00", to:"05:00", on:true, closedNow:false }
+   الإدارة بتظبطها من لوحة الإدارة. المواعيد بتعدّي نص الليل
+   (9ص → 5ف)، فالمقارنة على دايرة 24 ساعة مش مدى بسيط.
+══════════════════════════════════════════════════════════════ */
+const hhmmToMin = t => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+  return m ? +m[1] * 60 + +m[2] : null;
+};
+/** العميل المحظور مايقدرش يعمل طلبات جديدة — الإدارة بتحظره من
+    شاشة «عملاء التطبيق». طلباته القديمة بتفضل ظاهرة له عادي. */
+function isBlocked() { return S.profile?.blocked === true; }
+function showBlocked() {
+  openModal("الحساب موقوف", `
+    <div style="text-align:center;padding:6px 0 2px">
+      <div style="font-size:52px;line-height:1;margin-bottom:14px">🚫</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px">حسابك موقوف مؤقتًا</div>
+      <div style="color:var(--muted);font-size:14px;line-height:1.9;margin-bottom:16px">
+        مش هتقدر تعمل طلبات جديدة دلوقتي. لو تفتكر إن فيه خطأ،
+        كلّم خدمة العملاء وهنراجع حسابك.
+      </div>
+      <a class="btn" href="tel:${esc(S.profile?.defaultBranchPhone || "16000")}"
+         style="text-decoration:none">📞 كلّم خدمة العملاء</a>
+    </div>`);
+}
+
+function isOpenNow() {
+  const w = S.workHours;
+  if (w?.closedNow) return false;                  // قفل طارئ من الإدارة
+  if (!w || w.on === false) return true;           // التقييد مطفي = مفتوح دايمًا
+  const a = hhmmToMin(w.from), b = hhmmToMin(w.to);
+  if (a === null || b === null || a === b) return true;
+  const d = new Date(), n = d.getHours() * 60 + d.getMinutes();
+  return a < b ? (n >= a && n < b) : (n >= a || n < b);
+}
+/** الوقت بالعربي 12 ساعة — «9:00 صباحًا» */
+function ar12(hhmm) {
+  const m = hhmmToMin(hhmm);
+  if (m === null) return hhmm || "";
+  const h24 = Math.floor(m / 60), mm = m % 60;
+  let h = h24 % 12; if (h === 0) h = 12;
+  return `${h}:${String(mm).padStart(2, "0")} ${h24 < 12 ? "صباحًا" : "مساءً"}`;
+}
+function showClosed() {
+  const w = S.workHours || {};
+  const emergency = !!w.closedNow;
+  openModal("مقفولين دلوقتي", `
+    <div style="text-align:center;padding:6px 0 2px">
+      <div style="font-size:52px;line-height:1;margin-bottom:14px">${emergency ? "🚫" : "🌙"}</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px">
+        ${emergency ? "استقبال الطلبات متوقف مؤقتًا" : "احنا مقفولين دلوقتي"}</div>
+      <div style="color:var(--muted);font-size:14px;line-height:1.9;margin-bottom:16px">
+        ${emergency
+          ? "فيه ظرف طارئ ووقفنا استقبال الطلبات مؤقتًا. جرّب تاني بعد شوية أو كلّمنا."
+          : `مواعيد استقبال الطلبات من <b style="color:var(--txt)">${ar12(w.from || "09:00")}</b>
+             لحد <b style="color:var(--txt)">${ar12(w.to || "05:00")}</b>.<br />
+             ارجعلنا في الميعاد ده وهنكون في خدمتك.`}
+      </div>
+      <a class="btn" href="tel:${esc(S.profile?.defaultBranchPhone || "16000")}"
+         style="text-decoration:none">📞 كلّم خدمة العملاء</a>
+    </div>`);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   إنشاء طلب جديد — Wizard 4 خطوات
+══════════════════════════════════════════════════════════════ */
+const WIZ_CAPS = ["المُرسل", "المستلم", "الطلب", "المرفقات"];
+const KINDS = ["وثيقة", "طرد", "شنطة", "كرتونة", "أخرى"];
+/* «فيزا» اتشالت — مش متاحة للاختيار في طلب جديد. الطلبات القديمة
+   المحفوظة بـ paymentMethod = "فيزا" بتتعرض زي ما هي في تاريخ الطلبات. */
+const PAYS  = ["كاش", "مدفوع مسبقًا"];
+
+function startNewOrder() {
+  if (!S.profile?.profileCompleted) { toast("أكمل بياناتك أولاً", "err"); return openSetup(); }
+  if (isBlocked()) return showBlocked();
+  // برّه مواعيد الشغل مابنفتحش الفورم أصلاً — أرحم للعميل من إنه يملا
+  // كل الخطوات وبعدين يترفض في الآخر
+  if (!isOpenNow()) return showClosed();
+  S.wizStep = 1;
+  /* 🔴 اسم عشوائي لحقول المستلم مع كل طلب جديد. المسوّدة بتتصفّر صح
+     (blankReceiver)، لكن كروم بيملّي حقول الاسم/التليفون لوحده من تاريخ
+     الإدخال لما الحقل يبقى بنفس الاسم — فالعميل كان بيلاقي بيانات مستلم
+     الطلب اللي فات. الاسم المتغيّر بيكسر المطابقة دي. */
+  S.formNonce = Math.random().toString(36).slice(2, 8);
+  S.draft = { kind: "طرد", pieces: 1,
+              sndLat: S.profile.lat ?? null, sndLng: S.profile.lng ?? null,
+              receivers: [blankReceiver()] };
+
+  /* 🔴 فاضية عن قصد — شوف التعليق في خطوة ١. المنطقة مش بتتعبّى كمان
+     لأنها منطقة **الاستلام**، ولو صاحب الحساب هو المستلم بتبقى منطقة
+     الراسل مش منطقته هو. */
+  $("sndName").value  = "";
+  $("sndPhone").value = "";
+  renderAddr("sndAddrW", { value: "" });
+  fillZoneSelect($("sndZone"), {});
+  $("sndZone").onchange = onSenderZone;
+  onSenderZone();
+  $("sndPinState").style.display = S.draft.sndLat ? "block" : "none";
+  $("sndPinState").innerHTML = S.draft.sndLat ? "✅ نقطة الاستلام محدّدة من بياناتك المحفوظة" : "";
+
+  $("rcvNoData").checked = false;
+  $("rcvNoData").onchange = onReceiverMode;
+  onReceiverMode();                 // بيرسم بلوكات المستلمين جوّه
+
+
+  $("odCodTotal").value = 0; $("odNote").value = "";
+  $("odPieces").textContent = 1;
+  drawKinds();
+  renderSavedPicks();
+  wizNext(1);
+  go("new");
+}
+window.startNewOrder = startNewOrder;
+
+function onSenderZone() {
+  const z = findZone($("sndZone").value);
+  S.draft.senderZone = z;
+  const b = $("sndBranch");
+  if (!z) b.textContent = "اختر منطقة الاستلام عشان نحدد الفرع";
+  else b.innerHTML = `🏢 الفرع المسؤول: <b style="color:var(--txt)">${esc(zoneBranchName(z) || "—")}</b>`;
+  // مناطق التسليم المتاحة = مناطق نفس الفرع (زي بوابة المحل بالظبط)
+  refillReceiverZones();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   بلوكات المستلمين — طلب واحد لأكتر من نقطة تسليم
+   ──────────────────────────────────────────────────────────────
+   S.draft.receivers = [{ name, phone, phone2, address, zoneId, lat, lng }]
+   المصدر الرسمي للبيانات هو الـ state مش الـ DOM: قبل أي إعادة رسم
+   بننسخ اللي المستخدم كتبه بـ readReceiverBlocks() الأول، عشان
+   الإضافة أو الحذف ما تضيّعش كلامه.
+══════════════════════════════════════════════════════════════ */
+// cod = مبلغ التحصيل بتاع الطرد ده لوحده. بقى لكل طرد بدل ما يكون رقم واحد
+// للطلب كله، عشان لو الفرع فرّق الطرود على أكتر من طيار كل طيار ياخد
+// تحصيل طروده هو بس ومايتحسبش مرتين
+// images = صور الطرد ده لوحده. قبل كده كانت صور واحدة بتتحط على كل
+// الطرود، فلو العميل بعت ٣ طرود مختلفة كانت صور الطرد الأول بتروح
+// للتلاتة — والفرع والطيار يشوفوا مرفقات مش بتاعة الطرد اللي معاهم.
+/* بوابة التحصيل — السيرفر بيرجّعها في /api/customer/me. لو الحقل مش موجود
+   (سيرفر أقدم) بنسيب الخانة مفتوحة — الحارس الحقيقي على السيرفر برضه. */
+const codLocked = () => S.cod ? !S.cod.allowed : false;
+
+const blankReceiver = () => ({ name:"", phone:"", phone2:"", address:"", zoneId:"",
+                               lat:null, lng:null, cod:0, images:[] });
+
+/** DOM ← state: بيقرا اللي المستخدم كتبه ويخزّنه قبل إعادة الرسم */
+function readReceiverBlocks() {
+  (S.draft?.receivers || []).forEach((r, i) => {
+    if (!$("rcvName-" + i)) return;           // البلوك ده مش مرسوم دلوقتي
+    r.name    = $("rcvName-" + i).value.trim();
+    r.phone   = $("rcvPhone-" + i).value.trim();
+    r.phone2  = $("rcvPhone2-" + i).value.trim();
+    r.address = getAddr("rcvAddrW-" + i);
+    r.zoneId  = $("rcvZone-" + i).value;
+    r.cod     = parseFloat($("rcvCod-" + i)?.value) || 0;
+  });
+}
+
+function receiverBlockHtml(r, i, multi, receipt) {
+  return `
+  <div class="card rcv-block" data-i="${i}">
+    <div class="rcv-hd">
+      <span class="no">${i + 1}</span>
+      <b>${multi ? `📦 الطرد ${i + 1}` : "📦 بيانات الطرد"}</b>
+      ${!receipt ? `<button type="button" class="rcv-copy" onclick="addParcelSameReceiver(${i})"
+                   data-tip="طرد تاني لنفس المستلم — بينسخ بياناته وإنت تختار منطقته بس">＋ طرد لنفس المستلم</button>` : ""}
+      ${multi ? `<button type="button" class="rcv-del" onclick="removeReceiver(${i})"
+                   data-tip="حذف الطرد ده من الطلب">🗑️</button>` : ""}
+    </div>
+
+    <div id="rcvFields-${i}" style="display:${receipt ? "none" : "block"}">
+      <div class="fld" style="margin-bottom:10px" data-tip="اسم اللي هيستلم الشحنة."><div class="fi">👤</div><div class="fb">
+        <b>الاسم</b><input id="rcvName-${i}" placeholder="اسم المستلم" value="${esc(r.name)}"
+          autocomplete="off" autocorrect="off" spellcheck="false" name="rn-${i}-${S.formNonce}" /></div></div>
+      <div class="fld" style="margin-bottom:10px" data-tip="الرقم اللي الطيار هيتصل بيه وقت التسليم. لازم 11 رقم يبدأ بـ 01."><div class="fi">📞</div><div class="fb">
+        <b>رقم الهاتف</b><input id="rcvPhone-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone)}"
+          autocomplete="off" autocorrect="off" name="rp-${i}-${S.formNonce}" /></div></div>
+      <!-- منظومة الثقة: بادچ سمعة المستلم بيظهر أول ما الرقم يكتمل -->
+      <div id="rcvTrust-${i}" style="display:none;margin:-4px 0 10px"></div>
+      <div id="rcvTrustNote-${i}" style="display:none;font-size:11.5px;line-height:1.8;margin:-4px 0 10px"></div>
+      <div class="fld" style="margin-bottom:10px" data-tip="رقم احتياطي لو الأساسي مردّش — اختياري."><div class="fi">📱</div><div class="fb">
+        <b>رقم إضافي (اختياري)</b><input id="rcvPhone2-${i}" type="tel" inputmode="tel" placeholder="01xxxxxxxxx" value="${esc(r.phone2)}" /></div></div>
+      <span class="lbl">عنوان التسليم</span>
+      <div id="rcvAddrW-${i}" data-tip="العنوان اللي الطيار هيسلّم عليه — كل ما يكون أدق كل ما التسليم يبقى أسرع."></div>
+    </div>
+
+    <span class="lbl" style="margin-top:${receipt ? 0 : 12}px">منطقة التسليم</span>
+    <select id="rcvZone-${i}" data-zonepick data-tip="منطقة التسليم هي اللي بيتحسب منها سعر التوصيل. إجبارية في كل الحالات."></select>
+    <div id="rcvPrice-${i}" style="margin-top:9px;font-size:13px;display:none"></div>
+
+    <span class="lbl" style="margin-top:12px">مبلغ التحصيل من المستلم (ج.م)</span>
+    ${codLocked() ? `<div style="background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);
+        border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.8;color:var(--muted)">
+        🔒 التحصيل بيتفتح بعد <b style="color:var(--orange)">${S.cod.minDelivered}</b> طلبات متسلّمة
+        — عندك دلوقتي <b style="color:var(--orange)">${S.cod.delivered}</b>.
+        <div style="margin-top:3px">الطيار بيدفع المبلغ ده من جيبه ويحصّله من المستلم، عشان كده بيتفتح بعد تعامل موثّق.</div></div>` : ""}
+    <input id="rcvCod-${i}" type="number" inputmode="decimal" min="0"
+           ${codLocked() ? "disabled" : ""} value="${codLocked() ? 0 : esc(r.cod || 0)}"
+           oninput="updateRcvTotal()"
+           data-tip="المبلغ اللي الطيار هيحصّله من مستلم الطرد ده بالذات. لو مفيش تحصيل سيبه صفر." />
+
+    <!-- صور الطرد ده لوحده — مش صور الطلب كله -->
+    <span class="lbl" style="margin-top:12px">صور الطرد ${multi ? `#${i + 1}` : ""}
+      ${receipt ? `<b style="color:var(--red)">*</b>` : `<small style="font-weight:500">(اختياري)</small>`}</span>
+    <div class="up-grid">
+      <div class="up-box" onclick="document.getElementById('rcvCam-${i}').click()"
+        data-tip="صوّر الطرد ده أو إيصاله — الحد الأقصى 6 صور للطرد."><i>📷</i><span>تصوير</span></div>
+      <div class="up-box" onclick="document.getElementById('rcvGal-${i}').click()"
+        data-tip="اختار صور جاهزة من معرض الصور."><i>🖼️</i><span>من المعرض</span></div>
+    </div>
+    <input type="file" id="rcvCam-${i}" accept="image/*" capture="environment" multiple hidden />
+    <input type="file" id="rcvGal-${i}" accept="image/*" multiple hidden />
+    <div class="thumbs" id="rcvThumbs-${i}" style="margin-top:9px"></div>
+
+    <div id="rcvGeo-${i}" style="display:${receipt ? "none" : "block"}">
+      <div class="map" id="rcvMap-${i}" style="height:130px;margin-top:12px"></div>
+      <button class="btn ghost sm" style="margin-top:9px" onclick="pickOnMap('rcv',${i})"
+        data-tip="حدّد مكان التسليم بالظبط على الخريطة — بيوفّر على الطيار وقت ولفّ.">📍 تحديد الموقع على الخريطة</button>
+    </div>
+
+    <div id="rcvSaved-${i}" style="margin-top:10px;display:${receipt ? "none" : "block"}"></div>
+  </div>`;
+}
+
+/** state ← DOM: بيبني البلوكات من جديد ويرجّع كل القيم مكانها */
+function renderReceiverBlocks() {
+  const box = $("rcvBlocks"); if (!box || !S.draft) return;
+  const list = S.draft.receivers || (S.draft.receivers = [blankReceiver()]);
+  const receipt = !!S.draft.receiptMode;
+  const multi = list.length > 1;
+
+  box.innerHTML = list.map((r, i) => receiverBlockHtml(r, i, multi, receipt)).join("");
+
+  // ودجت العنوان والمنطقة والخريطة لكل بلوك — لازم بعد ما الـ HTML يتحط
+  list.forEach((r, i) => {
+    renderAddr("rcvAddrW-" + i, { value: r.address || "", simple: true });
+    const sel = $("rcvZone-" + i);
+    sel.onchange = () => onReceiverZone(i);
+    showMiniMap("rcvMap-" + i, r.lat, r.lng);
+    // صور الطرد — كل بلوك له مدخلاته وصوره
+    ["rcvCam-" + i, "rcvGal-" + i].forEach(id => {
+      const el = $(id); if (!el) return;
+      el.onchange = e => onParcelFiles(i, e);
+    });
+    drawRcvThumbs(i);
+    bindTrustToReceiver(i);
+  });
+  refillReceiverZones();
+  renderSavedPicks();
+  updateRcvTotal();
+  /* 🔴 الزرار كان بيتخفي في وضع الريسيت بحجة «مفيش بيانات نكرّرها» —
+     وده كان غلط: العميل ممكن يبعت أكتر من طرد لناس مختلفة والعناوين كلها
+     مكتوبة على صور الريسيت. كل طرد ساعتها = منطقة + صورة، والباقي بيتقرا
+     من الصورة. التحقق والإرسال أصلًا بيلفّوا على كل الطرود. */
+  const showAdd = "flex";
+  $("addRcvBtn").style.display = showAdd;
+  const topBtn = $("addRcvBtnTop");
+  if (topBtn) topBtn.style.display = showAdd;
+  /* في وضع الريسيت بنوضّح إن المطلوب صورة لكل طرد */
+  $("addRcvBtn").textContent = receipt ? "＋ إضافة طرد آخر (بصورة ريسيت)" : "＋ إضافة طرد لمستلم آخر";
+}
+
+/* ══════════════════════════════════════════════════════════════
+   منظومة الثقة في فورم الشحنة (نفس سلوك بوابة المحل بالظبط)
+   ──────────────────────────────────────────────────────────────
+   أول ما العميل يخلص كتابة رقم المستلم (debounce 400ms أو blur)
+   بننده GET /api/lookup. قاعدة الخصوصية سيرفر-سايد:
+     • التقييم وعدد الشحنات بيرجعوا دايمًا → البادچ بيظهر لأي حد.
+     • الاسم الكامل والعنوان بس لو العميل بعت للرقم ده قبل كده
+       (fullAccess) → ساعتها بنصحّح الاسم ونملأ العنوان لو فاضي.
+     • غير كده الاسم بيرجع مقنّع — بنعرضه كملاحظة والعنوان يكتبه بنفسه.
+══════════════════════════════════════════════════════════════ */
+function trustNote(i, html, tone) {
+  const box = $("rcvTrustNote-" + i);
+  if (!box) return;
+  if (!html) { box.style.display = "none"; box.innerHTML = ""; return; }
+  box.style.display = "";
+  box.style.color = tone === "warn" ? "#f59e0b" : "#22c55e";
+  box.innerHTML = html;
+}
+
+function bindTrustToReceiver(i) {
+  if (!window.Trust) return;
+  Trust.bindPhoneField({
+    input: "rcvPhone-" + i,
+    badge: "rcvTrust-" + i,
+    onClear: () => trustNote(i, ""),
+    onResult: (res) => {
+      if (!res || !res.found) { trustNote(i, ""); return; }
+
+      if (!res.fullAccess) {
+        trustNote(i, res.name
+          ? `🔒 مسجّل عندنا باسم <b>${esc(res.name)}</b> — البيانات الكاملة بتظهر بعد أول تعامل`
+          : "", "warn");
+        return;
+      }
+
+      const nameEl = $("rcvName-" + i);
+      let noted = "";
+      if (nameEl && res.name) {
+        const typed = nameEl.value.trim();
+        if (typed !== res.name) {
+          nameEl.value = res.name;             // الاسم الرسمي المعتمد
+          if (S.draft?.receivers?.[i]) S.draft.receivers[i].name = res.name;
+          noted = typed ? "✓ الاسم اتصحّح من سجلاتنا — تقدر تعدّله"
+                        : "✓ الاسم اتملى من سجلاتنا — تقدر تعدّله";
+        }
+      }
+      if (res.address) {
+        const cur = (getAddr("rcvAddrW-" + i) || "").trim();
+        if (!cur) {
+          setAddr("rcvAddrW-" + i, res.address);
+          if (S.draft?.receivers?.[i]) S.draft.receivers[i].address = res.address;
+          noted = noted ? noted + " · والعنوان كمان" : "✓ العنوان اتملى من سجلاتنا";
+        } else if (cur !== res.address) {
+          window._trustAddr = window._trustAddr || {};
+          window._trustAddr[i] = res.address;
+          noted = (noted ? noted + "<br>" : "") +
+            `📍 العنوان المسجّل: ${esc(res.address)} ` +
+            `<button type="button" onclick="useTrustAddress(${i})" style="background:transparent;` +
+            `border:1px solid var(--line);color:var(--red);border-radius:6px;padding:1px 7px;` +
+            `font-size:11px;cursor:pointer;font-family:inherit">استخدمه</button>`;
+        }
+      }
+      trustNote(i, noted);
+    }
+  });
+  // الرقم ممكن يكون موجود أصلًا (مسودة/نسخ طرد) — نشغّل البحث مرة
+  const inp = $("rcvPhone-" + i);
+  if (inp && Trust.normPhone(inp.value).length >= 7) inp.dispatchEvent(new Event("input"));
+}
+
+function useTrustAddress(i) {
+  const a = (window._trustAddr || {})[i];
+  if (!a) return;
+  setAddr("rcvAddrW-" + i, a);
+  if (S.draft?.receivers?.[i]) S.draft.receivers[i].address = a;
+  trustNote(i, "✓ العنوان اتحدّث من سجلاتنا");
+}
+window.useTrustAddress = useTrustAddress;
+
+/** مناطق التسليم = مناطق فرع الاستلام. بتتنادى لما المُرسِل يغيّر منطقته. */
+function refillReceiverZones() {
+  const z = S.draft?.senderZone;
+  const branchId = z ? zoneBranchId(z) : undefined;
+  (S.draft?.receivers || []).forEach((r, i) => {
+    const sel = $("rcvZone-" + i); if (!sel) return;
+    fillZoneSelect(sel, { branchId, selected: r.zoneId });
+    // لو المنطقة القديمة مش تابعة للفرع الجديد، الاختيار بيفضى — نمشّي الحالة معاه
+    r.zoneId = sel.value;
+    onReceiverZone(i);
+  });
+}
+
+/* طرد تاني لنفس المستلم — بينسخ بياناته وبيسيبه يختار المنطقة.
+   نفس نمط تطبيق الفروع: كل طرد سطر مستقل بسعره، والمستلم ممكن
+   يتكرر في أكتر من طرد، والإجمالي بيجمع سعر كل طرد. */
+function addParcelSameReceiver(i) {
+  readReceiverBlocks();
+  const src = S.draft.receivers[i]; if (!src) return;
+  S.draft.receivers.splice(i + 1, 0, {
+    name: src.name, phone: src.phone, phone2: src.phone2, address: src.address,
+    zoneId: src.zoneId, lat: src.lat, lng: src.lng,
+    // التحصيل والصور مابيتنسخوش — كل طرد له مبلغه وصوره
+    cod: 0, images: []
+  });
+  renderReceiverBlocks();
+  $("rcvBlocks")?.children[i + 1]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast("اتضاف طرد تاني لنفس المستلم", "ok");
+}
+window.addParcelSameReceiver = addParcelSameReceiver;
+
+function addReceiver() {
+  readReceiverBlocks();
+  S.draft.receivers.push(blankReceiver());
+  renderReceiverBlocks();
+  // ننزل على البلوك الجديد عشان المستخدم يشوفه
+  const el = $("rcvBlocks")?.lastElementChild;
+  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast("اتضاف مستلم جديد", "ok");
+}
+window.addReceiver = addReceiver;
+
+function removeReceiver(i) {
+  readReceiverBlocks();
+  if (S.draft.receivers.length <= 1) return;
+  S.draft.receivers.splice(i, 1);
+  renderReceiverBlocks();
+  toast("اتشال المستلم", "ok");
+}
+window.removeReceiver = removeReceiver;
+
+/* وضع "مش معايا بيانات المستلم" — بنخفي حقول المستلم ونعتمد على صورة
+   الريسيت، والمنطقة تفضل إجبارية لأن سعر التوصيل بيتحسب منها.
+   في الوضع ده بيبقى مستلم واحد بس — مفيش بيانات نوزّعها على أكتر من نقطة. */
+function onReceiverMode() {
+  const on = $("rcvNoData").checked;
+  readReceiverBlocks();
+  S.draft.receiptMode = on;
+  /* 🔴 كان بيقص الطرود لواحد عند تفعيل الوضع — يعني العميل اللي ضاف
+     تلات طرود ودوس على «مش معايا بيانات» بيلاقي اتنين اتمسحوا من غير
+     تحذير. الطرود بتفضل زي ما هي؛ اللي بيتخفي هو حقول الاسم والتليفون
+     والعنوان بس، والمنطقة والصورة بيفضلوا مطلوبين لكل طرد. */
+  $("rcvReceiptNote").style.display = on ? "block" : "none";
+  renderReceiverBlocks();
+  updateAttachHint();
+}
+window.onReceiverMode = onReceiverMode;
+
+function updateAttachHint() {
+  const el = $("attachHint"); if (!el) return;
+  if (S.draft?.receiptMode) {
+    el.innerHTML = `<span style="color:var(--orange);font-weight:700">
+      🧾 صورة الريسيت إجبارية لكل طرد</span> — العنوان وبيانات المستلم هيتقروا منها.
+      الصور بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.`;
+  } else {
+    el.style.color = "var(--muted)";
+    el.innerHTML = `📷 صور كل طرد بتتضاف جوّه الطرد نفسه في خطوة <b>المستلمين</b>.`;
+  }
+  renderAttachSummary();
+}
+
+/* ملخّص الصور — بيوري العميل كل طرد مضاف عليه كام صورة، وزرار
+   بيرجّعه لخطوة المستلمين لو ناقص. مافيش رفع من هنا خالص عشان
+   الصورة تفضل مربوطة بطردها. */
+function renderAttachSummary() {
+  const box = $("attachSummary"); if (!box) return;
+  const rs = S.draft?.receivers || [];
+  const multi = rs.length > 1;
+  const need = !!S.draft?.receiptMode;
+  box.innerHTML = rs.map((r, i) => {
+    const n = (r.images || []).filter(x => x.url).length;
+    const bad = need && !n;
+    return `<div class="kv" style="align-items:center">
+      <span class="k">📦 ${multi ? `الطرد #${i + 1}` : "الطرد"}
+        ${r.name ? `<small style="color:var(--muted)"> — ${esc(r.name)}</small>` : ""}</span>
+      <span class="v" style="color:${bad ? "var(--red)" : n ? "var(--green)" : "var(--muted)"};font-weight:800">
+        ${n ? `${n} صورة` : bad ? "مفيش صورة ⚠️" : "بدون صور"}</span>
+    </div>`;
+  }).join("") + `
+    <button class="btn" style="width:100%;margin-top:10px" onclick="wizNext(2)">
+      ✏️ رجوع لخطوة المستلمين لإضافة/تعديل الصور</button>`;
+}
+
+function onReceiverZone(i) {
+  const sel = $("rcvZone-" + i); if (!sel) return;
+  const r = S.draft?.receivers?.[i]; if (!r) return;
+  r.zoneId = sel.value;
+  const z = findZone(r.zoneId);
+  const el = $("rcvPrice-" + i);
+  if (el) {
+    if (!z) el.style.display = "none";
+    else {
+      el.style.display = "block";
+      el.innerHTML = z.price
+        ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;
+            padding:10px;font-size:13px">🚚 سعر التوصيل التقديري: <b>${fmtMoney(z.price)} ج.م</b></div>`
+        : `<div style="font-size:12px;color:var(--muted)">سعر التوصيل هيحدده الفرع</div>`;
+    }
+  }
+  updateRcvTotal();
+}
+
+/** إجمالي التوصيل = مجموع سعر منطقة كل طرد — زي تطبيق الفروع */
+function draftDeliveryTotal() {
+  return (S.draft?.receivers || []).reduce((s, r) => s + (findZone(r.zoneId)?.price || 0), 0);
+}
+/* مجموع التحصيل المكتوب على الطرود — بيتعرض في خطوة «بيانات الطلب» */
+function draftCodTotal() {
+  const list = S.draft?.receivers || [];
+  return list.reduce((s, r, i) => {
+    const live = $("rcvCod-" + i);
+    return s + (live ? (parseFloat(live.value) || 0) : (Number(r.cod) || 0));
+  }, 0);
+}
+function updateCodTotal() {
+  const el = $("odCodTotal");
+  if (el) el.value = fmtMoney(draftCodTotal());
+}
+
+/* بتتنده من oninput جوه قالب innerHTML — لازم تبقى على window وإلا ReferenceError
+   مع كل حرف ومجموع التحصيل يفضل قديم (كانت ناقصة من الأصل). */
+function updateRcvTotal() {
+  updateCodTotal();
+  const el = $("rcvTotal"); if (!el) return;
+  const list = S.draft?.receivers || [];
+  // بيظهر لما يكون فيه أكتر من مستلم — بلوك واحد سعره باين جوّاه خلاص
+  if (list.length < 2) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const total = draftDeliveryTotal();
+  const known = list.filter(r => findZone(r.zoneId)?.price).length;
+  el.style.display = "block";
+  el.innerHTML = `<div class="rcv-total">
+      <span>🚚 إجمالي التوصيل — ${list.length} طرود
+        ${known < list.length ? `<span style="color:var(--muted);font-size:11.5px">(فيه مناطق سعرها بيحدده الفرع)</span>` : ""}
+      </span>
+      <b>${fmtMoney(total)} ج.م</b>
+    </div>`;
+}
+window.updateRcvTotal = updateRcvTotal;
+
+function drawKinds() {
+  $("kindBox").innerHTML = KINDS.map(k =>
+    `<div class="kind ${S.draft.kind === k ? "on" : ""}" data-v="${k}">
+       <i>${KIND_ICON[k]}</i><span>${k}</span></div>`).join("");
+  $("kindBox").querySelectorAll(".kind").forEach(el => el.onclick = () => {
+    S.draft.kind = el.dataset.v; drawKinds();
+  });
+}
+function drawPays() {
+  $("payBox").innerHTML = PAYS.map(p =>
+    `<div class="chip ${S.draft.pay === p ? "on" : ""}" data-v="${p}">${p}</div>`).join("");
+  $("payBox").querySelectorAll(".chip").forEach(el => el.onclick = () => {
+    S.draft.pay = el.dataset.v; drawPays();
+  });
+}
+function bumpPieces(n) {
+  S.draft.pieces = Math.max(1, (S.draft.pieces || 1) + n);
+  $("odPieces").textContent = S.draft.pieces;
+}
+window.bumpPieces = bumpPieces;
+
+/* اختيار سريع من العناوين المحفوظة / المستلمين السابقين */
+/* الشيبات بقت في رأس البطاقة (سطر واحد جنب العنوان) — فالعرض بقى
+   أفقي متمرّر بدل ما يلف على سطرين ويكسر ارتفاع الرأس. */
+function renderSavedPicks() {
+  /* الشرط كان S.addresses.length — يعني شيب «بياناتي» مكانش بيظهر أصلًا
+     للعميل اللي مالوش عناوين محفوظة، وهو أكتر واحد محتاجه. */
+  if (true) {
+    /* «بياناتي» شيب أول القايمة — الخانات بقت فاضية عن قصد (صاحب الحساب
+       مش دايمًا هو الراسل)، فده بيرجّع بياناته بضغطة بدل ما يكتبها كل مرة. */
+    $("sndSaved").innerHTML = `<div class="chips chips-inline">
+        <div class="chip" data-me="1">👤 بياناتي</div>
+        ${S.addresses.map(a =>
+        `<div class="chip" data-id="${esc(a.id)}">${esc(a.label)}</div>`).join("")}</div>`;
+    $("sndSaved").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      // شيب «بياناتي» — الاسم والتليفون والعنوان والمنطقة من الملف الشخصي
+      if (c.dataset.me) {
+        const p = S.profile || {};
+        $("sndName").value  = p.displayNameAr || "";
+        $("sndPhone").value = p.phone1 || "";
+        setAddr("sndAddrW", p.address || "");
+        $("sndZone").value = p.defaultZoneId != null ? String(p.defaultZoneId) : ""; onSenderZone();
+        S.draft.sndLat = p.lat ?? null; S.draft.sndLng = p.lng ?? null;
+        showMiniMap("sndMap", p.lat, p.lng);
+        const pb = $("sndPinState");
+        if (pb) { pb.style.display = p.lat ? "block" : "none";
+                  pb.innerHTML = p.lat ? "✅ نقطة الاستلام من بياناتك المحفوظة" : ""; }
+        toast("اتملت بياناتك", "ok");
+        return;
+      }
+      const a = S.addresses.find(x => String(x.id) === c.dataset.id); if (!a) return;
+      /* العنوان المحفوظ بياخد اسم ورقم صاحب الحساب معاه — العناوين دي
+         بتاعته هو، فاللي بيستلم منها هو أو حد عنده. */
+      if (!$("sndName").value.trim())  $("sndName").value  = S.profile?.displayNameAr || "";
+      if (!$("sndPhone").value.trim()) $("sndPhone").value = S.profile?.phone1 || "";
+      setAddr("sndAddrW", a.fullAddress);
+      $("sndZone").value = a.zoneId != null ? String(a.zoneId) : ""; onSenderZone();
+      S.draft.sndLat = a.lat ?? null; S.draft.sndLng = a.lng ?? null;
+      showMiniMap("sndMap", a.lat, a.lng);
+      const b = $("sndPinState");
+      if (b) { b.style.display = a.lat ? "block" : "none";
+               b.innerHTML = a.lat ? "✅ نقطة الاستلام محدّدة من العنوان المحفوظ" : ""; }
+      toast("تم اختيار " + a.label, "ok");
+    });
+  } else $("sndSaved").innerHTML = "";
+
+  // شيبس المستلمين السابقين — لكل بلوك مستلم قايمته الخاصة
+  const picks = uniqueReceivers(S.savedReceivers);
+  (S.draft?.receivers || []).forEach((_, i) => {
+    const box = $("rcvSaved-" + i); if (!box) return;
+    if (!picks.length) { box.innerHTML = ""; return; }
+    box.innerHTML = `<span class="lbl">مستلمون سابقون</span>
+      <div class="chips">${picks.slice(0, 10).map(r =>
+        `<div class="chip" data-id="${esc(r.id)}">${esc(r.name || r.phone)}</div>`).join("")}</div>`;
+    box.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      const r = picks.find(x => String(x.id) === c.dataset.id); if (!r) return;
+      const t = S.draft.receivers[i]; if (!t) return;
+      $("rcvName-" + i).value   = r.name || "";
+      $("rcvPhone-" + i).value  = r.phone || "";
+      $("rcvPhone2-" + i).value = r.phone2 || "";
+      setAddr("rcvAddrW-" + i, r.address || "");
+      t.lat = r.lat ?? null; t.lng = r.lng ?? null;
+      if (r.zoneId) { $("rcvZone-" + i).value = String(r.zoneId); }
+      onReceiverZone(i);
+      showMiniMap("rcvMap-" + i, r.lat, r.lng);
+      toast("تم اختيار " + (r.name || r.phone), "ok");
+    });
+  });
+}
+
+/* ── دي-دوبليكيشن المستلمين ──────────────────────────────────
+   رقم الهاتف هو المعرّف — الأسماء بتتشابه. بنطبّقها عند العرض كمان
+   (مش عند الحفظ بس) عشان البيانات القديمة المكررة اللي اتسجّلت
+   في فايربيز قبل الإصلاح ما تفضلش ظاهرة مكررة في الشيبس. */
+const normPhone = p => String(p || "").replace(/\D/g, "").replace(/^0+/, "");
+function uniqueReceivers(list) {
+  const by = new Map();
+  for (const r of list || []) {
+    // من غير رقم بنرجع للاسم كمعرّف احتياطي
+    const key = normPhone(r.phone) || "n:" + String(r.name || "").trim();
+    if (!key || key === "n:") continue;
+    const old = by.get(key);
+    // بنسيب الأحدث — آخر عنوان استخدمه العميل هو الأصح للاقتراح
+    if (!old || new Date(r.createdAt || 0) >= new Date(old.createdAt || 0)) by.set(key, r);
+  }
+  return [...by.values()].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
+function wizNext(step) {
+  if (step > S.wizStep) {
+    if (S.wizStep === 1) {
+      if (!$("sndName").value.trim())            return toast("اكتب اسم المُرسِل", "err");
+      if (!validPhone($("sndPhone").value))      return toast("رقم هاتف المُرسِل غير صحيح", "err");
+      if (!getAddr("sndAddrW").trim())           return toast("اكتب عنوان الاستلام", "err");
+      if (!$("sndZone").value)                   return toast("اختر منطقة الاستلام", "err");
+      // من غير دبوس، الفرع بيضطر يخمّن مكان الاستلام من نص العنوان
+      // والدبوس بيقع غلط — فده إجباري
+      /* 🔴 نقطة الاستلام بقت **اختيارية** (طلب صاحب النظام): كانت بتوقف
+         العميل عند خطوة ١ لو ماحدّدش دبوس، وده كان بيقطع طلبات كتير —
+         خصوصًا مع عميل بيطلب من مكان مش عارف يحدده على الخريطة. العنوان
+         النصّي والمنطقة إجباريين وكفاية للطيار يوصل. الدبوس بيفضل متاح
+         ويوفّر على الطيار وقت لما العميل يحدده، بس مش شرط للإكمال. */
+    }
+    if (S.wizStep === 2) {
+      readReceiverBlocks();
+      const list = S.draft.receivers || [];
+      if (!list.length) return toast("أضف طرد واحد على الأقل", "err");
+      // كل بلوك مستلم بيتفحص لوحده — مش الأول بس
+      for (let i = 0; i < list.length; i++) {
+        const r = list[i];
+        const at = list.length > 1 ? ` — الطرد ${i + 1}` : "";
+        // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
+        if (!r.zoneId)                return toast("اختر منطقة التسليم" + at, "err");
+        if (!S.draft.receiptMode) {
+          if (!r.name)                return toast("اكتب اسم المستلم" + at, "err");
+          if (!validPhone(r.phone))   return toast("رقم هاتف المستلم غير صحيح" + at, "err");
+          if (!r.address.trim())      return toast("اكتب عنوان التسليم" + at, "err");
+        }
+      }
+    }
+  }
+  S.wizStep = step;
+  [1, 2, 3, 4].forEach(n => $("wz-" + n).style.display = n === step ? "block" : "none");
+  drawStepper("wizStepper", WIZ_CAPS, step);
+  if (step === 1) setTimeout(() => showMiniMap("sndMap", S.draft.sndLat, S.draft.sndLng), 60);
+  if (step === 2) setTimeout(() => (S.draft.receivers || []).forEach((r, i) =>
+                    showMiniMap("rcvMap-" + i, r.lat, r.lng)), 60);
+  if (step === 4) { updateAttachHint(); renderSummary(); }
+  $("s-new").querySelector(".scroll").scrollTop = 0;
+}
+window.wizNext = wizNext;
+window.wizBack = () => { if (S.wizStep > 1) wizNext(S.wizStep - 1); else go("home"); };
+
+function renderSummary() {
+  const list = S.draft.receivers || [];
+  const total = draftDeliveryTotal();
+  const allPriced = list.every(r => findZone(r.zoneId)?.price);
+  // كل مستلم في سطر لوحده عشان العميل يراجع قبل الإرسال
+  /* الملخّص كان بيعرض `list[0]` بس في وضع الريسيت — بعد ما بقى ينفع
+     أكتر من طرد، ده كان هيخفي باقي الطرود عن مراجعة العميل قبل الإرسال. */
+  const rcvRows = S.draft.receiptMode
+    ? list.map((r, i) => row(
+        list.length > 1 ? `الطرد ${i + 1}` : "المستلم",
+        "🧾 من صورة الريسيت — " + (zoneLabel(findZone(r.zoneId) || {}) || "—"))).join("")
+    : list.map((r, i) => row(
+        list.length > 1 ? `الطرد ${i + 1}` : "المستلم",
+        `${r.name || "—"} — ${zoneLabel(findZone(r.zoneId) || {}) || "—"}`)).join("");
+  $("summaryCard").innerHTML = `<span class="lbl">ملخّص الطلب</span>
+    ${rcvRows}
+    ${row("الفرع", zoneBranchName(S.draft.senderZone) || "—")}
+    ${row("النوع", S.draft.kind + " × " + S.draft.pieces)}
+    ${row(list.length > 1 ? "إجمالي التحصيل" : "التحصيل", fmtMoney(draftCodTotal()) + " ج.م")}
+    ${row(list.length > 1 ? `إجمالي التوصيل (${list.length} طرود)` : "سعر التوصيل",
+          total ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " + مناطق يحددها الفرع") : "يحدده الفرع")}
+    ${row("الدفع", S.draft.pay)}`;
+
+  /* نفس الأرقام في الشريط المثبّت تحت — بتتحسب هنا مرة واحدة بدل ما
+     يبقى فيه مصدرين للرقم يفترقوا مع أول تعديل. */
+  const wbD = $("wbDeliv"), wbC = $("wbCod");
+  if (wbD) wbD.textContent = total
+    ? fmtMoney(total) + " ج.م" + (allPriced ? "" : " +")
+    : "يحدده الفرع";
+  if (wbC) wbC.textContent = fmtMoney(draftCodTotal()) + " ج.م";
+}
+
+/* ── رفع الصور — imgcompress ثم POST /api/upload (مش Cloudinary) ── */
+async function uploadImage(file) {
+  /* الضغط قبل الرفع: صورة الكاميرا 4 ميجا بتبقى أقل من 400 كيلو،
+     والعميل مسموح له 6 صور للطرد — يعني كنا بنطلب منه يرفع 24 ميجا
+     على بيانات الموبايل. لو الضغط فشل بيرجّع الملف الأصلي. */
+  try {
+    const { compressImage } = await import("./assets/js/imgcompress.js");
+    file = await compressImage(file);
+  } catch (_) {/* نكمّل بالأصلي */}
+  return await api.upload(file);   // بيرجّع رابط الصورة من {url}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   صور الطرود — كل طرد وصوره
+   ──────────────────────────────────────────────────────────────
+   قبل كده كانت الصور مجموعة واحدة بتتحط على كل الطرود، فلو العميل
+   بعت أكتر من طرد كانت صور طرد بتروح للطرود التانية والفرع والطيار
+   يشوفوا مرفقات مش بتاعة الطرد اللي معاهم. دلوقتي كل بلوك له صوره.
+══════════════════════════════════════════════════════════════ */
+async function onParcelFiles(i, e) {
+  const r = S.draft?.receivers?.[i]; if (!r) return;
+  r.images = r.images || [];
+  const files = Array.from(e.target.files || []);
+  e.target.value = "";
+  for (const f of files) {
+    if (r.images.length >= 6) { toast("الحد الأقصى 6 صور للطرد الواحد", "err"); break; }
+    const item = { local: URL.createObjectURL(f), url: null, busy: true };
+    r.images.push(item); drawRcvThumbs(i);
+    try { item.url = await uploadImage(f); }
+    catch (err) { toast(err.message, "err"); r.images = r.images.filter(x => x !== item); }
+    finally { item.busy = false; drawRcvThumbs(i); }
+  }
+}
+window.onParcelFiles = onParcelFiles;
+
+function drawRcvThumbs(i) {
+  const box = $("rcvThumbs-" + i); if (!box) return;
+  const imgs = S.draft?.receivers?.[i]?.images || [];
+  box.innerHTML = imgs.map((im, k) => `
+    <div class="thumb"><img src="${esc(im.url || im.local)}" alt="" />
+      ${im.busy ? `<div class="ld">⏳</div>` : `<div class="x" data-k="${k}">✕</div>`}</div>`).join("");
+  box.querySelectorAll(".x").forEach(x => x.onclick = () => {
+    (S.draft.receivers[i].images || []).splice(+x.dataset.k, 1);
+    drawRcvThumbs(i);
+  });
+}
+
+/** كل صور كل الطرود — للفحص قبل الإرسال */
+const allParcelImages = () =>
+  (S.draft?.receivers || []).flatMap(r => r.images || []);
+
+/* ── الإرسال ─────────────────────────────────────────────── */
+async function submitOrder() {
+  if (allParcelImages().some(i => i.busy)) return toast("استنى لحد ما الصور ترفع", "err");
+  // فحص تاني عند الإرسال — العميل ممكن يكون فاتح الفورم قبل ميعاد القفل
+  // أو الإدارة حظرته وهو فاتح
+  if (isBlocked()) return showBlocked();
+  if (!isOpenNow()) return showClosed();
+  readReceiverBlocks();
+  const sz = S.draft.senderZone;
+  const receivers = (S.draft.receivers || []).filter(r => r.zoneId);
+  if (!sz) { wizNext(1); return toast("اختر منطقة الاستلام", "err"); }
+  if (!receivers.length) { wizNext(2); return toast("اختر منطقة التسليم", "err"); }
+  /* في وضع الريسيت، الصورة هي المصدر الوحيد لعنوان الطرد — فإجبارية
+     لكل طرد لوحده، مش صورة واحدة للطلب كله زي الأول. */
+  if (S.draft.receiptMode) {
+    const bad = receivers.findIndex(r => !(r.images || []).some(i => i.url));
+    if (bad !== -1) {
+      wizNext(2);
+      return toast(receivers.length > 1
+        ? `لازم ترفع صورة الريسيت للطرد #${bad + 1} — العنوان مكتوب عليها`
+        : "لازم ترفع صورة الريسيت — العنوان مكتوب عليها", "err");
+    }
+  }
+
+  const origBranchId = zoneBranchId(sz);
+  if (!origBranchId) return toast("المنطقة دي مش مربوطة بفرع — كلّم خدمة العملاء", "err");
+  // لو فرع المنطقة موقوف، الأوردر بيروح للفرع البديل تلقائيًا
+  const branchId   = routeBranch(origBranchId);
+  const branchName = S.branches[branchId]?.name || zoneBranchName(sz);
+
+  const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
+  try {
+    /* الترقيم بقى على السيرفر (عدّاد يومي لكل فرع بمفتاح يوم القاهرة،
+       معاملة SQL ذرّية) — POST /api/orders بيرجّع الأوردر برقمه جاهز */
+    const receipt = !!S.draft.receiptMode;
+    const note = $("odNote").value.trim();
+
+    // طرد لكل مستلم — نفس سكيمة deliveries المستخدمة في لوحة الإدارة
+    // وبوابة المحل، فالفرع والطيار بيشوفوا كل النقط من غير أي تعديل عندهم.
+    const deliveries = receivers.map((r, idx) => {
+      const rz = findZone(r.zoneId);
+      return {
+        // رقم ثابت للطرد جوّه الطلب — منه بيتبني رقم الجزء المفصول لو الفرع
+        // حمّل بعض الطرود بس على طيار (مثال: HAL-260805-003-2)
+        parcelNo: idx + 1,
+        receiverId: null,
+        // في وضع الريسيت بنسيب نص واضح بدل الفاضي، عشان جداول الفرع
+        // والإدارة وتطبيق الطيار تبقى مفهومة وما تبانش خانة فاضية
+        receiverName  : receipt ? "🧾 البيانات على صورة الريسيت" : r.name,
+        receiverPhone : receipt ? "" : r.phone,
+        /* 🔴 العلامة دي هي اللي بتخلّي السيرفر يقبل الرقم الفاضي.
+           من غيرها كان بيرفض بـ«رقم المستلم غير صحيح» وخانة
+           التليفون مخفية فمفيش مخرج — الوضع ده كان بيفشل دايمًا. */
+        fromReceipt   : !!receipt,
+        receiverPhone2: receipt ? "" : r.phone2,
+        zoneId: rz.id, zoneName: zoneLabel(rz), zonePrice: rz.price || 0,
+        // التحصيل بقى لكل طرد لوحده — كده لو الفرع فرّق الطرود على أكتر من
+        // طيار، كل طيار ياخد تحصيل طروده هو بس ومايتحسبش مرتين
+        orderPrice: Number(r.cod) || 0,
+        // في وضع الريسيت بنسيب العنوان = اسم المنطقة بس — التفاصيل في الملاحظة
+        // (دبوس صح على مستوى المنطقة بدل تخمين عشوائي من نص طويل)
+        address: receipt ? zoneLabel(rz) : r.address,
+        lat: receipt ? null : (r.lat ?? null),
+        lng: receipt ? null : (r.lng ?? null),
+        note: [note, receipt ? "🧾 العنوان الكامل على صورة الريسيت المرفقة" : ""]
+                .filter(Boolean).join(" — "),
+        // صور الطرد ده هو بس — بتفضل معاه لو الفرع فرّق الطلب على طيارين
+        images: (r.images || []).map(x => x.url).filter(Boolean)
+      };
+    });
+
+    const delivTotal = deliveries.reduce((s, d) => s + (d.zonePrice || 0), 0);
+
+    /* POST /api/customer/orders — المسار المخصوص للعميل: بياخد هويته من الجلسة
+       نفسها (مايصدّقش customerId من الجسم)، بيتأكد إنه أكمل بياناته، وبيشتق
+       الفرع من زون الاستلام سيرفر-سايد، والترقيم ذرّي. */
+    const res = await api.post("/api/customer/orders", {
+      senderName  : $("sndName").value.trim(),
+      senderPhone : $("sndPhone").value.trim(),
+      /* مابقاش بيتبعت رقم صاحب الحساب هنا: الراسل ممكن يكون شخص تاني
+         خالص، والطيار كان هيتصل برقم مالوش علاقة بمكان الاستلام. */
+      senderPhone2: "",
+      senderAddress: getAddr("sndAddrW"),
+      senderLat: S.draft.sndLat ?? null, senderLng: S.draft.sndLng ?? null,
+      // نفس دور geoSender القديم: العميل حدّد النقطة بنفسه فالخرايط تعتمدها
+      geoSrc: (S.draft.sndLat && S.draft.sndLng) ? "customer-pin" : "",
+      senderZoneId: sz.id,
+      branchId,
+      notes: note,
+      deliveries,
+      customerId: S.profile.id,
+      customerName: S.profile.displayNameAr || "",
+      customerPhone: S.profile.phone1 || "",
+      orderKind: S.draft.kind,
+      /* طريقة الدفع اتشالت من التطبيق (طلب صاحب النظام): العميل مابيدفعش
+         في التطبيق أصلًا — التحصيل بيحصل عند التسليم. القيمة بتتبعت ثابتة
+         عشان عقد الـAPI مايتغيّرش والتقارير القديمة تفضل متسقة. */
+      paymentMethod: "كاش",
+      piecesCount: S.draft.pieces,
+      /* قيمة البضاعة اتشالت من الفورم (طلب صاحب النظام) — بتتبعت صفر عشان
+         عقد الـAPI مايتغيّرش والأوردرات القديمة اللي فيها قيمة تفضل تتعرض
+         زي ما هي في التفاصيل والتقارير. */
+      goodsValue: 0
+    });
+    const saved = res.order;
+    mergeOrders([saved]);
+
+    /* الخصم من المحفظة **بعد** حفظ الأوردر — معاملة ذرّية على السيرفر
+       (use = min(الرصيد, سعر التوصيل) + بصمة walletUsed على الأوردر).
+       لو فشلت: الأوردر موجود بسعره الكامل — مفيش فلوس ضاعت. */
+    let walletUsed = 0, warning = "";
+    if (delivTotal > 0 && (S.wallet?.balance || 0) > 0) {
+      try {
+        const w = await api.post(`/api/orders/${saved.id}/apply-wallet`);
+        walletUsed = w.walletUsed || 0;
+        if (S.wallet) S.wallet.balance = w.walletBalance ?? S.wallet.balance;
+        if (w.order) mergeOrders([w.order]);
+      } catch (e) {
+        warning = "الأوردر اتسجّل، بس خصم رصيد المحفظة ما تمّش — " + (e.message || "كلّم الإدارة");
+      }
+    }
+
+    // نحفظ المستلمين للاقتراح في المرات الجاية
+    // (مش في وضع الريسيت — مفيش بيانات نحفظها)
+    if (!receipt) deliveries.forEach(d => saveReceiver(d));
+
+    if (warning)         toast(warning, "err");
+    else if (walletUsed) toast(`اتخصم ${walletUsed} ج.م من محفظتك 👛`, "ok");
+    showDone(saved.orderNum, saved.deliveries && saved.deliveries.length ? saved.deliveries : deliveries);
+  } catch (e) {
+    toast("تعذّر إرسال الطلب: " + (e.message || e), "err");
+  } finally {
+    btn.disabled = false; btn.textContent = "إرسال الطلب";
+  }
+}
+window.submitOrder = submitOrder;
+
+/* ── حفظ المستلم للاقتراح لاحقًا ──────────────────────────────
+   الـ upsert بقى على السيرفر: رقم الهاتف فريد جوّه حساب العميل
+   (uq_customer_saved_receivers_phone) — موجود بيتحدّث بأحدث بيانات،
+   مش موجود بيتضاف. فمفيش تكرار في الشيبس. */
+function saveReceiver(d) {
+  if (!d.receiverPhone) return;
+  api.post("/api/customer/receivers", {
+    name: d.receiverName, phone: d.receiverPhone, phone2: d.receiverPhone2,
+    address: d.address, zoneId: d.zoneId, lat: d.lat ?? null, lng: d.lng ?? null
+  }, { noPoke: true }).catch(() => {});
+}
+
+/* كود الطرد = رقم الطلب لو طرد واحد، وإلا رقم الطلب + رقم الطرد
+   (HAL-260805-009-2) — نفس الرقم اللي الطرد بياخده لو الفرع فرّقه على
+   طيار لوحده، فالكود بيفضل مطابق للأوردر في كل الحالات. */
+function parcelCodeOf(orderNum, d, total) {
+  const no = Number(d && d.parcelNo) || 0;
+  return (total > 1 && no) ? `${orderNum}-${no}` : orderNum;
+}
+
+/* الباركود بيشيل لينك التتبّع مش رقم مجرّد — كده لما المستلم يصوّره
+   بكاميرا الموبايل بيفتح صفحة الشحنة على طول من غير ما يكتب حاجة،
+   وبيلاقي زرار تحميل التطبيق. النص المكتوب تحته يفضل الرقم نفسه. */
+function trackUrlOf(code) {
+  // 🔴 مطلق عن قصد: اللينك ده بيتطبع في QR على الطرد. لو اتبنى من
+      // location.href كان هيتكسر أول ما الصفحة تتفتح من نطاق تاني.
+      return new URL("?track=" + encodeURIComponent(code), "https://aldahshan.cloud/").href;
+}
+
+/* بيرسم الباركود لكل طرد مع زراير الإرسال للمستلم */
+function showDone(num, deliveries) {
+  $("doneNum").textContent = "#" + num;
+  const list = Array.isArray(deliveries) && deliveries.length ? deliveries : [{}];
+  const box  = $("doneCodes");
+  box.innerHTML = list.map((d, i) => {
+    const code = parcelCodeOf(num, d, list.length);
+    const who  = d.receiverFromReceipt ? "🧾 المستلم على صورة الريسيت"
+               : (d.receiverName || "المستلم");
+    const zone = d.zoneName ? ` — ${esc(d.zoneName)}` : "";
+    return `
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:16px;
+                  padding:14px;margin-bottom:12px">
+        ${list.length > 1 ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">
+          📦 الطرد ${i + 1} من ${list.length}</div>` : ""}
+        <div style="font-weight:800;font-size:14px">${esc(who)}${zone}</div>
+        <div style="direction:ltr;font-weight:900;font-size:15px;margin:6px 0 10px">${esc(code)}</div>
+        <div class="qr-box" id="qrP${i}" style="margin:0 auto"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+          ${d.receiverPhone ? `<button class="btn ghost sm" onclick="sendCodeWhatsApp(${i})">📤 إرسال واتساب</button>` : ""}
+          <button class="btn ghost sm" onclick="shareCodeImage(${i})">🖼️ إرسال الصورة</button>
+          <button class="btn ghost sm" onclick="copyCode(${i})">📋 نسخ الكود</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  // بنخزّن البيانات عشان الزراير تستخدمها
+  window._doneCodes = list.map((d, i) => ({
+    code: parcelCodeOf(num, d, list.length),
+    phone: d.receiverPhone || "",
+    name: d.receiverName || "",
+    zone: d.zoneName || ""
+  }));
+
+  list.forEach((d, i) => {
+    const el = document.getElementById("qrP" + i);
+    if (!el) return;
+    const code = window._doneCodes[i].code;
+    // الباركود = لينك التتبّع، فالتصوير بالكاميرا بيفتح الشحنة على طول
+    try { new QRCode(el, { text: trackUrlOf(code), width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
+    catch (_) { el.innerHTML = `<div style="color:#111;font-weight:800;padding:20px">${esc(code)}</div>`; }
+  });
+
+  go("done");
+  confetti();
+}
+
+function _codeMsg(c) {
+  return `📦 شحنتك مع الدهشان\n`
+       + `رقم الطلب: ${c.code}\n`
+       + (c.zone ? `المنطقة: ${c.zone}\n` : "")
+       + `\nتابع شحنتك من هنا:\n${trackUrlOf(c.code)}`;
+}
+
+window.sendCodeWhatsApp = function (i) {
+  const c = (window._doneCodes || [])[i]; if (!c) return;
+  // نحوّل الرقم المصري لصيغة دولية عشان واتساب يفتح على الشخص الصح
+  let p = String(c.phone || "").replace(/\D/g, "");
+  if (p.startsWith("0")) p = "2" + p;
+  if (!p) { toast("مفيش رقم للمستلم ده", "err"); return; }
+  window.open(`https://wa.me/${p}?text=${encodeURIComponent(_codeMsg(c))}`, "_blank");
+};
+
+window.copyCode = function (i) {
+  const c = (window._doneCodes || [])[i]; if (!c) return;
+  navigator.clipboard?.writeText(c.code)
+    .then(() => toast("اتنسخ: " + c.code, "ok"))
+    .catch(() => toast("مقدرناش ننسخ — الكود: " + c.code, "err"));
+};
+
+/* بيبعت صورة الباركود نفسها — بيستخدم مشاركة النظام لو متاحة،
+   وإلا بينزّلها كصورة يبعتها بنفسه */
+window.shareCodeImage = async function (i) {
+  const c = (window._doneCodes || [])[i]; if (!c) return;
+  const cv = document.querySelector(`#qrP${i} canvas`);
+  if (!cv) { toast("الباركود لسه بيتحمّل", "err"); return; }
+  const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+  if (!blob) { toast("تعذّر تجهيز الصورة", "err"); return; }
+  const file = new File([blob], `${c.code}.png`, { type: "image/png" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: _codeMsg(c) }); return; }
+    catch (_) { /* لغى المشاركة — ننزّلها */ }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${c.code}.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("اتحفظت الصورة — ابعتها للمستلم", "ok");
+};
+function confetti() {
+  const host = $("s-done");
+  const colors = ["#e8192c", "#22c55e", "#f59e0b", "#3b82f6", "#fff"];
+  for (let i = 0; i < 46; i++) {
+    const c = document.createElement("div");
+    c.className = "cf";
+    c.style.right = Math.random() * 100 + "%";
+    c.style.background = colors[i % colors.length];
+    c.style.animationDuration = (2 + Math.random() * 1.6) + "s";
+    c.style.animationDelay = (Math.random() * .5) + "s";
+    host.appendChild(c);
+    setTimeout(() => c.remove(), 4200);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   الخرائط — Leaflet + OpenStreetMap (مجاني، بدون مفتاح API)
+══════════════════════════════════════════════════════════════ */
+const TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const miniMaps = {};
+function showMiniMap(elId, lat, lng) {
+  const el = $(elId); if (!el) return;
+  if (!lat || !lng || !window.L) {
+    el.innerHTML = `<div class="mini-map" style="height:100%"><span class="pin">📍</span></div>`;
+    return;
+  }
+  el.innerHTML = ""; el._leaflet_id = null;
+  if (miniMaps[elId]) { try { miniMaps[elId].remove(); } catch (_) {} }
+  const m = L.map(el, { attributionControl: false, zoomControl: false, dragging: false,
+                        scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false });
+  m.setView([lat, lng], 15);
+  L.tileLayer(TILES, { maxZoom: 19 }).addTo(m);
+  L.marker([lat, lng], { icon: L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 26],
+    html: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px #000)">📍</div>` }) }).addTo(m);
+  miniMaps[elId] = m;
+  setTimeout(() => m.invalidateSize(), 120);
+}
+
+let pickMap, pickMarker;
+function pickOnMap(target, idx) {
+  S.mapTarget = target;
+  S.mapIdx = idx ?? 0;                    // رقم بلوك المستلم (لو target = rcv)
+  const rc = target === "rcv" ? S.draft?.receivers?.[S.mapIdx] : null;
+  const cur = target === "snd" ? [S.draft?.sndLat, S.draft?.sndLng]
+            : target === "rcv" ? [rc?.lat, rc?.lng]
+            : [S.draftLat, S.draftLng];
+  const start = (cur[0] && cur[1]) ? cur : [30.0444, 31.2357];
+  $("mapModal").classList.add("on");
+  setTimeout(() => {
+    const el = $("pickMap");
+    el.innerHTML = ""; el._leaflet_id = null;
+    if (pickMap) { try { pickMap.remove(); } catch (_) {} }
+    pickMap = L.map(el, { attributionControl: false }).setView(start, (cur[0] ? 16 : 11));
+    L.tileLayer(TILES, { maxZoom: 19 }).addTo(pickMap);
+    pickMarker = L.marker(start, { draggable: true, icon: L.divIcon({ className: "",
+      iconSize: [30, 30], iconAnchor: [15, 30],
+      html: `<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 5px #000)">📍</div>` }) }).addTo(pickMap);
+    S.pickLatLng = { lat: start[0], lng: start[1] };
+    S.pickAcc = null;
+    const warn = $("pickAccWarn"); if (warn) warn.style.display = "none";
+    showCoords();
+    // أي تحريك يدوي = المستخدم أكّد المكان بنفسه، فالتحذير ما بقاش له لازمة
+    const manual = ll => { S.pickLatLng = ll; S.pickAcc = 0; showCoords();
+                           if (warn) warn.style.display = "none"; };
+    pickMarker.on("dragend", () => manual(pickMarker.getLatLng()));
+    pickMap.on("click", e => { pickMarker.setLatLng(e.latlng); manual(e.latlng); });
+    pickMap.invalidateSize();
+  }, 120);
+}
+window.pickOnMap = pickOnMap;
+const showCoords = () => $("pickCoords").textContent =
+  S.pickLatLng ? `${S.pickLatLng.lat.toFixed(5)} , ${S.pickLatLng.lng.toFixed(5)}` : "—";
+
+/* تحديد الموقع تلقائيًا.
+   على الموبايل بييجي من GPS فيكون دقيق بالأمتار. على الكمبيوتر مفيش GPS،
+   فالمتصفح بيرجّع موقع تقريبي مبني على الـ WiFi/IP وممكن يبعد كيلومترات —
+   وده اللي بيخلّي العنوان يتحفظ غلط. فبنعرض دقّة القراءة، ولو وحشة
+   بننبّه المستخدم يظبّط الدبوس بإيده بدل ما نقبلها بصمت. */
+function locateMe() {
+  if (!navigator.geolocation) return toast("المتصفح مش بيدعم تحديد الموقع", "err");
+  toast("جاري تحديد موقعك…");
+  navigator.geolocation.getCurrentPosition(p => {
+    const ll  = { lat: p.coords.latitude, lng: p.coords.longitude };
+    const acc = Math.round(p.coords.accuracy || 0);
+    S.pickLatLng = ll; S.pickAcc = acc;
+    pickMarker.setLatLng(ll);
+    pickMap.setView(ll, acc > 1000 ? 13 : acc > 300 ? 15 : 17);
+    showCoords();
+    if (acc > 300) {
+      toast(`الموقع تقريبي (±${acc >= 1000 ? Math.round(acc / 1000) + " كم" : acc + " م"}) — اسحب الدبوس على المكان بالظبط`, "err");
+      const el = $("pickAccWarn");
+      if (el) { el.style.display = "block";
+        el.innerHTML = `⚠️ دقّة تحديد الموقع ضعيفة (±${acc >= 1000 ? Math.round(acc/1000)+" كم" : acc+" م"}).
+          الأجهزة المكتبية بتحدد الموقع من الإنترنت مش من GPS —
+          <b>اسحب الدبوس على المكان الصح</b> أو استخدم الموبايل.`; }
+    } else {
+      const el = $("pickAccWarn"); if (el) el.style.display = "none";
+      toast(`تم تحديد موقعك (±${acc} م)`, "ok");
+    }
+  }, () => toast("تعذّر تحديد الموقع — فعّل صلاحية الموقع", "err"),
+     { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 });
+}
+window.locateMe = locateMe;
+
+function confirmMapPick() {
+  if (!S.pickLatLng) return closeMapModal();
+  const { lat, lng } = S.pickLatLng;
+  if (S.mapTarget === "snd") { S.draft.sndLat = lat; S.draft.sndLng = lng; showMiniMap("sndMap", lat, lng);
+    const b = $("sndPinState");
+    if (b) { b.style.display = "block"; b.innerHTML = `✅ نقطة الاستلام محدّدة
+      <span style="color:var(--muted);direction:ltr;display:inline-block">(${lat.toFixed(5)}, ${lng.toFixed(5)})</span>`; } }
+  else if (S.mapTarget === "rcv") {
+    const r = S.draft?.receivers?.[S.mapIdx];
+    if (r) { r.lat = lat; r.lng = lng; showMiniMap("rcvMap-" + S.mapIdx, lat, lng); } }
+  else if (S.mapTarget === "sut") { S.draftLat = lat; S.draftLng = lng; showMiniMap("sutMap", lat, lng);
+    $("sutCoords").textContent = `${lat.toFixed(5)} , ${lng.toFixed(5)}`; }
+  else if (S.mapTarget === "addr") { S.draftLat = lat; S.draftLng = lng; showMiniMap("addrMap", lat, lng); }
+  closeMapModal(); toast("تم حفظ الموقع ✅", "ok");
+}
+window.confirmMapPick = confirmMapPick;
+const closeMapModal = () => $("mapModal").classList.remove("on");
+window.closeMapModal = closeMapModal;
+
+/* ══════════════════════════════════════════════════════════════
+   مودال عام
+══════════════════════════════════════════════════════════════ */
+function openModal(title, html) {
+  $("modalTitle").textContent = title;
+  $("modalBody").innerHTML = html;
+  $("modal").classList.add("on");
+}
+const closeModal = () => $("modal").classList.remove("on");
+window.openModal = openModal; window.closeModal = closeModal;
+$("modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
+$("mapModal").onclick = e => { if (e.target.id === "mapModal") closeMapModal(); };
+
+/* زر الرجوع في المتصفح/الموبايل.
+   الحدث ده معناه إن الحارس اتاكل — فأي حالة بنفضل فيها جوّه التطبيق لازم
+   تدفع حارس جديد (go بيدفعه لوحده). الحالة الوحيدة اللي بنسيب فيها الحارس
+   مأكول هي الرئيسية: ضغطة رجوع تانية بتقفل التطبيق فعلًا. */
+window.addEventListener("popstate", () => {
+  if ($("modal").classList.contains("on"))    { closeModal();    return pushBackGuard(); }
+  if ($("mapModal").classList.contains("on")) { closeMapModal(); return pushBackGuard(); }
+  // استكمال البيانات جيت إجباري — الرجوع مايهرّبش منه للرئيسية
+  if (S.page === "setup") { pushBackGuard(); return toast("كمّل بياناتك الأول", "err"); }
+  if (S.page === "track")  return trackBack();
+  if (S.page === "detail") return go("orders");
+  if (S.page === "new" && S.wizStep > 1) { wizNext(S.wizStep - 1); return pushBackGuard(); }
+  if (!["home", "splash", "login"].includes(S.page)) return go("home");
+  if (S.page === "home") toast("دوس رجوع تاني للخروج");
+});
+
+/* ══════════════════════════════════════════════════════════════
+   PWA — تثبيت التطبيق على شاشة الموبايل + عمل offline
+══════════════════════════════════════════════════════════════ */
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("app-sw.js").catch(() => {}));
+}
+
+// شاشة التثبيت نفسها في install.js — مشتركة مع بوابة المحلات
+// لو التطبيق متثبّت ومفتوح كتطبيق، مفيش داعي لبند التثبيت
+if (matchMedia("(display-mode: standalone)").matches || navigator.standalone)
+  document.addEventListener("DOMContentLoaded", () => { const r = $("installRow"); if (r) r.style.display = "none"; });
+function installApp() { window.dahshanInstall(false); }
+window.installApp = installApp;
+
+/* ══════════════════════════════════════════════════════════════
+   الإشعارات الفورية (FCM Push) — مؤجّلة بقرار (خطة FCM الهجينة موثّقة).
+   الإشعارات جوّه التطبيق شغالة عادي بالاستطلاع (جرس الإشعارات فوق) —
+   لما دفع FCM يتفعّل هيتخزن التوكن في device_tokens عبر endpoint مخصوص.
+══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   إشعارات ستارة الهاتف (Web Push)
+   ──────────────────────────────────────────────────────────────────
+   السيرفر: GET /api/customer/push/key · POST /api/customer/push/subscribe
+            · POST /api/customer/push/unsubscribe  (App\Jobs\SendCustomerPush)
+   الـSW (app-sw.js) هو اللي بيعرض الإشعار في الستارة وبيفتح الرابط.
+   بيشتغل على أندرويد (كروم) مباشرة، وعلى الآيفون بعد «إضافة للشاشة
+   الرئيسية» (iOS 16.4+) — قيد من أبل مش مننا.
+══════════════════════════════════════════════════════════════════ */
+const PUSH_LS = "dahshan_push_state";   // "on" | "off" | "denied" — عرض سريع للحالة
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+function b64ToU8(b64) {
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function pushCurrentSub() {
+  try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); }
+  catch (_) { return null; }
+}
+async function enablePush(silent) {
+  if (!pushSupported()) {
+    if (!silent) toast("المتصفح ده مش بيدعم إشعارات الستارة — ثبّت التطبيق على الشاشة الرئيسية الأول", "err");
+    return false;
+  }
+  try {
+    let perm = Notification.permission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    if (perm !== "granted") {
+      localStorage.setItem(PUSH_LS, perm === "denied" ? "denied" : "off"); renderPushState();
+      if (!silent) toast("الإذن مرفوض — فعّله من إعدادات المتصفح للموقع", "err");
+      return false;
+    }
+    const publicKey = S.pushKey || (await api.get("/api/customer/push/key")).publicKey;
+    if (!publicKey) { if (!silent) toast("الإشعارات الفورية لسه ما اتفعّلتش على السيرفر", "err"); return false; }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    /* لو المفتاح اتغيّر على السيرفر، الاشتراك القديم شكله «مفعّل» لكن خدمة
+       الدفع بترفض الرسايل بصمت — بنقارن مفتاح الاشتراك بالمفتاح الحالي ونجدّده */
+    if (sub) {
+      try {
+        const cur = sub.options && sub.options.applicationServerKey
+          ? btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+          : null;
+        if (cur && cur !== publicKey.replace(/=+$/, "")) { await sub.unsubscribe(); sub = null; }
+      } catch (_) {}
+    }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(publicKey) });
+    const j = sub.toJSON();
+    await api.post("/api/customer/push/subscribe",
+      { endpoint: sub.endpoint, keys: j.keys, ua: String(navigator.userAgent || "").slice(0, 250) }, { noPoke: true });
+    localStorage.setItem(PUSH_LS, "on"); renderPushState();
+    if (!silent) toast("تمام — هتوصلك إشعارات طلباتك في الستارة ✓", "ok");
+    return true;
+  } catch (e) {
+    if (!silent) toast("تعذّر تفعيل الإشعارات: " + (e && e.message ? e.message : e), "err");
+    return false;
+  }
+}
+async function disablePush() {
+  try {
+    const sub = await pushCurrentSub();
+    if (sub) {
+      try { await api.post("/api/customer/push/unsubscribe", { endpoint: sub.endpoint }, { noPoke: true }); } catch (_) {}
+      await sub.unsubscribe();
+    }
+  } catch (_) {}
+  localStorage.setItem(PUSH_LS, "off"); renderPushState();
+}
+function pushStateNow() {
+  if (!pushSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  return (localStorage.getItem(PUSH_LS) === "on" && Notification.permission === "granted") ? "on" : "off";
+}
+function renderPushState() {
+  const st = pushStateNow();
+  const el = $("pushState");
+  if (el) el.textContent = st === "on" ? "مفعّلة ✓" : st === "denied" ? "مرفوضة" : st === "unsupported" ? "غير مدعومة"
+                        : (S.pushKey === null ? "غير متاحة حاليًا" : "غير مفعّلة");
+  const row = $("pushRow");
+  if (row) row.onclick = () => { st === "on" ? (confirm("إيقاف إشعارات الستارة؟") && disablePush()) : enablePush(false); };
+  renderPushCard();
+}
+/* كارت في الرئيسية — بيظهر بس لو الإذن لسه ما اتاخدش ولا اتقفل، وبيتقفل للجلسة */
+function renderPushCard() {
+  const el = $("homePush"); if (!el) return;
+  if (!S.pushKey || pushStateNow() !== "off" || sessionStorage.getItem("pushCardHidden")) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="push-card"><div style="font-size:26px">🔔</div>
+    <div style="flex:1;min-width:0"><b>فعّل إشعارات طلباتك</b>
+      <span>هيوصلك تنبيه في الستارة لما الطيار يستلم شحنتك أو يطلع في طريقه إليك</span></div>
+    <button class="btn sm" style="width:auto;padding:9px 14px;margin:0" onclick="enablePush(false)">تفعيل</button>
+    <div class="ico-btn" style="width:30px;height:30px;font-size:14px" title="لاحقًا"
+         onclick="sessionStorage.setItem('pushCardHidden','1');renderPushCard()">✕</div></div>`;
+}
+/* فحص جاهزية السيرفر مرة واحدة بعد الدخول: لو المفتاح مش متاح (الخدمة لسه
+   ما اتفعّلتش أو الإصدار قديم) الكارت مايبانش أصلًا بدل ما يبان ويفشل. */
+async function pushProbe() {
+  if (!pushSupported()) return;
+  try { const r = await api.get("/api/customer/push/key"); S.pushKey = (r && r.publicKey) || null; }
+  catch (_) { S.pushKey = null; }
+  renderPushState();
+}
+/* الاشتراك بيتجدّد بصمت مع كل فتح لو كان مفعّل — المتصفح بيغيّر الـendpoint أحيانًا */
+async function pushResync() {
+  await pushProbe();
+  if (S.pushKey && pushStateNow() === "on") { try { await enablePush(true); } catch (_) {} }
+}
+window.enablePush = enablePush; window.disablePush = disablePush; window.renderPushCard = renderPushCard;
+
+/* ══════ التوجيه بالـhash — من إشعار الستارة ومن اختصارات التطبيق ══════
+   #track=ID → صفحة الخريطة · #order=ID → التفاصيل · #new · #orders · #notifs · #account
+   (اختصارات المانيفست كانت بتحط #new/#orders ومفيش حاجة بتقراهم — اتصلّحت هنا) */
+function applyHashRoute(explicit) {
+  // لو الهاش جاي من رسالة الـSW بنمرّره مباشرة — تغيير location.hash كان
+  // بيضيف إدخال في التاريخ، وزر الرجوع على الرئيسية كان بياكل ٤ ضغطات بدل ٢
+  const h = (explicit || location.hash || "").replace(/^#/, "");
+  if (!h) return false;
+  if (!explicit) history.replaceState(null, "", location.pathname + location.search);   // بيتستهلك مرة واحدة
+  const m = h.match(/^(track|order)=(\d+)$/);
+  if (m) { S.currentOrderId = m[2]; go(m[1] === "track" ? "track" : "detail"); return true; }
+  if (h === "new") { startNewOrder(); return true; }
+  if (["orders", "notifs", "account"].includes(h)) { go(h); return true; }
+  return false;
+}
+/* التطبيق مفتوح والعميل داس على إشعار: الـSW بيركّز النافذة ويبعت الرابط —
+   بننقّل جوه التطبيق من غير reload يضيّع حالته */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", e => {
+    if (!e.data || e.data.type !== "navigate" || !e.data.url) return;
+    try {
+      const u = new URL(e.data.url);
+      if (!u.hash) return;
+      // قبل ما الإقلاع يخلّص (attachListeners) الهاش بيتحفظ ويتطبّق بعد الدخول —
+      // وإلا go("home") بتاعة الإقلاع كانت بتكتب فوق صفحة التتبّع
+      if (!S.booted) { S.pendingHash = u.hash; return; }
+      applyHashRoute(u.hash);
+    } catch (_) {}
+  });
+}
+
+/* لو الاتصال اتأخر ما نسيبش شاشة التحميل معلّقة — بس على نت بطيء كانت
+   بترمي عميل مسجّل دخوله على شاشة الترويج وهو لسه بيحمّل، فبنستنى التهيئة
+   تخلّص (_bootBusy) بدل ما نفرّق بين «فشل» و«لسه شغّال» بالوقت بس */
+setTimeout(function bootGuard() {
+  if (window._bootBusy) return setTimeout(bootGuard, 2000);
+  if ($("boot").style.display !== "none") { $("boot").style.display = "none"; go("splash"); }
+}, 6000);
+/* ══════════════════════════════════════════════════════════════
+   مظهر التطبيق — ليلي · نهاري · النظام
+   ──────────────────────────────────────────────────────────────
+   تلات حالات مش اتنين. «النظام» معناه **مانحطش** `data-theme` خالص،
+   فالـCSS بتسيب `prefers-color-scheme` يحكم. الاختيار الصريح بيحط
+   السمة فتغلب على الجهاز في الاتجاهين.
+
+   الاختيار بيتحفظ في localStorage — وبيتقرا **قبل ما الصفحة تترسم**
+   في سكربت صغير فوق (شوف `<head>`) عشان مايحصلش وميض أبيض.
+══════════════════════════════════════════════════════════════ */
+/* الترتيب هو ترتيب التبديل، وأول واحد هو **الافتراضي**.
+   ليلي أولًا عن قصد: التطبيق أسود من أصله وكل صفحات الموقع سودا،
+   فالافتراضي لازم يطابق ده. «النظام» اختيار متاح مش سلوك مفروض. */
+const THEMES = [
+  { key: "dark",   label: "ليلي",   icon: "🌙" },
+  { key: "light",  label: "نهاري",  icon: "☀️" },
+  { key: "system", label: "النظام", icon: "🌓" },
+];
+
+function applyTheme(key) {
+  const root = document.documentElement;
+  if (key === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", key);
+  try { localStorage.setItem("cust-theme", key); } catch (e) {}
+  const t = THEMES.find(x => x.key === key) || THEMES[0];
+  const ic = $("themeIcon"), st = $("themeState");
+  if (ic) ic.textContent = t.icon;
+  if (st) st.textContent = t.label;
+  /* خانات المنطقة (zonepick) بتتلوّن بستايل مباشر وقت الرسم، فبتتجمّد
+     على الوضع القديم. بنعيد تلوينها هنا — الأبعاد بتفضل زي ما هي. */
+  repaintZonePicks();
+  /* لون شريط المتصفح بيتبع الوضع الفعلي مش الاختيار */
+  const dark = key === "dark" || (key === "system" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
+  const m = document.createElement("meta");
+  m.name = "theme-color"; m.content = dark ? "#0a0a0b" : "#f4f4f6";
+  document.head.appendChild(m);
+}
+
+/* خانات zonepick بتاخد ألوانها كستايل مباشر من الـ<select> وقت الرسم
+   (شوف copyLook في assets/js/zonepick.js)، والستايل المباشر بيغلب على
+   التوكنز. فبعد أي تبديل وضع بنعيد تلوينها من التوكنز الحالية.
+   بنلمس اللون بس — الارتفاع والحشو والحدود بتفضل زي ما نُسخت. */
+function repaintZonePicks() {
+  const cs = getComputedStyle(document.documentElement);
+  const tok = k => cs.getPropertyValue(k).trim();
+  const bg = tok("--card2"), fg = tok("--txt"), ln = tok("--line"), pop = tok("--card");
+  document.querySelectorAll(".zp-in").forEach(el => {
+    el.style.backgroundColor = bg;
+    el.style.color = fg;
+    ["Top", "Right", "Bottom", "Left"].forEach(side => {
+      el.style["border" + side + "Color"] = ln;
+    });
+  });
+  document.querySelectorAll(".zp-pop").forEach(el => {
+    el.style.backgroundColor = pop;
+    el.style.color = fg;
+    el.style.borderColor = ln;
+  });
+}
+window.repaintZonePicks = repaintZonePicks;
+
+function currentTheme() {
+  /* الافتراضي **ليلي** مش «النظام» — شوف التعليق فوق THEMES. */
+  try { return localStorage.getItem("cust-theme") || "dark"; } catch (e) { return "dark"; }
+}
+
+function cycleTheme() {
+  const i = THEMES.findIndex(x => x.key === currentTheme());
+  const next = THEMES[(i + 1) % THEMES.length];
+  applyTheme(next.key);
+  toast("المظهر: " + next.label, "ok");
+}
+window.cycleTheme = cycleTheme;
+window.applyTheme = applyTheme;
+
+/* أول ما الصفحة تجهز، نظبّط الأيقونة والاسم على المحفوظ */
+applyTheme(currentTheme());
+
+</script>
+</body>
+</html>

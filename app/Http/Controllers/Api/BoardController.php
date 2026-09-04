@@ -9,6 +9,8 @@ use App\Http\Controllers\Concerns\BroadcastsOrders;
 use App\Http\Controllers\Concerns\NotifiesPilotRequests;
 use App\Support\Actor;
 use App\Support\ApiResponse;
+use App\Support\BizDay;
+use App\Support\Money;
 use App\Support\PollableList;
 use App\Support\Vocab;
 use App\Support\WireTime;
@@ -86,7 +88,7 @@ class BoardController
                FROM pilots p
                LEFT JOIN branches b ON b.id = p.assigned_branch_id
                LEFT JOIN users u ON u.pilot_id = p.id
-              WHERE p.assigned_branch_id = ?
+              WHERE p.assigned_branch_id = ? AND p.archived_at IS NULL
               ORDER BY (p.queue_no IS NULL), p.queue_no, p.name",
             [$branchId]
         );
@@ -261,11 +263,15 @@ class BoardController
      */
     public function closeoutGet(Request $request): JsonResponse
     {
+        $actor   = $request->actorOrFail();
         $pilotId = $this->intId($request->query('pilot', 0));
         $month   = (string) $request->query('month', '');
 
         $data = $this->buildMonthlyData($pilotId, $month);
         $p    = $data['pilot'];
+        /* 🔒 مشرف أي فرع كان بيقرا تقفيلة أي طيار — بمرتبه وعمولته وسلفه
+           وخصوماته. التعليق فوق الدالة كان معترف بالثغرة دي بالحرف. */
+        $this->assertPilotInScope($actor, $p);
 
         $saved = DB::select(
             'SELECT c.*, p.name AS pilot_name FROM pilot_monthly_closeouts c JOIN pilots p ON p.id = c.pilot_id WHERE c.pilot_id = ? AND c.month = ?',
@@ -491,10 +497,15 @@ class BoardController
         }
 
         $rows = DB::select(
-            'SELECT r.*, rb.name AS requesting_branch_name, ab.name AS accepted_by_branch_name, p.name AS pilot_name
+            'SELECT r.*, rb.name AS requesting_branch_name, ab.name AS accepted_by_branch_name,
+                    fb.name AS from_branch_name, p.name AS pilot_name, p.phone1 AS pilot_phone,
+                    p.custody_balance AS pilot_custody,
+                    (SELECT COUNT(*) FROM orders o
+                      WHERE o.pilot_id = r.pilot_id AND o.status = \'delivering\') AS pilot_active_orders
                FROM pilot_support_requests r
                JOIN branches rb ON rb.id = r.requesting_branch_id
                LEFT JOIN branches ab ON ab.id = r.accepted_by_branch_id
+               LEFT JOIN branches fb ON fb.id = r.from_branch_id
                LEFT JOIN pilots p ON p.id = r.pilot_id'
             . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
             . ' ORDER BY r.id DESC LIMIT 200',
@@ -555,6 +566,8 @@ class BoardController
         try {
             $queueNo = DB::transaction(function () use ($actor, $pilotId, $branchIn): int {
                 $pilot = $this->lockPilot($pilotId);
+                // 🔒 مشرف الفرع كان بيدخّل أي طيار في الشركة دوره
+                $this->assertPilotInScope($actor, $pilot);
                 if ($pilot['status'] === 'waiting') {
                     throw new ApiException('الطيار في الدور بالفعل');
                 }
@@ -645,12 +658,14 @@ class BoardController
      */
     public function queueLeave(Request $request): JsonResponse
     {
-        $request->actorOrFail();
+        $actor   = $request->actorOrFail();
         $pilotId = $this->intId($request->input('pilotId', 0));
 
         try {
-            DB::transaction(function () use ($pilotId): void {
+            DB::transaction(function () use ($actor, $pilotId): void {
                 $pilot = $this->lockPilot($pilotId);
+                // 🔒 مشرف الفرع كان بيحرّر أي طيار في الشركة من دوره
+                $this->assertPilotInScope($actor, $pilot);
                 if ($pilot['status'] === 'delivering') {
                     throw new ApiException('الطيار جارٍ التوصيل — سوّي أوردراته الأول');
                 }
@@ -691,13 +706,31 @@ class BoardController
         try {
             $shiftId = DB::transaction(function () use ($actor, $pilotId, $branchIn): int {
                 $pilot = $this->lockPilot($pilotId);
-                if ($pilot['status'] !== null && $pilot['status'] !== '') {
-                    throw new ApiException('الطيار عنده وردية مفتوحة بالفعل أو في إذن');
+                /* 🗄️ الطيار المؤرشف مايتفتحلوش وردية. الأرشفة بتصفّر فرعه
+                   وحالته وبتقفل حسابه، بس الفتح من اللوحة بياخد `pilotId`
+                   مباشرة — فمن غير الفحص ده مشرف الفرع يقدر يرجّعه للخدمة
+                   من غير ما يعدّي على قرار الإدارة. الرجوع من صفحة
+                   المؤرشفين بس (`POST /api/pilots/{id}/unarchive`). */
+                if (($pilot['archived_at'] ?? null) !== null) {
+                    throw new ApiException('الطيار مؤرشف — رجّعه للخدمة من صفحة الطيارين المؤرشفين الأول');
                 }
-                $branchId = $this->branchScope($actor, $branchIn !== null ? $this->intId($branchIn) : null)
-                    ?? ($pilot['assigned_branch_id'] !== null ? (int) $pilot['assigned_branch_id'] : null);
+                /* 🔴 الفرع الثابت هو الحاكم — مش اللي اتبعت من الشاشة.
+                   الطلب بالحرف: «ثبّت الطيار على فرع من البداية، وحتى لو
+                   اتقفلت الوردية يفتح على الفرع المتكوّد عليه، ولو اتنقل
+                   لفرع تاني اليوم يرجع لفرعه تاني يوم».
+
+                   النقل المؤقت بيحصل **بعد** الفتح (نقل الوردية أو الدعم)
+                   وبيغيّر `assigned_branch_id` بس — فبكرة الوردية بتفتح
+                   على `home_branch_id` من تاني لوحدها.
+
+                   الرجوع للمبعوت من الشاشة بيحصل بس لو الطيار لسه بلا فرع
+                   ثابت (بيانات قديمة) — ساعتها مفيش حاجة نرجعله. */
+                $branchId = ($pilot['home_branch_id'] ?? null) !== null
+                    ? (int) $pilot['home_branch_id']
+                    : ($this->branchScope($actor, $branchIn !== null ? $this->intId($branchIn) : null)
+                        ?? ($pilot['assigned_branch_id'] !== null ? (int) $pilot['assigned_branch_id'] : null));
                 if (! $branchId) {
-                    throw new ApiException('حدّد الفرع');
+                    throw new ApiException('الطيار مالوش فرع ثابت — حدّده من بيانات الطيار الأول');
                 }
                 $now = WireTime::nowDb();
                 $this->enterQueue($pilotId, $branchId, $now);
@@ -782,40 +815,132 @@ class BoardController
      */
     public function shiftSettlement(Request $request, string $id): JsonResponse
     {
-        $request->actorOrFail();
+        $actor   = $request->actorOrFail();
         $shiftId = $this->intId($id);
+
+        /* 🔒 كان بيكتب مكافأة وخصم وسلفة على وردية **أي** طيار في أي فرع —
+           مجرد `UPDATE shifts ... WHERE id = ?` بلا أي قراءة للفاعل.
+           بنجيب الطيار بتاع الوردية ونمرّره على نفس حارس النطاق. */
+        $shiftPilot = DB::select(
+            'SELECT p.* FROM shifts s JOIN pilots p ON p.id = s.pilot_id WHERE s.id = ? LIMIT 1',
+            [$shiftId]
+        )[0] ?? null;
+        if (! $shiftPilot) {
+            throw ApiException::notFound('الوردية غير موجودة');
+        }
+        $this->assertPilotInScope($actor, (array) $shiftPilot);
 
         // الافتراضي القديم monthly
         $settle = fn ($v) => in_array($v, ['daily', 'monthly'], true) ? $v : 'monthly';
 
-        $n = DB::update(
-            'UPDATE shifts SET bonus_amount = ?, bonus_reason = ?, deduction_amount = ?, deduction_reason = ?,
-                advance_amount = ?, advance_reason = ?,
-                commission_settle = ?, bonus_settle = ?, deduction_settle = ?, advance_settle = ?
-          WHERE id = ?',
-            [
-                (float) ($request->input('bonusAmount') ?? 0),
-                trim((string) ($request->input('bonusReason') ?? '')) ?: null,
-                (float) ($request->input('deductionAmount') ?? 0),
-                trim((string) ($request->input('deductionReason') ?? '')) ?: null,
-                (float) ($request->input('advanceAmount') ?? 0),
-                trim((string) ($request->input('advanceReason') ?? '')) ?: null,
-                $settle($request->input('commissionSettle', 'monthly')),
-                $settle($request->input('bonusSettle', 'monthly')),
-                $settle($request->input('deductionSettle', 'monthly')),
-                $settle($request->input('advanceSettle', 'monthly')),
-                $shiftId,
-            ]
-        );
+        /* 💵 طلب صاحب النظام 2026-09-03: «الخزنة يدخل لها المال بالكامل في
+           البداية ثم يخرج من الخزنة العمولة». الدخول الكامل موجود خلاص
+           (`تحصيل من الطيار` في settlePilotMoney بيودع المحصَّل من غير أي
+           خصم) — الناقص كان الخروج: اختيار «في نفس اليوم» للعمولة معناه
+           إنها بتتصرف للطيار دلوقتي، فلازم حركة `out` من الخزنة، وإلا
+           رصيد الخزنة يفضل شايل فلوس اتصرفت فعلًا.
 
-        if (! $n) {
-            $chk = DB::select('SELECT id FROM shifts WHERE id = ?', [$shiftId]);
-            if (! $chk) {
+           `commission_paid_at` بيمنع الصرف مرتين لو «تطبيق وحفظ» اتداس
+           تاني، وبيقفل الرجوع لـ«على الشهر» بعد الصرف — كانت هتتحسب
+           تاني في التقفيلة الشهرية (buildMonthlyData بيستثني daily بس). */
+        $commissionSettle = $settle($request->input('commissionSettle', 'monthly'));
+        $payout = DB::transaction(function () use ($request, $actor, $shiftId, $settle, $commissionSettle): float {
+            $row = DB::select('SELECT * FROM shifts WHERE id = ? FOR UPDATE', [$shiftId])[0] ?? null;
+            if (! $row) {
                 throw ApiException::notFound('الوردية غير موجودة');
             }
-        }
+            $shift = (array) $row;
 
-        return ApiResponse::ok();
+            if ($shift['commission_paid_at'] !== null && $commissionSettle !== 'daily') {
+                throw new ApiException('عمولة الوردية دي اتصرفت من الخزنة خلاص — مينفعش ترجع «على الشهر» عشان ماتتحسبش مرتين');
+            }
+
+            DB::update(
+                'UPDATE shifts SET bonus_amount = ?, bonus_reason = ?, deduction_amount = ?, deduction_reason = ?,
+                    advance_amount = ?, advance_reason = ?,
+                    commission_settle = ?, bonus_settle = ?, deduction_settle = ?, advance_settle = ?
+              WHERE id = ?',
+                [
+                    (float) ($request->input('bonusAmount') ?? 0),
+                    trim((string) ($request->input('bonusReason') ?? '')) ?: null,
+                    (float) ($request->input('deductionAmount') ?? 0),
+                    trim((string) ($request->input('deductionReason') ?? '')) ?: null,
+                    (float) ($request->input('advanceAmount') ?? 0),
+                    trim((string) ($request->input('advanceReason') ?? '')) ?: null,
+                    $commissionSettle,
+                    $settle($request->input('bonusSettle', 'monthly')),
+                    $settle($request->input('deductionSettle', 'monthly')),
+                    $settle($request->input('advanceSettle', 'monthly')),
+                    $shiftId,
+                ]
+            );
+
+            if ($commissionSettle !== 'daily' || $shift['commission_paid_at'] !== null) {
+                return 0.0;
+            }
+
+            /* عمولة الوردية = نفس معادلة buildMonthlyData بالحرف: الأوردرات
+               العادية بنسبة الطيار (المتسلّم بس) + الـoverride بمبلغه لأي
+               حالة (عمولة «من جيب الشركة» على مرتجع بتدخل هنا). الأوردرات
+               بتتقفل FOR UPDATE لأننا بنكتب فلوس على أساس أسعارها. */
+            $pilot = $this->lockPilot((int) $shift['pilot_id']);
+            $agg = (array) DB::selectOne(
+                "SELECT SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN 1 ELSE 0 END) AS plain_cnt,
+                        SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN o.total_delivery_price ELSE 0 END) AS plain_price,
+                        /* الباقي بس — الجزء اللي اتصرف كاش من صفحة أوردرات
+                           الطيار (paid_amount) خرج من الخزنة خلاص */
+                        SUM(CASE WHEN a.id IS NOT NULL THEN GREATEST(a.amount - a.paid_amount, 0) ELSE 0 END) AS override_sum
+                   FROM orders o
+                   LEFT JOIN pilot_commission_adjustments a
+                          ON a.order_id = o.id AND a.kind = 'override' AND a.pilot_id = o.pilot_id
+                  WHERE o.shift_id = ? FOR UPDATE",
+                [$shiftId]
+            );
+            $ct = $pilot['commission_type'] ?: 'percent';
+            $cv = (float) $pilot['commission_value'];
+            $total = round(($ct === 'fixed'
+                ? $cv * (int) ($agg['plain_cnt'] ?? 0)
+                : (float) ($agg['plain_price'] ?? 0) * $cv / 100.0)
+                + (float) ($agg['override_sum'] ?? 0), 2);
+            if ($total <= 0) {
+                return 0.0;
+            }
+
+            $cashStoreIn = $request->input('cashStoreId');
+            if (! $cashStoreIn) {
+                throw new ApiException('اختر الخزنة اللي هتتصرف منها عمولة الوردية');
+            }
+            $now = WireTime::nowDb();
+            $this->applyCashTxn(
+                $this->intId($cashStoreIn),
+                'out',
+                $total,
+                'عمولة وردية الطيار: ' . $pilot['name'],
+                (int) $pilot['id'],
+                (int) $shift['branch_id'] ?: null,
+                $actor->username,
+                $now
+            );
+            DB::update(
+                'UPDATE shifts SET commission_paid_amount = ?, commission_paid_at = ? WHERE id = ?',
+                [$total, $now, $shiftId]
+            );
+            /* الـoverrides اللي لسه فيها باقي اتغطت دلوقتي بالصرف ده —
+               تعليمها paid بيخلي أي تعديل لاحق عليها من صفحة أوردرات
+               الطيار يتحاسب بالفرق بس */
+            DB::update(
+                "UPDATE pilot_commission_adjustments a
+                   JOIN orders o ON o.id = a.order_id
+                    SET a.paid_amount = a.amount, a.paid_at = ?, a.paid_store_id = ?
+                  WHERE o.shift_id = ? AND a.kind = 'override' AND a.pilot_id = o.pilot_id
+                    AND a.amount > a.paid_amount",
+                [$now, $this->intId($cashStoreIn), $shiftId]
+            );
+
+            return $total;
+        });
+
+        return ApiResponse::out(['ok' => true, 'commissionPaid' => $payout]);
     }
 
     /**
@@ -842,7 +967,7 @@ class BoardController
         $shiftId = $this->intId($id);
 
         try {
-            [$deliveredCount, $undeliveredCount, $settledCount] = DB::transaction(
+            [$deliveredCount, $undeliveredCount, $settledCount, $custodyReturned, $custodyCarried] = DB::transaction(
                 function () use ($request, $actor, $shiftId): array {
                     $row = DB::select('SELECT * FROM shifts WHERE id = ? FOR UPDATE', [$shiftId])[0] ?? null;
                     if (! $row) {
@@ -853,7 +978,9 @@ class BoardController
                         throw new ApiException('الوردية مقفولة بالفعل');
                     }
 
-                    $pilot    = $this->lockPilot((int) $shift['pilot_id']);
+                    $pilot = $this->lockPilot((int) $shift['pilot_id']);
+                    // 🔒 كان بيسوّي فلوس طيار أي فرع — الإنهاء بينده settlePilotMoney
+                    $this->assertPilotInScope($actor, $pilot);
                     $now      = WireTime::nowDb();
                     $branchId = $this->branchScope($actor, (int) $shift['branch_id']);
 
@@ -867,8 +994,68 @@ class BoardController
                         $cashStoreIn ? $this->intId($cashStoreIn) : null,
                         $branchId,
                         $actor,
-                        $now
+                        $now,
+                        'فرق تحصيل عند إنهاء الوردية'
                     );
+
+                    /* 1.5) 🔒 إخلاء الطرف بالعهدة — طلب صاحب النظام:
+                       التقفيلة نفسها لازم تثبت إن العهدة رجعت الخزنة.
+                       بنقرا الرصيد **بعد** التسوية لأن فرق التحصيل لسه
+                       مضيفلها. */
+                    $custodyIn = $request->input('custodyReturn');
+                    $retAmount = is_array($custodyIn) ? round((float) ($custodyIn['amount'] ?? 0), 2) : 0.0;
+                    $retStore  = is_array($custodyIn) && ! empty($custodyIn['cashStoreId'])
+                        ? $this->intId($custodyIn['cashStoreId']) : null;
+                    if ($retAmount < 0) {
+                        throw new ApiException('مبلغ ردّ العهدة مينفعش يكون بالسالب');
+                    }
+
+                    $balNow = round((float) (DB::select(
+                        'SELECT custody_balance FROM pilots WHERE id = ?',
+                        [(int) $pilot['id']]
+                    )[0]->custody_balance ?? 0), 2);
+
+                    if ($retAmount > 0) {
+                        if ($retAmount > $balNow + 0.005) {
+                            throw new ApiException('ردّ العهدة (' . $retAmount . ' ج.م) أكبر من اللي على الطيار (' . $balNow . ' ج.م)');
+                        }
+                        if (! $retStore) {
+                            throw new ApiException('اختر الخزنة اللي هترجع لها العهدة');
+                        }
+                        /* نفس عقد ردّ العهدة اليدوي (custodyCreate type=return):
+                           الرصيد بينقص + صف في سجل العهدة + الفلوس تدخل الخزنة */
+                        DB::update('UPDATE pilots SET custody_balance = custody_balance - ? WHERE id = ?',
+                            [$retAmount, (int) $pilot['id']]);
+                        DB::insert(
+                            'INSERT INTO custody_transactions (pilot_id, type, amount, reason, store_id, branch_id, created_by, created_at)
+                             VALUES (?,?,?,?,?,?,?,?)',
+                            [(int) $pilot['id'], 'return', $retAmount,
+                             'ردّ عهدة عند تقفيل الوردية — إخلاء طرف',
+                             $retStore, $branchId, $actor->username, $now]
+                        );
+                        $this->applyCashTxn($retStore, 'in', $retAmount,
+                            'ردّ عهدة عند تقفيل الوردية: ' . $pilot['name'],
+                            (int) $pilot['id'], $branchId, $actor->username, $now);
+                        $balNow = round($balNow - $retAmount, 2);
+                    }
+
+                    /* 🔴 القاعدة: الوردية مابتتقفلش وعلى الطيار عهدة.
+                       الاستثناء الوحيد للإدارة وبعلم صريح — قرار إداري
+                       بيتسجّل على الوردية (custody_carried) عشان يبان
+                       في التقرير إن ده مش إخلاء طرف كامل. */
+                    if ($balNow > 0.005
+                        && ! ($actor->role === 'admin' && $request->boolean('allowCustodyCarry'))) {
+                        throw new ApiException(
+                            'مينفعش تتقفل الوردية والطيار عليه عهدة ' . number_format($balNow, 2)
+                            . ' ج.م — سجّل ردّها للخزنة في خانة «ردّ العهدة»'
+                            . ($actor->role === 'admin' ? ' أو فعّل «قفل مع ترحيل العهدة»' : ' أو كلّم الإدارة')
+                        );
+                    }
+
+                    /* 1.6) 💰 عمولة التقفيلة — بتتكتب صفوف override في
+                       سجل تعديلات العمولة، فالتقفيلة الشهرية بتشوفها
+                       من نفس المسار الموجود من غير أي معادلة جديدة. */
+                    $this->applyShiftCommission($request, $shiftId, $pilot, $branchId, $actor, $now);
 
                     // 2) بنود التقفيلة على الوردية (لو اتبعتت) + القفل
                     $settle = fn ($v, $cur) => in_array($v, ['daily', 'monthly'], true) ? $v : $cur;
@@ -876,6 +1063,7 @@ class BoardController
                         'UPDATE shifts SET bonus_amount = ?, bonus_reason = ?, deduction_amount = ?, deduction_reason = ?,
                     advance_amount = ?, advance_reason = ?,
                     commission_settle = ?, bonus_settle = ?, deduction_settle = ?, advance_settle = ?,
+                    custody_returned = ?, custody_carried = ?,
                     status = \'ended\', ended_at = ?, ended_by = ?
               WHERE id = ?',
                         [
@@ -889,6 +1077,8 @@ class BoardController
                             $settle($request->input('bonusSettle'), $shift['bonus_settle']),
                             $settle($request->input('deductionSettle'), $shift['deduction_settle']),
                             $settle($request->input('advanceSettle'), $shift['advance_settle']),
+                            $retAmount,
+                            $balNow,
                             $now,
                             $actor->username,
                             $shiftId,
@@ -898,7 +1088,7 @@ class BoardController
                     // 3) تحرير الطيار بالكامل (زي إزالة الطيار من اللوحة) + إزاحة الدور
                     $this->releasePilot($pilot);
 
-                    return [$deliveredCount, $undeliveredCount, $settledCount];
+                    return [$deliveredCount, $undeliveredCount, $settledCount, $retAmount, $balNow];
                 }
             );
         } catch (ApiException $e) {
@@ -913,6 +1103,9 @@ class BoardController
             'deliveredCount'   => $deliveredCount,
             'undeliveredCount' => $undeliveredCount,
             'settledCount'     => $settledCount,
+            /* إثبات إخلاء الطرف — التقرير بيطبعه */
+            'custodyReturned'  => $custodyReturned,
+            'custodyCarried'   => $custodyCarried,
         ]);
     }
 
@@ -938,7 +1131,9 @@ class BoardController
         try {
             [$next, $deliveredCount, $undeliveredCount, $settledCount] = DB::transaction(
                 function () use ($request, $actor, $pilotId): array {
-                    $pilot    = $this->lockPilot($pilotId);
+                    $pilot = $this->lockPilot($pilotId);
+                    // 🔒 كان بيسوّي فلوس أي طيار — العودة بتنده settlePilotMoney
+                    $this->assertPilotInScope($actor, $pilot);
                     $branchId = $pilot['assigned_branch_id'] !== null
                         ? (int) $pilot['assigned_branch_id']
                         : $this->branchScope($actor, null);
@@ -956,7 +1151,8 @@ class BoardController
                         $cashStoreIn ? $this->intId($cashStoreIn) : null,
                         $branchId,
                         $actor,
-                        $now
+                        $now,
+                        'فرق تحصيل عند عودة الطيار'
                     );
 
                     // الطيار بيرجع الانتظار في آخر الدور (منطق الأصل حرفيًا)
@@ -1041,6 +1237,13 @@ class BoardController
                     ]
                 );
 
+                /* 🔴 البثّ كان ناقص من المسار ده بالذات — الموافقة على طلب
+                   الطيار بتبثّ، والفرض لأ. النتيجة اللي صاحب النظام شافها
+                   أول يوم لايف: «الإذن بيتم بعد ٦٠ ثانية من قرار المشرف» —
+                   دورة الاستطلاع الكاملة، لأن الحدث اللحظي عمره ما اتبعت.
+                   afterCommit زي باقي المواضع فبيوصل بعد نجاح المعاملة بس. */
+                $this->broadcastPilotRequest('leave', $branchId, $pilotId);
+
                 return (int) DB::getPdo()->lastInsertId();
             });
         } catch (ApiException $e) {
@@ -1083,6 +1286,10 @@ class BoardController
         $pilotId = $this->intId($request->input('pilotId', 0));
         $month   = (string) ($request->input('month') ?? '');
         $data    = $this->buildMonthlyData($pilotId, $month);
+        /* 🔒 مشرف أي فرع كان بيكتب تقفيلة ومرتب لأي طيار — وآخر جملة في
+           المعاملة بتدوس على `pilots.monthly_salary` و`required_daily_hours`
+           كافتراضي للشهور الجاية. يعني كتابة على بيانات طيار فرع تاني. */
+        $this->assertPilotInScope($actor, $data['pilot']);
 
         $salary      = (float) ($request->input('salary') ?? 0);
         $reqHours    = (float) ($request->input('requiredDailyHours') ?? 0);
@@ -1211,8 +1418,12 @@ class BoardController
      */
     public function joinRequestApprove(Request $request, string $id): JsonResponse
     {
-        $request->actorOrFail();
+        /* 🔴 النتيجة لازم تتسند — النداء من غير إسناد ساب `$actor` غير
+           معرّفة والفحص اللي تحته بيرمي 500 (نفس فخ `$codAllowed`). */
+        $actor = $request->actorOrFail();
         $reqId = $this->intId($id);
+        // 🔒 نطاق الفرع على الطلب نفسه — شوف assertRequestBranch
+        $this->assertRequestBranch($actor, 'pilot_join_requests', $reqId, 'branch_id');
 
         $username = trim((string) ($request->input('username') ?? ''));
         $password = (string) ($request->input('password') ?? '');
@@ -1390,6 +1601,8 @@ class BoardController
                 );
 
                 $pilot = $this->lockPilot((int) $req['pilot_id']);
+                // 🔒 موافقة على إذن طيار فرع تاني — بتغيّر حالته وتشيله من الدور
+                $this->assertPilotInScope($actor, $pilot);
                 // خروج من الدور لو كان مستني + إزاحة الباقيين
                 if ($pilot['status'] === 'waiting') {
                     $this->queueShiftAfterRemoval(
@@ -1423,6 +1636,9 @@ class BoardController
     public function leaveRequestReject(Request $request, string $id): JsonResponse
     {
         $actor = $request->actorOrFail();
+        $reqId = $this->intId($id);
+        // 🔒 نطاق الفرع على الطلب نفسه — شوف assertRequestBranch
+        $this->assertRequestBranch($actor, 'pilot_leave_requests', $reqId, 'branch_id');
 
         $n = DB::update(
             "UPDATE pilot_leave_requests SET status = 'rejected', responded_at = ?, responded_by = ? WHERE id = ? AND status = 'pending'",
@@ -1470,6 +1686,11 @@ class BoardController
                 }
 
                 $pilot = $this->lockPilot((int) $req['pilot_id']);
+                /* 🔒 الطيار بينهي إذنه هو (الفرع اللي تحت)، والفرع بينهي
+                   إذن طياره هو بس — مش أي طيار في الشركة. */
+                if ($actor->role === 'branch') {
+                    $this->assertPilotInScope($actor, $pilot);
+                }
                 if ($actor->role === 'pilot') {
                     $mine = (int) DB::table('users')->where('id', $actor->userId)->value('pilot_id');
                     if ($mine !== (int) $req['pilot_id']) {
@@ -1584,7 +1805,9 @@ class BoardController
                 );
 
                 $branchId = (int) $req['branch_id'];
-                $this->lockPilot((int) $req['pilot_id']);
+                $reqPilot = $this->lockPilot((int) $req['pilot_id']);
+                // 🔒 موافقة على فتح وردية لطيار فرع تاني
+                $this->assertPilotInScope($actor, $reqPilot);
                 $this->enterQueue((int) $req['pilot_id'], $branchId, $now);
 
                 // بثّ الموافقة (afterCommit فبيتأجل لما المعاملة تنجح)
@@ -1605,6 +1828,9 @@ class BoardController
     public function shiftRequestReject(Request $request, string $id): JsonResponse
     {
         $actor = $request->actorOrFail();
+        $reqId = $this->intId($id);
+        // 🔒 نطاق الفرع على الطلب نفسه — شوف assertRequestBranch
+        $this->assertRequestBranch($actor, 'pilot_shift_requests', $reqId, 'branch_id');
 
         $n = DB::update(
             "UPDATE pilot_shift_requests SET status = 'rejected', responded_at = ?, responded_by = ? WHERE id = ? AND status = 'pending'",
@@ -1707,11 +1933,19 @@ class BoardController
      */
     public function returnRequestApprove(Request $request, string $id): JsonResponse
     {
-        $request->actorOrFail();
+        /* 🔴 النتيجة لازم تتسند — النداء من غير إسناد ساب `$actor` غير
+           معرّفة، وكل موافقة إرجاع كانت بترمي 500 (بلاغ 2026-09-02). */
+        $actor = $request->actorOrFail();
         $reqId = $this->intId($id);
+        // 🔒 نطاق الفرع على الطلب نفسه — شوف assertRequestBranch
+        $this->assertRequestBranch($actor, 'pilot_return_requests', $reqId, 'branch_id');
+        /* 💵 مين دفع التوصيل للمرتجع (طلب 2026-09-02) — المشرف بيحدده
+           وهو بيوافق على الإرجاع. نفس قيم orders/{id}/undeliver. */
+        $fareByIn = (string) ($request->input('fareBy') ?? 'none');
+        $fareBy   = in_array($fareByIn, ['receiver', 'sender', 'none'], true) ? $fareByIn : 'none';
 
         try {
-            DB::transaction(function () use ($reqId): void {
+            DB::transaction(function () use ($reqId, $fareBy): void {
                 $row = DB::select('SELECT * FROM pilot_return_requests WHERE id = ? FOR UPDATE', [$reqId])[0] ?? null;
                 if (! $row) {
                     throw ApiException::notFound('الطلب غير موجود');
@@ -1725,9 +1959,10 @@ class BoardController
                 DB::update("UPDATE pilot_return_requests SET status = 'approved' WHERE id = ?", [$reqId]);
                 DB::update(
                     "UPDATE orders SET status = 'undelivered', status_since = ?, undelivered_at = ?, undelivered_reason = ?,
+                            undelivered_fare_by = ?,
                             return_status = NULL, return_reason = NULL
                       WHERE id = ?",
-                    [$now, $now, ($req['reason'] ?: null) ?? 'إرجاع من الطيار', (int) $req['order_id']]
+                    [$now, $now, ($req['reason'] ?: null) ?? 'إرجاع من الطيار', $fareBy, (int) $req['order_id']]
                 );
                 // تغيير حالة → «لم يتم التوصيل» + مسح علامة الإرجاع
                 $this->broadcastOrder((int) $req['order_id']);
@@ -1752,8 +1987,11 @@ class BoardController
      */
     public function returnRequestReject(Request $request, string $id): JsonResponse
     {
-        $request->actorOrFail();
+        /* 🔴 النتيجة لازم تتسند — نفس فخ الموافقة اللي فوق بالظبط. */
+        $actor = $request->actorOrFail();
         $reqId = $this->intId($id);
+        // 🔒 نطاق الفرع على الطلب نفسه — شوف assertRequestBranch
+        $this->assertRequestBranch($actor, 'pilot_return_requests', $reqId, 'branch_id');
 
         try {
             DB::transaction(function () use ($reqId): void {
@@ -1881,6 +2119,16 @@ class BoardController
                     throw new ApiException('الطلب اتبتّ فيه بالفعل');
                 }
 
+                /* 🔒 هنا **مش** `assertPilotInScope`: النقل الدائم بيوافق
+                   عليه الفرع **المستقبِل**، والطيار لسه تابع للفرع المُرسِل —
+                   فالحارس العادي كان هيرفض الموافقة المشروعة. الشرط الصح:
+                   الموافقة من فرع الوجهة بس (أو الإدارة). من غيره كان مشرف
+                   أي فرع يقدر يوافق على نقل بين فرعين مالوش علاقة بيهم. */
+                if ($actor->role === 'branch'
+                    && (int) ($actor->branchId ?? 0) !== (int) $req['to_branch_id']) {
+                    throw ApiException::forbidden('النقل ده مش لفرعك — الموافقة من الفرع المستقبِل');
+                }
+
                 $now   = WireTime::nowDb();
                 $pilot = $this->lockPilot((int) $req['pilot_id']);
                 if ($pilot['status'] === 'waiting') {
@@ -1890,6 +2138,11 @@ class BoardController
                     );
                 }
                 $toBranchId = (int) $req['to_branch_id'];
+                /* ده النقل **الدائم** (طلب اتعمله موافقة) — فالفرع الثابت
+                   بيتحرّك معاه. النقل المؤقت (دعم/نقل وردية) مابيلمسهوش،
+                   وعشان كده الطيار بيرجع لفرعه تاني يوم لوحده. */
+                DB::update('UPDATE pilots SET home_branch_id = ? WHERE id = ?',
+                    [$toBranchId, (int) $req['pilot_id']]);
                 $this->enterQueue((int) $req['pilot_id'], $toBranchId, $now);
 
                 // الوردية المفتوحة بتتنقل مع الطيار (مش بتتقفل ولا بتتكرر)
@@ -1916,6 +2169,9 @@ class BoardController
     public function transferReject(Request $request, string $id): JsonResponse
     {
         $actor = $request->actorOrFail();
+        $reqId = $this->intId($id);
+        // 🔒 نطاق الفرع على الطلب نفسه — شوف assertRequestBranch
+        $this->assertRequestBranch($actor, 'pilot_transfers', $reqId, 'to_branch_id');
 
         $n = DB::update(
             "UPDATE pilot_transfers SET status = 'rejected', resolved_at = ?, resolved_by = ? WHERE id = ? AND status = 'pending'",
@@ -1977,13 +2233,47 @@ class BoardController
 
         $fromIn  = $request->input('fromBranchId');
         $pilotIn = $request->input('pilotId');
+
+        /* ═══ طلب طيار بعينه من فرع بعينه ═══
+           ده المسار الجديد (طلب النقل). الـbroadcast القديم بيعدّي من غير
+           أي فحص زي ما كان. الفحوصات هنا كلها بتمنع طلبات مالهاش معنى
+           بتقفل في حتة وسط وتسيب الطيار بلا فرع — وده بالظبط اللي حصل مع
+           طيار موجود في الإنتاج عهدته 50 ألف وassigned_branch_id فاضي. */
+        $pilotId = $pilotIn ? $this->intId($pilotIn) : null;
+        if ($pilotId) {
+            $p = DB::select('SELECT id, name, assigned_branch_id FROM pilots WHERE id = ?', [$pilotId])[0] ?? null;
+            if (! $p) {
+                throw ApiException::notFound('الطيار غير موجود');
+            }
+            $p = (array) $p;
+            $pilotBranch = $p['assigned_branch_id'] !== null ? (int) $p['assigned_branch_id'] : null;
+
+            if ($pilotBranch === $requestingBranchId) {
+                throw new ApiException('الطيار ده في فرعك أصلًا');
+            }
+            if (! $pilotBranch) {
+                throw new ApiException('الطيار ده مش تابع لأي فرع — كلّم الإدارة');
+            }
+            // الفرع المطلوب منه بيتحدد من فرع الطيار نفسه مش من اللي بعتته الواجهة
+            $fromIn = $pilotBranch;
+
+            $dup = $this->countOf(
+                "SELECT COUNT(*) FROM pilot_support_requests
+                  WHERE pilot_id = ? AND status IN ('pending','accepted')",
+                [$pilotId]
+            );
+            if ($dup > 0) {
+                throw new ApiException('في طلب شغّال على الطيار ده بالفعل');
+            }
+        }
+
         DB::insert(
             "INSERT INTO pilot_support_requests (requesting_branch_id, from_branch_id, pilot_id, notes, status, created_at)
              VALUES (?,?,?,?,'pending',?)",
             [
                 $requestingBranchId,
                 $fromIn ? $this->intId($fromIn) : null,
-                $pilotIn ? $this->intId($pilotIn) : null,
+                $pilotId,
                 trim((string) ($request->input('notes') ?? '')) ?: null,
                 WireTime::nowDb(),
             ]
@@ -2010,6 +2300,13 @@ class BoardController
         $reqId = $this->intId($id);
 
         $response = ($request->input('response') ?? 'rejected') === 'accepted' ? 'accepted' : 'rejected';
+        /* الرفض لازم يجي بسبب — قرار صاحب النظام. الفرع الطالب محتاج
+           يعرف رفضوه ليه عشان يقرر يطلب طيار تاني ولا يكلّم الإدارة،
+           و«اترفض» لوحدها مابتقولش حاجة. */
+        $reason = trim((string) ($request->input('reason') ?? ''));
+        if ($response === 'rejected' && $reason === '') {
+            throw new ApiException('اكتب سبب الرفض');
+        }
         $branchIn = $request->input('branchId');
         $branchId = $this->branchScope($actor, $branchIn ? $this->intId($branchIn) : null);
         if (! $branchId) {
@@ -2017,7 +2314,7 @@ class BoardController
         }
 
         try {
-            DB::transaction(function () use ($reqId, $response, $branchId): void {
+            DB::transaction(function () use ($reqId, $response, $branchId, $reason): void {
                 $row = DB::select('SELECT * FROM pilot_support_requests WHERE id = ? FOR UPDATE', [$reqId])[0] ?? null;
                 if (! $row) {
                     throw ApiException::notFound('طلب الدعم غير موجود');
@@ -2026,9 +2323,9 @@ class BoardController
 
                 $now = WireTime::nowDb();
                 DB::insert(
-                    'INSERT INTO pilot_support_responses (request_id, branch_id, response, responded_at, created_at)
-                     VALUES (?,?,?,?,?)',
-                    [$reqId, $branchId, $response, $now, $now]
+                    'INSERT INTO pilot_support_responses (request_id, branch_id, response, reason, responded_at, created_at)
+                     VALUES (?,?,?,?,?,?)',
+                    [$reqId, $branchId, $response, $reason !== '' ? $reason : null, $now, $now]
                 );
                 if ($response === 'rejected' && $req['from_branch_id'] !== null && $req['status'] === 'pending') {
                     DB::update("UPDATE pilot_support_requests SET status = 'rejected' WHERE id = ?", [$reqId]);
@@ -2053,7 +2350,13 @@ class BoardController
      * بـ`accept-pilot` وساعتها الوردية بتتنقل. كده `shift_id` بتاع
      * الأوردرات يفضل واحد على طول الرحلة.
      *
-     * الطيار «جاري التوصيل» **مايتبعتش** — فلوس أوردراته لسه معاه.
+     * 🔴 الطلب **الموجّه** (فرع بعينه + طيار بعينه) بيكمّل النقل لوحده
+     * هنا على طول: الطيار بيدخل الفرع الطالب وورديته وأوردراته الشغّالة
+     * بتتنقل معاه، والطلب بيتقفل «ended». الـbroadcast بيفضل خطوتين.
+     *
+     * 🔴 الطيار «جاري التوصيل» **بيتبعت عادي** دلوقتي (كان ممنوع): بيكمّل
+     * توصيله وأوردراته بتمشي معاه للفرع الجديد فالفلوس بتتقفل في مكان
+     * واحد. الفرع الأصلي محفوظ على كل أوردر في «origin_branch_id».
      */
     public function supportSendPilot(Request $request, string $id): JsonResponse
     {
@@ -2068,7 +2371,7 @@ class BoardController
         }
 
         try {
-            DB::transaction(function () use ($reqId, $pilotId, $myBranchId): void {
+            DB::transaction(function () use ($actor, $reqId, $pilotId, $myBranchId): void {
                 $row = DB::select('SELECT * FROM pilot_support_requests WHERE id = ? FOR UPDATE', [$reqId])[0] ?? null;
                 if (! $row) {
                     throw ApiException::notFound('طلب الدعم غير موجود');
@@ -2077,11 +2380,28 @@ class BoardController
                 if ($req['status'] !== 'pending') {
                     throw new ApiException('الطلب اتبتّ فيه بالفعل');
                 }
-
-                $pilot = $this->lockPilot($pilotId);
-                if ($pilot['status'] === 'delivering') {
-                    throw new ApiException('الطيار جارٍ التوصيل — مينفعش إرساله دلوقتي');
+                /* 🔒 مشرف الفرع كان بيقدر يبعت **أي** طيار في الشركة ردًّا
+                   على **أي** طلب دعم — يعني يسحب طيار فرع تاني بأوردراته
+                   الجارية وفلوسها لفرعه، من غير موافقة حد. الحارسين:
+                   الطلب لازم يكون على فرعه، والطيار لازم يكون طياره. */
+                if ($actor->role === 'branch' && (int) $req['from_branch_id'] !== $myBranchId) {
+                    throw ApiException::forbidden('طلب الدعم ده مش على فرعك');
                 }
+                /* الطلب اللي اتعمل على طيار بعينه مايتردّش عليه بطيار تاني */
+                if ($req['pilot_id'] !== null && (int) $req['pilot_id'] !== $pilotId) {
+                    throw new ApiException('الطلب ده على طيار محدد — مينفعش تبعت غيره');
+                }
+
+                /* 🔴 كان هنا رفض للطيار اللي حالته «جاري التوصيل».
+                   اتشال بقرار صاحب النظام: الطيار بيشتغل في نفس الشركة،
+                   فمفيش مانع ينتقل وهو شايل أوردر — بيكمّل توصيله عادي،
+                   وأوردراته الجارية بتتنقل معاه للفرع الجديد عند الضم
+                   (supportAcceptPilot) عشان حسابه آخر اليوم يبقى كله في
+                   مكان واحد. الفرع الأصلي بيفضل مسجّل على كل أوردر في
+                   origin_branch_id فمحدش بيضيع منه أثر. */
+                $pilot = $this->lockPilot($pilotId);
+                // 🔒 والطيار المبعوت لازم يكون تابع لفرع الفاعل فعلًا
+                $this->assertPilotInScope($actor, $pilot);
 
                 $now = WireTime::nowDb();
                 // تحرير الطيار من فرعه — الوردية المفتوحة بتفضل زي ما هي لحد ما الفرع المستقبِل يضمّه
@@ -2095,6 +2415,19 @@ class BoardController
                      VALUES (?,?,'accepted',?,?)",
                     [$reqId, $myBranchId, $now, $now]
                 );
+
+                /* ═══ الطلب الموجّه بيخلص هنا على طول ═══
+                   صاحب النظام طلب «واذا قبل ينتقل الطيار الي الفرع الذي طلب
+                   بشكل تلقائي» — من غير ما الفرع الطالب يضغط زرار تاني.
+
+                   وده مش رفاهية: الخطوتين القديمين بيسيبوا الطيار في نص
+                   الطريق (assigned_branch_id = NULL) لو الفرع الطالب اتأخر
+                   أو نسي — طيار بلا فرع مابيظهرش في أي لوحة وعهدته معلّقة.
+                   الـbroadcast القديم بيفضل خطوتين زي ما هو. */
+                if ($req['from_branch_id'] !== null && $req['pilot_id'] !== null) {
+                    $this->completePilotTransfer($pilotId, (int) $req['requesting_branch_id'], $actor, $now);
+                    DB::update("UPDATE pilot_support_requests SET status = 'ended' WHERE id = ?", [$reqId]);
+                }
             });
         } catch (ApiException $e) {
             throw $e;
@@ -2141,10 +2474,12 @@ class BoardController
                 }
 
                 $now = WireTime::nowDb();
-                $this->lockPilot((int) $req['pilot_id']);
-                $this->enterQueue((int) $req['pilot_id'], (int) $req['requesting_branch_id'], $now);
-                // لو معاه وردية مفتوحة من فرعه القديم بتتنقل لفرعنا — ولو لأ بتتفتح واحدة جديدة
-                $this->openOrTransferShift((int) $req['pilot_id'], (int) $req['requesting_branch_id'], $actor, true, $now);
+                $this->completePilotTransfer(
+                    (int) $req['pilot_id'],
+                    (int) $req['requesting_branch_id'],
+                    $actor,
+                    $now
+                );
 
                 DB::update("UPDATE pilot_support_requests SET status = 'ended' WHERE id = ?", [$reqId]);
             });
@@ -2371,7 +2706,16 @@ class BoardController
         }
 
         try {
-            $start = new DateTimeImmutable($month . '-01 00:00:00', new DateTimeZone('Africa/Cairo'));
+            /* 🗓️ الشهر **تجاري** (ملاحظة تدقيق المناورة 2026-09-03): بيبدأ
+               أول يوم الساعة 9ص قاهرة وينتهي أول يوم في الشهر اللي بعده
+               9ص — نفس قلبة تقفيلة الطيارين (autoMatrix بـ bizMoment)
+               بالظبط. قبل كده كان ميلادي (نص الليل) فوردية بتفتح 11م آخر
+               الشهر وتقفل بعد نص الليل كانت بتقع في شهرين مختلفين بين
+               الشاشتين. */
+            $start = new DateTimeImmutable(
+                sprintf('%s-01 %02d:00:00', $month, BizDay::startHour()),
+                new DateTimeZone('Africa/Cairo')
+            );
         } catch (Exception) {
             throw new ApiException('شهر غير صالح');
         }
@@ -2496,9 +2840,30 @@ class BoardController
             ? (int) $b['orderId'] : null;
         $kind = $orderId ? 'override' : 'extra';
 
+        /* 💸 الصرف الفوري من الخزنة (طلب صاحب النظام 2026-09-03: «لما
+           أكتب العمولة في الصفحة دي لازم تحصل حركة في سجل الخزنة»):
+           وجود cashStoreId معناه إن العمولة بتتصرف كاش دلوقتي — حركة
+           `out` بقيمتها، والتعديل بعد كده بيصرف/بيسترجع **الفرق** بس.
+           عمود paid_amount هو اللي بيمنع نفس الفلوس تتصرف تاني في صرف
+           تقفيلة الوردية أو تتجمع في الشهرية (الاتنين بيحسبوا الباقي
+           GREATEST(amount − paid, 0)). */
+        $cashStoreIn = $b['cashStoreId'] ?? null;
+        $cashStoreId = $cashStoreIn ? $this->intId($cashStoreIn) : null;
+        if ($cashStoreId) {
+            $storeRow = DB::selectOne('SELECT id, branch_id FROM cash_stores WHERE id = ?', [$cashStoreId]);
+            if (! $storeRow) {
+                throw ApiException::notFound('الخزنة غير موجودة');
+            }
+            if ($actor->role === 'branch'
+                && (int) ($storeRow->branch_id ?? 0) !== (int) ($actor->branchId ?? 0)) {
+                throw ApiException::forbidden('الخزنة دي مش على فرعك');
+            }
+        }
+
         $effective = trim((string) ($b['effectiveDate'] ?? ''));
+        $orderNum  = null;
         if ($orderId) {
-            $ord = DB::selectOne('SELECT id, pilot_id, branch_id, delivered_at, created_at FROM orders WHERE id = ?', [$orderId]);
+            $ord = DB::selectOne('SELECT id, order_num, pilot_id, branch_id, delivered_at, undelivered_at, created_at FROM orders WHERE id = ?', [$orderId]);
             if (! $ord) {
                 throw ApiException::notFound('الأوردر غير موجود');
             }
@@ -2507,39 +2872,71 @@ class BoardController
                 throw new ApiException('الأوردر ده مش محمّل على الطيار ده');
             }
             /* التاريخ بييجي من الأوردر نفسه — عشان التعديل يقع في نفس
-               الشهر اللي الأوردر اتسلّم فيه مهما اتكتب إمتى. */
+               الشهر اللي الأوردر اتسلّم فيه مهما اتكتب إمتى. المرتجع
+               (عمولة من جيب الشركة — طلب 2026-09-03) بياخد يوم الإرجاع. */
             if ($effective === '') {
-                $effective = substr((string) ($ord['delivered_at'] ?: $ord['created_at']), 0, 10);
+                $effective = substr((string) ($ord['delivered_at'] ?: ($ord['undelivered_at'] ?: $ord['created_at'])), 0, 10);
             }
+            $orderNum = (string) ($ord['order_num'] ?: $orderId);
         }
         if ($effective === '') {
             $effective = substr(WireTime::nowDb(), 0, 10);
         }
 
         $now = WireTime::nowDb();
-        $id = DB::transaction(function () use ($pilotId, $orderId, $kind, $amount, $reason, $effective, $pilotBranch, $actor, $now): int {
+        $paidDelta = 0.0;
+        $id = DB::transaction(function () use ($pilotId, $orderId, $orderNum, $kind, $amount, $reason, $effective, $pilotBranch, $actor, $now, $cashStoreId, $pilot, &$paidDelta): int {
+            $rowId   = null;
+            $oldPaid = 0.0;
             if ($orderId) {
-                $ex = DB::selectOne('SELECT id FROM pilot_commission_adjustments WHERE order_id = ? FOR UPDATE', [$orderId]);
+                $ex = DB::selectOne('SELECT id, paid_amount FROM pilot_commission_adjustments WHERE order_id = ? FOR UPDATE', [$orderId]);
                 if ($ex) {
-                    DB::update(
-                        'UPDATE pilot_commission_adjustments
-                            SET pilot_id = ?, kind = ?, amount = ?, reason = ?, effective_date = ?,
-                                branch_id = ?, created_by = ?, updated_at = ?
-                          WHERE id = ?',
-                        [$pilotId, $kind, $amount, $reason, $effective, $pilotBranch, $actor->username, $now, (int) $ex->id]
-                    );
-
-                    return (int) $ex->id;
+                    $rowId   = (int) $ex->id;
+                    $oldPaid = (float) $ex->paid_amount;
                 }
             }
-            DB::insert(
-                'INSERT INTO pilot_commission_adjustments
-                   (pilot_id, order_id, kind, amount, reason, effective_date, branch_id, created_by, created_at)
-                 VALUES (?,?,?,?,?,?,?,?,?)',
-                [$pilotId, $orderId, $kind, $amount, $reason, $effective, $pilotBranch, $actor->username, $now]
-            );
+            /* مبلغ اتصرف منه كاش قبل كده — أي تعديل لازم يمر بحركة خزنة
+               (فرق بالزيادة = خروج، بالنقصان = استرجاع)، وإلا paid_amount
+               هيبقى أكبر من amount والحسابات تتلخبط. */
+            if ($oldPaid > 0.004 && ! $cashStoreId) {
+                throw new ApiException('العمولة دي اتصرف منها من الخزنة — تعديلها لازم يتم بحركة خزنة، اختر الخزنة');
+            }
+            if ($rowId) {
+                DB::update(
+                    'UPDATE pilot_commission_adjustments
+                        SET pilot_id = ?, kind = ?, amount = ?, reason = ?, effective_date = ?,
+                            branch_id = ?, created_by = ?, updated_at = ?
+                      WHERE id = ?',
+                    [$pilotId, $kind, $amount, $reason, $effective, $pilotBranch, $actor->username, $now, $rowId]
+                );
+            } else {
+                DB::insert(
+                    'INSERT INTO pilot_commission_adjustments
+                       (pilot_id, order_id, kind, amount, reason, effective_date, branch_id, created_by, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?)',
+                    [$pilotId, $orderId, $kind, $amount, $reason, $effective, $pilotBranch, $actor->username, $now]
+                );
+                $rowId = (int) DB::getPdo()->lastInsertId();
+            }
 
-            return (int) DB::getPdo()->lastInsertId();
+            if ($cashStoreId) {
+                $label = $orderId
+                    ? ('عمولة أوردر ' . $orderNum . ': ' . $pilot['name'])
+                    : ('عمولة مستقلة: ' . $pilot['name']);
+                $delta = round($amount - $oldPaid, 2);
+                if ($delta >= 0.005) {
+                    $this->applyCashTxn($cashStoreId, 'out', $delta, $label, $pilotId, $pilotBranch, $actor->username, $now);
+                } elseif ($delta <= -0.005) {
+                    $this->applyCashTxn($cashStoreId, 'in', -$delta, 'استرجاع فرق ' . $label, $pilotId, $pilotBranch, $actor->username, $now);
+                }
+                DB::update(
+                    'UPDATE pilot_commission_adjustments SET paid_amount = ?, paid_at = ?, paid_store_id = ? WHERE id = ?',
+                    [$amount, $now, $cashStoreId, $rowId]
+                );
+                $paidDelta = $delta;
+            }
+
+            return $rowId;
         });
 
         $row = DB::selectOne(
@@ -2554,6 +2951,8 @@ class BoardController
 
         return ApiResponse::out([
             'ok'         => true,
+            // موجب = خرج من الخزنة، سالب = رجع لها، صفر = مفيش حركة
+            'paidDelta'  => round($paidDelta, 2),
             'adjustment' => FinanceWire::commissionAdjustment((array) $row),
         ]);
     }
@@ -2578,9 +2977,37 @@ class BoardController
             throw ApiException::forbidden('الطيار ده مش على فرعك');
         }
 
-        DB::delete('DELETE FROM pilot_commission_adjustments WHERE id = ?', [(int) $id]);
+        /* 💸 مبلغ اتصرف كاش من الخزنة — مسحه لازم يرجّع الفلوس لنفس
+           الخزنة بحركة `in`، وإلا سجل الخزنة يفضل شايل صرف لعمولة
+           اتلغت (طلب 2026-09-03: كل حركة عمولة ليها أثر في السجل). */
+        $refunded = DB::transaction(function () use ($id, $actor): float {
+            $r = DB::selectOne('SELECT * FROM pilot_commission_adjustments WHERE id = ? FOR UPDATE', [(int) $id]);
+            if (! $r) {
+                return 0.0;
+            }
+            $paid = (float) $r->paid_amount;
+            if ($paid > 0.004) {
+                if (! $r->paid_store_id) {
+                    throw new ApiException('المبلغ ده اتصرف من خزنة مش معروفة — رجّعه بحركة يدوية الأول');
+                }
+                $pilotName = (string) (DB::selectOne('SELECT name FROM pilots WHERE id = ?', [(int) $r->pilot_id])->name ?? '');
+                $this->applyCashTxn(
+                    (int) $r->paid_store_id,
+                    'in',
+                    $paid,
+                    'استرجاع عمولة اتلغت: ' . $pilotName,
+                    (int) $r->pilot_id,
+                    $r->branch_id !== null ? (int) $r->branch_id : null,
+                    $actor->username,
+                    WireTime::nowDb()
+                );
+            }
+            DB::delete('DELETE FROM pilot_commission_adjustments WHERE id = ?', [(int) $id]);
 
-        return ApiResponse::ok();
+            return $paid;
+        });
+
+        return ApiResponse::out(['ok' => true, 'refunded' => round($refunded, 2)]);
     }
 
     /**
@@ -2630,7 +3057,11 @@ class BoardController
             /* مجاميع أوردرات كل وردية دفعة واحدة — مش استعلام لكل وردية.
                الأوردر اللي عليه عمولة مكتوبة بالإيد (override) بيتفصل عن
                الباقي: الباقي بيتحسب بنسبة الطيار، وهو بيتاخد بمبلغه زي ما
-               هو. من غير الفصل ده كان هيتحسب مرتين. */
+               هو. من غير الفصل ده كان هيتحسب مرتين.
+               الـoverride بيتجمع لأي حالة أوردر مش المتسلّم بس — عمولة
+               «من جيب الشركة» على مرتجع (طلب 2026-09-03) لازم توصل
+               لمستحقات الطيار برضه. الحساب التلقائي بنسبة الطيار بيفضل
+               على المتسلّم وحده. */
             $byShift = [];
             foreach (DB::select(
                 "SELECT o.shift_id,
@@ -2638,10 +3069,15 @@ class BoardController
                         SUM(CASE WHEN o.status = 'delivered' THEN 1 ELSE 0 END) AS delivered_cnt,
                         SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN 1 ELSE 0 END) AS plain_cnt,
                         SUM(CASE WHEN o.status = 'delivered' AND a.id IS NULL THEN o.total_delivery_price ELSE 0 END) AS plain_price,
-                        SUM(CASE WHEN o.status = 'delivered' AND a.id IS NOT NULL THEN a.amount ELSE 0 END) AS override_sum
+                        /* الباقي غير المصروف بس (amount − paid) — الجزء اللي
+                           اتصرف كاش من الخزنة خرج خلاص، جمعه هنا = دفع مرتين */
+                        SUM(CASE WHEN a.id IS NOT NULL THEN GREATEST(a.amount - a.paid_amount, 0) ELSE 0 END) AS override_sum
                    FROM orders o
                    LEFT JOIN pilot_commission_adjustments a
-                          ON a.order_id = o.id AND a.kind = 'override'
+                          /* a.pilot_id = o.pilot_id (ملاحظة تدقيق 2026-09-03):
+                             نفس فلتر autoMatrix — أوردر اتنقل بين طيارين
+                             ماياخدش override مكتوب لطيار تاني */
+                          ON a.order_id = o.id AND a.kind = 'override' AND a.pilot_id = o.pilot_id
                   WHERE o.shift_id IN (" . $this->placeholders($ids) . ') GROUP BY o.shift_id',
                 $ids
             ) as $r) {
@@ -2690,7 +3126,7 @@ class BoardController
            فبتتجمع بتاريخها هي. بتتحسب دايمًا بغض النظر عن commission_settle
            لأنها مبلغ مقطوع اتقرر مرة واحدة مش نسبة على أوردرات. */
         $extra = (float) (DB::selectOne(
-            "SELECT COALESCE(SUM(amount), 0) AS s
+            "SELECT COALESCE(SUM(GREATEST(amount - paid_amount, 0)), 0) AS s
                FROM pilot_commission_adjustments
               WHERE pilot_id = ? AND kind = 'extra'
                 AND effective_date >= ? AND effective_date < ?",
@@ -2726,6 +3162,59 @@ class BoardController
      * القفل ده هو اللي بيمنع تسويتين متوازيتين لنفس الطيار من إنهما
      * يقروا نفس `custody_balance` ويكتبوا فوق بعض.
      */
+    /**
+     * 🔴 ضمّ الطيار للفرع الجديد — الخطوة الأخيرة في نقل طيار بين فرعين،
+     * وبتتنده من مسارين: الطلب الموجّه (بيكمّل تلقائي جوه send-pilot)
+     * والـbroadcast القديم (الفرع الطالب بيضغط accept-pilot).
+     *
+     * ترتيب الخطوات مقصود:
+     *
+     *  1) **الحالة**: الطيار اللي معاه أوردر «جاري التوصيل» بيدخل الفرع
+     *     الجديد وهو لسه «delivering» من غير رقم دور — مش «waiting».
+     *     «enterQueue» كانت هتديله رقم في الدور وهو ماسك أوردر، فيبقى
+     *     مرشّح لأوردر جديد وهو أصلًا برّه — ودي مسبّبة أوردر ضايع.
+     *     مالوش أوردرات ⇒ آخر الدور عادي.
+     *  2) **الوردية** بتتنقل لفرعنا (أو بتتفتح جديدة لو مالوش).
+     *  3) **أوردراته الشغّالة** بتتنقل لفرعنا كمان — لازم تمشي ورا
+     *     الوردية، لأن الأوردر متعلّق بـshift_id، ولو الوردية في فرع
+     *     والأوردر في فرع تاني بتبقى التقفيلة مكسورة على الجهتين.
+     *     المنتهية (متسلّم/ملغي/لم يتم التوصيل) **مابتتحركش** — دي
+     *     اتحاسبت خلاص في الفرع القديم ونقلها بيغيّر تقفيلة يوم عدّى.
+     *     و«origin_branch_id» مابيتلمسش، فالفرع الأصلي بيفضل باين على كل
+     *     أوردر اتنقل — ده اللي صاحب النظام طلبه بالحرف.
+     *
+     * ⚠️ الاستدعاء لازم يكون جوه معاملة — الدالة مابتفتحش واحدة.
+     */
+    private function completePilotTransfer(int $pilotId, int $toBranch, Actor $actor, string $now): void
+    {
+        $this->lockPilot($pilotId);
+
+        $busy = $this->countOf(
+            "SELECT COUNT(*) FROM orders WHERE pilot_id = ? AND status = 'delivering'",
+            [$pilotId]
+        ) > 0;
+
+        if ($busy) {
+            DB::update(
+                "UPDATE pilots SET assigned_branch_id = ?, status = 'delivering', queue_no = NULL,
+                    status_since = COALESCE(status_since, ?), break_started_at = NULL,
+                    leave_type = NULL, leave_reason = NULL, leave_forced = 0
+              WHERE id = ?",
+                [$toBranch, $now, $pilotId]
+            );
+        } else {
+            $this->enterQueue($pilotId, $toBranch, $now);
+        }
+
+        $this->openOrTransferShift($pilotId, $toBranch, $actor, true, $now);
+
+        DB::update(
+            "UPDATE orders SET branch_id = ?
+              WHERE pilot_id = ? AND status IN ('processing','delivering','postponed')",
+            [$toBranch, $pilotId]
+        );
+    }
+
     private function lockPilot(int $pilotId): array
     {
         $row = DB::select('SELECT * FROM pilots WHERE id = ? FOR UPDATE', [$pilotId])[0] ?? null;
@@ -2797,7 +3286,10 @@ class BoardController
     private function releasePilot(array $pilotRow): void
     {
         DB::update(
-            "UPDATE pilots SET status = NULL, assigned_branch_id = NULL, queue_no = NULL,
+            /* 🔴 الفرع بيرجع للثابت مش بيتمسح — الطيار تابع لفرعه حتى
+               وهو مش شغّال. لو مالوش فرع ثابت (بيانات قديمة) بيتصفّر زي
+               الأول عشان مانخترعش له فرع. */
+            "UPDATE pilots SET status = NULL, assigned_branch_id = home_branch_id, queue_no = NULL,
                 status_since = NULL, break_started_at = NULL, leave_type = NULL,
                 leave_reason = NULL, leave_forced = 0
           WHERE id = ?",
@@ -2837,6 +3329,14 @@ class BoardController
             return false;
         }
 
+        /* 🔴 الشرط ده كان `if (! $branchId)` وكان بيلعب دور «الطيار مش
+           شغّال» — لأن الفرع كان بيتصفّر عند قفل الوردية. من 2026-08-30
+           الفرع بيفضل (بيرجع للثابت)، فالسؤال الصح بقى على الحالة نفسها:
+           `status = NULL` يعني مافيش وردية مفتوحة، والطيار **ممنوع**
+           يترجّع للدور مهما اتقفل من أوردرات متأخرة. */
+        if (($pilot['status'] ?? null) === null || $pilot['status'] === '') {
+            return false;
+        }
         $branchId = $pilot['assigned_branch_id'] !== null ? (int) $pilot['assigned_branch_id'] : null;
         if (! $branchId) {
             return false;
@@ -2895,27 +3395,45 @@ class BoardController
      *    حركة أصلًا. ده اللي بيمنع صفوف عهدة وهمية من أخطاء الفاصلة العائمة.
      *  • العهدة **مبتنزلش تحت الصفر** — بتتقص عند 0. يعني تسديد زيادة أكبر
      *    من العهدة بيضيع الفرق (مابيتحوّلش لرصيد للطيار). سلوك الأصل.
-     *  • قيمة الحركة المسجّلة هي **`abs($delta)` الكاملة** مش المقصوصة —
-     *    فالمجموع من `custody_transactions` ممكن مايطابقش `custody_balance`.
-     *    باج موروث ومنقول بالحرف.
+     *
+     * 🔴 اتصلح 2026-08-27 بقرار صاحب النظام: الحركة المسجّلة بقت
+     * **التغيير الفعلي** مش الدلتا المطلوبة. الأصل كان بيقص الرصيد عند
+     * الصفر وبيسجّل `abs($delta)` كاملة، فطيار عهدته 100 وسدّد 250 كان
+     * رصيده يبقى 0 والحركة تتسجّل 150 — يعني جمع السجل مايساويش الرصيد
+     * وماتقدرش تراجع الرقم. دلوقتي بيتسجّل 100 (اللي اتحرك فعلًا)،
+     * ولو مفيش تغيير أصلًا مفيش صف. `ops/custody_reconcile.php` بيتأكد
+     * إن المجموع = الرصيد لكل طيار.
      */
-    private function applyCustodyDelta(array $pilotRow, float $delta, ?int $branchId, string $by, string $now): void
-    {
+    private function applyCustodyDelta(
+        array $pilotRow,
+        float $delta,
+        ?int $branchId,
+        string $by,
+        string $now,
+        string $reason = 'فرق تحصيل أوردرات',
+    ): void {
         if (abs($delta) < 0.005) {
             return;
         }
-        $newCustody = (float) $pilotRow['custody_balance'] + $delta;
+        $old        = (float) $pilotRow['custody_balance'];
+        $newCustody = $old + $delta;
         if ($newCustody < 0) {
             $newCustody = 0.0;
         }
+        // اللي اتحرك فعلًا بعد القص — ده اللي بيتسجّل
+        $applied = round($newCustody - $old, 2);
         DB::update('UPDATE pilots SET custody_balance = ? WHERE id = ?', [$newCustody, (int) $pilotRow['id']]);
+        if (abs($applied) < 0.005) {
+            return;   // الرصيد كان صفر والتسديد زيادة — مفيش حركة تتسجّل
+        }
         DB::insert(
-            'INSERT INTO custody_transactions (pilot_id, type, amount, store_id, branch_id, created_by, created_at)
-         VALUES (?,?,?,?,?,?,?)',
+            'INSERT INTO custody_transactions (pilot_id, type, amount, reason, store_id, branch_id, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,?)',
             [
                 (int) $pilotRow['id'],
-                $delta > 0 ? 'order_pending' : 'order_extra',
-                abs($delta),
+                $applied > 0 ? 'order_pending' : 'order_extra',
+                abs($applied),
+                mb_substr($reason, 0, 190),
                 null, $branchId, $by, $now,
             ]
         );
@@ -3001,6 +3519,204 @@ class BoardController
      *
      * بترجع [expectedCollect, deliveredCount, undeliveredCount, settledCount]
      */
+    /**
+     * GET /api/shifts/{id}/closeout-details — تفاصيل تقفيلة الوردية.
+     *
+     * طلب صاحب النظام 2026-09-01: «تفاصيل العهدة يجب أن تظهر في
+     * التقفيلة — استلم كام وسلّم كام» و«الإذن يظهر في تقفيلة الطيار».
+     * قراءة خالصة من السجلات الموجودة — مافيش كتابة ولا عمود جديد.
+     */
+    public function shiftCloseoutDetails(Request $request, string $id): JsonResponse
+    {
+        $actor   = $request->actorOrFail();
+        $shiftId = $this->intId($id);
+
+        $row = DB::select('SELECT * FROM shifts WHERE id = ?', [$shiftId])[0] ?? null;
+        if (! $row) {
+            throw ApiException::notFound('الوردية غير موجودة');
+        }
+        $shift = (array) $row;
+        if ($actor->role === 'branch' && (int) $shift['branch_id'] !== (int) ($actor->branchId ?? -1)) {
+            throw ApiException::forbidden('الوردية دي مش في فرعك');
+        }
+
+        $pilotId = (int) $shift['pilot_id'];
+        $from    = (string) $shift['started_at'];
+        $to      = $shift['ended_at'] !== null ? (string) $shift['ended_at'] : WireTime::nowDb();
+
+        /* حركات العهدة في نافذة الوردية — الأنواع الأربعة من السجل */
+        $rows = array_map(fn ($r) => (array) $r, DB::select(
+            'SELECT ct.type, ct.amount, ct.reason, ct.created_by, ct.created_at, cs.name AS store_name
+               FROM custody_transactions ct
+               LEFT JOIN cash_stores cs ON cs.id = ct.store_id
+              WHERE ct.pilot_id = ? AND ct.created_at BETWEEN ? AND ?
+              ORDER BY ct.id',
+            [$pilotId, $from, $to]
+        ));
+        $sum = fn (string $t): float => round(array_sum(array_map(
+            fn ($r) => $r['type'] === $t ? (float) $r['amount'] : 0.0, $rows)), 2);
+
+        /* الأذونات المتقاطعة مع الوردية — بتاعة الطيار في المدة دي */
+        $leaves = array_map(fn ($r) => (array) $r, DB::select(
+            "SELECT type, reason, status, requested_at, responded_at, responded_by,
+                    ended_at, ended_by, forced_by
+               FROM pilot_leave_requests
+              WHERE pilot_id = ? AND status IN ('approved', 'ended')
+                AND requested_at <= ? AND (ended_at IS NULL OR ended_at >= ?)
+              ORDER BY id"
+            , [$pilotId, $to, $from]
+        ));
+
+        /* عمولات التقفيلة المكتوبة لأوردرات الوردية دي */
+        $comm = array_map(fn ($r) => (array) $r, DB::select(
+            'SELECT a.amount, a.reason, o.order_num
+               FROM pilot_commission_adjustments a
+               JOIN orders o ON o.id = a.order_id
+              WHERE o.shift_id = ? ORDER BY a.id',
+            [$shiftId]
+        ));
+
+        return ApiResponse::out([
+            'ok'      => true,
+            'custody' => [
+                /* استلم = تسليم عهدة له · ردّ = رجّع للخزنة (بما فيها
+                   ردّ التقفيلة) · التسوية = فرق تحصيل الأوردرات */
+                'given'         => $sum('give'),
+                'returned'      => $sum('return'),
+                'settledOn'     => $sum('order_pending'),
+                'settledOff'    => $sum('order_extra'),
+                'closeReturned' => round((float) ($shift['custody_returned'] ?? 0), 2),
+                'closeCarried'  => round((float) ($shift['custody_carried'] ?? 0), 2),
+                'rows'          => array_map(fn ($r): array => [
+                    'type'      => $r['type'],
+                    'amount'    => round((float) $r['amount'], 2),
+                    'reason'    => $r['reason'],
+                    'storeName' => $r['store_name'],
+                    'by'        => $r['created_by'],
+                    'at'        => WireTime::toWire($r['created_at']),
+                ], $rows),
+            ],
+            'leaves' => array_map(fn ($r): array => [
+                'type'        => Vocab::LEAVE_TYPE_WIRE[$r['type']] ?? $r['type'],
+                'reason'      => $r['reason'],
+                'status'      => $r['status'],
+                'forced'      => $r['forced_by'] !== null,
+                'approvedBy'  => $r['responded_by'],
+                'from'        => WireTime::toWire($r['responded_at'] ?? $r['requested_at']),
+                'to'          => WireTime::toWire($r['ended_at']),
+                'endedBy'     => $r['ended_by'],
+            ], $leaves),
+            'commissions' => [
+                'count' => count($comm),
+                'total' => round(array_sum(array_map(fn ($r) => (float) $r['amount'], $comm)), 2),
+                'rows'  => array_map(fn ($r): array => [
+                    'orderNum' => $r['order_num'],
+                    'amount'   => round((float) $r['amount'], 2),
+                    'reason'   => $r['reason'],
+                ], $comm),
+            ],
+        ]);
+    }
+
+    /**
+     * 💰 عمولة تقفيلة الوردية — طلب صاحب النظام 2026-09-01:
+     * «المشرف يعمل العمولة في التقفيلة: ثابت أو نسبة لكل الأوردرات
+     * أو لكل أوردر على حدة (أوردر سفر له عمولة خاصة)».
+     *
+     * بتتكتب صفوف `override` في سجل تعديلات العمولة الموجود — نفس
+     * اللي التقفيلة الشهرية بتقرا منه (orderCommission). upsert على
+     * قيد `uq_pca_order` عشان إعادة التقفيلة ماتعملش صفين لأوردر.
+     * `effective_date` من `delivered_at` زي commissionAdjustmentSave
+     * بالحرف — عشان التعديل يقع في شهر التسليم مهما اتكتب إمتى.
+     *
+     * `mode=keep` (أو مافيش commission خالص) = مافيش أي كتابة —
+     * حساب الطيار الافتراضي شغال زي ما هو.
+     */
+    private function applyShiftCommission(
+        Request $request,
+        int $shiftId,
+        array $pilot,
+        ?int $branchId,
+        Actor $actor,
+        string $now,
+    ): void {
+        $c = $request->input('commission');
+        if (! is_array($c)) {
+            return;
+        }
+        $mode = (string) ($c['mode'] ?? 'keep');
+        if ($mode === 'keep') {
+            return;
+        }
+        if (! in_array($mode, ['percent', 'fixed', 'custom'], true)) {
+            throw new ApiException('نوع العمولة لازم يكون percent أو fixed أو custom');
+        }
+
+        $value = round((float) ($c['value'] ?? 0), 2);
+        if (in_array($mode, ['percent', 'fixed'], true) && $value < 0) {
+            throw new ApiException('قيمة العمولة مينفعش تكون بالسالب');
+        }
+        if ($mode === 'percent' && $value > 100) {
+            throw new ApiException('النسبة مينفعش تعدّي 100%');
+        }
+
+        $per = [];
+        if ($mode === 'custom') {
+            foreach ((array) ($c['perOrder'] ?? []) as $row) {
+                $oid = (int) ($row['orderId'] ?? 0);
+                $amt = round((float) ($row['amount'] ?? -1), 2);
+                if ($oid > 0 && $amt >= 0) {
+                    $per[$oid] = $amt;
+                }
+            }
+            if (! $per) {
+                return;   // تحديد يدوي من غير ولا أوردر = مافيش حاجة تتكتب
+            }
+        }
+
+        $reason = trim((string) ($c['reason'] ?? ''));
+        if ($reason === '') {
+            $reason = $mode === 'percent' ? ('عمولة تقفيلة الوردية — نسبة ' . $value . '%')
+                : ($mode === 'fixed' ? ('عمولة تقفيلة الوردية — ' . $value . ' ج.م للأوردر')
+                : 'عمولة تقفيلة الوردية — تحديد يدوي');
+        }
+        $reason = mb_substr($reason, 0, 190);
+
+        /* أوردرات الوردية دي المتسلّمة — بعد ما التسوية خلّصت حالاتها.
+           بقفل، لأننا هنكتب فلوس بناءً على أسعارها. */
+        $orders = array_map(fn ($r) => (array) $r, DB::select(
+            "SELECT id, total_delivery_price, delivered_at, created_at
+               FROM orders WHERE shift_id = ? AND status = 'delivered' FOR UPDATE",
+            [$shiftId]
+        ));
+
+        foreach ($orders as $o) {
+            $oid = (int) $o['id'];
+            if ($mode === 'percent') {
+                $amt = round(((float) $o['total_delivery_price']) * $value / 100, 2);
+            } elseif ($mode === 'fixed') {
+                $amt = $value;
+            } else {
+                if (! array_key_exists($oid, $per)) {
+                    continue;   // المشرف ماحددش للأوردر ده — بيفضل على حساب الطيار
+                }
+                $amt = $per[$oid];
+            }
+
+            $effective = substr((string) ($o['delivered_at'] ?: $o['created_at']), 0, 10);
+            DB::insert(
+                'INSERT INTO pilot_commission_adjustments
+                   (pilot_id, order_id, kind, amount, reason, effective_date, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE pilot_id = VALUES(pilot_id), amount = VALUES(amount),
+                     reason = VALUES(reason), effective_date = VALUES(effective_date),
+                     branch_id = VALUES(branch_id), created_by = VALUES(created_by), updated_at = VALUES(created_at)',
+                [(int) $pilot['id'], $oid, 'override', $amt, $reason, $effective,
+                 $branchId, $actor->username, $now]
+            );
+        }
+    }
+
     private function settlePilotMoney(
         array $pilot,
         array $decisions,
@@ -3009,7 +3725,20 @@ class BoardController
         ?int $branchId,
         Actor $actor,
         string $now,
+        // بيتكتب في سجل العهدة عشان الحركة تقول جت منين
+        string $reason = 'فرق تحصيل أوردرات',
     ): array {
+        /* 🔴 المبلغ المحصَّل مكانش عليه أي فحص إشارة. رقم سالب كان بيعمل
+           حاجتين مع بعض:
+             • بيتخطّى إيداع الخزنة خالص (الشرط تحت «> 0»)، فمفيش أثر نقدي.
+             • وبيدخل الطرح «المستحق − المحصَّل» فيبقى جمع، فعهدة الطيار
+               بتزيد بالمستحق + قيمة السالب.
+           يعني مسار «إنهاء الوردية» كان ينفع يضخّم عهدة طيار من غير ما
+           يبان في أي درج. مفيش واجهة بتبعت سالب، فالفحص ده مابيكسرش حاجة. */
+        if ($collectedAmount < 0) {
+            throw new ApiException('المبلغ المحصَّل مينفعش يكون بالسالب');
+        }
+
         $pilotId = (int) $pilot['id'];
         $decMap  = [];
         foreach ($decisions as $d) {
@@ -3021,7 +3750,11 @@ class BoardController
         // الأوردرات الجارية على الطيار — بقفل
         $active = array_map(
             fn ($r) => (array) $r,
-            DB::select("SELECT id, total_delivery_price FROM orders WHERE pilot_id = ? AND status = 'delivering' FOR UPDATE", [$pilotId])
+            /* 💰 `wallet_used` معاه: المتوقّع من الطيار هو اللي **حصّله
+               كاش**، مش سعر التوصيل الخام. العميل ممكن يكون دفع جزء من
+               محفظته والرصيد اتخصم وقت الطلب — فطلب الخام من الطيار
+               معناه إننا بنحصّل نفس الفلوس مرتين. الشرح في Money::netCollect. */
+            DB::select("SELECT id, total_delivery_price, wallet_used FROM orders WHERE pilot_id = ? AND status = 'delivering' FOR UPDATE", [$pilotId])
         );
 
         $expected         = 0.0;
@@ -3032,17 +3765,34 @@ class BoardController
             $choice = ($d['choice'] ?? 'delivered') === 'undelivered' ? 'undelivered' : 'delivered';
             if ($choice === 'delivered') {
                 DB::update(
-                    "UPDATE orders SET status = 'delivered', status_since = ?, delivered_at = ?, money_settled = 1, pilot_name = ? WHERE id = ?",
-                    [$now, $now, $pilot['name'], (int) $o['id']]
+                    /* net_delivery_price كان بيتكتب من مسار deliver بس —
+                       المتسلّم من مودال التقفيلة كان بيفضل بصفر وأي تقرير
+                       يقرا العمود يطلّع نص البيانات أصفار (ملاحظة تدقيق
+                       المناورة 2026-09-03). */
+                    "UPDATE orders SET status = 'delivered', status_since = ?, delivered_at = ?, money_settled = 1, net_delivery_price = ?, pilot_name = ?, undelivered_fare_by = NULL WHERE id = ?",
+                    [$now, $now, Money::netCollect($o), $pilot['name'], (int) $o['id']]
                 );
-                $expected += (float) $o['total_delivery_price'];
+                $expected += Money::netCollect($o);
                 $deliveredCount++;
             } else {
                 $reason = trim((string) ($d['reason'] ?? '')) ?: '—';
+                /* 💵 مرتجع مدفوع التوصيل (طلب 2026-09-02): المستلم رفض
+                   ودفع، أو المحل دفع للطيار — الفلوس دي **في جيب الطيار**
+                   فلازم تدخل «المتوقع منه» زي أوردر متسلّم بالظبط، وإلا
+                   الفرق كان بيروح عهدة بالغلط. none = محدش دفع (السلوك
+                   القديم — مفيش فلوس تتحاسب). */
+                $fareByIn = (string) ($d['fareBy'] ?? 'none');
+                $fareBy   = in_array($fareByIn, ['receiver', 'sender', 'none'], true) ? $fareByIn : 'none';
                 DB::update(
-                    "UPDATE orders SET status = 'undelivered', status_since = ?, undelivered_at = ?, undelivered_reason = ?, pilot_name = ? WHERE id = ?",
-                    [$now, $now, $reason, $pilot['name'], (int) $o['id']]
+                    /* money_settled=1 للمدفوع — من غيرها فئة «المرتجعات
+                       المدفوعة غير المسوّاة» تحت كانت بتلقطه تاني في نفس
+                       النداء ويتحسب مرتين (اتمسكت في حارس المناورة). */
+                    "UPDATE orders SET status = 'undelivered', status_since = ?, undelivered_at = ?, undelivered_reason = ?, undelivered_fare_by = ?, money_settled = ?, pilot_name = ? WHERE id = ?",
+                    [$now, $now, $reason, $fareBy, $fareBy !== 'none' ? 1 : 0, $pilot['name'], (int) $o['id']]
                 );
+                if ($fareBy !== 'none') {
+                    $expected += Money::netCollect($o);
+                }
                 $undeliveredCount++;
             }
 
@@ -3057,7 +3807,7 @@ class BoardController
         $pending = array_map(
             fn ($r) => (array) $r,
             DB::select(
-                "SELECT id, total_delivery_price FROM orders
+                "SELECT id, total_delivery_price, wallet_used FROM orders
           WHERE pilot_id = ? AND status = 'delivered' AND money_settled = 0 FOR UPDATE",
                 [$pilotId]
             )
@@ -3069,7 +3819,28 @@ class BoardController
                = SELECT زيادة جوه قسم ماسك أقفال على الأوردرات والمحافظ
                والخزنة. الاستطلاع بيمسكها من `updated_at`. */
             DB::update('UPDATE orders SET money_settled = 1 WHERE id = ?', [(int) $o['id']]);
-            $expected += (float) $o['total_delivery_price'];
+            $expected += Money::netCollect($o);
+            $settledCount++;
+        }
+
+        /* 💵 مرتجعات اتدفع توصيلها **أثناء** الوردية (زر «لم يتم التوصيل»
+           أو موافقة إرجاع، مش قرار مودال التسوية) — فلوسها في جيب الطيار
+           وماكانتش بتدخل أي تسوية خالص، فالفرق كان بيتخصم من عهدته
+           بالغلط. اتكشفت في المناورة التجريبية 2026-09-03: مرتجع مدفوع
+           30 ج.م خلّى السيرفر يرفض إخلاء الطرف («ردّ العهدة أكبر من اللي
+           على الطيار»). نفس منطق فئة «سلّمها من تطبيقه» بالحرف. */
+        $farePending = array_map(
+            fn ($r) => (array) $r,
+            DB::select(
+                "SELECT id, total_delivery_price, wallet_used FROM orders
+          WHERE pilot_id = ? AND status = 'undelivered'
+            AND undelivered_fare_by IN ('receiver','sender') AND money_settled = 0 FOR UPDATE",
+                [$pilotId]
+            )
+        );
+        foreach ($farePending as $o) {
+            DB::update('UPDATE orders SET money_settled = 1 WHERE id = ?', [(int) $o['id']]);
+            $expected += Money::netCollect($o);
             $settledCount++;
         }
 
@@ -3091,7 +3862,7 @@ class BoardController
         }
 
         // فرق التحصيل → عهدة
-        $this->applyCustodyDelta($pilot, $expected - $collectedAmount, $branchId, $actor->username, $now);
+        $this->applyCustodyDelta($pilot, $expected - $collectedAmount, $branchId, $actor->username, $now, $reason);
 
         return [$expected, $deliveredCount, $undeliveredCount, $settledCount];
     }
@@ -3106,6 +3877,33 @@ class BoardController
      * ⚠️ مشرف فرع بـ`branch_id` فاضي (= 0) بيترفض على طول — حتى لو الطيار
      * كمان بلا فرع. الشرط `$userBranch === 0 ||` متعمّد.
      */
+    /**
+     * 🔒 حارس نطاق على **الطلب** نفسه — مش على الطيار.
+     *
+     * مسارات الرفض بتعمل `UPDATE ... WHERE id = ? AND status = 'pending'`
+     * على طول من غير ما تقرا الفاعل، فمشرف أي فرع كان بيرفض طلبات أي فرع
+     * تاني (أذونات · ورديات · إرجاع · انضمام · نقل). ومفيش صف طيار مقفول
+     * في المسارات دي عشان نستخدم `assertPilotInScope`، فالفحص على
+     * `branch_id` بتاع الطلب.
+     *
+     * ⚠️ في النقل الدائم العمود `to_branch_id` مش `branch_id` — الموافقة
+     * والرفض من الفرع **المستقبِل**.
+     */
+    private function assertRequestBranch(Actor $actor, string $table, int $reqId, string $col = 'branch_id'): void
+    {
+        if ($actor->role !== 'branch') {
+            return;   // الإدارة: كل الفروع
+        }
+        $row = DB::select("SELECT {$col} AS b FROM {$table} WHERE id = ? LIMIT 1", [$reqId])[0] ?? null;
+        if (! $row) {
+            throw ApiException::notFound('الطلب غير موجود');
+        }
+        $mine = (int) ($actor->branchId ?? 0);
+        if ($mine === 0 || $mine !== (int) $row->b) {
+            throw ApiException::forbidden('الطلب ده مش على فرعك');
+        }
+    }
+
     private function assertPilotInScope(Actor $actor, array $pilot): void
     {
         if ($actor->role !== 'branch') {

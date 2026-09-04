@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Support\Actor;
 use App\Support\ApiResponse;
+use App\Support\BizDay;
 use App\Support\PollableList;
 use App\Support\WireTime;
 use App\Wire\FinanceWire;
@@ -58,11 +59,15 @@ class FinanceController
      */
     public function cashStoresList(Request $request): JsonResponse
     {
-        $q = $request->query();
+        $actor = $request->actorOrFail();
+        $q     = $request->query();
 
-        $branchId = isset($q['branchId']) && $q['branchId'] !== '' ? (int) $q['branchId'] : null;
+        // 🔒 مشرف الفرع مقفول على فرعه — شوف scopeBranch
+        $branchId = $this->scopeBranch($actor, $q['branchId'] ?? null);
 
-        $sql = 'SELECT * FROM cash_stores';
+        // اسم الفرع بيتجاب هنا عشان السلك يبعته — الواجهة بتعرضه في الجدول
+        $sql = 'SELECT s.*, b.name AS _branch_name FROM cash_stores s
+                LEFT JOIN branches b ON b.id = s.branch_id';
         $params = [];
         if ($branchId !== null) {
             $sql .= ' WHERE branch_id = ?';
@@ -93,7 +98,10 @@ class FinanceController
      */
     public function cashTxnsList(Request $request, string $id): JsonResponse
     {
+        $actor   = $request->actorOrFail();
         $storeId = $this->intId($id);
+        // 🔒 كان بيرجّع حركات أي خزنة في الشركة بمجرد رقمها
+        $this->assertStoreInScope($actor, $storeId);
         $q = $request->query();
 
         $sql = 'SELECT * FROM cash_transactions WHERE store_id = ?';
@@ -131,23 +139,33 @@ class FinanceController
      */
     public function custodyList(Request $request): JsonResponse
     {
-        $q = $request->query();
+        $actor = $request->actorOrFail();
+        $q     = $request->query();
 
-        $sql = 'SELECT * FROM custody_transactions WHERE 1=1';
+        /* 🔒 كانت `WHERE 1=1` — كل حركات عهدة كل طيارين الشركة.
+           الفلترة على فرع الطيار الجاري (`assigned_branch_id`) زي باقي
+           استعلامات النطاق في اللوحة. */
+        $sql = 'SELECT ct.* FROM custody_transactions ct
+                JOIN pilots p ON p.id = ct.pilot_id WHERE 1=1';
         $params = [];
+        $scope  = $this->scopeBranch($actor, $q['branchId'] ?? null);
+        if ($scope !== null) {
+            $sql .= ' AND p.assigned_branch_id = ?';
+            $params[] = $scope;
+        }
         if (! empty($q['pilotId'])) {
-            $sql .= ' AND pilot_id = ?';
+            $sql .= ' AND ct.pilot_id = ?';
             $params[] = (int) $q['pilotId'];
         }
         if (! empty($q['from'])) {
-            $sql .= ' AND created_at >= ?';
+            $sql .= ' AND ct.created_at >= ?';
             $params[] = $q['from'] . ' 00:00:00';
         }
         if (! empty($q['to'])) {
-            $sql .= ' AND created_at <= ?';
+            $sql .= ' AND ct.created_at <= ?';
             $params[] = $q['to'] . ' 23:59:59';
         }
-        $sql .= ' ORDER BY id DESC LIMIT 500';
+        $sql .= ' ORDER BY ct.id DESC LIMIT 500';
 
         return PollableList::items(array_map(
             fn ($r) => FinanceWire::custody($r),
@@ -164,13 +182,21 @@ class FinanceController
      * الرصيد بيتقرا من `pilots.custody_balance` مش بجمع الحركات — الجمع
      * كان هيدي رقم تاني لأن السقف 200.
      */
-    public function pilotCustody(string $id): JsonResponse
+    public function pilotCustody(Request $request, string $id): JsonResponse
     {
+        $actor   = $request->actorOrFail();
         $pilotId = $this->intId($id);
 
-        $pilot = DB::select('SELECT id, name, custody_balance FROM pilots WHERE id = ?', [$pilotId])[0] ?? null;
+        $pilot = DB::select('SELECT id, name, custody_balance, assigned_branch_id FROM pilots WHERE id = ?', [$pilotId])[0] ?? null;
         if (! $pilot) {
             throw ApiException::notFound('الطيار غير موجود');
+        }
+        // 🔒 كان بيرجّع رصيد وحركات عهدة أي طيار في الشركة بمجرد رقمه
+        if ($actor->role === 'branch') {
+            $mine = (int) ($actor->branchId ?? 0);
+            if ($mine === 0 || $mine !== (int) $pilot->assigned_branch_id) {
+                throw ApiException::forbidden('الطيار ده مش تابع لفرعك');
+            }
         }
 
         $tx = DB::select(
@@ -201,9 +227,12 @@ class FinanceController
      */
     public function expensesList(Request $request): JsonResponse
     {
-        $q = $request->query();
+        $actor = $request->actorOrFail();
+        $q     = $request->query();
 
-        $sql = 'SELECT * FROM expenses WHERE 1=1';
+        // اسم الخزنة بيتجاب هنا عشان شارة «مدفوع» تبان بمصدر الدفع
+        $sql = 'SELECT e.*, s.name AS _cash_store_name FROM expenses e
+                LEFT JOIN cash_stores s ON s.id = e.cash_store_id WHERE 1=1';
         $params = [];
         if (! empty($q['from'])) {
             $sql .= ' AND expense_date >= ?';
@@ -213,9 +242,12 @@ class FinanceController
             $sql .= ' AND expense_date <= ?';
             $params[] = $q['to'];
         }
-        if (! empty($q['branchId'])) {
+        /* 🔒 كان `!empty($q['branchId'])` — يعني من غير الباراميتر بترجّع
+           مصروفات الشركة كلها لمشرف أي فرع. `scopeBranch` بيلزّمه بفرعه. */
+        $scope = $this->scopeBranch($actor, $q['branchId'] ?? null);
+        if ($scope !== null) {
             $sql .= ' AND branch_id = ?';
-            $params[] = (int) $q['branchId'];
+            $params[] = $scope;
         }
         $sql .= ' ORDER BY expense_date DESC, id DESC LIMIT 500';
 
@@ -337,7 +369,7 @@ class FinanceController
         $from = ! empty($q['from']) ? trim((string) $q['from']) : null;
         $to   = ! empty($q['to'])   ? trim((string) $q['to'])   : null;
         if ($day === null && $from === null) {
-            $day = WireTime::cairoDayKey();
+            $day = BizDay::key();
         }
 
         $sql = 'SELECT * FROM attendance_sessions WHERE 1=1';
@@ -516,6 +548,93 @@ class FinanceController
      * ("0.00")، والصرامة كانت هتخلي خزنة صفر تتعامل كأن فيها رصيد. نفس
      * سبب Commission.php بالظبط.
      */
+    /**
+     * POST /api/cash-stores/transfer — تحويل فلوس من خزنة لخزنة.
+     * الجسم: {fromId, toId, amount, reason?}
+     *
+     * ═══ ليه مسار مستقل مش حركتين ═══
+     * لو الواجهة عملت «صادر» من خزنة و«وارد» في التانية بنداءين منفصلين،
+     * أي فشل بين النداءين (نت قطع · التاب اتقفل · السيرفر رجع خطأ) بيسيب
+     * فلوس **طالعة من خزنة وما دخلتش التانية** — وده فرق في الدفاتر محدش
+     * هيعرف يفسّره. هنا الاتنين جوه معاملة واحدة: يا الاتنين يا ولا واحد.
+     *
+     * ═══ ترتيب القفل ═══
+     * 🔴 الخزنتين بيتقفلوا **بترتيب الرقم تصاعديًا** مش بترتيب (من/إلى).
+     * من غير كده، تحويل من خزنة 5 لـ7 في نفس لحظة تحويل من 7 لـ5 =
+     * كل معاملة ماسكة قفل والتانية مستنياه = تعليق (deadlock) والقاعدة
+     * بتقتل واحدة منهم. الترتيب الثابت بيمنع الحالة دي من أصلها.
+     *
+     * ═══ الأدوار ═══
+     * المدير والمحاسب. مشرف الفرع **مقصود** إنه برّه: التحويل بين الخزن
+     * حركة على مستوى الشركة مش على مستوى فرع، وصاحب النظام قفل إنشاء
+     * الخزن على المدير لنفس السبب.
+     */
+    public function cashStoresTransfer(Request $request): JsonResponse
+    {
+        $user = $request->actorOrFail();
+        $body = $this->body($request);
+
+        $fromId = $this->intId((string) ($body['fromId'] ?? 0));
+        $toId   = $this->intId((string) ($body['toId'] ?? 0));
+        if ($fromId === $toId) {
+            throw new ApiException('اختر خزنتين مختلفتين');
+        }
+        $amount = $this->amount($body);
+        $note   = isset($body['reason']) ? trim((string) $body['reason']) : '';
+
+        [$outId, $inId] = $this->tx(function () use ($fromId, $toId, $amount, $note, $user): array {
+            /* القفل بترتيب الرقم — الشرح فوق. بنقفل الاتنين قبل أي قراءة
+               للرصيد عشان محدش يغيّره بينا وبين الكتابة. */
+            [$lo, $hi] = $fromId < $toId ? [$fromId, $toId] : [$toId, $fromId];
+            $a = $this->lockStore($lo);
+            $b = $this->lockStore($hi);
+            $from = (int) $a['id'] === $fromId ? $a : $b;
+            $to   = (int) $a['id'] === $fromId ? $b : $a;
+
+            if ((float) $from['balance'] < $amount) {
+                throw new ApiException(
+                    'رصيد «' . $from['name'] . '» ' . number_format((float) $from['balance'], 2)
+                    . ' ج.م — مايكفيش للتحويل'
+                );
+            }
+
+            /* السبب بيتكتب على الحركتين وفيه اسم الخزنة التانية: من غيره
+               الدفتر بيبقى «صادر 5000» و«وارد 5000» من غير أي رابط بينهم. */
+            $tail = $note !== '' ? ' — ' . $note : '';
+
+            $outTxn = $this->applyCashTxn(
+                $from, 'out', $amount,
+                mb_substr('تحويل إلى «' . $to['name'] . '»' . $tail, 0, 190),
+                null, null, null,
+                $from['branch_id'] !== null ? (int) $from['branch_id'] : null,
+                $user->username
+            );
+            $inTxn = $this->applyCashTxn(
+                $to, 'in', $amount,
+                mb_substr('تحويل من «' . $from['name'] . '»' . $tail, 0, 190),
+                null, null, null,
+                $to['branch_id'] !== null ? (int) $to['branch_id'] : null,
+                $user->username
+            );
+
+            return [$outTxn, $inTxn];
+        });
+
+        $rows = DB::select(
+            'SELECT * FROM cash_stores WHERE id IN (?,?) ORDER BY FIELD(id, ?, ?)',
+            [$fromId, $toId, $fromId, $toId]
+        );
+
+        return ApiResponse::out([
+            'ok'      => true,
+            'from'    => FinanceWire::store($rows[0]),
+            'to'      => FinanceWire::store($rows[1]),
+            'outTxnId' => $outId,
+            'inTxnId'  => $inId,
+            'message' => 'اتحوّل ' . number_format($amount, 2) . ' ج.م',
+        ]);
+    }
+
     public function cashStoresDelete(string $id): JsonResponse
     {
         $id = $this->intId($id);
@@ -562,8 +681,15 @@ class FinanceController
         $reason = isset($body['reason']) ? trim((string) $body['reason']) : null;
         $notes  = isset($body['notes'])  ? trim((string) $body['notes'])  : null;
         $pilotId = isset($body['pilotId']) && $body['pilotId'] !== '' ? (int) $body['pilotId'] : null;
-        $branchId = isset($body['branchId']) && $body['branchId'] !== ''
-            ? (int) $body['branchId'] : $user->branchId;
+        /* 🔒 رقم الفرع كان بيتاخد من **جسم الطلب** زي ما هو — فمشرف فرع
+           كان بيقيّد حركة على أي فرع يكتبه. بقى من الجلسة للدور branch. */
+        $branchId = $user->role === 'branch'
+            ? $user->branchId
+            : (isset($body['branchId']) && $body['branchId'] !== ''
+                ? (int) $body['branchId'] : $user->branchId);
+
+        // 🔒 والخزنة نفسها لازم تكون في نطاقه — كان بياخد أي رقم خزنة
+        $this->assertStoreInScope($user, $storeId);
 
         $txnId = $this->tx(function () use (
             $storeId, $type, $amount, $reason, $notes, $pilotId, $branchId, $user
@@ -597,11 +723,15 @@ class FinanceController
      * اللي بيضمن إن اعتمادين متوازيين مايزوّدوش الرصيد مرتين لو القفل
      * اتفلت لأي سبب. الرسالة «اتعتمدت من ثانية» بتوصل للتاني.
      */
-    public function cashTxnsApprove(string $id): JsonResponse
+    public function cashTxnsApprove(Request $request, string $id): JsonResponse
     {
+        /* 🔒 الدالة دي مكانش فيها **ولا قراءة واحدة للفاعل** — أي حساب
+           عدّى الميدلوير كان بيعتمد أي حركة معلّقة في الشركة، والاعتماد
+           بيضيف المبلغ لرصيد خزنة ممكن تكون مش خزنته. */
+        $actor = $request->actorOrFail();
         $txnId = $this->intId($id);
 
-        $this->tx(function () use ($txnId): void {
+        $this->tx(function () use ($actor, $txnId): void {
             $txn = DB::select('SELECT * FROM cash_transactions WHERE id = ? FOR UPDATE', [$txnId])[0] ?? null;
             if (! $txn) {
                 throw new ApiException('الحركة غير موجودة', 404);
@@ -611,6 +741,8 @@ class FinanceController
                 throw new ApiException('الحركة دي مش معلّقة');
             }
 
+            // 🔒 خزنة الحركة لازم تكون في نطاق الفاعل قبل أي تعديل رصيد
+            $this->assertStoreInScope($actor, (int) $txn['store_id']);
             // القفل بس — الصف الراجع مش مستعمل، زي الأصل بالحرف
             $this->lockStore((int) $txn['store_id']);
 
@@ -666,12 +798,38 @@ class FinanceController
         if (! in_array($type, self::CUSTODY_TYPES, true)) {
             throw new ApiException('نوع حركة العهدة لازم يكون give أو return أو order_pending أو order_extra');
         }
+        /* 🔴 order_pending و order_extra **بيولّدهم النظام لوحده** من تسوية
+           الأوردرات (BoardController::applyCustodyDelta بيعمل INSERT مباشر).
+           المسار ده كان بيقبلهم من الإنترنت زي give/return بالظبط — و
+           النوعين دول بيتخطّوا حركة الخزنة تمامًا (الشرط تحت on give/return
+           بس). يعني كان ينفع حد يزوّد عهدة طيار بأي رقم **من غير ما جنيه
+           يتحرك من أي درج**، والصف اللي بيتسجّل شكله بالظبط زي اللي النظام
+           بيطلّعه — مفيش حاجة تفرّق بينهم في المراجعة.
+
+           مفيش أي واجهة بتبعت النوعين دول (اتفحصت كل ملفات public/) فالقفل
+           ده مابيكسرش حاجة شغّالة. */
+        if (! in_array($type, ['give', 'return'], true)) {
+            throw new ApiException('النوع ده بيتسجّل تلقائي من تسوية الأوردرات — مينفعش يتكتب بالإيد');
+        }
         $amount  = $this->amount($body);
+        /* 🔴 الواجهة بتبعت السبب من أول يوم (branch.html: خانة السبب في
+           مودال العهدة) والكنترولر مكانش بيقراها خالص — كانت بتترمي
+           وبتتكتب null في حركة الخزنة. النتيجة: تسليم عهدة 50 ألف على
+           السيرفر مالوش سبب مكتوب، وصاحب النظام سأل «العهدة دي إزاي
+           مكتوبة». السبب ده هو الإجابة، فلازم يوصل ويتخزّن.
+
+           بيتقرا من reason وبيقع على notes للتوافق مع أي نسخة واجهة
+           قديمة لسه شغّالة في متصفّح مفتوح. */
+        $reason = trim((string) ($body['reason'] ?? $body['notes'] ?? ''));
+        if ($reason === '') {
+            throw new ApiException('اكتب سبب حركة العهدة');
+        }
+        $reason = mb_substr($reason, 0, 190);
         $storeId = isset($body['storeId']) && $body['storeId'] !== '' ? (int) $body['storeId'] : null;
         $branchId = isset($body['branchId']) && $body['branchId'] !== ''
             ? (int) $body['branchId'] : $user->branchId;
 
-        $custodyId = $this->tx(function () use ($pilotId, $type, $amount, $storeId, $branchId, $user): int {
+        $custodyId = $this->tx(function () use ($pilotId, $type, $amount, $reason, $storeId, $branchId, $user): int {
             // قفل صف الطيار الأول (ترتيب قفل ثابت: pilots ثم cash_stores)
             $pilot = DB::select(
                 'SELECT id, name, custody_balance FROM pilots WHERE id = ? FOR UPDATE',
@@ -695,18 +853,21 @@ class FinanceController
                 if ($cashType === 'out' && (float) $store['balance'] < $amount) {
                     throw new ApiException('رصيد الخزنة لا يكفي لتسليم العهدة');
                 }
-                $reason = $type === 'give'
+                /* عنوان الحركة في الخزنة بيفضل النص التلقائي (الكشف
+                   بيتقرا بالعين)، والسبب اللي كتبه الموظف بيروح في خانة
+                   الملاحظات جنبه. */
+                $cashReason = $type === 'give'
                     ? 'تسليم عهدة للطيار ' . $pilot['name']
                     : 'ردّ عهدة من الطيار ' . $pilot['name'];
                 $this->applyCashTxn(
-                    $store, $cashType, $amount, $reason, null, $pilotId, null, $branchId, $user->username
+                    $store, $cashType, $amount, $cashReason, $reason, $pilotId, null, $branchId, $user->username
                 );
             }
 
             DB::insert(
-                'INSERT INTO custody_transactions (pilot_id, type, amount, store_id, branch_id, created_by, created_at)
-                 VALUES (?,?,?,?,?,?,?)',
-                [$pilotId, $type, $amount, $storeId, $branchId, $user->username, WireTime::nowDb()]
+                'INSERT INTO custody_transactions (pilot_id, type, amount, reason, store_id, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?)',
+                [$pilotId, $type, $amount, $reason, $storeId, $branchId, $user->username, WireTime::nowDb()]
             );
             $custodyId = (int) DB::getPdo()->lastInsertId();
 
@@ -752,7 +913,7 @@ class FinanceController
             throw new ApiException('بند المصروف مطلوب');
         }
         $amount = $this->amount($body);
-        $date = trim((string) ($body['date'] ?? '')) ?: WireTime::cairoDayKey();
+        $date = trim((string) ($body['date'] ?? '')) ?: BizDay::key();
         if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             throw new ApiException('تاريخ المصروف غير صالح');
         }
@@ -821,6 +982,14 @@ class FinanceController
                 throw new ApiException('المصروف غير موجود', 404);
             }
             $exp = (array) $exp;
+            /* 🔒 كان بياخد {id} أي مصروف في الشركة — مشرف فرع يعدّل أو
+               يمسح مصروف فرع تاني. */
+            if ($user->role === 'branch') {
+                $mine = (int) ($user->branchId ?? 0);
+                if ($mine === 0 || $mine !== (int) $exp['branch_id']) {
+                    throw ApiException::forbidden('المصروف ده مش تابع لفرعك');
+                }
+            }
 
             $item = array_key_exists('item', $body) ? trim((string) $body['item']) : $exp['item'];
             if ($item === '') {
@@ -889,6 +1058,14 @@ class FinanceController
                 throw new ApiException('المصروف غير موجود', 404);
             }
             $exp = (array) $exp;
+            /* 🔒 كان بياخد {id} أي مصروف في الشركة — مشرف فرع يعدّل أو
+               يمسح مصروف فرع تاني. */
+            if ($user->role === 'branch') {
+                $mine = (int) ($user->branchId ?? 0);
+                if ($mine === 0 || $mine !== (int) $exp['branch_id']) {
+                    throw ApiException::forbidden('المصروف ده مش تابع لفرعك');
+                }
+            }
 
             // لو مربوط بخزنة: حركة عكسية بترجّع المبلغ (الأرشيف بيفضل — مفيش حذف حركات)
             if ($exp['cash_store_id'] !== null) {
@@ -1019,7 +1196,7 @@ class FinanceController
         $role = $username === $user->username ? $user->role : trim((string) ($body['role'] ?? 'manual'));
         $entryType = $username === $user->username ? 'auto' : 'manual';
 
-        $day = WireTime::cairoDayKey();
+        $day = BizDay::key();
         $now = WireTime::nowDb();
 
         $sessionId = $this->tx(function () use ($day, $username, $role, $entryType, $now): int {
@@ -1069,7 +1246,7 @@ class FinanceController
     public function attendanceHeartbeat(Request $request): JsonResponse
     {
         $user = $request->actorOrFail();
-        $day = WireTime::cairoDayKey();
+        $day = BizDay::key();
         $now = WireTime::nowDb();
 
         $open = DB::select(
@@ -1104,7 +1281,7 @@ class FinanceController
         $username = $user->role === 'admin' && ! empty($body['username'])
             ? trim((string) $body['username']) : $user->username;
 
-        $day = WireTime::cairoDayKey();
+        $day = BizDay::key();
         $now = WireTime::nowDb();
 
         $sessionId = $this->tx(function () use ($day, $username, $now): int {
@@ -1232,6 +1409,52 @@ class FinanceController
      * المقابل لـ finance_int_id(): المعرّف لازم يبقى موجب.
      * الـcast بيخلي "abc" → 0 و"-5" → -5، والاتنين بيرجعوا 400 مش 404.
      */
+    /**
+     * 🔒 نطاق الفرع للمسارات المالية — **مشرف الفرع مقفول على فرعه**.
+     *
+     * كل قراءات وكتابات الملف ده كانت بلا أي فلترة فرع: `?branchId=` بيتقرا
+     * من الطلب وبس، ومن غيره بترجّع الشركة كلها. يعني مشرف فرع كان بيقرا
+     * أرصدة كل الخزن وحركاتها وعُهد كل الطيارين ومصروفات كل الفروع —
+     * ويكتب عليها كمان.
+     *
+     * بيرجّع رقم الفرع الملزِم، أو `null` للأدمن/المحاسب لو مطلبش فرع بعينه.
+     *
+     * ⚠️ فخ `branchId = 0`: مشرف فرع بلا `branch_id` كان بياخد صفر، والشرط
+     * `if ($branchId)` كان بيتخطّى الفلترة **خالص** فيشوف كل الفروع.
+     * هنا بنرفض على طول بدل ما نفتح.
+     */
+    private function scopeBranch(Actor $actor, mixed $requested): ?int
+    {
+        $req = $requested !== null && $requested !== '' ? (int) $requested : null;
+
+        if ($actor->role !== 'branch') {
+            return $req;   // الإدارة والمحاسب: اللي بيطلبوه
+        }
+        $mine = (int) ($actor->branchId ?? 0);
+        if ($mine === 0) {
+            throw ApiException::forbidden('حسابك مش مربوط بفرع');
+        }
+
+        return $mine;   // المطلوب بيتتجاهل — الفرع بتاعه هو الحاكم
+    }
+
+    /** 🔒 الخزنة دي في نطاق الفاعل؟ — بتتنده قبل أي قراءة أو كتابة عليها */
+    private function assertStoreInScope(Actor $actor, int $storeId): array
+    {
+        $row = DB::select('SELECT * FROM cash_stores WHERE id = ? LIMIT 1', [$storeId])[0] ?? null;
+        if (! $row) {
+            throw ApiException::notFound('الخزنة غير موجودة');
+        }
+        if ($actor->role === 'branch') {
+            $mine = (int) ($actor->branchId ?? 0);
+            if ($mine === 0 || $mine !== (int) $row->branch_id) {
+                throw ApiException::forbidden('الخزنة دي مش تابعة لفرعك');
+            }
+        }
+
+        return (array) $row;
+    }
+
     private function intId(string $id): int
     {
         $n = (int) $id;

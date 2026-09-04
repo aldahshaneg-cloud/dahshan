@@ -32,9 +32,11 @@ final class OrderWire
         return "SELECT o.*,
                        b.name       AS _branch_name,
                        b.code       AS _branch_code,
+                       ob.name      AS _origin_branch_name,
                        z.area_name  AS _sender_zone_name
                 FROM orders o
                 JOIN branches b ON b.id = o.branch_id
+                LEFT JOIN branches ob ON ob.id = o.origin_branch_id
                 LEFT JOIN zones z ON z.id = o.sender_zone_id";
     }
 
@@ -155,6 +157,14 @@ final class OrderWire
             'orderPrice'     => (float) $d['order_price'],
             'address'        => $d['address'] ?? '',
             'note'           => $d['note'] ?? '',
+            /* بيانات المستلم مكتوبة على صورة الريسيت مش مدخلة يدوي —
+               الشارة دي بتقول للفرع والطيار يبصوا على الصورة. العمود
+               موجود في المخطط من الأصل والواجهات بتقراه، والسلك مكانش
+               بيبعته فالشارة عمرها ما ظهرت. */
+            'receiverFromReceipt' => (bool) ($d['receiver_from_receipt'] ?? false),
+            // دبوس التسليم — خريطة التتبّع بتحتاجه عشان ترسم نقطة الوصول
+            'lat'            => isset($d['lat']) && $d['lat'] !== null ? (float) $d['lat'] : null,
+            'lng'            => isset($d['lng']) && $d['lng'] !== null ? (float) $d['lng'] : null,
             'status'         => Vocab::parcelStatusToAr($d['status']),
             'images'         => $imagesByDelivery[(int) $d['id']] ?? [],
         ];
@@ -216,6 +226,12 @@ final class OrderWire
 
             'branchId'   => (int) $o['branch_id'],
             'branchName' => $o['_branch_name'] ?? '',
+            /* الفرع اللي أنشأ الأوردر — بيفضل ثابت مهما الأوردر اتنقل.
+               الواجهة بتعرضه لما يختلف عن branchId عشان يبان إن الأوردر
+               ده أصله من فرع تاني. */
+            'originBranchId'   => isset($o['origin_branch_id']) && $o['origin_branch_id'] !== null
+                ? (int) $o['origin_branch_id'] : null,
+            'originBranchName' => $o['_origin_branch_name'] ?? null,
             'notes'      => $o['notes'] ?? '',
 
             'deliveries' => array_map(
@@ -250,11 +266,15 @@ final class OrderWire
 
             'receivedAt'    => WireTime::toWire($o['received_at']),
             'tripStartedAt' => WireTime::toWire($o['trip_started_at']),
+            'handedOverAt'  => WireTime::toWire($o['handed_over_at'] ?? null),
+            'handedOverBy'  => $o['handed_over_by'] ?? null,
             'deliveredAt'   => WireTime::toWire($o['delivered_at']),
             'moneySettled'  => (bool) $o['money_settled'],
 
             'undeliveredAt'     => WireTime::toWire($o['undelivered_at']),
             'undeliveredReason' => $o['undelivered_reason'],
+            // 💵 مين دفع توصيل المرتجع: receiver/sender/none (طلب 2026-09-02)
+            'undeliveredFareBy' => $o['undelivered_fare_by'] ?? null,
             'cancelledAt'       => WireTime::toWire($o['cancelled_at']),
             'cancelledBy'       => $o['cancelled_by'],
             // ⚠️ cancelReason مش cancelledReason — اللسان القديم

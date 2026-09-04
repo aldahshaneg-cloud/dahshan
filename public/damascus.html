@@ -812,6 +812,12 @@
 
 var api = window.API;
 
+/* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش مصرّح
+   له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل أي دور
+   بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html.
+   الكود "damascus" بيتشتق من صلاحية "accounts" في appsFor. */
+var APP_KEY = "damascus";
+
 /* orderRate     = رسوم التطوير على كل أوردر (بتاعة الشركة — عامة)
    pilotOrderRate = خدمة الطيار على كل أوردر (الافتراضي لو الطيار مالوش سعر خاص) */
 const DEFAULT_SETTINGS = {
@@ -1009,7 +1015,7 @@ window.doLogin = async function() {
   if (!username || !password) { err.textContent = "يرجى إدخال بيانات الدخول"; return; }
   btn.disabled = true; btn.textContent = "جاري التحقق…";
   try {
-    await api.login(username, password);
+    await api.login(username, password, APP_KEY);
     const d = await loadBootstrap();
     const u = d.user || {};
     // غير المدير لازم يكون المدير ظبّط له صلاحيات الأول

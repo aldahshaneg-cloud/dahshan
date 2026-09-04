@@ -49,6 +49,11 @@ final class FinanceWire
             'orderNum'      => $r['order_num'] ?? null,
             'kind'          => $r['kind'],
             'amount'        => (float) $r['amount'],
+            /* 💸 المصروف كاش من الخزنة (طلب 2026-09-03) — بيه الواجهة
+               بتعرف تعرض «اتصرفت» وتحاسب التعديل بالفرق */
+            'paidAmount'    => (float) ($r['paid_amount'] ?? 0),
+            'paidAt'        => WireTime::toWire($r['paid_at'] ?? null),
+            'paidStoreId'   => isset($r['paid_store_id']) && $r['paid_store_id'] !== null ? (int) $r['paid_store_id'] : null,
             'reason'        => $r['reason'],
             'effectiveDate' => $r['effective_date'],
             'branchId'      => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
@@ -71,6 +76,10 @@ final class FinanceWire
             'key'       => $r['legacy_key'],
             'name'      => $r['name'],
             'branchId'  => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
+            /* اسم الفرع — الواجهات كانت بتقراه من الأول والسلك مكانش
+               بيبعته، فعمود «الفرع» في جداول الخزن كان «—» دايمًا
+               والموظف مايفرّقش بين خزنتين بأسماء متشابهة. */
+            'branchName' => $r['_branch_name'] ?? null,
             'balance'   => (float) $r['balance'],
             'createdAt' => WireTime::toWire($r['created_at']),
         ];
@@ -115,6 +124,8 @@ final class FinanceWire
             'pilotId'   => (int) $r['pilot_id'],
             'type'      => $r['type'],
             'amount'    => (float) $r['amount'],
+            // سبب الحركة — اتضاف 2026-08-27. الحركات القديمة قيمتها null.
+            'reason'    => $r['reason'] ?? null,
             'storeId'   => $r['store_id'] !== null ? (int) $r['store_id'] : null,
             'branchId'  => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
             'createdBy' => $r['created_by'],
@@ -140,6 +151,13 @@ final class FinanceWire
             'branchId'    => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
             'notes'       => $r['notes'],
             'cashStoreId' => $r['cash_store_id'] !== null ? (int) $r['cash_store_id'] : null,
+            /* 🔴 الاتنين دول الواجهات بتقراهم من الأول والسلك مكانش
+               بيبعتهم، والنتيجة إن **كل مصروف مدفوع من خزنة كان بيفضل
+               يبان «⏳ مستحق»** مهما اتخصم فعلًا، وقايمة الخزنة في نافذة
+               التعديل مابتتقفلش. العمود «cash_txn_id» موجود في المخطط
+               وبيتكتب فعلًا وقت الدفع. */
+            'cashTxnId'   => isset($r['cash_txn_id']) && $r['cash_txn_id'] !== null ? (int) $r['cash_txn_id'] : null,
+            'cashStoreName' => $r['_cash_store_name'] ?? null,
             'createdBy'   => $r['created_by'],
             'createdAt'   => WireTime::toWire($r['created_at']),
         ];

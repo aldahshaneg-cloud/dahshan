@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Support\ApiResponse;
+use App\Support\BizDay;
+use App\Support\Money;
 use App\Support\PollableList;
 use App\Support\WireTime;
 use App\Wire\BoardWire;
@@ -164,7 +166,7 @@ class PilotAppController
         // ?since — تخطي الرد الكامل لو مفيش تغيير (والبصمة متطابقة لو اتبعتت)
         $since = $this->since($request);
         if ($since > 0) {
-            $maxTs = $this->rowTs($pilot, ['status_since', 'break_started_at', 'app_version_at', 'created_at']);
+            $maxTs = $this->rowTs($pilot, ['status_since', 'break_started_at', 'location_updated_at', 'app_version_at', 'created_at']);
             if ($shiftRow) {
                 $maxTs = max($maxTs, $this->rowTs($shiftRow, ['started_at', 'ended_at', 'transferred_at', 'created_at']));
             }
@@ -253,7 +255,7 @@ class PilotAppController
             [$pilotId]
         );
 
-        return PollableList::items(OrderWire::batch($rows));
+        return PollableList::items(self::netCollectView(OrderWire::batch($rows)));
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -295,6 +297,99 @@ class PilotAppController
     }
 
     /* ═══════════════════════════════════════════════════════════
+       يوم الطيار = يوم **ورديته**، مش يوم النتيجة
+    ═══════════════════════════════════════════════════════════ */
+
+    /**
+     * التعبير اللي بيحدّد «الأوردر ده بتاع أنهي يوم».
+     *
+     * ═══ ليه الوردية مش الساعة ═══
+     * وردية الشركة بتبدأ 9 ص وبتنتهي 4 الفجر — يعني اليوم بيعدّي نص
+     * الليل. الكود القديم كان بيفلتر من 00:00 لـ 00:00 بتوقيت القاهرة،
+     * فآخر أربع ساعات من كل وردية كانت **بتتنقل لليوم اللي بعده**:
+     *
+     *   الطيار سلّم أوردر 2 الفجر وهو لسه في وردية بدأت 9 ص إمبارح
+     *     • كشف الإدارة (PilotAccountingController) بيحسبه على إمبارح
+     *     • تطبيق الطيار كان بيحسبه على النهارده
+     *   ⟵ الرقمين مايطلعوش مع بعض ومحدش يعرف مين الغلطان.
+     *
+     * صاحب النظام حدّد القاعدة بالنص: «لو لسه في الوردية المفتوحة يبقى
+     * اليوم القديم، أما لو فتح وردية جديدة يبقى اليوم الجديد». يعني
+     * الفاصل هو **فتح وردية**، مش ساعة ثابتة — وده بيغطّي الحالات كلها
+     * من غير استثناءات: الوردية اللي اتنست مفتوحة 25 ساعة كلها يوم
+     * واحد، والوردية اللي اتفتحت 6 ص بعد ما اللي قبلها قفلت يوم جديد.
+     *
+     * الرجوع لوقت الأوردر نفسه بيحصل بس لو مفيش `shift_id` — وده مش
+     * موجود في أي صف على الإنتاج (0 من 31)، بس الحارس أرخص من الثقة.
+     */
+    private const DAY_ANCHOR =
+        "COALESCE((SELECT sh.started_at FROM shifts sh WHERE sh.id = o.shift_id),
+                  o.delivered_at, o.undelivered_at, o.status_since)";
+
+    /**
+     * حدود نافذة UTC لمدى تواريخ قاهرة **شامل الطرفين**.
+     *
+     * ⚠️ الحساب بيتعمل على كائن بتوقيت القاهرة الأول وبعدين بيتحوّل UTC،
+     * مش بإزاحة ثابتة: مصر رجّعت التوقيت الصيفي، فـ`+03:00` صح نص السنة
+     * وغلط النص التاني. `DateTimeZone('Africa/Cairo')` عارف الفرق.
+     *
+     * @return array{0: string, 1: string}  [من (شامل), إلى (غير شامل)]
+     */
+    private static function cairoWindow(string $fromDate, string $toDate): array
+    {
+        $tz  = new DateTimeZone('Africa/Cairo');
+        $utc = new DateTimeZone('UTC');
+        $a   = new DateTimeImmutable($fromDate . ' 00:00:00', $tz);
+        $b   = (new DateTimeImmutable($toDate . ' 00:00:00', $tz))->modify('+1 day');
+
+        return [
+            $a->setTimezone($utc)->format('Y-m-d H:i:s'),
+            $b->setTimezone($utc)->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * «يوم الطيار الحالي» = يوم بداية وردية**ه** المفتوحة، ولو مقفولة
+     * فيوم آخر وردية، ولو عمره ما اشتغل فيوم القاهرة الحالي.
+     *
+     * 🔴 السيرفر هو اللي بيحسب ده مش التطبيق. سببين:
+     *   1. التليفون ممكن يكون على منطقة زمنية غلط أو ساعة مظبوطة بالإيد —
+     *      وساعتها «النهارده» في التطبيق تفرق عن «النهارده» في الكشف.
+     *   2. القاعدة نفسها بتعتمد على الورديات، والتطبيق مش شايفها كلها.
+     *
+     * ومنه بتتبني «الشهر» و«السنة» كمان: لو الطيار فاتح الشاشة 2 الفجر
+     * أول سبتمبر وهو في وردية بدأت 31 أغسطس، «الشهر ده» = **أغسطس**.
+     * أي حساب تاني كان هيوريه شهر فاضي وهو لسه بيشتغل.
+     */
+    private function anchorDay(int $pilotId): string
+    {
+        $row = DB::select(
+            "SELECT started_at FROM shifts WHERE pilot_id = ?
+              ORDER BY (status = 'active') DESC, started_at DESC LIMIT 1",
+            [$pilotId]
+        )[0]->started_at ?? null;
+
+        if ($row === null) {
+            return BizDay::key();
+        }
+
+        /* يوم **تجاري** (بلاغ 2026-09-02): وردية بدأت 00:30 بليل — نادرة
+           بس واردة — تتبع يوم امبارح زي كل حسابات النظام. */
+        return \App\Wire\PilotAccountingWire::bizMoment($row, BizDay::startHour())['date']
+            ?? BizDay::key();
+    }
+
+    /** تاريخ قاهرة صالح؟ (الصيغة **و** التاريخ نفسه — 2026-13-45 بيعدّي الregex) */
+    private static function validDate(string $d): bool
+    {
+        if (! preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m)) {
+            return false;
+        }
+
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
        GET /api/pilot/finished-orders?day=YYYY-MM-DD&shift=&since=
        تاب «الطلبات المنتهية» بإحصائيات الوردية
     ═══════════════════════════════════════════════════════════ */
@@ -322,7 +417,31 @@ class PilotAppController
         $args  = [$pilotId];
 
         $day     = trim((string) $request->query('day', ''));
+        $from    = trim((string) $request->query('from', ''));
+        $to      = trim((string) $request->query('to', ''));
+        $period  = trim((string) $request->query('period', ''));
+
+        /* الاختصارات بتتحوّل لمدى تواريخ هنا عشان يبقى فيه مسار حساب
+           واحد. `anchorDay` هو نقطة الارتكاز — مش تاريخ النهارده. */
+        if ($period !== '' && $day === '' && $from === '' && $to === '') {
+            $anchor = $this->anchorDay($pilotId);
+            if ($period === 'today') {
+                $day = $anchor;
+            } elseif ($period === 'month') {
+                $from = substr($anchor, 0, 7) . '-01';
+                $to   = $anchor;
+            } elseif ($period === 'year') {
+                $from = substr($anchor, 0, 4) . '-01-01';
+                $to   = $anchor;
+            } else {
+                throw new ApiException('الفترة لازم تكون today أو month أو year');
+            }
+        }
         $shiftId = $request->query('shift') !== null ? (int) $request->query('shift') : 0;
+
+        /* وصف اللي بيتعرض — بيرجع في الرد عشان الشاشة تكتب للطيار
+           «انت شايف إيه» بدل ما يفتكر الرقم إجمالي عمره كله. */
+        $range = ['mode' => 'shift', 'from' => null, 'to' => null];
 
         if ($shiftId > 0) {
             // وردية معيّنة — لازم تكون بتاعته هو
@@ -332,22 +451,32 @@ class PilotAppController
             }
             $where[] = 'o.shift_id = ?';
             $args[]  = $shiftId;
-        } elseif ($day !== '') {
-            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) {
-                throw new ApiException('اليوم بصيغة YYYY-MM-DD');
+        } elseif ($day !== '' || $from !== '' || $to !== '') {
+            /* `day=` القديم = مدى من يوم واحد. الاتنين بيمشوا على نفس
+               الكود عشان مايفرقوش في السلوك مع الوقت. */
+            $a = $day !== '' ? $day : ($from !== '' ? $from : $to);
+            $b = $day !== '' ? $day : ($to !== '' ? $to : $from);
+            if (! self::validDate($a) || ! self::validDate($b)) {
+                throw new ApiException('التاريخ بصيغة YYYY-MM-DD');
             }
-            try {
-                $start = new DateTimeImmutable($day . ' 00:00:00', new DateTimeZone('Africa/Cairo'));
-            } catch (Exception) {
-                // الشكل عدّى الـregex بس التاريخ نفسه مستحيل (2026-13-45)
-                throw new ApiException('يوم غير صالح');
+            /* المقلوب بيتظبط بدل ما يترمي: الطيار اللي اختار «من 30 إلى 1»
+               قصده واضح، والخطأ هنا بيوقّف شاشة مش بيحمي حاجة. */
+            if ($a > $b) {
+                [$a, $b] = [$b, $a];
             }
-            $utc     = new DateTimeZone('UTC');
-            $fromUtc = $start->setTimezone($utc)->format('Y-m-d H:i:s');
-            $toUtc   = $start->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
-            $where[] = 'COALESCE(o.delivered_at, o.undelivered_at, o.status_since) >= ?
-                AND COALESCE(o.delivered_at, o.undelivered_at, o.status_since) < ?';
+            /* حد أقصى سنتين: من غيره `from=1900-01-01` بيمسح كل الجدول
+               في استعلام واحد على مسار بيتنده من كل طيار. */
+            if ((strtotime($b) - strtotime($a)) > 366 * 2 * 86400) {
+                throw new ApiException('المدى أكبر من سنتين — قلّل الفترة');
+            }
+            [$fromUtc, $toUtc] = self::cairoWindow($a, $b);
+            $where[] = self::DAY_ANCHOR . ' >= ? AND ' . self::DAY_ANCHOR . ' < ?';
             array_push($args, $fromUtc, $toUtc);
+            $range = [
+                'mode' => $period !== '' ? $period : ($day !== '' ? 'day' : 'range'),
+                'from' => $a,
+                'to'   => $b,
+            ];
         } else {
             // الافتراضي: الوردية المفتوحة الحالية (زي الشاشة الأصلية)، وإلا يوم القاهرة الحالي
             $activeShift = DB::select(
@@ -359,15 +488,18 @@ class PilotAppController
                 $where[] = 'o.shift_id = ?';
                 $args[]  = (int) $activeShift;
             } else {
-                $utc     = new DateTimeZone('UTC');
-                $start   = new DateTimeImmutable(WireTime::cairoDayKey() . ' 00:00:00', new DateTimeZone('Africa/Cairo'));
-                $where[] = 'COALESCE(o.delivered_at, o.undelivered_at, o.status_since) >= ?
-                    AND COALESCE(o.delivered_at, o.undelivered_at, o.status_since) < ?';
-                array_push(
-                    $args,
-                    $start->setTimezone($utc)->format('Y-m-d H:i:s'),
-                    $start->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s')
-                );
+                /* 🔴 مفيش وردية مفتوحة — بنرجع ليوم **الوردية الأخيرة**
+                   مش ليوم النهارده من نص الليل.
+
+                   السيناريو اللي كان بيكسر: الطيار شغّال من 9 ص، الساعة
+                   2 الفجر الوردية اتقفلت لأي سبب. يفتح الشاشة يلاقي
+                   يوم شغل كامل اتمسح — لأن «النهارده» ابتدت من نص الليل
+                   قبلها بساعتين. */
+                $anchorDay = $this->anchorDay($pilotId);
+                [$fromUtc, $toUtc] = self::cairoWindow($anchorDay, $anchorDay);
+                $where[] = self::DAY_ANCHOR . ' >= ? AND ' . self::DAY_ANCHOR . ' < ?';
+                array_push($args, $fromUtc, $toUtc);
+                $range = ['mode' => 'day', 'from' => $anchorDay, 'to' => $anchorDay];
             }
         }
 
@@ -409,36 +541,101 @@ class PilotAppController
 
            ⚠️ الإجمالي بيتجمّع من **المُسلَّم بس**؛ «لم يتم التوصيل» بيتعد في
            undeliveredCount لكن مابيدخلش التحصيل ولا العمولة. */
+        /* 🔴 رقمين مختلفين عن قصد — كانوا رقم واحد وده كان غلط:
+             • `$collectedTotal` = اللي الطيار **حصّله كاش** فعلًا. لو
+               العميل دفع جزء من محفظته، الجزء ده مش في إيد الطيار،
+               فعرضه على إنه «إجمالي التحصيل» بيخلّيه يفتكر إن عليه فلوس
+               للفرع مش معاه.
+             • `$feeTotal` = سعر التوصيل **الخام**، وهو أساس العمولة:
+               المحل مدين للشركة بالأجرة كاملة مهما كانت طريقة دفع
+               العميل، فعمولة الطيار مالهاش دعوة بالمحفظة. */
+        /* 🔴 الإحصائيات بتتحسب على **كل** الصفوف اللي في المدى، مش على
+           الـ200 اللي رجعوا للعرض.
+
+           اللسعة اللي اتشالت هنا: الحلقة كانت بتلف على `$rows` — وهي
+           `LIMIT 200`. طول ما الشاشة كانت بتعرض وردية واحدة الرقم كان
+           بيطلع صح بالصدفة. أول ما بقى فيه فلتر شهر أو سنة، «إجمالي
+           التحصيل» كان هيحسب أول 200 أوردر بس **ويعرضه على إنه
+           الإجمالي** — رقم فلوس ناقص من غير أي علامة إنه ناقص.
+
+           الاستعلام ده بيجيب تلات أعمدة أرقام بس، فحتى سنة كاملة رخيصة.
+           والحساب لسه بيعدّي على `Money::netCollect` — تعريف واحد للفلوس
+           بدل نسخة تانية مكتوبة SQL تفرق عنها مع الوقت. */
+        $allRows = DB::select(
+            'SELECT o.status, o.total_delivery_price, o.wallet_used FROM orders o WHERE '
+            . implode(' AND ', $where),
+            $args
+        );
+
         $deliveredCount = 0;
-        $deliveredTotal = 0.0;
-        foreach ($rows as $r) {
+        $collectedTotal = 0.0;
+        $feeTotal       = 0.0;
+        foreach ($allRows as $r) {
             if ($r->status === 'delivered') {
                 $deliveredCount++;
-                $deliveredTotal += (float) $r->total_delivery_price;
+                $collectedTotal += Money::netCollect((array) $r);
+                $feeTotal       += (float) $r->total_delivery_price;
             }
         }
+        $matchedTotal = count($allRows);
         $commissionType  = $pilot['commission_type'] ?: 'percent';
         $commissionValue = (float) $pilot['commission_value'];
         $commission = $commissionType === 'fixed'
             ? $commissionValue * $deliveredCount
-            : $deliveredTotal * $commissionValue / 100.0;
+            : $feeTotal * $commissionValue / 100.0;
 
         // غلاف مكتوب بالإيد: فيه `stats` بعد `items` — مش شكل PollableList
         return ApiResponse::out([
             'ok'        => true,
             'serverNow' => PollableList::serverNowMs(),
             'changed'   => true,
-            'items'     => OrderWire::batch($rows),
+            'items'     => self::netCollectView(OrderWire::batch($rows)),
+            'range'     => $range,
             'stats'     => [
-                'totalOrders'      => count($rows),
+                'totalOrders'      => $matchedTotal,
                 'deliveredCount'   => $deliveredCount,
-                'undeliveredCount' => count($rows) - $deliveredCount,
-                'totalCollected'   => round($deliveredTotal, 2),
+                'undeliveredCount' => $matchedTotal - $deliveredCount,
+                /* الشاشة محتاجة تفرّق بين «دول كل الأوردرات» و«دي أول 200».
+                   من غير الحقل ده الطيار بيعدّ الكروت ويقارنها بالإجمالي
+                   ويفتكر إن فيه أوردرات ضاعت. */
+                'itemsShown'       => count($rows),
+                'itemsTruncated'   => $matchedTotal > count($rows),
+                'totalCollected'   => round($collectedTotal, 2),
                 'commissionType'   => $commissionType,
                 'commissionValue'  => $commissionValue,
                 'commission'       => round($commission, 2),
             ],
         ]);
+    }
+
+    /**
+     * 💰 كل أوردر خارج للطيار: `totalDeliveryPrice` = اللي هيحصّله فعلًا.
+     *
+     * 🔴 المسارات دي هي **الشاشة الرئيسية** لتطبيق الطيار (كارت الأوردر
+     * «💵 قيمة التحصيل» وإجمالي الوردية). الإصلاح الأول اتحط في
+     * `OrdersController` بس — وهو اللي التطبيق بينده عليه لشاشة الحساب
+     * فقط. يعني الشاشة الأهم فضلت بتعرض السعر الخام.
+     *
+     * العميل ممكن يكون دفع جزء من محفظته والرصيد اتخصم وقت الطلب، فالخام
+     * معناه إن الطيار بيطلب من العميل فلوس اتدفعت خلاص. الشرح الكامل في
+     * `Money::netCollect`.
+     *
+     * الدالة **مش** مشروطة بالدور: المسارات دي كلها تحت مجموعة
+     * `role:pilot` أصلًا (routes/api.php)، فمفيش دور تاني بيوصلها.
+     *
+     * @param  array<int, array<string, mixed>>  $orders
+     * @return array<int, array<string, mixed>>
+     */
+    private static function netCollectView(array $orders): array
+    {
+        foreach ($orders as $i => $o) {
+            if (! is_array($o) || ((float) ($o['walletUsed'] ?? 0)) <= 0) {
+                continue;   // الحالة الغالبة — مفيش خصم، مفيش فرق
+            }
+            $orders[$i]['totalDeliveryPrice'] = Money::netCollectWire($o);
+        }
+
+        return $orders;
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -583,56 +780,36 @@ class PilotAppController
     }
 
     /**
-     * POST /api/pilot/shift/end — إنهاء الوردية من التطبيق نفسه.
+     * POST /api/pilot/shift/end — **مقفول**.
      *
-     * نفس سلوك التطبيق القديم حرفيًا (closeShift + releasePilotFromBranch):
-     * قفل سجل الوردية → تعليمها `ended` → قفل صف الطيار → التحرير الكامل
-     * من الفرع وإزاحة الدور.
+     * ═══ القرار (صاحب النظام 2026-08-30) ═══
+     * «امنع الطيار إنه يخرج من الوردية — اللي يخرجه هو الفرع أو الإدارة».
      *
-     * 🔴 **من غير أي تسوية فلوس** — لا عهدة ولا خزنة ولا `money_settled`.
-     * التسوية بتفضل شغلة الفرع من اللوحة (`POST /api/shifts/{id}/end`
-     * اللي بينده `settlePilotMoney`). ده مش سهو: الطيار بيقفل ورديته من
-     * التطبيق وهو في الشارع، والفلوس بتتسلّم في الفرع بعدين.
+     * ═══ ليه ده أصح ماليًا ═══
+     * الدالة دي كانت بتقفل الوردية **من غير أي تسوية فلوس** — لا عهدة ولا
+     * خزنة ولا `money_settled`. يعني الطيار يقفل ورديته وفلوسه معلّقة،
+     * والفرع يكتشفها في التقفيلة. البديل (`POST /api/shifts/{id}/end` →
+     * `BoardController::shiftEnd`) بينده `settlePilotMoney` وبيفرض تسوية
+     * الأوردرات المسلّمة الأول. فكل قفل دلوقتي بيعدّي على التسوية.
      *
-     * ⚠️ بيشتغل **حتى لو مفيش وردية مفتوحة** — بيحرّر الطيار بس. زي القديم.
-     * ⚠️ `ended_by = 'pilot'` نص حرفي مش اسم المستخدم — الواجهة بتفرّق.
-     * ⚠️ ترتيب القفلين (الوردية ثم الطيار) جزء من الصح، متغيّرش.
+     * ═══ ليه المسار فاضل موجود بدل ما يتشال ═══
+     * ① جزء من **العقد الأصلي** — شيله بيخلّي `route:coverage` يقول «ناقص ١».
+     * ② مافيش فرض تحديث على الإنتاج (`site_settings.pilotApp` مش موجود)،
+     *    فالتطبيقات القديمة على تليفونات الطيارين لسه بتنده عليه. رسالة
+     *    واضحة أحسن من 404 غامض.
+     *
+     * التطبيق الجديد شال زر «إنهاء الوردية» وشال النداء من تسجيل الخروج،
+     * فالمسار ده مابيتندهش منه أصلًا — هو بس شبكة أمان للنسخ القديمة.
+     *
+     * 🔒 الحارس: ops/test_shift_end_lock.php
      */
     public function shiftEnd(Request $request): JsonResponse
     {
-        $pilot   = $this->pilotCtx($request);
-        $pilotId = (int) $pilot['id'];
-
-        try {
-            DB::transaction(function () use ($pilotId): void {
-                $shiftId = DB::select(
-                    "SELECT id FROM shifts WHERE pilot_id = ? AND status = 'active'
-                      ORDER BY id DESC LIMIT 1 FOR UPDATE",
-                    [$pilotId]
-                )[0]->id ?? null;
-
-                $now = WireTime::nowDb();
-                if ($shiftId !== null) {
-                    DB::update(
-                        "UPDATE shifts SET status = 'ended', ended_at = ?, ended_by = 'pilot' WHERE id = ?",
-                        [$now, (int) $shiftId]
-                    );
-                }
-
-                $this->releasePilot($this->lockPilot($pilotId));
-            });
-        } catch (ApiException $e) {
-            /* الأصل بينده fail() اللي بتعمل exit، فرسالة الدالة الداخلية
-               (زي «الطيار غير موجود» 404) بتوصل للعميل زي ما هي **من غير**
-               ما تتحوّل لرسالة الـ500 العامة. هنا الاستثناء بيعدّي بنفس
-               الطريقة — والمعاملة بترجع لوحدها. */
-            throw $e;
-        } catch (Throwable $e) {
-            report($e);
-            throw new ApiException('تعذّر إنهاء الوردية — جرّب تاني', 500);
-        }
-
-        return ApiResponse::ok();
+        /* 🔒 مقفول. مابنندهش `pilotCtx` هنا: الرفض واحد لأي طيار، وهي
+           كانت هترمي «الطيار غير موجود» (404) للحساب المش مربوط بصف
+           طيار — رسالة بتخفي السبب الحقيقي. الوسيطة `role:pilot` على
+           المسار كافية للتحقق من الدور. */
+        throw ApiException::forbidden('إنهاء الوردية بقى من الفرع أو الإدارة — كلّم المشرف بتاعك');
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -769,72 +946,5 @@ class PilotAppController
         $row = DB::select($sql, $bindings)[0] ?? null;
 
         return $row !== null ? (array) $row : null;
-    }
-
-    /* ═══════════════════════════════════════════════════════════
-       أدوات الطيار المشتركة مع اللوحة — board_lock_pilot /
-       board_release_pilot / board_queue_shift_after_removal
-
-       ⚠️ الجُمل دي **مكرّرة** من `BoardController` عن قصد: نظائرها هناك
-       `private` ومفيش طريقة نناديها بيها من هنا، و`pilot_shift_end` في
-       الأصل بينده `board_release_pilot` مباشرةً. البديل كان تغيير رؤية
-       دوال `BoardController` — ملف بيتكتب فيه بالتوازي. لو الجُمل دي
-       اتغيّرت هناك لازم تتغيّر هنا (كلها منقولة من نفس المصدر:
-       api/routes/board.php سطور 113 و 146 و 171).
-    ═══════════════════════════════════════════════════════════ */
-
-    /** board_lock_pilot(): صف الطيار بقفل FOR UPDATE — لازم جوه معاملة */
-    private function lockPilot(int $pilotId): array
-    {
-        $row = DB::select('SELECT * FROM pilots WHERE id = ? FOR UPDATE', [$pilotId])[0] ?? null;
-        if (! $row) {
-            throw ApiException::notFound('الطيار غير موجود');
-        }
-
-        return (array) $row;
-    }
-
-    /**
-     * board_queue_shift_after_removal(): خروج طيار من الدور معناه إن اللي
-     * بعده كلهم بينقصوا 1 — الأرقام تفضل متراصة من غير فجوات.
-     *
-     * ⚠️ فرع فاضي أو رقم دور فاضي = **لا شيء** (و`queue_no = 0` بيتعامل
-     * كفاضي بسبب `!` مش `=== null`). سلوك الأصل بالحرف.
-     */
-    private function queueShiftAfterRemoval(?int $branchId, ?int $removedQueueNo): void
-    {
-        if (! $branchId || ! $removedQueueNo) {
-            return;
-        }
-        DB::update(
-            "UPDATE pilots SET queue_no = queue_no - 1
-          WHERE assigned_branch_id = ? AND status = 'waiting' AND queue_no > ?",
-            [$branchId, $removedQueueNo]
-        );
-    }
-
-    /**
-     * board_release_pilot(): التحرير الكامل من الفرع (VOCAB بند 6).
-     * كل حقول الحالة بتتصفّر، والإزاحة بتحصل **بس** لو كان منتظر — الطيار
-     * اللي في إذن مالوش رقم دور أصلًا.
-     *
-     * التصفير الكامل ده هو السبب في وجود `?sig=` في `GET /api/pilot/state`:
-     * مفيش أي عمود توقيت بيتحرك هنا، فـ`?since` لوحده عمره ما هيحس بيه.
-     */
-    private function releasePilot(array $pilotRow): void
-    {
-        DB::update(
-            "UPDATE pilots SET status = NULL, assigned_branch_id = NULL, queue_no = NULL,
-                status_since = NULL, break_started_at = NULL, leave_type = NULL,
-                leave_reason = NULL, leave_forced = 0
-          WHERE id = ?",
-            [(int) $pilotRow['id']]
-        );
-        if (($pilotRow['status'] ?? null) === 'waiting') {
-            $this->queueShiftAfterRemoval(
-                $pilotRow['assigned_branch_id'] !== null ? (int) $pilotRow['assigned_branch_id'] : null,
-                $pilotRow['queue_no'] !== null ? (int) $pilotRow['queue_no'] : null
-            );
-        }
     }
 }

@@ -201,6 +201,21 @@ header{position:sticky;top:0;z-index:50;background:rgba(8,8,10,.9);backdrop-filt
   overflow-wrap:anywhere}
 .m-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:11px}
 </style>
+<style>
+  /* صفوف الأرقام المتعددة */
+  .numrows{display:flex;flex-direction:column;gap:8px}
+  .numrow{display:flex;gap:8px;align-items:center}
+  .numrow input.n{flex:0 0 190px}
+  .numrow input.lb{flex:1;min-width:120px}
+  .numrow .del{background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;
+    line-height:1;padding:4px 8px;border-radius:8px}
+  .numrow .del:hover{background:rgba(232,25,44,.1)}
+  .numrow .pri{font-size:11px;font-weight:800;color:#22c55e;white-space:nowrap}
+  .numadd{align-self:flex-start;background:none;border:1px dashed var(--line);color:var(--muted);
+    border-radius:8px;padding:7px 14px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:700}
+  .numadd:hover{border-color:var(--red);color:var(--red)}
+  .numempty{color:var(--muted);font-size:12.5px;padding:4px 0}
+</style>
 </head>
 <body>
 
@@ -257,11 +272,17 @@ header{position:sticky;top:0;z-index:50;background:rgba(8,8,10,.9);backdrop-filt
         <h2>📞 بيانات التواصل</h2>
         <div class="sub">بتظهر في الهيدر والفوتر وزرار الواتساب العائم وصفحة التتبّع.</div>
         <div class="grid2">
-          <div class="f"><label>رقم الهاتف</label>
-            <input id="iPhone" placeholder="01xxxxxxxxx" dir="ltr" /></div>
-          <div class="f"><label>واتساب (بصيغة دولية بدون +)</label>
-            <input id="iWa" placeholder="201xxxxxxxxx" dir="ltr" />
-            <span class="hint">مثال: 201012345678</span></div>
+          <!-- أرقام متعددة: أول رقم في كل قايمة هو **الأساسي** — هو اللي
+               بيظهر في الهيدر والفوتر وزرار الواتساب العائم. الباقي بيظهر
+               في صفحة «تواصل معنا» وفي شاشات الدعم جوه التطبيقات. -->
+          <div class="f full"><label>أرقام الهاتف</label>
+            <div id="phoneRows" class="numrows"></div>
+            <button type="button" class="numadd" onclick="addNumRow('phone')">+ أضف رقم هاتف</button>
+            <span class="hint">أول رقم = الأساسي اللي بيظهر في الهيدر والفوتر. الاسم اختياري (مثال: خدمة العملاء · الشكاوى).</span></div>
+          <div class="f full"><label>أرقام واتساب (بصيغة دولية بدون +)</label>
+            <div id="waRows" class="numrows"></div>
+            <button type="button" class="numadd" onclick="addNumRow('whatsapp')">+ أضف رقم واتساب</button>
+            <span class="hint">مثال: 201012345678 — أول رقم هو اللي بيفتحه زرار الواتساب العائم.</span></div>
           <div class="f"><label>البريد الإلكتروني</label>
             <input id="iMail" placeholder="info@example.com" dir="ltr" /></div>
           <div class="f"><label>مواعيد العمل</label>
@@ -402,6 +423,13 @@ header{position:sticky;top:0;z-index:50;background:rgba(8,8,10,.9);backdrop-filt
 
 <script src="assets/js/api.js"></script>
 <script>
+/* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش مصرّح
+   له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل أي دور
+   بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html. */
+var APP_KEY = "siteadmin";
+</script>
+<script src="assets/js/support-numbers.js"></script>
+<script>
 /* اتحول من Firebase لـ REST API: المحتوى في site_settings (مفتاح site) والشركاء في site_partners */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -437,7 +465,7 @@ $("gBtn").onclick = async () => {
   const u = $("gUser").value.trim(), p = $("gPass").value;
   if (!u || !p) { $("gateErr").textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
   try {
-    const res = await API.login(u, p);
+    const res = await API.login(u, p, APP_KEY);
     if (res.user.role !== "admin") {
       await API.logout().catch(() => {});
       $("gateErr").textContent = "الحساب ده مش مدير — كلّم إدارة النظام."; return;
@@ -502,24 +530,127 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   if (t.dataset.p === "msgs")    loadMsgs();
 });
 
-/* ══ بيانات التواصل ══ */
+/* ══ بيانات التواصل — أرقام متعددة ══
+   أول رقم في كل قايمة هو الأساسي. `SupportNums.syncPrimary` بتخلّي
+   `info.phone`/`info.whatsapp` = أول رقم وقت الحفظ، فالصفحات القديمة
+   اللي بتقرا المفتاح المفرد بتفضل شغّالة من غير أي تعديل فيها. */
+const NUM_BOX = { phone: "phoneRows", whatsapp: "waRows" };
+
+window.addNumRow = function (kind, n, label, silent) {
+  const box = $(NUM_BOX[kind]);
+  if (!box) return;
+  const empty = box.querySelector(".numempty");
+  if (empty) empty.remove();
+
+  const row = document.createElement("div");
+  row.className = "numrow";
+
+  const ni = document.createElement("input");
+  ni.className = "n"; ni.dir = "ltr"; ni.value = n || "";
+  ni.placeholder = kind === "whatsapp" ? "201xxxxxxxxx" : "01xxxxxxxxx";
+
+  const li = document.createElement("input");
+  li.className = "lb"; li.value = label || "";
+  li.placeholder = "الاسم (اختياري) — مثال: خدمة العملاء";
+
+  const pri = document.createElement("span");
+  pri.className = "pri";
+
+  const del = document.createElement("button");
+  del.type = "button"; del.className = "del"; del.textContent = "🗑";
+  del.title = "حذف الرقم";
+  del.onclick = () => { row.remove(); markPrimary(kind); };
+
+  row.append(ni, li, pri, del);
+  box.appendChild(row);
+  markPrimary(kind);
+  if (!silent) ni.focus();
+};
+
+/* شارة «الأساسي» بتتحرّك مع أول صف موجود — بتتحدّث مع كل إضافة وحذف
+   عشان المدير يشوف بعينه أنهي رقم اللي هيظهر في الهيدر. */
+function markPrimary(kind) {
+  const box = $(NUM_BOX[kind]);
+  if (!box) return;
+  const rows = box.querySelectorAll(".numrow");
+  rows.forEach((r, i) => {
+    const b = r.querySelector(".pri");
+    if (b) b.textContent = i === 0 ? "★ الأساسي" : "";
+  });
+  if (!rows.length) {
+    const e = document.createElement("div");
+    e.className = "numempty";
+    e.textContent = "مفيش أرقام — دوس «أضف رقم».";
+    box.appendChild(e);
+  }
+}
+
+function readNumRows(kind) {
+  const box = $(NUM_BOX[kind]);
+  if (!box) return [];
+  const out = [];
+  box.querySelectorAll(".numrow").forEach(r => {
+    const n = r.querySelector("input.n").value.trim();
+    if (!n) return;                      // صف فاضي = مش رقم، بيتشال بهدوء
+    out.push({ n: n, label: r.querySelector("input.lb").value.trim() });
+  });
+  return out;
+}
+
+/* 🔴 لو `support-numbers.js` ما اتحمّلش (٤٠٤ · شبكة · حاجب)، الخانات
+   كانت هتتعرض **فاضية** والمدير مايعرفش — وأول ضغطة حفظ كانت هتكتب
+   أرقام فاضية وتمسح أرقام الشركة كلها من غير أي تحذير.
+
+   الحماية: لو المكتبة مش موجودة، بنقفل الحفظ ونقول السبب. خانات فاضية
+   أحسن من أرقام ممسوحة، والاتنين مش أحسن من رسالة واضحة. */
+function supportLibReady() {
+  if (window.SupportNums) return true;
+  const btn = $("saveInfo");
+  if (btn) { btn.disabled = true; btn.textContent = "⚠️ تعذّر التحميل"; }
+  toast("ملف الأرقام ما اتحمّلش — حدّث الصفحة قبل ما تحفظ", "bad");
+  return false;
+}
+
 function fillInfo() {
   const i = SITEDATA.info || {};
-  $("iPhone").value = i.phone || ""; $("iWa").value = i.whatsapp || "";
+  if (!supportLibReady()) return;
+  ["phone", "whatsapp"].forEach(kind => {
+    const box = $(NUM_BOX[kind]);
+    if (box) box.innerHTML = "";
+    SupportNums.list(i, kind).forEach(x => addNumRow(kind, x.n, x.label, true));
+    markPrimary(kind);
+  });
   $("iMail").value = i.email || "";  $("iHours").value = i.hours || "";
   $("iCR").value = i.crNumber || "";  $("iTax").value = i.taxNumber || "";
 }
+
 $("saveInfo").onclick = async () => {
-  const wa = $("iWa").value.replace(/\D/g, "");
-  SITEDATA.info = {
-    phone: $("iPhone").value.trim(), whatsapp: wa,
+  if (!supportLibReady()) return;
+  /* حفظ بيمسح **كل** الأرقام: بنسأل الأول. الفاضي ممكن يكون مقصود
+     (شركة شالت رقم)، بس مش المفروض يعدّي بالغلط — الرقم ده في الهيدر
+     والفوتر وزرار الواتساب العائم في كل صفحات الموقع. */
+  const anyNums = readNumRows("phone").length || readNumRows("whatsapp").length;
+  const hadNums = (SITEDATA.info || {}).phone || (SITEDATA.info || {}).whatsapp;
+  if (!anyNums && hadNums &&
+      !confirm("مفيش ولا رقم متكتوب — الحفظ هيمسح كل أرقام التواصل من الموقع.\n\nمتأكد؟")) {
+    return;
+  }
+  const info = {
+    phones:    readNumRows("phone"),
+    whatsapps: readNumRows("whatsapp"),
     email: $("iMail").value.trim(), hours: $("iHours").value.trim(),
       /* السجل والبطاقة: بيتعرضوا في فوتر كل الصفحات عن طريق
          `data-site-info` في site-cms.js. الفاضي = يفضل المكتوب في الـHTML. */
       crNumber: $("iCR").value.trim(), taxNumber: $("iTax").value.trim()
   };
-  try { await saveSite(); toast("اتحفظت بيانات التواصل ✓", "ok"); }
-  catch (e) { toast("تعذّر الحفظ: " + (e.message || ""), "bad"); }
+  /* بتضيف `phone`/`whatsapp` = أول رقم، وبتنضّف الواتساب من أي رموز.
+     من غير النداء ده الصفحات القديمة هتلاقي المفتاح المفرد فاضي. */
+  SITEDATA.info = SupportNums.syncPrimary(info);
+  try {
+    await saveSite();
+    fillInfo();                     // بيعيد الملء بالشكل المتنضّف (واتساب أرقام بس)
+    toast("اتحفظت بيانات التواصل ✓", "ok");
+  } catch (e) { toast("تعذّر الحفظ: " + (e.message || ""), "bad"); }
 };
 
 /* ══ التطبيقات ══ */

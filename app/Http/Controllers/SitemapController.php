@@ -36,6 +36,8 @@ class SitemapController
         ['file' => 'pricing.html',  'loc' => 'pricing.html',  'priority' => '0.9', 'freq' => 'weekly'],
         ['file' => 'faq.html',      'loc' => 'faq.html',      'priority' => '0.8', 'freq' => 'monthly'],
         ['file' => 'about.html',    'loc' => 'about.html',    'priority' => '0.6', 'freq' => 'yearly'],
+        // بروفايل الشركة — الصفحة اللي الـQR على الكارت بيوّدي لها
+        ['file' => 'profile.html',  'loc' => 'profile.html',  'priority' => '0.8', 'freq' => 'monthly'],
         ['file' => 'contact.html',  'loc' => 'contact.html',  'priority' => '0.7', 'freq' => 'yearly'],
         ['file' => 'privacy.html',  'loc' => 'privacy.html',  'priority' => '0.3', 'freq' => 'yearly'],
         ['file' => 'terms.html',    'loc' => 'terms.html',    'priority' => '0.3', 'freq' => 'yearly'],

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\AlertsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoardController;
 use App\Http\Controllers\Api\CustomerAppController;
@@ -9,7 +10,9 @@ use App\Http\Controllers\Api\DamascusController;
 use App\Http\Controllers\Api\CustomersController;
 use App\Http\Controllers\Api\EntitiesController;
 use App\Http\Controllers\Api\FinanceController;
+use App\Http\Controllers\Api\OrderUrgeController;
 use App\Http\Controllers\Api\OrdersController;
+use App\Http\Controllers\Api\PilotAccountingController;
 use App\Http\Controllers\Api\PilotAppController;
 use App\Http\Controllers\Api\PublicSiteController;
 use App\Http\Controllers\Api\SupportController;
@@ -86,6 +89,9 @@ Route::get('store-contacts', [EntitiesController::class, 'storeContactsList']);
 Route::get('orders/stats', [OrdersController::class, 'stats'])
     ->middleware('role:admin,callcenter');
 Route::get('orders', [OrdersController::class, 'index']);
+// ⚠️ وكذلك urges — لازم تفضل قبل {id} لنفس السبب
+Route::get('orders/urges', [OrderUrgeController::class, 'list'])
+    ->middleware('role:admin,branch,pilot,callcenter');
 Route::get('orders/{id}', [OrdersController::class, 'show']);
 
 /* ═══ لوحة العمليات ═══════════════════════════════════════════ */
@@ -99,9 +105,15 @@ Route::get('join-requests', [BoardController::class, 'joinRequestsList'])
    مدير الفرع مقصوص على طيارين فرعه جوّه الكنترولر. */
 Route::get('pilot-commission-adjustments', [BoardController::class, 'commissionAdjustmentsList'])
     ->middleware('role:admin,branch,accountant');
-Route::get('leave-requests', [BoardController::class, 'leaveRequestsList']);
-Route::get('shift-requests', [BoardController::class, 'shiftRequestsList']);
-Route::get('return-requests', [BoardController::class, 'returnRequestsList']);
+/* 🔒 كانوا **بلا أي قيد دور** — فالمحل والعميل والكول سنتر كانوا بيقروا
+   أذونات وورديات وطلبات إرجاع كل الطيارين. نفس قايمة الأدوار اللي على
+   pilot-transfers و support-requests تحتيهم بالظبط. */
+Route::get('leave-requests', [BoardController::class, 'leaveRequestsList'])
+    ->middleware('role:admin,branch,pilot,pilot_supervisor');
+Route::get('shift-requests', [BoardController::class, 'shiftRequestsList'])
+    ->middleware('role:admin,branch,pilot,pilot_supervisor');
+Route::get('return-requests', [BoardController::class, 'returnRequestsList'])
+    ->middleware('role:admin,branch,pilot,pilot_supervisor');
 Route::get('pilot-transfers', [BoardController::class, 'transfersList'])
     ->middleware('role:admin,branch,pilot_supervisor');
 Route::get('support-requests', [BoardController::class, 'supportRequestsList'])
@@ -138,6 +150,12 @@ Route::get('zone-requests', [SupportController::class, 'zoneRequestsList'])
 // دي بيانات ناس من بره الشركة بلا تقنيع (شوف ContactWire)
 Route::get('contact-messages', [SupportController::class, 'contactMessagesList'])
     ->middleware('role:admin');
+
+/* 🚨 أعطال الإنتاج — الوجه المرئي لجدول error_alerts.
+   الإدارة بس: التفاصيل فيها مسارات ملفات ومكدس. */
+Route::get('alerts', [AlertsController::class, 'index'])->middleware('role:admin');
+Route::post('alerts/{id}/resolve', [AlertsController::class, 'resolve'])->middleware('role:admin');
+Route::post('alerts/{id}/reopen', [AlertsController::class, 'reopen'])->middleware('role:admin');
 // رسايل إشعار المستلمين بالأوردر — أوسع من contact-messages عن قصد:
 // ده شغل تشغيلي يومي بيتعمل من الفرع والكول سنتر، ونفس البيانات اللي
 // الأدوار دي شايفاها في شاشة الأوردرات. الفرع مقصوص على فرعه جوه الكنترولر
@@ -150,6 +168,15 @@ Route::get('settings', [SupportController::class, 'settingsGet']);
 Route::get('customers', [CustomersController::class, 'index'])
     ->middleware('role:admin,callcenter');
 Route::get('store/pickup-profile', [CustomersController::class, 'pickupProfile'])
+    ->middleware('role:store');
+// دفتر عناوين بوابة المحلات — «عناويني» زي تطبيق العملاء (طلب 2026-09-02)
+Route::get('store/addresses', [CustomersController::class, 'storeAddressesList'])
+    ->middleware('role:store');
+Route::post('store/addresses', [CustomersController::class, 'storeAddressesCreate'])
+    ->middleware('role:store');
+Route::put('store/addresses/{id}', [CustomersController::class, 'storeAddressesUpdate'])
+    ->middleware('role:store');
+Route::delete('store/addresses/{id}', [CustomersController::class, 'storeAddressesDelete'])
     ->middleware('role:store');
 
 /* ═══ تطبيق الطيار (X-Auth-Token) ═════════════════════════════ */
@@ -182,16 +209,27 @@ Route::get('lookup', [TrustController::class, 'lookup'])
 Route::post('branches', [EntitiesController::class, 'branchesCreate'])->middleware('role:admin');
 Route::put('branches/{id}', [EntitiesController::class, 'branchesUpdate'])->middleware('role:admin');
 
-Route::post('zones', [EntitiesController::class, 'zonesCreate'])->middleware('role:admin,branch,callcenter');
-Route::put('zones/{id}', [EntitiesController::class, 'zonesUpdate'])->middleware('role:admin,branch,callcenter');
-Route::delete('zones/{id}', [EntitiesController::class, 'zonesDelete'])->middleware('role:admin,branch,callcenter');
+/* 🔒 الكول سنتر اتشال — المناطق بتحدّد الأسعار والفروع، ودي مش من شغله
+   («تفاصيل وشكوى بس»). وحارس الفرع على الحذف جوّه الكنترولر. */
+Route::post('zones', [EntitiesController::class, 'zonesCreate'])->middleware('role:admin,branch');
+Route::put('zones/{id}', [EntitiesController::class, 'zonesUpdate'])->middleware('role:admin,branch');
+Route::delete('zones/{id}', [EntitiesController::class, 'zonesDelete'])->middleware('role:admin,branch');
 
 Route::post('pilots', [EntitiesController::class, 'pilotsCreate'])->middleware('role:admin,branch,callcenter,pilot_supervisor');
-Route::put('pilots/{id}', [EntitiesController::class, 'pilotsUpdate'])->middleware('role:admin,branch,callcenter,pilot_supervisor');
+/* 🔒 الكول سنتر اتشال (قرار «تفاصيل وشكوى بس») — كان بيقدر يغيّر مرتب
+   وعمولة وفرع أي طيار. وحارس الفرع للدور branch جوّه الكنترولر. */
+Route::put('pilots/{id}', [EntitiesController::class, 'pilotsUpdate'])->middleware('role:admin,branch,pilot_supervisor');
+/* 🗄️ الحذف اتلغى والبديل الأرشفة (قرار صاحب النظام 2026-09-01).
+   المسار سايب مسجّل عشان `route:coverage` يفضل 219/219 وعشان أي واجهة
+   قديمة مكاشة تاخد رسالة عربية واضحة — الكنترولر بيرمي 403 دايمًا. */
 Route::delete('pilots/{id}', [EntitiesController::class, 'pilotsDelete'])->middleware('role:admin');
+Route::post('pilots/{id}/archive', [EntitiesController::class, 'pilotsArchive'])->middleware('role:admin');
+Route::post('pilots/{id}/unarchive', [EntitiesController::class, 'pilotsUnarchive'])->middleware('role:admin');
 
 Route::post('users', [EntitiesController::class, 'usersCreate'])->middleware('role:admin');
 Route::post('users/{id}/block', [EntitiesController::class, 'usersBlock'])->middleware('role:admin');
+/* 🏪 فتح/قفل تعديل سعر التوصيل لمحل بعينه (طلب 2026-09-03) — إدارة المحلات */
+Route::post('users/{id}/price-edit', [EntitiesController::class, 'usersPriceEdit'])->middleware('role:admin');
 Route::put('users/{id}', [EntitiesController::class, 'usersUpdate'])->middleware('role:admin');
 Route::delete('users/{id}', [EntitiesController::class, 'usersDelete'])->middleware('role:admin');
 
@@ -222,45 +260,137 @@ Route::delete('store-contacts/{id}', [EntitiesController::class, 'storeContactsD
 /* ── الأوردرات ── */
 Route::post('upload', [OrdersController::class, 'upload']);
 // bulk قبل {id} — أشكال مختلفة بس بنلتزم بالقاعدة
-/* 🔴 الكول سنتر **اترجع واتقفل** 2026-08-25 بقرار صاحب النظام، بعد ما كان
-   اتفتح 2026-08-23. القرار الجديد بالحرف: «الكول سنتر ليس له سلطة على الطيار
-   أو الفرع غير أنه يرسل الأوردر». فالتحميل على طيار (assign · assign-bulk)
-   والنقل من طيار لطيار (transfer) رجعوا للفرع والإدارة بس.
+/* 🔴 صلاحيات الكول سنتر على الأوردر — التاريخ باختصار:
+     2026-08-23  اتفتحت
+     2026-08-25  اترجعت واتقفلت جزئيًا («ليس له سلطة على الطيار أو الفرع
+                 غير أنه يرسل الأوردر») — فـassign و assign-bulk و
+                 transfer رجعوا للفرع والإدارة بس.
+     2026-08-30  اتقفلت بالكامل. القرار بالحرف: «الكول سنتر يتعامل مع
+                 العميل فقط في تلقي الأوردر والشكاوى، أما باقي العمل من
+                 اختصاص باقي المنظومة».
 
-   ⛔ deliver و undeliver فضلوا مقفولين من الأول (بيقفلوا الأوردر ماليًا).
+   ✅ اللي فضل للكول سنتر — تلقّي الأوردر والشكوى وبس:
+      • orders (store)   — تسجيل الأوردر وإرساله للفرع (جوهر الدور).
+      • complaints       — تسجيل شكوى العميل.
+      • senders/receivers — بيانات العملاء نفسهم وقت المكالمة.
 
-   ✅ اللي فضل مفتوح للكول سنتر عن قصد — ده شغله هو مش سلطة على حد:
-      • store            — تسجيل الأوردر وإرساله للفرع (جوهر الدور).
-      • cancel/postpone  — العميل بيتصل يلغي أو يأجّل، والموظف على التليفون.
-      • transfer-branch  — تصحيح **غلطته هو** لما يبعت الأوردر لفرع غلط.
-      • update           — تصحيح بيانات العميل والعنوان بعد المكالمة.
+   ⛔ اللي اتسحب منه 2026-08-30:
+      • cancel · postpone · unpostpone — بقوا شغل الفرع والإدارة، وزراير
+        التأجيل اتضافت لـbranch.html و tiar.html في نفس اليوم.
+      • transfer-branch  — تصحيح الفرع الغلط بقى شغل الفرع/الإدارة.
+      • update (PUT)     — تصحيح بيانات العميل على أوردر موجود؛ الواجهة
+        بتاعته موجودة أصلًا في branch.html و tiar.html.
 
-   الأزرار في callcenter.html اتخفت كمان (isCC)، بس الإخفاء تجميل —
-   القفل الحقيقي هو السطور دي. */
+   ⛔ deliver و undeliver مقفولين من الأول (بيقفلوا الأوردر ماليًا).
+
+   الأزرار في callcenter.html اتشالت كمان، بس الشيل تجميل —
+   القفل الحقيقي هو السطور دي. الحارس: ops/test_cc_routes.php */
 Route::post('orders/assign-bulk', [OrdersController::class, 'assignBulk'])->middleware('role:branch,admin');
 Route::post('orders/settle-money-bulk', [OrdersController::class, 'settleMoneyBulk'])->middleware('role:branch,admin');
 Route::post('orders', [OrdersController::class, 'store'])
     ->middleware('role:branch,admin,callcenter,store,customer');
-Route::put('orders/{id}', [OrdersController::class, 'update'])->middleware('role:branch,admin,callcenter');
+Route::put('orders/{id}', [OrdersController::class, 'update'])->middleware('role:branch,admin');
 Route::post('orders/{id}/split', [OrdersController::class, 'split'])->middleware('role:branch,admin');
-Route::post('orders/{id}/images', [OrdersController::class, 'addImages']);
+/* 🔴 كان بلا `role:` خالص — يعني أي حساب مسجّل (عميل تطبيق · محل · طيار ·
+   محاسب · hr) يقدر يناديه على **أي** أوردر. والدالة بترجّع
+   `OrderWire::full` كامل (اسم المستلم وتليفوناته وعنوانه ودبوسه والأسعار
+   والتحصيل وبيانات المُرسِل)، وبتكتب روابط صور خام على الطرد كمان.
+   الأدوار دي هي اللي بترفع صور فعلًا: الطيار (إثبات التسليم) والفرع
+   والإدارة والمحل (صور الطرد وقت التسجيل). */
+Route::post('orders/{id}/images', [OrdersController::class, 'addImages'])
+    ->middleware('role:pilot,branch,admin,store');
 Route::post('orders/{id}/assign', [OrdersController::class, 'assign'])->middleware('role:branch,admin');
 Route::post('orders/{id}/transfer', [OrdersController::class, 'transfer'])->middleware('role:branch,admin');
 Route::post('orders/{id}/transfer-branch', [OrdersController::class, 'transferBranch'])
-    ->middleware('role:branch,admin,callcenter');
+    ->middleware('role:branch,admin');
 Route::post('orders/{id}/receive', [OrdersController::class, 'receive'])->middleware('role:pilot,branch,admin');
+/* ✅ «سلّمت الأوردر للطيار» من بوابة المحل. تأكيد مش بوابة — الطيار
+   بيقدر يبدأ رحلته حتى لو المحل نسي يدوس، والطابع بيتملا لوحده ساعتها. */
+Route::post('orders/{id}/handover', [OrdersController::class, 'handover'])
+    ->middleware('role:store,branch,admin');
 Route::post('orders/{id}/start-trip', [OrdersController::class, 'startTrip'])->middleware('role:pilot,branch,admin');
 Route::post('orders/{id}/deliver', [OrdersController::class, 'deliver'])->middleware('role:pilot,branch,admin');
 Route::post('orders/{id}/undeliver', [OrdersController::class, 'undeliver'])->middleware('role:pilot,branch,admin');
-Route::post('orders/{id}/cancel', [OrdersController::class, 'cancel'])->middleware('role:branch,admin,callcenter');
-Route::post('orders/{id}/postpone', [OrdersController::class, 'postpone'])->middleware('role:branch,admin,callcenter');
-Route::post('orders/{id}/unpostpone', [OrdersController::class, 'unpostpone'])->middleware('role:branch,admin,callcenter');
+Route::post('orders/{id}/cancel', [OrdersController::class, 'cancel'])->middleware('role:branch,admin');
+Route::post('orders/{id}/postpone', [OrdersController::class, 'postpone'])->middleware('role:branch,admin');
+Route::post('orders/{id}/unpostpone', [OrdersController::class, 'unpostpone'])->middleware('role:branch,admin');
 Route::post('orders/{id}/settle-money', [OrdersController::class, 'settleMoney'])->middleware('role:branch,admin');
+
+/* ⏰ «الأوردر جاهز — برجاء الاستعجال» من بوابة المحل.
+   المحل بيستعجل أوردراته هو بس (الفحص جوّه الكنترولر على added_by)،
+   والتنبيه بيروح للفرع لو الأوردر لسه في المكتب أو للطيار لو متحمّل.
+   الحد: استعجال كل 4 دقايق لكل أوردر. */
+Route::post('orders/{id}/urge', [OrderUrgeController::class, 'urge'])
+    ->middleware('role:store,admin,branch');
+Route::post('orders/urges/seen', [OrderUrgeController::class, 'seen'])
+    ->middleware('role:admin,branch,pilot,callcenter');
 // 💰 تعديل عمولة طيار — بيدخل مستحقاته فعلًا، فالكتابة للمدير ومدير الفرع بس
 Route::post('pilot-commission-adjustments', [BoardController::class, 'commissionAdjustmentSave'])
     ->middleware('role:admin,branch');
 Route::delete('pilot-commission-adjustments/{id}', [BoardController::class, 'commissionAdjustmentDelete'])
     ->middleware('role:admin,branch');
+
+/* ═══ 💰 قسم حسابات الطيارين — الشيت اليومي والتقفيلة والسلف المؤجلة ═══
+   نموذج «روح دمشق» مطبّق على طياري الشركة، بفرق إن الخانات بتتملى من
+   المنظومة. القراءة لمشرف الفرع والمحاسب والإدارة (والكنترولر بيقصّ
+   مشرف الفرع على فرعه)، والكتابة على الشيت لمشرف الفرع والإدارة.
+   السلف المؤجلة وقفل الشهر والإعدادات **للإدارة بس** — قرارات مالية. */
+Route::get('pilot-accounting/month', [PilotAccountingController::class, 'month'])
+    ->middleware('role:admin,branch,accountant');
+Route::get('pilot-accounting/deferred', [PilotAccountingController::class, 'deferredList'])
+    ->middleware('role:admin,branch,accountant');
+Route::get('pilot-accounting/settings', [PilotAccountingController::class, 'settingsGet'])
+    ->middleware('role:admin,branch,accountant');
+
+/* المحاسب اتضاف 2026-08-31 مع برنامج «تقفيل الطيارين» المستقل
+   (public/accounts.html). بياخد اللي مشرف الفرع بياخده بالظبط: يملا
+   الشيت ويظبّط أعمدة الصلاحيات. أما السلف والقفل والإعدادات تحت
+   فبيفضلوا للإدارة — قرارات مالية زي ما التعليق فوق بيقول. */
+Route::post('pilot-accounting/entry', [PilotAccountingController::class, 'entrySave'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/perms', [PilotAccountingController::class, 'permsSave'])
+    ->middleware('role:admin,branch,accountant');
+
+/* 🔐 التلاتة دول كانوا `role:admin` لوحده. اتوسّعوا عشان شاشة الصلاحيات
+   جوّه البرنامج تقدر تمنحهم — والحارس بقى جوّه الكنترولر:
+   `act.deferred` و`act.lock` و`act.settings`.
+
+   ⚠️ التوسيع ده **مش** بيفتح حاجة لحد لوحده: اللي مالوش صف صلاحيات
+   بياخد `defaultPermKeys()` اللي التلاتة دول مقصوصين منها بالظبط،
+   فبيترفض بـ403 زي ما المسار كان بيرفضه. اللي بيتغيّر هو إن الأدمن
+   بقى يقدر يمنحهم لحد بعينه من الشاشة. */
+Route::post('pilot-accounting/deferred', [PilotAccountingController::class, 'deferredSave'])
+    ->middleware('role:admin,branch,accountant');
+Route::delete('pilot-accounting/deferred/{id}', [PilotAccountingController::class, 'deferredDelete'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/deferred/{id}/payment', [PilotAccountingController::class, 'deferredPayment'])
+    ->middleware('role:admin,branch,accountant');
+
+Route::post('pilot-accounting/lock', [PilotAccountingController::class, 'lockMonth'])
+    ->middleware('role:admin,branch,accountant');
+Route::delete('pilot-accounting/lock', [PilotAccountingController::class, 'unlockMonth'])
+    ->middleware('role:admin,branch,accountant');
+Route::put('pilot-accounting/settings', [PilotAccountingController::class, 'settingsSave'])
+    ->middleware('role:admin,branch,accountant');
+
+/* 🔐 شاشة الصلاحيات جوّه البرنامج — للإدارة بس، والكنترولر بيتأكد تاني.
+   الرد بيحمل تعريف المجموعات نفسه، فالشاشة بتتبني من السيرفر. */
+/* 👥 تقفيل الموظفين — نفس أدوار تقفيلة الطيارين، والكنترولر بيقصّ
+   بالصلاحيات (page.staff) وبنطاق الفرع. الحضور من attendance_sessions
+   اللي بيتكتب تلقائيًا من فتح صفحات الفرع والكول سنتر والإدارة. */
+Route::get('pilot-accounting/staff-month', [PilotAccountingController::class, 'staffMonth'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/staff-entry', [PilotAccountingController::class, 'staffEntrySave'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/staff-perms', [PilotAccountingController::class, 'staffPermsSave'])
+    ->middleware('role:admin,branch,accountant');
+
+Route::get('pilot-accounting/acl', [PilotAccountingController::class, 'aclList'])
+    ->middleware('role:admin');
+Route::put('pilot-accounting/acl', [PilotAccountingController::class, 'aclSave'])
+    ->middleware('role:admin');
+Route::delete('pilot-accounting/acl/{userId}', [PilotAccountingController::class, 'aclReset'])
+    ->middleware('role:admin');
 
 /* ── لوحة العمليات: الدور والورديات ── */
 Route::post('queue/enter', [BoardController::class, 'queueEnter'])->middleware('role:admin,branch,pilot_supervisor');
@@ -268,6 +398,9 @@ Route::post('queue/reorder', [BoardController::class, 'queueReorder'])->middlewa
 Route::post('queue/leave', [BoardController::class, 'queueLeave'])->middleware('role:admin,branch,pilot_supervisor');
 Route::post('shifts/open', [BoardController::class, 'shiftOpen'])->middleware('role:admin,branch,pilot_supervisor');
 Route::post('shifts/{id}/end', [BoardController::class, 'shiftEnd'])->middleware('role:admin,branch');
+/* 📊 تفاصيل التقفيلة (عهدة + أذونات + عمولات) — قراءة خالصة للتقرير */
+Route::get('shifts/{id}/closeout-details', [BoardController::class, 'shiftCloseoutDetails'])
+    ->middleware('role:admin,branch');
 Route::post('shifts/{id}/transfer', [BoardController::class, 'shiftTransfer'])->middleware('role:admin,branch,pilot_supervisor');
 Route::post('shifts/{id}/settlement', [BoardController::class, 'shiftSettlement'])->middleware('role:admin,branch');
 Route::post('pilots/{id}/return', [BoardController::class, 'pilotReturn'])->middleware('role:admin,branch');
@@ -287,6 +420,12 @@ Route::post('closeouts/monthly', [BoardController::class, 'closeoutSave'])->midd
    منها. الفتح والإغلاق قرار إداري مش تشغيلي. */
 Route::post('cash-stores', [FinanceController::class, 'cashStoresCreate'])
     ->middleware('role:admin');   // 💰
+/* 🔄 تحويل بين خزنتين — حركتين في معاملة واحدة. لازم تفضل **قبل**
+   `cash-stores/{id}/transactions`؟ لأ: دي مسار مختلف تمامًا (`transfer`
+   مش `{id}/transactions`) فمفيش تعارض. بس بتفضل قبل أي `cash-stores/{id}`
+   محتمل يتضاف بعدين — نفس درس `orders/urges`. */
+Route::post('cash-stores/transfer', [FinanceController::class, 'cashStoresTransfer'])
+    ->middleware('role:admin,accountant');   // 💰
 Route::post('complaints', [SupportController::class, 'complaintsCreate'])
     ->middleware('role:admin,callcenter,branch');
 Route::post('custody', [FinanceController::class, 'custodyCreate'])
@@ -342,26 +481,35 @@ Route::post('pilot/version', [PilotAppController::class, 'version'])
 // حد معدّل جوه الكنترولر (3 رسايل/ساعة لنفس رقم الموبايل)
 Route::post('public/contact-message', [PublicSiteController::class, 'contactMessage']);
 Route::post('public/join-request', [PublicSiteController::class, 'joinRequest']);
-Route::get('rd/bootstrap', [DamascusController::class, 'bootstrap']);   // 💰
-Route::get('rd/branches', [DamascusController::class, 'branchesList']);
-Route::post('rd/branches', [DamascusController::class, 'branchesCreate']);
-Route::get('rd/deferred', [DamascusController::class, 'deferredList']);   // 💰
-Route::post('rd/deferred', [DamascusController::class, 'deferredCreate']);   // 💰
-Route::get('rd/entries', [DamascusController::class, 'entriesList']);   // 💰
-Route::put('rd/entries', [DamascusController::class, 'entriesSave']);   // 💰
-Route::put('rd/entry-perms', [DamascusController::class, 'entryPermsSave']);   // 💰
-Route::post('rd/month-lock', [DamascusController::class, 'monthLockCreate']);
-Route::delete('rd/month-lock', [DamascusController::class, 'monthLockDelete']);
-Route::get('rd/month-locks', [DamascusController::class, 'monthLocksList']);
-Route::get('rd/perms', [DamascusController::class, 'permsList']);
-Route::put('rd/perms', [DamascusController::class, 'permsSave']);
-Route::get('rd/pilot-sheet', [DamascusController::class, 'pilotSheet']);   // 💰
-Route::get('rd/pilots', [DamascusController::class, 'pilotsList']);   // 💰
-Route::post('rd/pilots', [DamascusController::class, 'pilotsCreate']);   // 💰
-Route::get('rd/settings', [DamascusController::class, 'settingsGet']);   // 💰
-Route::put('rd/settings', [DamascusController::class, 'settingsPut']);   // 💰
-Route::get('rd/summaries', [DamascusController::class, 'summariesList']);   // 💰
-Route::put('rd/summaries', [DamascusController::class, 'summariesSave']);   // 💰
+/* ═══ روح دمشق (rd/*) — مقفولة على الحسابات والإدارة ══════════
+   🔒 التسعة وعشرين مسار دول كانوا **بلا أي قيد دور**، وأربعة منهم بلا أي
+   فحص صلاحية جوّه الكنترولر كمان (bootstrap · branchesList · pilotsList ·
+   monthLocksList) — يعني أجور طياري دمشق ومصروفاتهم كانت مكشوفة لأي حساب
+   موظف، وللطيارين بتوكن الموبايل، وللمحلات.
+   الأدوار دي هي اللي بيتفتح لها تطبيق الحسابات (appsFor: accounts ⟵ damascus).
+   منظومة rd_perms جوّه الكنترولر بتفضل شغّالة فوق القيد ده.
+   ⚠️ المسارات متداخلة مع غيرها في الملف فمينفعش تتلفّ في group — القيد
+   على كل واحد لوحده، والحارس بيعدّهم. */
+Route::get('rd/bootstrap', [DamascusController::class, 'bootstrap'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/branches', [DamascusController::class, 'branchesList'])->middleware('role:admin,accountant');
+Route::post('rd/branches', [DamascusController::class, 'branchesCreate'])->middleware('role:admin,accountant');
+Route::get('rd/deferred', [DamascusController::class, 'deferredList'])->middleware('role:admin,accountant');   // 💰
+Route::post('rd/deferred', [DamascusController::class, 'deferredCreate'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/entries', [DamascusController::class, 'entriesList'])->middleware('role:admin,accountant');   // 💰
+Route::put('rd/entries', [DamascusController::class, 'entriesSave'])->middleware('role:admin,accountant');   // 💰
+Route::put('rd/entry-perms', [DamascusController::class, 'entryPermsSave'])->middleware('role:admin,accountant');   // 💰
+Route::post('rd/month-lock', [DamascusController::class, 'monthLockCreate'])->middleware('role:admin,accountant');
+Route::delete('rd/month-lock', [DamascusController::class, 'monthLockDelete'])->middleware('role:admin,accountant');
+Route::get('rd/month-locks', [DamascusController::class, 'monthLocksList'])->middleware('role:admin,accountant');
+Route::get('rd/perms', [DamascusController::class, 'permsList'])->middleware('role:admin,accountant');
+Route::put('rd/perms', [DamascusController::class, 'permsSave'])->middleware('role:admin,accountant');
+Route::get('rd/pilot-sheet', [DamascusController::class, 'pilotSheet'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/pilots', [DamascusController::class, 'pilotsList'])->middleware('role:admin,accountant');   // 💰
+Route::post('rd/pilots', [DamascusController::class, 'pilotsCreate'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/settings', [DamascusController::class, 'settingsGet'])->middleware('role:admin,accountant');   // 💰
+Route::put('rd/settings', [DamascusController::class, 'settingsPut'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/summaries', [DamascusController::class, 'summariesList'])->middleware('role:admin,accountant');   // 💰
+Route::put('rd/summaries', [DamascusController::class, 'summariesSave'])->middleware('role:admin,accountant');   // 💰
 Route::put('store/pickup-profile', [CustomersController::class, 'pickupProfileSave'])
     ->middleware('role:store');
 Route::post('trust/rate', [TrustController::class, 'rateDirect'])
@@ -376,8 +524,8 @@ Route::post('pilot/leave-requests/end', [PilotAppController::class, 'leaveEnd'])
     ->middleware('role:pilot');
 Route::post('pilot/shift/end', [PilotAppController::class, 'shiftEnd'])
     ->middleware('role:pilot');
-Route::get('rd/closeout/day', [DamascusController::class, 'closeoutDay']);   // 💰
-Route::get('rd/closeout/month', [DamascusController::class, 'closeoutMonth']);   // 💰
+Route::get('rd/closeout/day', [DamascusController::class, 'closeoutDay'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/closeout/month', [DamascusController::class, 'closeoutMonth'])->middleware('role:admin,accountant');   // 💰
 Route::put('cash-stores/{id}', [FinanceController::class, 'cashStoresUpdate'])
     ->middleware('role:admin,accountant');   // 💰
 Route::delete('cash-stores/{id}', [FinanceController::class, 'cashStoresDelete'])
@@ -413,7 +561,13 @@ Route::post('order-notifications/{id}/sent', [SupportController::class, 'orderNo
     ->middleware('role:admin,branch,callcenter');
 Route::put('customer/addresses/{id}', [CustomerAppController::class, 'addressesUpdate']);
 Route::delete('customer/addresses/{id}', [CustomerAppController::class, 'addressesDelete']);
+/* المستلمون المحفوظون: كان فيه قايمة وحفظ بس — الحذف اتضاف مع شاشة
+   «عملائي» عشان التاجر يقدر يشيل مستلم مابيتعاملش معاه تاني. */
+Route::delete('customer/receivers/{id}', [CustomerAppController::class, 'receiversDelete']);
 Route::post('customers/{id}/block', [CustomersController::class, 'block'])
+    ->middleware('role:admin');
+// فتح/قفل تعديل سعر التوصيل للعميل — زي المحلات (طلب 2026-09-02)
+Route::post('customers/{id}/price-edit', [CustomersController::class, 'priceEdit'])
     ->middleware('role:admin');
 Route::post('customers/{id}/zone', [CustomersController::class, 'setZone'])
     ->middleware('role:admin');
@@ -432,19 +586,23 @@ Route::post('orders/{id}/apply-wallet', [SupportController::class, 'applyWallet'
 Route::post('orders/{id}/clear-return-flag', [BoardController::class, 'orderClearReturnFlag'])
     ->middleware('role:pilot,admin,branch');
 Route::post('orders/{id}/rate-receiver', [TrustController::class, 'rateReceiver']);
-Route::post('orders/{id}/rating', [SupportController::class, 'orderRating']);
+/* 🔒 كان بلا قيد دور وبيرجّع OrderWire::full — أي حساب مسجّل كان بيقرا
+   أي أوردر كامل (تليفونات وعناوين ودبابيس وأسعار) بحجة إنه بيقيّم.
+   وحارس الفرع للدور branch جوّه الكنترولر. */
+Route::post('orders/{id}/rating', [SupportController::class, 'orderRating'])
+    ->middleware('role:admin,branch,callcenter,store');
 Route::post('pilot-transfers/{id}/approve', [BoardController::class, 'transferApprove'])
     ->middleware('role:admin,pilot_supervisor');
 Route::post('pilot-transfers/{id}/end', [BoardController::class, 'transferEnd'])
     ->middleware('role:admin,branch,pilot_supervisor');
 Route::post('pilot-transfers/{id}/reject', [BoardController::class, 'transferReject'])
     ->middleware('role:admin,pilot_supervisor');
-Route::put('rd/branches/{id}', [DamascusController::class, 'branchesUpdate']);
-Route::delete('rd/branches/{id}', [DamascusController::class, 'branchesDelete']);
-Route::put('rd/deferred/{id}', [DamascusController::class, 'deferredUpdate']);   // 💰
-Route::delete('rd/deferred/{id}', [DamascusController::class, 'deferredDelete']);   // 💰
-Route::put('rd/pilots/{id}', [DamascusController::class, 'pilotsUpdate']);   // 💰
-Route::delete('rd/pilots/{id}', [DamascusController::class, 'pilotsDelete']);
+Route::put('rd/branches/{id}', [DamascusController::class, 'branchesUpdate'])->middleware('role:admin,accountant');
+Route::delete('rd/branches/{id}', [DamascusController::class, 'branchesDelete'])->middleware('role:admin,accountant');
+Route::put('rd/deferred/{id}', [DamascusController::class, 'deferredUpdate'])->middleware('role:admin,accountant');   // 💰
+Route::delete('rd/deferred/{id}', [DamascusController::class, 'deferredDelete'])->middleware('role:admin,accountant');   // 💰
+Route::put('rd/pilots/{id}', [DamascusController::class, 'pilotsUpdate'])->middleware('role:admin,accountant');   // 💰
+Route::delete('rd/pilots/{id}', [DamascusController::class, 'pilotsDelete'])->middleware('role:admin,accountant');
 Route::post('return-requests/{id}/approve', [BoardController::class, 'returnRequestApprove'])
     ->middleware('role:admin,branch');   // 💰
 Route::post('return-requests/{id}/reject', [BoardController::class, 'returnRequestReject'])
@@ -472,7 +630,7 @@ Route::post('pilot/orders/{id}/deliver', [OrdersController::class, 'deliver'])
     ->middleware('role:pilot');   // 💰
 Route::post('pilot/orders/{id}/undeliver', [OrdersController::class, 'undeliver'])
     ->middleware('role:pilot');
-Route::put('rd/deferred/{id}/payment', [DamascusController::class, 'deferredPayment']);   // 💰
+Route::put('rd/deferred/{id}/payment', [DamascusController::class, 'deferredPayment'])->middleware('role:admin,accountant');   // 💰
 Route::post('wallets/{ownerType}/{ownerId}/credit', [FinanceController::class, 'walletCredit'])
     ->middleware('role:admin,branch,accountant');   // 💰
 Route::post('wallets/{ownerType}/{ownerId}/debit', [FinanceController::class, 'walletDebit'])

@@ -105,9 +105,18 @@ final class CoreWire
             'notes'     => $r['notes'] ?? null,
             'commissionType'  => $r['commission_type'] ?: 'percent',
             'commissionValue' => (float) ($r['commission_value'] ?? 0),
+            /* 💵 شاشة أسعار الطيارين في برنامج التقفيل بتقرا منهم */
+            'hourRate'      => round((float) ($r['hour_rate'] ?? 0), 2),
+            'paidLeaveDays' => (int) ($r['paid_leave_days'] ?? 0),
             'assignedBranchId' => isset($r['assigned_branch_id']) && $r['assigned_branch_id'] !== null
                 ? (int) $r['assigned_branch_id'] : null,
             'assignedBranchName' => $r['assigned_branch_name'] ?? null,
+            /* الفرع الثابت — ده اللي بيتعرض في جدول الطيارين وبتفتح عليه
+               كل وردية. `assignedBranch*` فوق هو الفرع الجاري (بيفضى
+               لما الوردية تتقفل)، والاتنين بيختلفوا وقت الدعم المؤقت. */
+            'homeBranchId' => isset($r['home_branch_id']) && $r['home_branch_id'] !== null
+                ? (int) $r['home_branch_id'] : null,
+            'homeBranchName' => $r['home_branch_name'] ?? null,
             'pilotStatus' => Vocab::pilotStatusToWire($r['status'] ?? null),
             'queueNo'     => isset($r['queue_no']) && $r['queue_no'] !== null ? (int) $r['queue_no'] : null,
             'statusSince' => WireTime::toWire($r['status_since'] ?? null),
@@ -125,6 +134,11 @@ final class CoreWire
                 ? (float) $r['required_daily_hours'] : null,
             'appVersion' => $r['app_version'] ?? null,
             'createdAt'  => WireTime::toWire($r['created_at'] ?? null),
+            /* 🗄️ الأرشفة (2026-09-01) — بديل الحذف. `null` = طيار فعّال.
+               الواجهة بتستعمله في صفحة المؤرشفين وفي إخفاء أزرار الإجراءات.
+               مسجّل كإضافة مقصودة في بوابتي السلك (الأصل مافيهوش الحقل). */
+            'archivedAt' => WireTime::toWire($r['archived_at'] ?? null),
+            'archivedBy' => $r['archived_by'] ?? null,
         ];
     }
 
@@ -145,7 +159,10 @@ final class CoreWire
     {
         $wire = self::pilot($row);
 
-        if ($role === 'pilot_supervisor') {
+        /* 🔒 `callcenter` اتضاف 2026-09-01: الكول سنتر بياخد قايمة الطيارين
+           للتنسيق («مين متاح») — مش محتاج عهدتهم ولا مرتباتهم ولا عمولتهم.
+           نفس قاعدة «تفاصيل وشكوى بس». */
+        if (in_array($role, ['pilot_supervisor', 'callcenter'], true)) {
             foreach (self::PILOT_MONEY_KEYS as $k) {
                 unset($wire[$k]);
             }
@@ -172,9 +189,15 @@ final class CoreWire
             'shopPhone'   => $r['shop_phone'] ?? null,
             'shopPhone2'  => $r['shop_phone2'] ?? null,
             'shopAddress' => $r['shop_address'] ?? null,
+            /* 🏪 خاصية تعديل سعر التوصيل للمحل (طلب 2026-09-03) — INTENTIONAL */
+            'canEditPrice' => (int) ($r['can_edit_price'] ?? 0) === 1,
             'senderId'    => isset($r['sender_id']) && $r['sender_id'] !== null ? (int) $r['sender_id'] : null,
             'blocked'     => (bool) ($r['blocked'] ?? 0),
             'protected'   => (bool) ($r['protected'] ?? 0),
+            /* 💵 رواتب تقفيلة الموظفين — مسجّلين INTENTIONAL في بوابة السلك */
+            'hourRate'      => round((float) ($r['hour_rate'] ?? 0), 2),
+            'monthlySalary' => round((float) ($r['monthly_salary'] ?? 0), 2),
+            'paidLeaveDays' => (int) ($r['paid_leave_days'] ?? 0),
             'createdAt'   => WireTime::toWire($r['created_at'] ?? null),
         ];
     }

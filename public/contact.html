@@ -50,6 +50,14 @@
 
 <!-- ═══ نظام التصميم ═══ -->
 <link rel="stylesheet" href="assets/css/site.css" />
+<style>
+  /* أرقام الدعم الإضافية تحت الرقم الأساسي في بطاقات التواصل */
+  .more-nums{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .more-nums a{display:flex;align-items:center;gap:8px;font-size:14px;
+    color:var(--txt);text-decoration:none;direction:ltr;justify-content:flex-end}
+  .more-nums a:hover{color:var(--red-l)}
+  .more-nums .lb{font-size:12px;color:#8a8a94;font-weight:700;direction:rtl}
+</style>
 </head>
 <body>
 
@@ -208,6 +216,8 @@
         </div>
         <b data-cms="contact.channels.1.title">اتصل بنا</b>
         <a id="cTel">غير متاح حاليًا</a>
+        <!-- باقي أرقام الهاتف — بيتحقن من الإعدادات، وبيفضل فاضي لو رقم واحد -->
+        <div class="more-nums" id="cTelMore"></div>
         <p class="muted" id="cHours"></p>
       </div>
 
@@ -217,6 +227,8 @@
         </div>
         <b data-cms="contact.channels.2.title">واتساب</b>
         <a id="cWa" href="#msgForm" data-cms="contact.channels.2.link">أسرع طريقة لطلب مندوب</a>
+        <!-- باقي أرقام الواتساب — نفس فكرة أرقام الهاتف فوق -->
+        <div class="more-nums" id="cWaMore"></div>
         <p class="muted" data-cms="contact.channels.2.desc">راسلنا وسنرد عليك فوراً خلال ساعات العمل.</p>
       </div>
 
@@ -414,6 +426,7 @@
     <div>
       <h2 class="site-footer__title">الشركة</h2>
       <div class="site-footer__links">
+        <a class="site-footer__link" href="profile.html">بروفايل الشركة</a>
         <a class="site-footer__link" href="contact.html">تواصل معنا</a>
         <a class="site-footer__link" href="index.html#join">انضم إلينا</a>
         <a class="site-footer__link" href="privacy.html">سياسة الخصوصية</a>
@@ -440,6 +453,8 @@
 </a>
 
 <script src="assets/js/site-icons.js"></script>
+<!-- قايمة أرقام الدعم — لازم قبل السكربت اللي بيقرا الإعدادات تحت -->
+<script src="assets/js/support-numbers.js"></script>
 <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
 
 <script>
@@ -489,7 +504,8 @@
   }
 
   function applyInfo() {
-    var wa = INFO.whatsapp ? 'https://wa.me/' + INFO.whatsapp : '';
+    // الرقم في الإعدادات محلي (01…) — wa.me بيقبل الدولي بس
+    var wa = INFO.whatsapp ? 'https://wa.me/' + SupportNums.intl(INFO.whatsapp) : '';
 
     /* الهاتف */
     if (INFO.phone) {
@@ -520,6 +536,14 @@
       $('sHours').textContent = INFO.hours;
     }
 
+    /* ── باقي الأرقام ──
+       البطاقة بتعرض الرقم الأساسي زي ما كانت، والباقي بيتحط تحته. لو رقم
+       واحد بس، البلوك بيفضل فاضي فالبطاقة شكلها زي الأول بالظبط. */
+    fillMore('cTelMore', INFO.phones, function (x) { return 'tel:' + x.n; }, false);
+    fillMore('cWaMore', INFO.whatsapps, function (x) {
+      return 'https://wa.me/' + SupportNums.intl(x.n) + '?text=' + encodeURIComponent(WA_TEXT);
+    }, true);
+
     /* مفيش ولا قناة؟ نوجّه المستخدم للنموذج */
     var none = !INFO.phone && !INFO.whatsapp && !INFO.email;
     $('infoFallback').style.display = none ? '' : 'none';
@@ -527,6 +551,30 @@
       setLink('waFab', '#msgForm', null);
       setLink('ftWa', '#msgForm', null);
       setLink('ftTel', '#msgForm', null);
+    }
+  }
+
+  /**
+   * بيملا بلوك «باقي الأرقام»: بيتخطّى الأول (الأساسي معروض فوق أصلًا)،
+   * ولو مفيش غيره بيسيب البلوك فاضي.
+   */
+  function fillMore(boxId, list, href, external) {
+    var box = document.getElementById(boxId);
+    if (!box) return;
+    box.innerHTML = '';
+    var rest = (list || []).slice(1);
+    for (var i = 0; i < rest.length; i++) {
+      var a = document.createElement('a');
+      a.href = href(rest[i]);
+      if (external) { a.target = '_blank'; a.rel = 'noopener'; }
+      if (rest[i].label) {
+        var s = document.createElement('span');
+        s.className = 'lb';
+        s.textContent = rest[i].label;
+        a.appendChild(s);
+      }
+      a.appendChild(document.createTextNode(rest[i].n));
+      box.appendChild(a);
     }
   }
 
@@ -548,8 +596,17 @@
       /* 🔴 فلترة عند المصدر: القيم دي معناها «لسه ما اتحطّتش» مش «دي بياناتنا».
          عرض رقم ميّت على صفحة التواصل أوحش من عدم عرض حاجة — الزبون بيتصل،
          مايردّش عليه حد، ويستنتج إن الشركة قافلة. (اتكشفت في مراجعة 2026-08-20.) */
-      INFO.phone    = real('phone',    info.phone);
-      INFO.whatsapp = real('whatsapp', String(info.whatsapp || '').replace(/\D/g, ''));
+      /* القوايم الأول: `SupportNums` بيوحّد الشكل (نص أو {n,label}) وبيقع
+         على الرقم المفرد لو القايمة لسه ما اتحطّتش. وبعدين بنشيل الأرقام
+         الوهمية بنفس فلتر `real` — لو الأساسي كان وهمي، اللي بعده بيطلع
+         مكانه بدل ما البطاقة تفضل «غير متاح». */
+      INFO.phones = (window.SupportNums ? SupportNums.phones(info) : [])
+        .filter(function (x) { return real('phone', x.n); });
+      INFO.whatsapps = (window.SupportNums ? SupportNums.whatsapps(info) : [])
+        .filter(function (x) { return real('whatsapp', x.n); });
+
+      INFO.phone    = INFO.phones.length    ? INFO.phones[0].n    : '';
+      INFO.whatsapp = INFO.whatsapps.length ? INFO.whatsapps[0].n : '';
       INFO.email    = real('email',    info.email);
       INFO.hours    = String(info.hours || '').trim();
     })
@@ -632,7 +689,7 @@
                      (v.subject ? '\nالموضوع: ' + v.subject : '') +
                      '\n\n' + v.message;
           html += '<br /><a class="btn btn--wa btn--sm mt-16" target="_blank" rel="noopener" href="https://wa.me/' +
-                  INFO.whatsapp + '?text=' + encodeURIComponent(text) + '">ابعت الرسالة على واتساب</a>';
+                  SupportNums.intl(INFO.whatsapp) + '?text=' + encodeURIComponent(text) + '">ابعت الرسالة على واتساب</a>';
         }
         showMsg('bad', html);
       })

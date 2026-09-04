@@ -50,6 +50,21 @@
 
 <!-- ═══ نظام التصميم ═══ -->
 <link rel="stylesheet" href="assets/css/site.css" />
+<style>
+  /* شريط اختيار «من» + خانة البحث فوق جدول الأسعار */
+  .zfilter{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  .zfilter__lbl{font-weight:800;font-size:14px;color:var(--txt);margin-inline-end:4px}
+  .zchip{padding:7px 16px;border-radius:999px;font-size:13.5px;font-weight:800;cursor:pointer;
+    background:transparent;color:#c8c8d0;border:1px solid var(--line);font-family:inherit;
+    transition:background .18s,border-color .18s,color .18s}
+  .zchip:hover{border-color:var(--red-l);color:var(--txt)}
+  .zchip[aria-pressed="true"]{background:var(--red);border-color:var(--red);color:#fff}
+  .zsearch{flex:1;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--card);color:var(--txt);font-family:inherit;font-size:14px}
+  .zsearch:focus{outline:none;border-color:var(--red-l)}
+  .zcount{font-size:13px;color:var(--mut,#8a8a94);margin-top:10px}
+  .zempty{padding:26px;text-align:center;color:#8a8a94;font-size:14.5px}
+</style>
 </head>
 <body>
 
@@ -361,6 +376,7 @@
     <div>
       <h2 class="site-footer__title">الشركة</h2>
       <div class="site-footer__links">
+        <a class="site-footer__link" href="profile.html">بروفايل الشركة</a>
         <a class="site-footer__link" href="contact.html">تواصل معنا</a>
         <a class="site-footer__link" href="index.html#join">انضم إلينا</a>
         <a class="site-footer__link" href="privacy.html">سياسة الخصوصية</a>
@@ -386,6 +402,7 @@
   <svg viewBox="0 0 24 24"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.65-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Z"/></svg>
 </a>
 
+<script src="assets/js/support-numbers.js"></script>
 <script src="assets/js/site-icons.js"></script>
 <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
 
@@ -428,51 +445,149 @@
     }
   })();
 
-  /* ══ ١) جدول المناطق ══
-     الرد الحالي بيرجّع {name, price} لكل منطقة. لو الـAPI ضاف الوقت المتوقع
-     بعد كده (est_minutes) العمود بيظهر لوحده — من غير ما نعدّل الصفحة. */
+  /* ══ ١) جدول الأسعار: من فين → لفين ══
+     🔴 كان بيعرض «المنطقة | السعر» بس، والـAPI بيرجّع صف لكل **مسار**
+     (فرع الاستلام → منطقة التسليم) — يعني المنطقة الواحدة بتتكرر مرة لكل
+     فرع. العميل كان بيشوف «6 اكتوبر — 30 جنيه» تلات مرات ورا بعض من غير
+     أي فرق باين، ومايعرفش السعر ده من فين أصلًا.
+
+     دلوقتي الجدول بيقول **من** و**إلى**، وفوقه شريط بيفلتر على «من»
+     وخانة بحث على «إلى». الصفحة بتتعامل مع الشكل القديم برضه: لو
+     `routes` مش موجود (كاش قديم للـAPI) بترجع للجدول القديم زي ما هو. */
   (function () {
     var box = document.getElementById('zonesBox');
     if (!box) return;
 
-    function minutesOf(z) {
-      var m = Number(z.est_minutes != null ? z.est_minutes : z.estMinutes);
-      return isFinite(m) && m > 0 ? m : 0;
+    var ALL = '__all__';
+    var state = { from: ALL, q: '' };
+    var routes = [];
+    var froms  = [];
+
+    function money(p) {
+      var n = Number(p);
+      return isFinite(n) && n > 0 ? Math.round(n) + ' جنيه' : null;
     }
 
-    function render(list) {
-      var hasTime = list.some(function (z) { return minutesOf(z) > 0; });
+    function matches(r) {
+      if (state.from !== ALL && r.from !== state.from) return false;
+      if (!state.q) return true;
+      var q = state.q;
+      return String(r.to).indexOf(q) !== -1 || String(r.from).indexOf(q) !== -1;
+    }
 
-      var head = '<tr><th>المنطقة</th><th>سعر التوصيل</th>' +
-                 (hasTime ? '<th>الوقت المتوقع</th>' : '') +
-                 '<th>ملاحظات</th></tr>';
-
-      var body = list.map(function (z) {
-        var price = Number(z.price);
-        var priceCell = isFinite(price) && price > 0
-          ? '<td class="table__price">' + Math.round(price) + ' جنيه</td>'
-          : '<td class="muted">حسب المسافة</td>';
-        var mins = minutesOf(z);
+    function rowsHtml(list) {
+      if (!list.length) {
+        return '<div class="zempty">مفيش منطقة بالاسم ده — جرّب جزء من الاسم، أو كلّمنا ونقولك.</div>';
+      }
+      var body = list.map(function (r) {
+        var m = money(r.price);
         return '<tr>' +
-                 '<td>' + esc(z.name) + '</td>' +
-                 priceCell +
-                 (hasTime ? '<td class="table__num">' + (mins ? mins + ' دقيقة تقريباً' : '—') + '</td>' : '') +
-                 '<td class="muted">تُحتسب من نقطة الاستلام</td>' +
+                 '<td>' + esc(r.from) + '</td>' +
+                 '<td>' + esc(r.to) + '</td>' +
+                 (m ? '<td class="table__price">' + m + '</td>'
+                    : '<td class="muted">حسب المسافة</td>') +
                '</tr>';
       }).join('');
+      return '<div class="table-wrap"><table class="table">' +
+               '<thead><tr>' +
+                 '<th>من (نقطة الاستلام)</th>' +
+                 '<th>إلى (منطقة التسليم)</th>' +
+                 '<th>سعر التوصيل</th>' +
+               '</tr></thead>' +
+               '<tbody>' + body + '</tbody>' +
+             '</table></div>';
+    }
 
+    /* بيتحدّث لوحده مع الفلتر — والرقم بيتحسب من المعروض فعلًا مش من الكل */
+    function paint() {
+      var list = routes.filter(matches);
+      document.getElementById('zTable').innerHTML = rowsHtml(list);
+      var el = document.getElementById('zCount');
+      if (el) {
+        el.textContent = list.length
+          ? 'بيتعرض ' + list.length + ' مسار من إجمالي ' + routes.length
+          : '';
+      }
+      Array.prototype.forEach.call(document.querySelectorAll('.zchip'), function (b) {
+        b.setAttribute('aria-pressed', b.dataset.from === state.from ? 'true' : 'false');
+      });
+    }
+
+    function chrome() {
+      /* كل الأسعار واحدة؟ نقولها بصريح العبارة فوق الجدول بدل ما العميل
+         يعدّي 400 صف عشان يكتشف كده بنفسه. الرقم من البيانات مش مكتوب. */
+      var prices = routes.map(function (r) { return Number(r.price) || 0; })
+                         .filter(function (p) { return p > 0; });
+      var flat = prices.length && Math.min.apply(null, prices) === Math.max.apply(null, prices);
+      var note = flat
+        ? '<div class="alert alert--info" style="margin-bottom:14px">' +
+            '<span>سعر التوصيل <b>' + Math.round(prices[0]) + ' جنيه</b> لكل المناطق اللي بنغطيها.' +
+            ' الجدول تحت بيوضّح كل مسار من نقطة الاستلام لمنطقة التسليم.</span>' +
+          '</div>'
+        : '';
+
+      var chips = ['<button type="button" class="zchip" data-from="' + ALL + '" aria-pressed="true">الكل</button>']
+        .concat(froms.map(function (f) {
+          return '<button type="button" class="zchip" data-from="' + esc(f) + '" aria-pressed="false">' + esc(f) + '</button>';
+        })).join('');
+
+      box.innerHTML =
+        note +
+        '<div class="zfilter">' +
+          '<span class="zfilter__lbl">الاستلام من:</span>' + chips +
+          '<input class="zsearch" id="zSearch" type="search" placeholder="🔍 دوّر على منطقة التسليم…" aria-label="بحث عن منطقة" />' +
+        '</div>' +
+        '<div id="zTable"></div>' +
+        '<div class="zcount" id="zCount"></div>';
+
+      Array.prototype.forEach.call(box.querySelectorAll('.zchip'), function (b) {
+        b.addEventListener('click', function () { state.from = b.dataset.from; paint(); });
+      });
+      var s = document.getElementById('zSearch');
+      if (s) {
+        s.addEventListener('input', function () { state.q = s.value.trim(); paint(); });
+      }
+      paint();
+    }
+
+    /* الشكل القديم — بيفضل موجود عشان لو الـAPI رجّع `zones` من غير
+       `routes` الصفحة تعرض حاجة مفيدة بدل ما تقع على المحتوى الاحتياطي. */
+    function renderLegacy(list) {
+      var body = list.map(function (z) {
+        var m = money(z.price);
+        return '<tr><td>' + esc(z.name) + '</td>' +
+               (m ? '<td class="table__price">' + m + '</td>' : '<td class="muted">حسب المسافة</td>') +
+               '<td class="muted">تُحتسب من نقطة الاستلام</td></tr>';
+      }).join('');
       box.innerHTML = '<div class="table-wrap"><table class="table">' +
-                        '<thead>' + head + '</thead><tbody>' + body + '</tbody>' +
-                      '</table></div>';
+                        '<thead><tr><th>المنطقة</th><th>سعر التوصيل</th><th>ملاحظات</th></tr></thead>' +
+                        '<tbody>' + body + '</tbody></table></div>';
     }
 
     getJSON('/api/public/coverage').then(function (res) {
-      var zones = (res && res.zones ? res.zones : []).filter(function (z) {
-        return z && String(z.name || '').trim();
+      routes = (res && res.routes ? res.routes : []).filter(function (r) {
+        return r && String(r.to || '').trim() && String(r.from || '').trim();
       });
-      if (!zones.length) return;                     /* الرد فاضي → المحتوى الاحتياطي يفضل */
-      zones.sort(function (a, b) { return Number(a.price || 0) - Number(b.price || 0); });
-      render(zones);
+
+      if (!routes.length) {
+        var zones = (res && res.zones ? res.zones : []).filter(function (z) {
+          return z && String(z.name || '').trim();
+        });
+        if (!zones.length) return;               /* الرد فاضي → المحتوى الاحتياطي يفضل */
+        zones.sort(function (a, b) { return Number(a.price || 0) - Number(b.price || 0); });
+        renderLegacy(zones);
+        return;
+      }
+
+      var seen = {};
+      routes.forEach(function (r) { seen[r.from] = true; });
+      froms = Object.keys(seen).sort(function (a, b) { return a.localeCompare(b, 'ar'); });
+
+      routes.sort(function (a, b) {
+        return a.from.localeCompare(b.from, 'ar') || a.to.localeCompare(b.to, 'ar');
+      });
+
+      chrome();
     }).catch(function (e) { console.warn('coverage:', e); });
   })();
 
@@ -492,7 +607,8 @@
     }
     function setWa(el, num, text) {
       if (!el) return;
-      el.href = 'https://wa.me/' + encodeURIComponent(num) +
+      // intl: الرقم المخزّن محلي (01…) وwa.me بيقبل الدولي بس
+      el.href = 'https://wa.me/' + SupportNums.intl(num) +
                 (text ? '?text=' + encodeURIComponent(text) : '');
       el.target = '_blank';
       el.rel = 'noopener';

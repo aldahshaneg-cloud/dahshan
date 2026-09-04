@@ -107,7 +107,16 @@
 
   function copyLook(from, to) {
     var cs = global.getComputedStyle(from);
-    [ "fontFamily","fontSize","fontWeight","color","backgroundColor","backgroundImage",
+    /* 🔴 صورة الخلفية **مابتتنسخش** — عن قصد.
+       الـselect في تطبيق العميل عليه سهم SVG للقايمة المنسدلة، ونسخه
+       على خانة البحث عمل مشكلتين:
+         ١) اتنسخ من غير background-repeat فاتكرر وملى الخانة مثلثات
+            من الآخر للآخر — ده اللي شافه صاحب النظام على الإنتاج
+            2026-08-28 (خانة 488×46 = 246 مثلث).
+         ٢) وحتى بعد تصليح التكرار، السهم بيقع تحت زرار المسح ✕ في
+            الواجهة العربية فيبان شكل مبهم.
+       والخانة دي **بحث نصي** مش قايمة منسدلة، فالسهم مالوش معنى فيها. */
+    [ "fontFamily","fontSize","fontWeight","color","backgroundColor",
       "borderTopWidth","borderRightWidth","borderBottomWidth","borderLeftWidth",
       "borderTopStyle","borderRightStyle","borderBottomStyle","borderLeftStyle",
       "borderTopColor","borderRightColor","borderBottomColor","borderLeftColor",
@@ -178,6 +187,32 @@
     wrap.appendChild(input);
     wrap.appendChild(clear);
     wrap.appendChild(pop);
+
+    /* 🔴 لازم نشيل ستايل الإخفاء **قبل** ما ننسخ الشكل.
+
+       اللسعة: `copyLook` بتنسخ `height` و`padding` و`border` من الـselect
+       لخانة البحث. والـselect بيتخفي بعدها بـ`height:1px; padding:0;
+       border:0` — تمام في أول ربط.
+
+       بس الربط بيتكرر: لما الفرع يتغيّر، `populateZoneSelect` بتعمل
+       `cloneNode` + `replaceChild` للـselect. والنسخة بتاخد سمة `style`
+       معاها — يعني **بتيجي وهي مخفية أصلًا**. فالمراقب بينده `attach`
+       عليها، و`copyLook` بتقرا 1px وتنسخها لخانة البحث.
+
+       النتيجة اللي ظهرت على الإنتاج: خانة «المنطقة» في مودال الطلب
+       بترتفاعها **بكسل واحد** — النص اللي بيتختار مش بيبان، والموظف
+       بالكاد يقدر يقف عليها بالماوس. وحقل «منطقة الاستلام» سليم لأن
+       الـselect بتاعه عمره ما بيتبدل.
+
+       التصفير هنا بيرجّع الـselect لشكله الطبيعي عشان القياس يطلع صح،
+       وبعدين بيتخفي من جديد تحت. */
+    sel.style.position = "";
+    sel.style.opacity = "";
+    sel.style.pointerEvents = "";
+    sel.style.width = "";
+    sel.style.height = "";
+    sel.style.padding = "";
+    sel.style.border = "";
 
     copyLook(sel, input);
     popLook(sel, pop);

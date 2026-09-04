@@ -128,11 +128,37 @@
       '</div>';
   }
 
+  /* 💸 اختيار الخزنة — إجباري مع أي كتابة عمولة (طلب صاحب النظام
+     2026-09-03: «لما أكتب العمولة في الصفحة دي لازم تحصل حركة في سجل
+     الخزنة»). السيرفر بيسجّل حركة `out` بالقيمة، والتعديل بعد كده
+     بالفرق بس، والمسح بيرجّع المصروف للخزنة. */
+  function storeSelHtml(id, selectedId) {
+    var stores = global._cashStoresData || [];
+    var opts = stores.map(function (s, i) {
+      var sel = selectedId != null ? String(s.id) === String(selectedId) : i === 0;
+      return '<option value="' + esc(s.id) + '"' + (sel ? ' selected' : '') + '>' +
+        esc(s.name) + (s.branchName ? ' — ' + esc(s.branchName) : '') + '</option>';
+    }).join("");
+    return '<div style="margin-bottom:13px">' +
+      '<label style="display:block;font-size:.78rem;color:#9a9aa2;margin-bottom:5px">' +
+      '💸 الخزنة اللي العمولة هتتصرف منها (بتتسجل حركة بقيمتها/بالفرق في سجل الخزنة)</label>' +
+      '<select id="' + id + '" style="width:100%;box-sizing:border-box;background:#1e1e24;' +
+      'border:1px solid rgba(128,128,128,.3);border-radius:9px;padding:10px 12px;color:#eee;' +
+      'font-size:.9rem;font-family:inherit">' +
+      '<option value="">— اختر الخزنة —</option>' + opts + '</select></div>';
+  }
+  function toast(msg) {
+    if (typeof global.showToast === "function") global.showToast(msg, "success");
+  }
+
   async function save(body, box, close, onDone) {
     try {
-      await api().post(API_PATH, body);
+      var res = await api().post(API_PATH, body);
       await load(S.pilotId, S.from, S.to);
       close();
+      var d = Number(res && res.paidDelta) || 0;
+      if (d > 0.004) toast("💸 اتسجلت حركة خروج من الخزنة: " + money(d) + " ج.م");
+      else if (d < -0.004) toast("↩️ رجع للخزنة فرق العمولة: " + money(-d) + " ج.م");
       if (onDone) onDone();
     } catch (e) {
       err(box, "خطأ: " + (e && e.message ? e.message : e));
@@ -158,6 +184,11 @@
         '½ نص سعر التوصيل (' + money(price / 2) + ')</button></div>' +
       fld("السبب", "_caReason", "text", cur ? cur.reason : "",
           'إجباري — ده مبلغ بيدخل مستحقات الطيار، والسبب بيفضل مسجّل في السجل.') +
+      storeSelHtml("_caStore", cur ? cur.paidStoreId : null) +
+      (cur && cur.paidAt
+        ? '<div style="font-size:.78rem;color:#22c55e;font-weight:700;margin-bottom:10px">' +
+          '💸 اتصرف منها من الخزنة: ' + money(cur.paidAmount) + ' ج.م — التعديل هيتحاسب بالفرق بس</div>'
+        : "") +
       (cur
         ? '<div style="font-size:.74rem;color:#8a8a92;border-top:1px solid rgba(128,128,128,.2);padding-top:10px">' +
           'آخر تعديل: <b>' + esc(cur.createdBy) + '</b>' + (cur.updatedAt || cur.createdAt
@@ -173,9 +204,11 @@
     var box = sheet("✏️ تعديل عمولة أوردر", body, function (b, close) {
       var amt = parseFloat(b.querySelector("#_caAmt").value);
       var rsn = b.querySelector("#_caReason").value.trim();
+      var st  = b.querySelector("#_caStore").value;
       if (isNaN(amt) || amt < 0) return err(b, "اكتب مبلغ صحيح (صفر أو أكتر)");
       if (!rsn) return err(b, "اكتب سبب التعديل");
-      save({ pilotId: pilot.id, orderId: order.id, amount: amt, reason: rsn }, b, close, onDone);
+      if (!st) return err(b, "اختر الخزنة — العمولة لازم تتسجل بحركة في سجل الخزنة");
+      save({ pilotId: pilot.id, orderId: order.id, amount: amt, reason: rsn, cashStoreId: st }, b, close, onDone);
     }, extraBtn);
 
     box.querySelector("#_caHalf").onclick = function () {
@@ -185,11 +218,16 @@
     };
     var del = box.querySelector("#_caDel");
     if (del) del.onclick = async function () {
-      if (!confirm("ترجّع الأوردر ده للحساب التلقائي بنسبة الطيار؟")) return;
+      var q = cur.paidAmount > 0
+        ? "ترجّع الأوردر ده للحساب التلقائي؟ المصروف (" + money(cur.paidAmount) + " ج.م) هيرجع للخزنة بحركة دخول."
+        : "ترجّع الأوردر ده للحساب التلقائي بنسبة الطيار؟";
+      if (!confirm(q)) return;
       try {
-        await api().del(API_PATH + "/" + encodeURIComponent(cur.id));
+        var res = await api().del(API_PATH + "/" + encodeURIComponent(cur.id));
         await load(S.pilotId, S.from, S.to);
         box.remove();
+        var rf = Number(res && res.refunded) || 0;
+        if (rf > 0.004) toast("↩️ رجع للخزنة: " + money(rf) + " ج.م");
         if (onDone) onDone();
       } catch (e) { err(box, "خطأ: " + (e && e.message ? e.message : e)); }
     };
@@ -206,23 +244,28 @@
       '</div>' +
       fld("المبلغ (ج.م)", "_caAmt", "number", "") +
       fld("السبب", "_caReason", "text", "", 'إجباري — مثال: تعويض شكوى العميل أحمد.') +
-      fld("التاريخ", "_caDate", "date", today, 'بيحدد الشهر اللي المبلغ يتحسب فيه.');
+      fld("التاريخ", "_caDate", "date", today, 'بيحدد الشهر اللي المبلغ يتحسب فيه.') +
+      storeSelHtml("_caStore", null);
 
     sheet("➕ عمولة بلا أوردر", body, function (b, close) {
       var amt = parseFloat(b.querySelector("#_caAmt").value);
       var rsn = b.querySelector("#_caReason").value.trim();
       var dt  = b.querySelector("#_caDate").value;
+      var st  = b.querySelector("#_caStore").value;
       if (isNaN(amt) || amt < 0) return err(b, "اكتب مبلغ صحيح");
       if (!rsn) return err(b, "اكتب السبب");
-      save({ pilotId: pilot.id, amount: amt, reason: rsn, effectiveDate: dt || undefined }, b, close, onDone);
+      if (!st) return err(b, "اختر الخزنة — العمولة لازم تتسجل بحركة في سجل الخزنة");
+      save({ pilotId: pilot.id, amount: amt, reason: rsn, effectiveDate: dt || undefined, cashStoreId: st }, b, close, onDone);
     });
   }
 
   async function remove(id, onDone) {
-    if (!confirm("تمسح المبلغ ده من مستحقات الطيار؟")) return;
+    if (!confirm("تمسح المبلغ ده من مستحقات الطيار؟ لو اتصرف من الخزنة هيرجع لها بحركة دخول.")) return;
     try {
-      await api().del(API_PATH + "/" + encodeURIComponent(id));
+      var res = await api().del(API_PATH + "/" + encodeURIComponent(id));
       await load(S.pilotId, S.from, S.to);
+      var rf = Number(res && res.refunded) || 0;
+      if (rf > 0.004) toast("↩️ رجع للخزنة: " + money(rf) + " ج.م");
       if (onDone) onDone();
     } catch (e) { alert("خطأ: " + (e && e.message ? e.message : e)); }
   }
@@ -245,7 +288,8 @@
         return '<tr style="border-top:1px solid rgba(128,128,128,.18)">' +
           '<td style="padding:8px 6px;white-space:nowrap">' + esc(a.effectiveDate) + '</td>' +
           '<td style="padding:8px 6px">' + esc(a.reason || "—") + '</td>' +
-          '<td style="padding:8px 6px;color:#22c55e;font-weight:700;white-space:nowrap">' + money(a.amount) + ' ج.م</td>' +
+          '<td style="padding:8px 6px;color:#22c55e;font-weight:700;white-space:nowrap">' + money(a.amount) + ' ج.م' +
+            (a.paidAt ? ' <span title="اتصرفت من الخزنة">💸</span>' : '') + '</td>' +
           '<td style="padding:8px 6px;color:#8a8a92;font-size:.78rem">' + esc(a.createdBy || "—") + '</td>' +
           '<td style="padding:8px 6px">' + (canEdit()
             ? '<button type="button" onclick="CommAdj.remove(' + Number(a.id) + ', window._caRefresh)" ' +

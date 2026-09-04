@@ -69,6 +69,10 @@ final class CustomerAppWire
             'defaultBranchId'   => $c['default_branch_id'] !== null ? (int) $c['default_branch_id'] : null,
             'defaultBranchName' => $c['_branch_name'] ?? null,
             'profileCompleted'  => (bool) $c['profile_completed'],
+            /* فتح تعديل سعر التوصيل من إدارة العملاء (طلب 2026-09-02) —
+               التطبيق بيفتح خانة السعر لما تبقى true، والبوابة الحقيقية
+               على السيرفر في customerDeliveryPrice */
+            'canEditPrice'      => (int) ($c['can_edit_price'] ?? 0) === 1,
             'blocked'           => (bool) $c['blocked'],
             'notifSeenAt'       => WireTime::toWire($c['notif_seen_at']),
             'createdAt'         => WireTime::toWire($c['created_at']),

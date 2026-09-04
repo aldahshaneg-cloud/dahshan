@@ -207,6 +207,12 @@ button,input,select,textarea{font-family:inherit;color:inherit}
 
 <script src="assets/js/constants.js"></script>
 <script src="assets/js/api.js"></script>
+<script>
+/* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش مصرّح
+   له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل أي دور
+   بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html. */
+var APP_KEY = "storesadmin";
+</script>
 <script src="assets/js/trust-admin.js"></script>
 <script>
 /* اتحول من Firebase لـ REST API — الجلسة كوكي PHP والبيانات بالاستطلاع */
@@ -246,7 +252,7 @@ window.doLogin = async function () {
   err.textContent = "";
   if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
   try {
-    const res = await API.login(u, p);
+    const res = await API.login(u, p, APP_KEY);
     if (res.user.role !== "admin") {
       /* مفيش logout هنا عن قصد: الجلسة كوكي واحد على الدومين كله، فالـlogout
          مابيلغيش «محاولة الدخول» دي — بيقتل جلسة نفس اليوزر في كل تاباته
@@ -661,9 +667,14 @@ function renderPane() {
         ${kv("الهاتف", esc(s.shopPhone || "—"), 1)}
         ${kv("هاتف إضافي", esc(s.shopPhone2 || "—"), 1)}
         ${kv("العنوان", esc(s.shopAddress || "—"))}
+        ${kv("تعديل سعر التوصيل", s.canEditPrice
+          ? `<span class="tag t-ok">💰 مفتوح — يزوّد أو ينقّص</span>`
+          : `<span class="tag">🔒 مقفول — سعر المنطقة إجباري</span>`)}
         ${kv("اتسجّل", fmtFull(s.createdAt))}
         <div class="acts">
           <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
+          <button class="btn ${s.canEditPrice ? "danger" : "ok"}" data-act="price">
+            ${s.canEditPrice ? "💰 اقفل تعديل سعر التوصيل" : "💰 افتح تعديل سعر التوصيل"}</button>
           <button class="btn ${s.blocked ? "ok" : "danger"}" data-act="block">
             ${s.blocked ? "✅ إلغاء الإيقاف" : "🚫 إيقاف المحل"}</button>
           <button class="btn danger" data-act="del">🗑️ حذف المحل</button>
@@ -709,6 +720,7 @@ $("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
 function act(a, s) {
   if (a === "edit")     return openEdit(s);
   if (a === "block")    return doBlock(s, !s.blocked);
+  if (a === "price")    return askPriceEdit(s);
   if (a === "del")      return askDelete(s);
   if (a === "rate")     return askRate(s);
   if (a === "identity") return askIdentity(s);
@@ -800,6 +812,33 @@ async function doBlock(s, on) {
     await API.post(`/api/users/${s.id}/block`, { blocked: on });
     toast(on ? "اتوقف المحل 🚫" : "اترفع الإيقاف ✅");
   } catch (e) { toast("خطأ: " + (e.message || "")); }
+}
+
+/* ══ فتح/قفل تعديل سعر التوصيل — خاصية لبعض المحلات (طلب 2026-09-03) ══
+   الافتراضي مقفول: سعر المنطقة إجباري والبوابة بتتجاهل أي سعر مبعوت.
+   المفتوح له يزوّد **أو ينقّص** زي ما يحب (عكس العملاء اللي ليهم أرضية).
+   القفل من غير تأكيد؛ الفتح بتأكيد لأنه صلاحية تسعير بيتحاسب عليها
+   الطيار والفرع. */
+function askPriceEdit(s) {
+  if (s.canEditPrice) return doPriceEdit(s, false);
+  openM("فتح تعديل سعر التوصيل", `
+    <p style="font-size:13.5px;line-height:1.9;margin-bottom:16px">
+      هتفتح لـ<b>${esc(nameOf(s))}</b> إمكانية تغيير سعر التوصيل من البوابة؟<br>
+      <span style="color:var(--muted);font-size:12.5px">هيقدر <b>يزوّد أو ينقّص</b> السعر عن سعر
+      المنطقة لكل طرد — والفرع والطيار بيتحاسبوا بالسعر اللي هو كتبه.
+      المحلات المقفولة بتاخد سعر المنطقة إجباريًا.</span></p>
+    <div style="display:flex;gap:9px">
+      <button class="btn ok" id="okBtn">💰 افتح الخاصية</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = () => { closeM(); doPriceEdit(s, true); };
+}
+async function doPriceEdit(s, on) {
+  try {
+    const d = await API.post(`/api/users/${s.id}/price-edit`, { enabled: on });
+    s.canEditPrice = !!d.canEditPrice;
+    renderPane();
+    toast(on ? "اتفتح له تعديل السعر ✓ — خانة السعر بقت مفتوحة في بوابته" : "اتقفل تعديل السعر ✓ — سعر المنطقة إجباري");
+  } catch (e) { toast("تعذّر: " + (e?.message || e)); }
 }
 
 function askDelete(s) {

@@ -76,7 +76,54 @@ class WireEdgeCases extends Command
 
             $this->seed($pdo);
 
-            $compare = function (string $what, mixed $old, mixed $new) use (&$pass, &$fail, &$failures): void {
+            /* حقول اتضافت في السلك الجديد ومالهاش مقابل في الأصل — بتتشال
+               من الجديد قبل المقارنة عشان الفحص يفضل بيمسك أي اختلاف تاني.
+               نفس فكرة INTENTIONAL_FIELDS في wire:verify. */
+            $intentional = [
+                'originBranchId'   => true,   // الفرع اللي أنشأ الأوردر (2026-08-26)
+                'originBranchName' => true,
+                // تأكيد المحل إنه سلّم الأوردر للطيار (2026-08-29)
+                'handedOverAt'     => true,
+                'handedOverBy'     => true,
+                // مين دفع توصيل المرتجع (2026-09-02) — شوف wire:verify
+                'undeliveredFareBy' => true,
+                /* فرع الطيار الثابت (2026-08-30) — الأصل كان بيستعمل
+                   assigned_branch_id لمعنيين، وبيمسحه عند قفل الوردية. */
+                'homeBranchId'     => true,
+                'homeBranchName'   => true,
+                // الأرشفة — بديل الحذف (2026-09-01). شوف VerifyWireParity للسبب الكامل.
+                'archivedAt'       => true,
+                'archivedBy'       => true,
+                /* رواتب التقفيلة (2026-09-01) — سعر الساعة والإجازة على سلك
+                   الطيار والمستخدم. شوف VerifyWireParity للسبب الكامل. */
+                'hourRate'        => true,
+                'paidLeaveDays'   => true,
+                'monthlySalary'   => true,
+            ];
+            // وحقول الطرد الجديدة (2026-08-27)
+            $intentionalDelivery = ['receiverFromReceipt' => true, 'lat' => true, 'lng' => true];
+
+            $compare = function (string $what, mixed $old, mixed $new) use (&$pass, &$fail, &$failures, $intentional, $intentionalDelivery): void {
+                if (is_array($new)) {
+                    foreach (array_keys($intentional) as $f) {
+                        if (! array_key_exists($f, (array) $old)) {
+                            unset($new[$f]);
+                        }
+                    }
+                    if (is_array($new['deliveries'] ?? null)) {
+                        foreach ($new['deliveries'] as $i => $d) {
+                            if (! is_array($d)) {
+                                continue;
+                            }
+                            $oldD = ((array) $old)['deliveries'][$i] ?? [];
+                            foreach (array_keys($intentionalDelivery) as $f) {
+                                if (! is_array($oldD) || ! array_key_exists($f, $oldD)) {
+                                    unset($new['deliveries'][$i][$f]);
+                                }
+                            }
+                        }
+                    }
+                }
                 $a = json_encode($old, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 $b = json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 if ($a === $b) { $pass++; return; }

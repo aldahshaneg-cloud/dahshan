@@ -239,8 +239,14 @@ button,input,select,textarea{font-family:inherit;color:inherit}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="assets/js/constants.js"></script>
 <script src="assets/js/api.js"></script>
+<script>
+/* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش مصرّح
+   له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل أي دور
+   بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html. */
+var APP_KEY = "pilotsadmin";
+</script>
 <script src="assets/js/vendor/pusher.min.js"></script>
-<script src="assets/js/realtime.js?v=20260822a"></script>
+<script src="assets/js/realtime.js?v=20260829a"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════
    لوحة مشرف الطيارين — pilot_supervisor
@@ -311,7 +317,7 @@ window.doLogin = async function () {
   err.textContent = "";
   if (!u || !p) { err.textContent = "اكتب اسم المستخدم وكلمة المرور"; return; }
   try {
-    const res = await API.login(u, p);
+    const res = await API.login(u, p, APP_KEY);
     if (!ROLES_OK.includes(res.user.role)) { err.textContent = "الصفحة دي لمشرف الطيارين بس"; return; }
     applySession(res.user);
   } catch (e) { err.textContent = e.message || "اسم المستخدم أو كلمة المرور غير صحيحة"; }
@@ -466,7 +472,7 @@ function fillBranchSelect(id, sel, all) {
 const ST = {
   waiting:   ["في الدور", "t-ok"],
   delivering:["بيوصّل",   "t-info"],
-  on_leave:  ["في إذن",   "t-warn"],
+  onLeave:   ["في إذن",   "t-warn"],   // القيمة على السلك onLeave مش on_leave
 };
 function statusTag(p) {
   const s = p.pilotStatus || "";
@@ -965,7 +971,10 @@ function renderMap() {
   if (S.tab !== "map") return;
   fillBranchSelect("mapBranch", "", true);
   const bf = $("mapBranch") ? $("mapBranch").value : "";
-  const pts = S.pilots.filter(p => p.location && (!bf || String(p.assignedBranchId) === String(bf)));
+  /* بوابة الوردية زي باقي اللوحات: الحالة الفاضية = مفيش وردية مفتوحة.
+     الإحداثيات بتفضل متسجّلة بعد قفل الوردية، فمن غير الشرط ده الطيار
+     بيفضل ظاهر على الخريطة وهو خارج الشغل في آخر مكان معروف. */
+  const pts = S.pilots.filter(p => p.location && p.pilotStatus && (!bf || String(p.assignedBranchId) === String(bf)));
   $("mapInfo").textContent = `${pts.length} طيار عليهم موقع من ${S.pilots.length}`;
 
   if (!window.L) return;

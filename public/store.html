@@ -14,7 +14,10 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- `viewport-fit=cover` شرط عشان `env(safe-area-inset-*)` ترجّع قيمة
+       حقيقية على الأيفون. من غيرها بترجّع صفر والشريط السفلي بيقع تحت
+       شريط الـhome indicator الأبيض. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>طيّار | بوابة المحلات</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
@@ -31,6 +34,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="محلات الدهشان" />
   <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <!-- نسخة البوابة — التحديث الذاتي تحت بيقارن بيها نسخة السيرفر.
+       لازم تتحرّك مع أي رفعة فيها تغيير جافاسكربت، وإلا الآلية عمياء. -->
+  <meta name="app-version" content="1.1.2" />
 
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
@@ -83,12 +89,22 @@
       const p = window.cairoParts(d);
       return p.y + p.m + p.d;
     };
-    /* هل التاريخ ده النهاردة بتوقيت مصر؟ */
+    /* ── اليوم التجاري (بلاغ 2026-09-02): قبل 9ص = اليوم اللي قبله —
+       نفس قاعدة السيرفر (App\Support\BizDay) وترقيم الأوردرات ── */
+    window.BIZ_DAY_START = 9;
+    window.bizDayKey = function (d) {
+      const t = d ? new Date(d) : new Date();
+      const h = +new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Africa/Cairo", hour: "2-digit", hour12: false
+      }).format(t);
+      return window.cairoDayKey(h < window.BIZ_DAY_START ? new Date(t.getTime() - 864e5) : t);
+    };
+    /* هل اللحظة دي «النهاردة»؟ — باليوم التجاري مش الميلادي */
     window.isCairoToday = function (iso) {
       if (!iso) return false;
       const t = new Date(iso);
       if (isNaN(t)) return false;
-      return window.cairoDayKey(t) === window.cairoDayKey(new Date());
+      return window.bizDayKey(t) === window.bizDayKey(new Date());
     };
 
     window.escJs = function (v) {
@@ -96,15 +112,21 @@
     };
   </script>
   <script src="assets/js/constants.js"></script>
+<script src="assets/js/support-numbers.js"></script>
   <script src="assets/js/api.js"></script>
   <!-- منظومة الثقة: البحث الفوري بالتليفون + بادچ السمعة + تقييم المستلم -->
   <script src="assets/js/trust.js"></script>
-  <script src="assets/js/zonepick.js?v=20260826"></script>
+  <script src="assets/js/zonepick.js?v=20260830b"></script>
   <script type="module">
     /* ═══ REST بدل فايربيز — كل القراءة والكتابة عبر assets/js/api.js ═══
        التحويل جراحي (CONVENTIONS.md بند «الواجهات المحوّلة»): نفس أشكال
        البيانات القديمة، والـ serializers في PHP بترجّع اللسان القديم. */
     const api = window.API;
+
+    /* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش
+       مصرّح له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل
+       أي دور بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html. */
+    const APP_KEY = "store";
 
     /* توحيد المعرّفات كنصوص — الواجهة القديمة كانت بتقارن مفاتيح فايربيز
        النصية بـ ===، والـ API بيرجّع ids رقمية. من غير التوحيد ده
@@ -291,6 +313,12 @@
       window._currentUser = data;
       document.getElementById("login-screen").style.display = "none";
       document.getElementById("app").style.display          = "flex";
+      /* شاشة الترحيب هنا بالظبط: `applySession` هي النقطة الوحيدة اللي
+         بتعدّي منها مسارات الدخول التلاتة (استعادة جلسة · دخول عادي ·
+         منتقي الإدارة)، و`navigateTo` مالهاش علاقة بيها — فالتنقّل بين
+         التبويبات مابيعرضهاش. والتطبيق بيترسم وراها أثناء الثانية
+         والنص فلما تختفي يكون جاهز. */
+      showWelcome(data);
       // هوية المحل في صفحة حسابي — الفرع والحالة بيتحدّثوا من renderStoreIdentity()
       // أول ما ملف الاستلام و/أو قائمة الفروع توصل (مش نص ثابت زي الأول)
       $("prof-shop").textContent = data.shopName || data.username;
@@ -301,6 +329,15 @@
       $("sender-phone").textContent = data.shopPhone  || "—";
       startListeners(data);
       navigateTo("new-order");
+      /* بعد `navigateTo` عشان الفورم يكون اتبنى. `restoreDraft` بترجّع
+         false لو مافيش مسوّدة، فالفورم النضيف بيفضل زي ما هو.
+
+         🔴 البوابة بتتفتح **بره الـtry** عشان تتفتح حتى لو الاسترجاع
+         رمى — وإلا مسوّدة بايظة واحدة بتقفل الحفظ للجلسة كلها. */
+      setTimeout(() => {
+        try { window.restoreDraft?.(); } catch (e) {}
+        window._draftReady = true;
+      }, 0);
     }
 
     /* استعادة الجلسة عند التحميل.
@@ -400,7 +437,7 @@
       try {
         const pt = JSON.parse(raw);
         if (!pt?.username || !pt?.password) return false;
-        const res = await api.login(pt.username, pt.password);
+        const res = await api.login(pt.username, pt.password, APP_KEY);
         return await _finishLogin(res.user);
       } catch(e) { console.error("store passthrough error", e); return false; }
     }
@@ -452,7 +489,7 @@
       btn.disabled = true; btn.textContent = "جاري التحقق…";
       try {
         // التحقق كله على السيرفر: كلمة المرور bcrypt + الإيقاف (403 برسالة عربية)
-        const res = await api.login(username, password);
+        const res = await api.login(username, password, APP_KEY);
         await _finishLogin(res.user);
       } catch (e) {
         errEl.textContent = e.message || "اسم المستخدم أو كلمة المرور غير صحيحة";
@@ -467,6 +504,16 @@
       window._zonesList    = [];
       window._ordersData   = [];
       window._delivCount   = 0;
+      window._wallet       = { balance: 0, txns: [] };
+      /* الشاشات الجديدة لازم تتقفل مع الخروج — وإلا شاشة الدخول بتظهر
+         ورا سايد بار مفتوح أو ترحيب معلّق. */
+      window.closeNotifs?.();
+      window.closeDrawer?.();
+      window.hideWelcome?.();
+      _welcomeFor = null;              // دخول تاني يعرض الترحيب من جديد
+      window._notifs   = { seenAt: 0, log: [], snap: {}, ready: false };
+      window._notifUser = null;
+      window.renderNotifBadge?.();
       clearSession();
       // إنهاء جلسة السيرفر كمان — وإلا منتقي المحلات هيظهر تاني فورًا للإدارة
       api.logout().catch(() => {});
@@ -485,24 +532,448 @@
     /* ══════════════════════════════════════════════════════
        NAVIGATION
     ══════════════════════════════════════════════════════ */
-    const PAGES = ["home", "new-order", "my-orders", "reports", "profile"];
+    const PAGES = ["home", "new-order", "my-orders", "reports", "profile", "wallet",
+                   "addressbook", "clients"];
     const PAGE_TITLES = { "home": "الرئيسية", "new-order": "طلب جديد",
-                          "my-orders": "طلباتي", "reports": "تقاريري", "profile": "حسابي" };
+                          "my-orders": "طلباتي", "reports": "تقاريري", "profile": "حسابي",
+                          "wallet": "المحفظة",
+                          /* «عناويني» و«عملائي» — نفس شاشتي تطبيق العملاء
+                             (طلب صاحب النظام 2026-09-02)، الدخول من «حسابي» */
+                          "addressbook": "عناويني", "clients": "عملائي" };
+
+
+    /* ══════════════════════════════════════════════════════════════
+       ① شاشة الترحيب
+       ──────────────────────────────────────────────────────────────
+       «مرة واحدة عند فتح التطبيق» = مرة لكل تحميل للصفحة ولكل محل.
+       متغيّر في الذاكرة مش `localStorage` عن قصد: المطلوب تظهر مع كل
+       فتح، مش مرة واحدة في العمر. و`navigateTo` مالهاش علاقة بيها
+       خالص، فالتنقّل بين التبويبات مابيعرضهاش.
+
+       🔴 وأهم حاجة فيها: بوابة «حدّد موقع محلك» **إجبارية**، ونداء
+       الملف اللي بيفتحها async — ممكن يرجع في نص ثانية. لو اتفتحت
+       تحت شاشة الترحيب، المحل بيشوف شاشة متجمّدة. عشان كده أي حاجة
+       إجبارية بتتأجّل بـ`afterWelcome` لحد ما الترحيب يختفي.
+    ══════════════════════════════════════════════════════════════ */
+    const WELCOME_MS = 1700;
+    let _welcomeFor = null, _welcomeQ = [];
+    window._welcomeOn = false;
+
+    window.showWelcome = function (data) {
+      const ov = document.getElementById("welcomeOverlay");
+      if (!ov) return;
+      const who = (data && data.username) || "";
+      if (_welcomeFor === who) return;          // اتعرضت للمحل ده خلاص
+      _welcomeFor = who;
+      const n = document.getElementById("wel-shop");
+      if (n) n.textContent = (data && (data.shopName || data.username)) || "—";
+      ov.setAttribute("aria-hidden", "false");
+      ov.classList.remove("out");
+      ov.style.display = "flex";
+      // فريم واحد قبل ما نضيف `on` — من غيره الترانزيشن مابيشتغلش
+      requestAnimationFrame(() => ov.classList.add("on"));
+      window._welcomeOn = true;
+      clearTimeout(window._welTimer);
+      window._welTimer = setTimeout(hideWelcome, WELCOME_MS);
+    };
+
+    function _flushWelcomeQ() {
+      const q = _welcomeQ;
+      _welcomeQ = [];
+      q.forEach(fn => { try { fn(); } catch (e) {} });
+    }
+
+    function hideWelcome() {
+      clearTimeout(window._welTimer);
+      const ov = document.getElementById("welcomeOverlay");
+      if (!window._welcomeOn) { _flushWelcomeQ(); return; }
+      window._welcomeOn = false;
+      if (ov) {
+        ov.classList.add("out");
+        setTimeout(() => {
+          ov.classList.remove("on", "out");
+          ov.style.display = "none";
+          ov.setAttribute("aria-hidden", "true");
+        }, 380);
+      }
+      _flushWelcomeQ();
+    }
+    window.hideWelcome = hideWelcome;
+
+    /** بينفّذ فورًا لو الترحيب مش شغّال، وإلا بيأجّل لحد ما يختفي */
+    window.afterWelcome = function (fn) {
+      if (!window._welcomeOn) { try { fn(); } catch (e) {} return; }
+      _welcomeQ.push(fn);
+    };
+
+    /* ══════════════════════════════════════════════════════════════
+       ② السايد بار
+    ══════════════════════════════════════════════════════════════ */
+    window.openDrawer = function () {
+      window.closeNotifs?.();
+      const d = document.getElementById("drawer"), s = document.getElementById("drawerScrim");
+      if (!d) return;
+      syncDrawer();
+      d.classList.add("on"); s?.classList.add("on");
+      d.setAttribute("aria-hidden", "false");
+      document.getElementById("drawerBtn")?.setAttribute("aria-expanded", "true");
+    };
+
+    window.closeDrawer = function () {
+      const d = document.getElementById("drawer"), s = document.getElementById("drawerScrim");
+      d?.classList.remove("on"); s?.classList.remove("on");
+      d?.setAttribute("aria-hidden", "true");
+      document.getElementById("drawerBtn")?.setAttribute("aria-expanded", "false");
+    };
+
+    /** رابط في السايد بار: بيقفل الأول عشان الحركة تبان، وبعدين بينقل */
+    window.drawerGo = function (page, scrollToId) {
+      closeDrawer();
+      navigateTo(page);
+      if (scrollToId) {
+        setTimeout(() => document.getElementById(scrollToId)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" }), 90);
+      }
+    };
+
+    /** بيحدّث اسم المحل والصفحة النشطة وشارة الطلبات جوه السايد بار */
+    function syncDrawer() {
+      const u = window._currentUser || {};
+      const p = window._pickupProfile || {};
+      const nm = document.getElementById("dr-shop");
+      const us = document.getElementById("dr-user");
+      if (nm) nm.textContent = p.shopName || u.shopName || u.username || "—";
+      if (us) us.textContent = u.username ? "@" + u.username : "";
+      document.querySelectorAll("#drawer [data-nav]").forEach(b =>
+        b.classList.toggle("active", b.dataset.nav === window._currentPage));
+      const c = document.getElementById("dr-orders-cnt");
+      const b = document.getElementById("orders-badge");
+      if (c && b) {
+        c.textContent = b.textContent;
+        c.style.display = b.style.display === "flex" ? "flex" : "none";
+      }
+    }
+    window.syncDrawer = syncDrawer;
+
+    /* ══════════════════════════════════════════════════════════════
+       ③ الإشعارات — من تغيّرات حالة شحنات المحل نفسه
+       ──────────────────────────────────────────────────────────────
+       🔴 مفيش نظام إشعارات للمحلات على السيرفر: جدول `notifications`
+       فيه `customer_id` بس ومفيش أي مسار API للمحل. فالجرس ده مبني
+       على البيانات اللي الشاشة **بتجيبها أصلًا** كل ٨ ثواني.
+
+       يعني: سجل حقيقي لتغيّرات حالة شحناتك على الجهاز ده — مش إشعارات
+       فورية من السيرفر. مكتوبة صراحة تحت اللوحة عشان محدش يفتكرها
+       حاجة تانية.
+
+       «غير مقروء» = اللي حصل بعد آخر مرة فتح فيها اللوحة (`seenAt`)،
+       متخزّن لكل محل لوحده — محل تاني على نفس الجهاز مايشوفش سجل غيره.
+    ══════════════════════════════════════════════════════════════ */
+    const NOTIF_KEY = "tiar-store-notifs:";
+    const NOTIF_MAX = 60;
+    window._notifs = { seenAt: 0, log: [], snap: {}, ready: false };
+    window._notifUser = null;
+
+    function loadNotifs(username) {
+      window._notifUser = username || null;
+      window._notifs = { seenAt: 0, log: [], snap: {}, ready: false };
+      if (!username) return;
+      try {
+        const raw = localStorage.getItem(NOTIF_KEY + username);
+        if (raw) {
+          const v = JSON.parse(raw);
+          window._notifs.seenAt = Number(v.seenAt) || 0;
+          window._notifs.log    = Array.isArray(v.log) ? v.log.slice(0, NOTIF_MAX) : [];
+          window._notifs.snap   = v.snap && typeof v.snap === "object" ? v.snap : {};
+          window._notifs.ready  = !!v.ready;
+        }
+      } catch (e) { /* التخزين مقفول أو ممتلي — الجرس بيبدأ فاضي وخلاص */ }
+      renderNotifBadge();
+    }
+
+    function saveNotifs() {
+      const n = window._notifs;
+      if (!window._notifUser || !n) return;
+      try {
+        localStorage.setItem(NOTIF_KEY + window._notifUser, JSON.stringify({
+          seenAt: n.seenAt, log: n.log.slice(0, NOTIF_MAX), snap: n.snap, ready: true
+        }));
+      } catch (e) {}
+    }
+
+    /** نص الإشعار وأيقونته من الحالة الجديدة */
+    function notifTextFor(o) {
+      const s = o.status || "";
+      const num = o.orderNum || "";
+      if (s === "تم التسليم")      return { icon: "✅", txt: num + " اتسلّم للعميل" };
+      if (s === "جاري التوصيل")    return { icon: "🛵", txt: num + " الطيار خده وفي الطريق" };
+      if (s === "لم يتم التوصيل")  return { icon: "⚠️", txt: num + " ماتسلّمش — محتاج متابعة" };
+      if (s === "ملغي")            return { icon: "🚫", txt: num + " اتلغى" };
+      if (s === "مؤجل")            return { icon: "⏳", txt: num + " اتأجّل" };
+      if (s === "قيد التنفيذ")     return { icon: "📦", txt: num + " اتقبل وجاهز للتحميل" };
+      return null;
+    }
+
+    /**
+     * بيقارن حالة كل أوردر بآخر لقطة، وأي تغيير بيتسجّل إشعار.
+     *
+     * 🔴 أول تشغيل بيبني اللقطة **في صمت**: من غير كده المحل اللي عنده
+     * ٥٠ شحنة كان هيفتح التطبيق ويلاقي ٥٠ إشعار «جديد» دفعة واحدة.
+     * وكمان الأوردر الجديد **مش خبر** — هو اللي عمله بنفسه.
+     */
+    function scanNotifs() {
+      const n = window._notifs;
+      if (!n || !window._notifUser) return;
+      const list = window._ordersData || [];
+      if (!list.length) return;
+
+      const first = !n.ready;
+      let changed = false;
+
+      list.forEach(o => {
+        const id = String(o.id || o.orderNum || "");
+        if (!id) return;
+        const st = o.status || "";
+        const was = n.snap[id];
+        n.snap[id] = st;
+        if (was === st) return;
+        changed = true;
+        if (first || was === undefined) return;   // لقطة أولى / أوردر جديد = مش خبر
+        const t = notifTextFor(o);
+        if (!t) return;
+        /* وقت الإشعار من السيرفر لما يكون متاح — مش لحظة الاستطلاع،
+           عشان «تم التسليم» يقول وقت التسليم الحقيقي. */
+        const at = o.deliveredAt || o.statusSince || o.updatedAt || null;
+        const ms = at ? new Date(at).getTime() : Date.now();
+        n.log.unshift({ id: id, icon: t.icon, txt: t.txt,
+                        at: isFinite(ms) ? ms : Date.now() });
+      });
+
+      if (first) n.ready = true;
+      if (changed || first) {
+        n.log = n.log.slice(0, NOTIF_MAX);
+        saveNotifs();
+        renderNotifBadge();
+      }
+    }
+    window.scanNotifs = scanNotifs;
+
+    function unreadCount() {
+      const n = window._notifs;
+      if (!n) return 0;
+      return n.log.filter(e => e.at > n.seenAt).length;
+    }
+
+    function renderNotifBadge() {
+      const b = document.getElementById("notifBadge");
+      if (!b) return;
+      const c = unreadCount();
+      b.textContent = c > 9 ? "9+" : String(c);
+      b.style.display = c ? "flex" : "none";
+    }
+    window.renderNotifBadge = renderNotifBadge;
+
+    function renderNotifs() {
+      const box = document.getElementById("notifList");
+      const n = window._notifs;
+      if (!box || !n) return;
+      /* `setHtml` بتقارن الـinnerHTML قبل الكتابة — فممنوع أي وقت نسبي
+         («من ٥ دقايق») هنا، وإلا اللوحة بتتهدّ وتتبني كل ٨ ثواني وهي
+         مفتوحة. `toLocaleString` قيمة ثابتة. */
+      setHtml(box, n.log.length ? n.log.map(e => `
+        <div class="nf-row${ e.at > n.seenAt ? " new" : "" }" onclick="notifOpen('${ escJs(e.id) }')">
+          <span class="nf-ic">${ esc(e.icon) }</span>
+          <div class="nf-b">
+            <div class="nf-t">${ esc(e.txt) }</div>
+            <div class="nf-d">${ esc(new Date(e.at).toLocaleString("ar-EG")) }</div>
+          </div>
+        </div>`).join("")
+        : `<div class="nf-empty">🔕<br>مفيش جديد على شحناتك</div>`);
+    }
+
+    window.notifOpen = function (id) {
+      closeNotifs();
+      navigateTo("my-orders");
+      setTimeout(() => {
+        window._openDets?.add(String(id));
+        try { renderOrders(); } catch (e) {}
+        document.getElementById("det-" + id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+    };
+
+    window.toggleNotifs = function () {
+      window._notifsOpen ? closeNotifs() : openNotifs();
+    };
+
+    window.openNotifs = function () {
+      window.closeDrawer?.();
+      const p = document.getElementById("notifPanel"), s = document.getElementById("notifScrim");
+      if (!p) return;
+      window._notifsOpen = true;
+      renderNotifs();
+      p.classList.add("on"); s?.classList.add("on");
+      p.setAttribute("aria-hidden", "false");
+      document.getElementById("notifBtn")?.setAttribute("aria-expanded", "true");
+      // «قريت» = لحظة الفتح، وبتتحفظ فورًا فالريفريش مايرجّعش العدد
+      const n = window._notifs;
+      if (n) { n.seenAt = Date.now(); saveNotifs(); }
+      // العدد يفضل بادي نص ثانية عشان المحل يشوف اللي اتقرا
+      setTimeout(renderNotifBadge, 500);
+    };
+
+    window.closeNotifs = function () {
+      const p = document.getElementById("notifPanel"), s = document.getElementById("notifScrim");
+      window._notifsOpen = false;
+      p?.classList.remove("on"); s?.classList.remove("on");
+      p?.setAttribute("aria-hidden", "true");
+      document.getElementById("notifBtn")?.setAttribute("aria-expanded", "false");
+      renderNotifBadge();
+    };
+
+
+    /* ── فتح السايد بار بالسحب من حافة اليمين ────────────────────────
+       الواجهة RTL فالسايد بار جاي من اليمين، يعني السحب لليسار بيفتحه.
+
+       الاستثناءات مقصودة: فيه عناصر بتتمرّر أفقيًا بنفسها (شرايط فلتر
+       الطلبات) وفيه خريطة بتتسحب. لو خطفنا اللمسة منهم، المحل بيحاول
+       يمرّر الشرايط فيفتحله السايد بار — وده أوحش من إن الميزة مش
+       موجودة أصلًا. */
+    (function initDrawerSwipe() {
+      const EDGE = 24;      // من آخر ٢٤ بكسل على اليمين بس
+      const NEED = 55;      // مسافة السحب اللي بتفتح
+      let x0 = null, y0 = null, live = false;
+
+      const blocked = () => {
+        const on = id => {
+          const el = document.getElementById(id);
+          return el && getComputedStyle(el).display !== "none";
+        };
+        return on("storeGateOverlay") || on("pinMapOverlay") ||
+               on("login-screen")     || window._welcomeOn;
+      };
+
+      const scrollableAt = (t) =>
+        !!(t && t.closest && t.closest(".chips, .leaflet-container, .zp-pop, .ac-drop"));
+
+      document.addEventListener("touchstart", e => {
+        if (blocked() || !e.touches || e.touches.length !== 1) return;
+        const t = e.touches[0];
+        if (scrollableAt(e.target)) return;
+        const fromEdge = (window.innerWidth - t.clientX) <= EDGE;
+        const inside   = document.getElementById("drawer")?.classList.contains("on");
+        if (!fromEdge && !inside) return;
+        x0 = t.clientX; y0 = t.clientY; live = true;
+      }, { passive: true });
+
+      document.addEventListener("touchmove", e => {
+        if (!live || !e.touches || !e.touches.length) return;
+        const t = e.touches[0];
+        const dx = t.clientX - x0, dy = t.clientY - y0;
+        // حركة رأسية أوضح من الأفقية = المستخدم بيمرّر، مش بيفتح
+        if (Math.abs(dy) > Math.abs(dx)) { live = false; return; }
+        const open = document.getElementById("drawer")?.classList.contains("on");
+        if (!open && dx < -NEED)      { live = false; openDrawer(); }
+        else if (open && dx > NEED)   { live = false; closeDrawer(); }
+      }, { passive: true });
+
+      const end = () => { live = false; x0 = y0 = null; };
+      document.addEventListener("touchend", end,    { passive: true });
+      document.addEventListener("touchcancel", end, { passive: true });
+
+      // Esc بيقفل أي طبقة مفتوحة — أسرع من الدوران على زرار الإغلاق
+      document.addEventListener("keydown", e => {
+        if (e.key !== "Escape") return;
+        if (window._notifsOpen) closeNotifs();
+        else if (document.getElementById("drawer")?.classList.contains("on")) closeDrawer();
+      });
+    })();
+
+    /* ══════════════════════════════════════════════════════════════
+       ④ صفحة المحفظة
+    ══════════════════════════════════════════════════════════════ */
+    window.renderWallet = function () {
+      const el = document.getElementById("walletBody");
+      if (!el) return;
+      const w  = window._wallet || { balance: 0, txns: [] };
+      const os = window._ordersData || [];
+      /* نفس حساب «إجمالي العهدة» بتاع الرئيسية بالحرف — رقمين مختلفين
+         في الشاشتين كان هيخلّي المحل مايثقش في الاتنين. */
+      const cod = os.filter(o => o.status !== "ملغي")
+                    .reduce((a, o) => a + (Number(o.storePrepaid) || 0), 0);
+      const b   = Number(w.balance) || 0;
+      const col = b > 0 ? "var(--green)" : b < 0 ? "var(--red)" : "var(--muted)";
+
+      setHtml(el, `
+        <div class="wl-hero">
+          <div class="wl-lbl">${b < 0 ? "مستحق عليك" : "رصيدك في المحفظة"}</div>
+          <div class="wl-val" style="color:${col}">${_money(Math.abs(b))} ج.م</div>
+          <div class="wl-note">${b > 0
+            ? "الرصيد ده بيتخصم من حساب أوردراتك مع الفرع."
+            : b < 0 ? "المبلغ ده عليك للفرع وبيتسوّى مع حسابك."
+                    : "مفيش رصيد ولا مستحق دلوقتي."}</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:13px;padding:14px;text-align:center">
+            <div style="font-size:1.25rem;font-weight:900;color:var(--orng)">${ esc(cod) } ج</div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:3px">إجمالي العهدة</div>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:13px;padding:14px;text-align:center">
+            <div style="font-size:1.25rem;font-weight:900;color:var(--text)">${ esc(w.txns.length) }</div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:3px">عدد الحركات</div>
+          </div>
+        </div>
+
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px">
+          <div style="font-size:.85rem;font-weight:800;margin-bottom:6px">📒 سجل الحركات</div>
+          ${w.txns.length ? w.txns.map(t => {
+            const up = Number(t.amount) > 0;
+            return `<div class="wl-tx">
+              <div style="min-width:0">
+                <div style="font-size:.84rem">${ esc(t.note || (up ? "إضافة رصيد" : "خصم")) }</div>
+                <div style="font-size:.71rem;color:var(--muted);margin-top:3px">
+                  ${ esc(t.at ? new Date(t.at).toLocaleString("ar-EG") : "—") }</div>
+              </div>
+              <b class="wl-amt" style="color:${up ? "var(--green)" : "var(--red)"}">
+                ${up ? "+" : "−"}${ esc(Math.abs(Number(t.amount) || 0)) } ج</b>
+            </div>`;
+          }).join("")
+          : `<div style="text-align:center;color:var(--muted);padding:26px 10px;font-size:.85rem;line-height:2">
+               👛<br>مفيش حركات على محفظتك لسه</div>`}
+        </div>`);
+    };
 
     window.navigateTo = function (page) {
+      /* حارس: اسم صفحة مش معروف كان بيشيل `active` من الكل ومايحطهاش
+         على حاجة — شاشة فاضية وعنوان فاضي من غير أي خطأ. */
+      if (!PAGES.includes(page)) return;
+
       PAGES.forEach(p => {
         document.getElementById("page-" + p)?.classList.remove("active");
-        document.querySelector(`[data-page="${p}"]`)?.classList.remove("active");
+        /* `querySelectorAll` مش `querySelector`: بقى فيه أكتر من عنصر
+           ممكن يحمل نفس الصفحة (الشريط السفلي + أي مكان تاني)، والنسخة
+           المفردة كانت هتلوّن أول واحد بس. */
+        document.querySelectorAll(`[data-page="${p}"]`)
+          .forEach(b => b.classList.remove("active"));
       });
       document.getElementById("page-" + page)?.classList.add("active");
-      document.querySelector(`[data-page="${page}"]`)?.classList.add("active");
+      document.querySelectorAll(`[data-page="${page}"]`)
+        .forEach(b => b.classList.add("active"));
       $("top-title").textContent = PAGE_TITLES[page] || "";
       window._currentPage = page;
-      if (page === "new-order")  { resetForm(); renderStoreSetupHint(); }
+      /* 🔴 التصفير بقى مشروط. الصفحات بتتخفي مش بتتمسح، فالطرود
+         بتفضل في الـDOM — واللي كان بيمسحها هو النداء ده مع **كل**
+         دخول. المحل يبعت طرد، يروح «طلباتي» يطمّن، يرجع يلاقي الطرد
+         التاني اللي كان مالياه اتمسح. */
+      if (page === "new-order")  { if (!formHasWork()) resetForm(); renderStoreSetupHint(); }
       if (page === "my-orders")  renderOrders();
       if (page === "home")       renderHome();
       if (page === "profile")    renderStoreSettings();
-        if (page === "reports")    renderReports();
+      if (page === "reports")    renderReports();
+      if (page === "wallet")     renderWallet();
+      if (page === "addressbook") renderAddrBook();
+      if (page === "clients")     renderClientsPage();
+      window.syncDrawer?.();
     };
 
     /* ══════════════════════════════════════════════════════
@@ -529,10 +1000,234 @@
       const params = window._currentUser?.viaAdmin ? { store: username } : undefined;
       const p = new api.Poller("/api/store-contacts", {
         interval: 60000, useSince: false, params,
-        onChange: d => { window._storeContacts = nrmList(d.items); }
+        onChange: d => {
+          window._storeContacts = nrmList(d.items);
+          // شاشة «عملائي» بتتحدث مع كل دورة استطلاع لو مفتوحة
+          if (window._currentPage === "clients") { try { renderClientsPage(); } catch (e) {} }
+        }
       });
       window._pollers.push(p);
     }
+
+    /* ══════════════════════════════════════════════════════
+       📍 عناويني — دفتر عناوين المحل (طلب صاحب النظام 2026-09-02:
+       «في تطبيق المحلات اعمل عناويني زي تطبيق العملاء»)
+       نفس شاشة تطبيق العميل: قايمة + إضافة/تعديل/حذف + افتراضي واحد.
+       والفايدة التشغيلية: منتقي «استلام من عنوان محفوظ» في فورم الشحنة
+       بيملا المنطقة والعنوان والدبوس بضغطة.
+    ══════════════════════════════════════════════════════ */
+    async function loadStoreAddresses() {
+      try {
+        const d = await api.get("/api/store/addresses");
+        window._storeAddresses = nrmList(d.items);
+      } catch (e) { window._storeAddresses = []; }
+      try { renderAddrBook(); } catch (e) {}
+      try { renderPickupAddrChoice(); } catch (e) {}
+    }
+
+    window.renderAddrBook = function () {
+      const box = document.getElementById("addrBookList");
+      if (!box) return;
+      const list = window._storeAddresses || [];
+      if (!list.length) {
+        box.innerHTML = `<div class="info-card" style="padding:22px;text-align:center;color:var(--muted);font-size:.85rem">
+          📍 لسه مافيش عناوين محفوظة<br>
+          <span style="font-size:.76rem">احفظ عناوينك (المحل، المخزن، الفرع التاني…) عشان تختارها بضغطة وقت الشحنة</span></div>`;
+        return;
+      }
+      const ICO = { "المحل": "🏪", "المخزن": "📦", "البيت": "🏠", "المنزل": "🏠" };
+      box.innerHTML = list.map(a => `
+        <div class="info-card" style="display:flex;align-items:center;gap:11px;padding:12px 14px;margin-bottom:9px">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--card,#1e293b);
+            display:grid;place-items:center;font-size:17px;flex:none">${ICO[a.label] || "📍"}</div>
+          <div style="flex:1;min-width:0">
+            <b style="font-size:.88rem">${esc(a.label || "عنوان")}
+              ${a.isDefault ? `<span style="font-size:.66rem;background:rgba(34,197,94,.15);color:#22c55e;border-radius:6px;padding:2px 7px;margin-right:6px">افتراضي</span>` : ""}</b>
+            <div style="font-size:.76rem;color:var(--muted);margin-top:3px">${esc(a.fullAddress || "")}</div>
+            <div style="font-size:.7rem;color:var(--muted);opacity:.75;margin-top:2px">${esc(a.zoneName || "")}${a.branchName ? " · " + esc(a.branchName) : ""}${a.lat ? " · 📍 على الخريطة" : ""}</div>
+          </div>
+          <button class="link-btn" style="flex:none" onclick="openAddrModal('${esc(a.id)}')">✏️</button>
+          <button class="link-btn" style="flex:none;color:#f87171" onclick="delStoreAddr('${esc(a.id)}')">🗑️</button>
+        </div>`).join("");
+    };
+
+    /* المودال — إضافة أو تعديل (نفس الفورم، الفرق قيمة _addrEditId) */
+    window._addrEditId = null;
+    window.openAddrModal = function (id) {
+      window._addrEditId = id || null;
+      const a = id ? (window._storeAddresses || []).find(x => String(x.id) === String(id)) : null;
+      document.getElementById("addrModalTitle").textContent = a ? "✏️ تعديل العنوان" : "📍 إضافة عنوان جديد";
+      document.getElementById("addrLabelIn").value = a ? (a.label || "") : "";
+      document.getElementById("addrDefaultIn").checked = a ? !!a.isDefault : !(window._storeAddresses || []).length;
+      fillPickupZones("addrZoneIn");
+      const zs = document.getElementById("addrZoneIn");
+      if (zs) zs.value = a && a.zoneId ? String(a.zoneId) : "";
+      window.renderAddressWidget("addrModalWidget", { edit: true, required: true, value: a ? (a.fullAddress || "") : "" });
+      // دبوس الخريطة — نفس منتقي فورم الشحنة بمفتاح خاص بالمودال
+      if (a && a.lat && a.lng) window._geoPins.addrbook = { lat: a.lat, lng: a.lng };
+      else delete window._geoPins.addrbook;
+      window.renderGeoPicker("addrGeoBox", "addrbook", "مكان العنوان (اختياري)");
+      document.getElementById("addrModal").style.display = "flex";
+    };
+    window.closeAddrModal = function () {
+      document.getElementById("addrModal").style.display = "none";
+      window._addrEditId = null;
+    };
+
+    window.saveStoreAddr = async function () {
+      const label = document.getElementById("addrLabelIn").value.trim();
+      const zoneId = document.getElementById("addrZoneIn").value;
+      const full  = window.getAddressValue("addrModalWidget");
+      if (!full)   { toast("اكتب العنوان", "err"); return; }
+      if (!zoneId) { toast("اختر المنطقة", "err"); return; }
+      const pin = window._geoPins.addrbook || null;
+      const body = {
+        label: label || "عنوان", fullAddress: full, zoneId,
+        isDefault: document.getElementById("addrDefaultIn").checked,
+        lat: pin ? pin.lat : null, lng: pin ? pin.lng : null,
+      };
+      const btn = document.getElementById("addrSaveBtn");
+      btn.disabled = true;
+      try {
+        const r = window._addrEditId
+          ? await api.put(`/api/store/addresses/${encodeURIComponent(window._addrEditId)}`, body)
+          : await api.post("/api/store/addresses", body);
+        window._storeAddresses = nrmList(r.items);
+        closeAddrModal();
+        renderAddrBook();
+        renderPickupAddrChoice();
+        toast("العنوان اتحفظ ✓", "ok");
+      } catch (e) { toast("خطأ: " + (e.message || e), "err"); }
+      btn.disabled = false;
+    };
+
+    window.delStoreAddr = async function (id) {
+      if (!confirm("تمسح العنوان ده؟ الشحنات القديمة مش هتتأثر.")) return;
+      try {
+        const r = await api.del(`/api/store/addresses/${encodeURIComponent(id)}`);
+        window._storeAddresses = nrmList(r.items);
+        renderAddrBook();
+        renderPickupAddrChoice();
+        toast("اتمسح ✓", "ok");
+      } catch (e) { toast("خطأ: " + (e.message || e), "err"); }
+    };
+
+    /* ── منتقي «استلام من عنوان محفوظ» في فورم الشحنة ── */
+    window.renderPickupAddrChoice = function () {
+      const wrap = document.getElementById("pickupAddrChoiceWrap");
+      const sel  = document.getElementById("pickupAddrChoice");
+      if (!wrap || !sel) return;
+      const list = window._storeAddresses || [];
+      wrap.style.display = list.length ? "" : "none";
+      if (!list.length) return;
+      const prev = sel.value;
+      sel.innerHTML = `<option value="">— اختار من عناوينك المحفوظة —</option>` +
+        list.map(a => `<option value="${esc(a.id)}">${esc(a.label || "عنوان")}${a.isDefault ? " (الافتراضي)" : ""} — ${esc(a.zoneName || "")}</option>`).join("");
+      if (prev && list.some(a => String(a.id) === prev)) sel.value = prev;
+    };
+
+    window.applyPickupSavedAddr = function () {
+      const id = document.getElementById("pickupAddrChoice")?.value;
+      const a = (window._storeAddresses || []).find(x => String(x.id) === String(id));
+      if (!a) return;
+      if (a.fullAddress) window.setAddressValue("pickupAddrWidget", a.fullAddress);
+      const pz = document.getElementById("pickupZone");
+      if (pz && a.zoneId) {
+        pz.value = String(a.zoneId);
+        applyPickupZone({ keepSelection: true });
+      }
+      if (a.lat && a.lng) {
+        window._geoPins.pickup = { lat: Number(a.lat), lng: Number(a.lng) };
+      } else {
+        delete window._geoPins.pickup;
+      }
+      window.renderGeoPicker("pickupGeoBox", "pickup", "نقطة الاستلام (اختياري)");
+      window.refreshPickupSummary?.();
+      toast(`استلام من «${a.label || "عنوان"}» ✓`, "ok");
+    };
+
+    /* العنوان الافتراضي بيتطبق مع فتح فورم جديد — بيغلب ملف الاستلام
+       لأنه اختيار المحل الصريح من «عناويني» */
+    function applyDefaultSavedAddress() {
+      const d = (window._storeAddresses || []).find(a => a.isDefault);
+      if (!d) return;
+      const sel = document.getElementById("pickupAddrChoice");
+      if (sel) sel.value = String(d.id);
+      const a = d;
+      if (a.fullAddress) window.setAddressValue("pickupAddrWidget", a.fullAddress);
+      const pz = document.getElementById("pickupZone");
+      if (pz && a.zoneId) { pz.value = String(a.zoneId); applyPickupZone({ keepSelection: true }); }
+      if (a.lat && a.lng) window._geoPins.pickup = { lat: Number(a.lat), lng: Number(a.lng) };
+      window.renderGeoPicker("pickupGeoBox", "pickup", "نقطة الاستلام (اختياري)");
+    }
+
+    /* ══════════════════════════════════════════════════════
+       👥 عملائي — نفس شاشة تطبيق العملاء: كل مستلم بعت له قبل كده
+       محفوظ تلقائيًا، و«ابعت له» بتفتح شحنة ببياناته جاهزة.
+    ══════════════════════════════════════════════════════ */
+    window.renderClientsPage = function () {
+      const box = document.getElementById("clientsList");
+      if (!box) return;
+      const list = window._storeContacts || [];
+      if (!list.length) {
+        box.innerHTML = `<div class="info-card" style="padding:22px;text-align:center;color:var(--muted);font-size:.85rem">
+          📇 لسه مافيش عملاء محفوظين<br>
+          <span style="font-size:.76rem">أول ما تبعت أول شحنة، بيانات المستلم هتتحفظ هنا لوحدها</span></div>`;
+        return;
+      }
+      box.innerHTML = list.map(c => `
+        <div class="info-card" style="display:flex;align-items:center;gap:11px;padding:12px 14px;margin-bottom:9px">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--card,#1e293b);
+            display:grid;place-items:center;font-size:17px;flex:none">👤</div>
+          <div style="flex:1;min-width:0">
+            <b style="font-size:.88rem">${esc(c.name || "—")}</b>
+            <div style="font-size:.76rem;color:var(--muted);margin-top:3px" dir="ltr">${esc(c.phone || "")}</div>
+            <div style="font-size:.7rem;color:var(--muted);opacity:.75;margin-top:2px">${esc(_zoneNameOfId(c.zoneId))}${c.address ? " · " + esc(c.address) : ""}</div>
+          </div>
+          <button class="link-btn" style="flex:none;font-weight:800" onclick="sendToContact('${esc(c.id)}')">📤 ابعت له</button>
+          <button class="link-btn" style="flex:none;color:#f87171" onclick="delStoreContact('${esc(c.id)}')">🗑️</button>
+        </div>`).join("");
+    };
+    function _zoneNameOfId(zoneId) {
+      if (!zoneId) return "";
+      const z = (window._allZones || []).find(x => String(x.id) === String(zoneId));
+      return z ? (z.areaName || z.name || "") : "";
+    }
+
+    /* «ابعت له» — فتح شحنة ببيانات العميل جاهزة (نفس نمط fillShopAsReceiver).
+       لو الفورم فيه شغل قائم بنضيف طرد جديد بدل ما ندوس على المكتوب. */
+    window.sendToContact = function (id) {
+      const c = (window._storeContacts || []).find(x => String(x.id) === String(id));
+      if (!c) return;
+      navigateTo("new-order");
+      if (formHasWork()) addRow();
+      setTimeout(() => {
+        const n = window._activeRow;
+        if (!n) return;
+        const set = (fid, v) => { const el = document.getElementById(fid); if (el && v) el.value = v; };
+        set(`rName-${n}`,   c.name);
+        set(`rPhone-${n}`,  c.phone);
+        set(`rPhone2-${n}`, c.phone2);
+        if (c.address) window.setAddressValue(`rAddrWidget-${n}`, c.address);
+        const zs = document.getElementById(`rZone-${n}`);
+        if (zs && c.zoneId) {
+          zs.value = String(c.zoneId);
+          if (zs.value === String(c.zoneId)) window.onZone(n);
+        }
+        document.getElementById(`rPhone-${n}`)?.dispatchEvent(new Event("input"));
+        toast(`بيانات «${c.name}» اتملت ✓ — كمّل الشحنة`, "ok");
+      }, 60);
+    };
+
+    window.delStoreContact = async function (id) {
+      if (!confirm("تشيل العميل ده من دفترك؟ شحناته القديمة مش هتتأثر.")) return;
+      try {
+        await api.del(`/api/store-contacts/${encodeURIComponent(id)}`);
+        window._storeContacts = (window._storeContacts || []).filter(c => String(c.id) !== String(id));
+        renderClientsPage();
+        toast("اتشال ✓", "ok");
+      } catch (e) { toast("خطأ: " + (e.message || e), "err"); }
+    };
 
     // حفظ جهة اتصال للمحل بناءً على رقم الهاتف — في مكانين:
     //   1) /api/store-contacts  -- خاص بالمحل فقط (autocomplete)
@@ -578,17 +1273,49 @@
       window._pickupZone         = null;
       window._pickupBranchId     = null;
       window._profSettingsReady  = false;   // عشان ودجت العنوان والدبوس يتبنوا من جديد
+      /* حقول البوابة كمان — دي حقول DOM ثابتة، والقيم اللي فيها بتفضل من
+         المحل اللي قبله. `openStoreLocationGate` بتملاها بـ`if (!ph1.value)`
+         فمابتدهسش القديم، والنتيجة إن المحل الجديد كان بيلاقي هاتف وعنوان
+         محل تاني متعبّيين قدامه ويدوس حفظ عليهم. `_gateWidgetsReady`
+         بيتصفّر عشان ودجت العنوان تتبني من جديد بقيمة المحل الجديد. */
+      window._gateWidgetsReady = false;
+      ["gateShopName", "gatePhone", "gatePhone2"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.value = ""; el.readOnly = false; }
+      });
+      const _gz = document.getElementById("gateZone"); if (_gz) _gz.value = "";
       /* الـselect بيحافظ على اختياره بنفسه (fillPickupZones وrenderStoreSettings
          بيرجّعوا القيمة السابقة) — فلازم نفضّيه بإيدينا مع تغيير المحل */
       const _pz = document.getElementById("pickupZone"); if (_pz) _pz.value = "";
       const _fz = document.getElementById("profZone");   if (_fz) _fz.value = "";
+      window._notifsOpen = false;
+      /* سجل كل محل لوحده — محل تاني بيدخل على نفس التاب مايشوفش
+         إشعارات اللي قبله (نفس سبب تصفير الملف والدبابيس فوق). */
+      loadNotifs(u.username);
       loadStoreContacts(u.username);
+      /* دفتر العناوين — «عناويني». viaAdmin بياخد 403 (المسار role:store
+         زي ملف الاستلام) فالكاتش بيسيب القايمة فاضية من غير ضجيج. */
+      window._storeAddresses = [];
+      loadStoreAddresses();
       // ملف الاستلام الدائم — بيتحمّل مرة عند الدخول وبيتعبّى في كل شحنة
       window._pickupProfileReady = api.get("/api/store/pickup-profile")
         .then(r => {
           window._pickupProfile = r.profile || null;
           try { applySavedPickup(); } catch (e) {}
+          // خانة سعر التوصيل بتتفتح/بتتقفل حسب صلاحية المحل
+          try { window.applyPriceEditPerm?.(); } catch (e) {}
           try { renderStoreSettings(); renderStoreSetupHint(); } catch (e) {}
+          try { window.refreshPickupSummary?.(); } catch (e) {}
+          /* 🔴 البوابة هنا بالذات مش في `applySession`: هناك الملف لسه
+             `null` (النداء ده لسه ماخلصش)، فالبوابة كانت هتظهر لكل
+             مستخدم في كل دخول حتى لو موقعه محفوظ.
+
+             و`afterWelcome` عشان شاشة الترحيب ماتغطّيهاش: النداء ده
+             ممكن يرجع في نص ثانية والترحيب لسه شغّال، فالبوابة كانت
+             هتتفتح تحته والمحل يشوف شاشة متجمّدة. */
+          try {
+            if (window.storeNeedsLocation()) window.afterWelcome(window.openStoreLocationGate);
+          } catch (e) {}
         })
         .catch(() => { window._pickupProfile = null; });
       const reg = p => window._pollers.push(p);
@@ -601,6 +1328,25 @@
         // قائمة المناطق وصلت — دلوقتي بس نقدر نختار منطقة المحل المحفوظة
         try { applySavedPickup(); renderStoreSettings(); } catch (e) {}
         applyPickupZone({ keepSelection: true });
+        /* 🔴 وقايمة **البوابة** كمان لو مفتوحة دلوقتي.
+           `openStoreLocationGate` بتنده `fillPickupZones("gateZone")` مرة
+           واحدة وقت الفتح، والبوابة بتتفتح بعد ١.٧ ثانية من الترحيب — لو
+           `/api/zones` اتأخرت أكتر من كده (٤١٧ منطقة على خط ضعيف) البوابة
+           بتفتح بسطر «— اختر المنطقة —» بس، والمنطقة إجبارية للحفظ،
+           ومفيش زرار إغلاق. يعني قفل تام لحد ما يعمل reload.
+           الدورة الجاية بعد ٦٠ ثانية كانت بتملا `pickupZone` و`profZone`
+           وتسيب `gateZone` فاضية. */
+        try {
+          const ov = document.getElementById("storeGateOverlay");
+          if (ov && ov.style.display !== "none" && ov.style.display !== "") {
+            const gz = document.getElementById("gateZone");
+            const prev = gz ? gz.value : "";
+            fillPickupZones("gateZone");
+            const saved = prev || (window._pickupProfile?.zoneId != null
+                                   ? String(window._pickupProfile.zoneId) : "");
+            if (gz && saved) gz.value = saved;
+          }
+        } catch (e) {}
       }}));
 
       // أسماء الفروع — عشان نعرض الفرع المسؤول اللي طلع من منطقة الاستلام
@@ -637,9 +1383,16 @@
            عشان لو المسار اتظبط بعدين ما يكسرش. */
         const s = d?.site || {};
         const info = s.site?.info || s.info || {};
+        /* قوايم الأرقام كمان — الكارت بيعرض الأساسي كبير والباقي شرايط
+           تحته. `SupportNums` بيقع على الرقم المفرد لو القايمة لسه
+           ما اتحطّتش، فالإعدادات القديمة شغّالة زي ما هي. */
+        const phones = window.SupportNums ? SupportNums.phones(info) : [];
+        const was    = window.SupportNums ? SupportNums.whatsapps(info) : [];
         window._support = {
-          phone   : info.phone    || "",
-          whatsapp: info.whatsapp || "",
+          phone   : phones.length ? phones[0].n : (info.phone || ""),
+          whatsapp: was.length    ? was[0].n    : (info.whatsapp || ""),
+          phones  : phones,
+          whatsapps: was,
           hours   : info.hours    || ""
         };
         renderSupportBits();
@@ -682,6 +1435,9 @@
         .filter(o => o.addedBy === username)
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       refreshBadge();
+      scanNotifs();      // أي تغيّر حالة بقى إشعار — شوف `scanNotifs`
+      window.syncDrawer?.();
+      if (window._currentPage === "wallet") renderWallet();
       if (window._currentPage === "my-orders") renderOrders();
       if (window._currentPage === "home")      renderHome();
       if (window._currentPage === "reports")   renderReports();
@@ -727,6 +1483,28 @@
       $("orderNotes").value         = "";
       $("orderPrepaid").value       = "";
       $("delivContainer").innerHTML = "";
+      // صف الأزرار وحالة التنقّل بيتصفّروا مع الفورم
+      const _pt = document.getElementById("parcelTabs");
+      if (_pt) _pt.innerHTML = "";
+      window._activeRow     = null;
+      window._parcelChecked = false;
+      /* 🔴 مافيش `clearDraft` هنا. `resetForm` بتتنده في **تهيئة
+         الإقلاع** كمان، واللحظة دي بالظبط هي اللي المسوّدة لازم تعيش
+         فيها — المسح هنا كان بيوصل قبل الاسترجاع ويمسح كل حاجة.
+         المسح بقى عند «خلصنا» بس: نجاح إرسال آخر طرد. */
+      /* 🔴 «الاستلام من مكان تاني» كان بيفضل مشيّك بعد إرسال ناجح —
+         فالطلب اللي بعده كان بياخد نفس المُرسِل البديل من غير ما المحل
+         ياخد باله. الحقول نفسها كانت بتفضل متعبّية كمان. */
+      const elsewhereEl = document.getElementById("pickupElsewhere");
+      if (elsewhereEl && elsewhereEl.checked) {
+        elsewhereEl.checked = false;
+        ["senderNameIn", "senderPhoneIn", "senderPhone2In"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        window.togglePickupSender?.();
+      }
+      window._pickupOpen = false;
       window._rowImages = {};
       window._delivCount = 0;
       // دبابيس التسليم بتخصّ الطرود اللي اتمسحت — نقطة الاستلام بتفضل
@@ -738,8 +1516,8 @@
       Object.keys(window._geoPins || {}).forEach(k => {
         if (!KEEP_PINS.includes(k)) delete window._geoPins[k];
       });
-      const btn = $("saveBtn");
-      if (btn) { btn.disabled = false; btn.textContent = "📤 إرسال الطلب"; }
+      /* `saveBtn` اتشال — أزرار الطرود بتتبني جديدة مع كل صف فمافيش
+         زرار عالق يحتاج ترجيع هنا. */
       const tot = $("orderTotal");
       if (tot) tot.textContent = "0 ج.م";
       /* بيانات استلام المحل بتتعبّى **تلقائيًا في كل شحنة** من ملفه الدائم
@@ -747,7 +1525,7 @@
          الملف بيتحفظ لوحده أول ما يبعت أول شحنة، وأي تعديل بعدها بيتحفظ كمان. */
       const u = window._currentUser || {};
       const prof = window._pickupProfile || {};
-      window.renderAddressWidget("pickupAddrWidget", {
+      window.renderAddressWidget("pickupAddrWidget", { edit: true,
         required: true,
         value: prof.address || u.shopAddress || ""
       });
@@ -763,8 +1541,16 @@
       /* لو الفورم اتفتح قبل ما ملف الاستلام يوصل من السيرفر (سباق توقيت)،
          بنعيد التعبئة أول ما يوصل — من غير ما نلمس أي حاجة المحل كتبها. */
       if (window._pickupProfileReady) {
-        window._pickupProfileReady.then(() => applySavedPickup()).catch(() => {});
+        window._pickupProfileReady
+          .then(() => { applySavedPickup(); window.refreshPickupSummary?.(); })
+          .catch(() => {});
       }
+      /* «عناويني»: المنتقي بيتبني، والعنوان الافتراضي (لو متحدد) بيغلب
+         ملف الاستلام — ده اختيار المحل الصريح من دفتر عناوينه. */
+      try { renderPickupAddrChoice(); applyDefaultSavedAddress(); } catch (e) {}
+      /* الطيّ بيتقرّر بعد التعبئة مش قبلها — قبلها المنطقة لسه فاضية
+         فالملخّص كان هيفتح دايمًا. */
+      window.refreshPickupSummary?.();
       addRow();
     }
 
@@ -1252,6 +2038,11 @@
        فعلًا، والمحافظة/المدينة كانوا تكرار بيطوّل الفورم على المحل اللي
        بيسجّل عشرات الشحنات في اليوم. بيانات **الاستلام** بتفضل بالمحافظة
        والمدينة زي ما هي — دي بتتكتب مرة واحدة في ملف المحل. */
+    /* ══ الافتراضي لأي عنوان جديد ══
+       الدقهلية / المنصورة — ده مقر الشغل، فأغلب الإدخالات عليه
+       والموظف بيوفّر اختيارين في كل فورم. */
+    window.ADDR_DEFAULT = { gov: 'الدقهلية', city: 'المنصورة' };
+
     window.renderAddressWidget = function(containerId, opts = {}) {
       const el = document.getElementById(containerId);
       if (!el) return;
@@ -1294,7 +2085,16 @@
       // أول ما المحافظة تتغيّر نملأ مدنها
       const _govEl = document.getElementById(`${containerId}-gov`);
       if (_govEl) _govEl.addEventListener('change', () => window.fillCities(containerId));
-      window.fillCities(containerId);
+      /* الافتراضي بيتحط بس لما يكون فيه سجل جديد بيتفتح:
+         • `opts.edit` = بنعدّل سجل موجود — ممنوع نكتب فيه حاجة من عندنا،
+           لأن الموظف ممكن يحفظ من غير ما ياخد باله فيتخزّن عنوان ما اختارهوش.
+         • `opts.blank` = مخرج صريح لو حد عايز الحقل فاضي. */
+      if (_govEl && !opts.edit && !opts.blank && !_govEl.value) {
+        _govEl.value = window.ADDR_DEFAULT.gov;
+        window.fillCities(containerId, window.ADDR_DEFAULT.city);
+      } else {
+        window.fillCities(containerId);
+      }
 
       ['gov','area','detail'].forEach(k => {
         const el2 = document.getElementById(`${containerId}-${k}`);
@@ -1374,6 +2174,267 @@
       window._updateAddrPreview(containerId);
     };
 
+    /* ══════════════════════════════════════════════════════
+       التنقّل بين الطرود
+       الطرود موجودة كلها في الـDOM في نفس الوقت — الظاهر واحد بس.
+       يعني القيم كلها محفوظة، و saveOrder بتلقط الصفوف المخفية عادي
+       بـ querySelectorAll زي ما هي.
+    ══════════════════════════════════════════════════════ */
+
+    /* 🧾 الطرد ده بياناته على صورة الريسيت؟ — بيتقرا من الشيك بوكس
+       مباشرةً عشان يفضل مصدر واحد للحقيقة، من غير حالة موازية تسهى. */
+    window.rowIsReceipt = function (n) {
+      return !!document.getElementById("rReceipt-" + n)?.checked;
+    };
+
+    /* بيخفي/يظهر حقول هوية المستلم للطرد ده بس.
+       لفّتين مش واحدة لأن اختيار المنطقة واقع بينهم في القالب،
+       والمنطقة لازم تفضل ظاهرة — منها بيتحسب سعر التوصيل. */
+    window.onRowReceipt = function (n) {
+      const on = window.rowIsReceipt(n);
+      const set = (id, show) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = show ? "" : "none";
+      };
+      set("rIdent-" + n, !on);
+      set("rAddrBlock-" + n, !on);
+      document.getElementById("rReceiptBox-" + n)?.classList.toggle("on", on);
+
+      window.queueSaveDraft?.();
+      const hint = document.getElementById("rReceiptHint-" + n);
+      if (hint) hint.textContent = on
+        ? "🧾 مطلوب صورة ريسيت للطرد ده — العنوان والبيانات هيتقروا منها"
+        : "هرفع صورة الريسيت بدل ما أكتب الاسم والتليفون والعنوان";
+
+      const lbl = document.getElementById("rImgLabel-" + n);
+      if (lbl) lbl.innerHTML = on
+        ? "📷 صور الريسيت <span class=\"req\">*</span>"
+        : "📷 صور الإيصال / العنوان (اختياري)";
+
+      window.renderParcelTabs?.();
+    };
+
+    /* ══════════════════════════════════════════════════════
+       مسوّدة الشحنة على التليفون
+       الشغل كان بيعيش في الـDOM بس، فأي تحديث للصفحة بيضيّعه.
+       دلوقتي بيتحفظ في `localStorage` وبيترجع عند الفتح.
+    ══════════════════════════════════════════════════════ */
+
+    /* المفتاح فيه اسم المستخدم: محل بيفتح على نفس التليفون بعد محل
+       تاني مايلاقيش مسوّدة مش بتاعته — أرقام مستلمين وعناوين غريبة. */
+    function draftKey() {
+      const u = window._currentUser?.username || "";
+      return u ? "tiar-store-draft:" + u : "";
+    }
+
+    /** بيقرا الفورم كله لكائن قابل للتخزين */
+    function readDraft() {
+      const v = id => document.getElementById(id)?.value ?? "";
+      return parcelRows().map(r => {
+        const n = r.id.replace("row-", "");
+        return {
+          name   : v("rName-" + n),
+          phone  : v("rPhone-" + n),
+          phone2 : v("rPhone2-" + n),
+          zoneId : v("rZone-" + n),
+          price  : v("rPrice-" + n),
+          cod    : v("rOrderPrice-" + n),
+          note   : v("rNote-" + n),
+          receipt: !!window.rowIsReceipt(n),
+          addr   : window.getAddressValue ? window.getAddressValue("rAddrWidget-" + n) : "",
+          // روابط بس — الصور مرفوعة على السيرفر أصلًا فالمساحة صغيرة
+          images : (window._rowImages?.[n] || []).filter(x => typeof x === "string"),
+          pin    : window._geoPins?.["r" + n] || null,
+        };
+      });
+    }
+
+    /* كل نداء تخزين جوه try/catch: الوضع الخاص في سفاري بيرمي عند
+       الكتابة، والحصة ممكن تتملى. مسوّدة ضايعة مقبولة — صفحة واقعة لأ. */
+    /* 🔴 مافيش كتابة قبل ما محاولة الاسترجاع تخلص.
+
+       من غير البوابة دي، أي كتابة وقت الإقلاع بتدهس المسوّدة قبل ما
+       تترجع: `resetForm` بتنده `addRow`، و`addRow` بتنده
+       `queueSaveDraft`، وبعد نص ثانية بتحفظ فورم فاضي — يعني
+       `saveDraft` بتشوف `formHasWork() === false` وتمسح المفتاح.
+       البوابة بتقفل الفئة كلها مش حالة واحدة. */
+    window._draftReady = false;
+
+    window.saveDraft = function () {
+      const k = draftKey(); if (!k || !window._draftReady) return;
+      try {
+        if (!formHasWork()) { localStorage.removeItem(k); return; }
+        localStorage.setItem(k, JSON.stringify({ at: Date.now(), rows: readDraft() }));
+      } catch (e) {}
+    };
+
+    window.clearDraft = function () {
+      const k = draftKey(); if (!k) return;
+      try { localStorage.removeItem(k); } catch (e) {}
+    };
+
+    /* الحفظ مؤجّل: الكتابة مع كل حرف بتقفّل الواجهة على تليفون ضعيف. */
+    let _draftTimer = null;
+    window.queueSaveDraft = function () {
+      clearTimeout(_draftTimer);
+      _draftTimer = setTimeout(() => window.saveDraft(), 500);
+    };
+
+    /**
+     * بيرجّع المسوّدة المحفوظة. بيرجّع `true` لو رجّع حاجة فعلًا.
+     *
+     * ⚠️ بينده `addRow` لكل صف عشان الودجتات (العنوان والخريطة والمناطق)
+     * تتبني زي أي طرد عادي — بناء الـHTML بإيدنا كان هيسيبهم ميتين.
+     */
+    window.restoreDraft = function () {
+      const k = draftKey(); if (!k) return false;
+      let d = null;
+      try { d = JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return false; }
+      if (!d || !Array.isArray(d.rows) || !d.rows.length) return false;
+
+      document.getElementById("delivContainer").innerHTML = "";
+      document.getElementById("parcelTabs").innerHTML = "";
+      window._delivCount = 0;
+      window._rowImages  = {};
+
+      d.rows.forEach(row => {
+        addRow();
+        const n  = window._delivCount;
+        const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+        set("rName-"       + n, row.name);
+        set("rPhone-"      + n, row.phone);
+        set("rPhone2-"     + n, row.phone2);
+        set("rNote-"       + n, row.note);
+        set("rOrderPrice-" + n, row.cod);
+        if (row.addr && window.setAddressValue) window.setAddressValue("rAddrWidget-" + n, row.addr);
+
+        /* المنطقة الأول: `onZone` بتدهس السعر بسعر المنطقة، فلازم
+           تتنده **قبل** ما نرجّع السعر اللي المحل كتبه. */
+        const zs = document.getElementById("rZone-" + n);
+        if (zs && row.zoneId) {
+          zs.value = String(row.zoneId);
+          if (zs.value === String(row.zoneId)) window.onZone(n);
+        }
+        if (row.price) { const pe = document.getElementById("rPrice-" + n);
+          if (pe) { pe.value = row.price; window.onPriceEdit?.(n); } }
+
+        if (row.receipt) {
+          const cb = document.getElementById("rReceipt-" + n);
+          if (cb) { cb.checked = true; window.onRowReceipt(n); }
+        }
+        if (Array.isArray(row.images) && row.images.length) {
+          window._rowImages[n] = row.images.slice();
+          window.renderRowImages?.(n);
+        }
+        if (row.pin) { window._geoPins["r" + n] = row.pin;
+          window.renderGeoPicker?.("rGeoBox-" + n, "r" + n, "نقطة التسليم"); }
+      });
+
+      window.showRow(1);
+      recalc(); recalcTotal();
+      return true;
+    };
+
+    /**
+     * فيه شغل لسه ماتبعتش؟ — أي طرد فيه حاجة المحل كتبها بإيده.
+     *
+     * `rPrice` مش في القايمة عن قصد: بيتملى لوحده من المنطقة، فوجوده
+     * مش دليل على شغل. و`rZone` بتغطّيه.
+     *
+     * فورم نضيف (طرد واحد فاضي) بيرجّع false — فالتصفير بيشتغل عادي
+     * ويرجّع ملف الاستلام المحفوظ، وده اللي إحنا عايزينه أول ما ندخل.
+     */
+    window.formHasWork = function () {
+      return parcelRows().some(r => {
+        const n = r.id.replace("row-", "");
+        const v = id => (document.getElementById(id)?.value || "").trim();
+        return !!(v("rName-" + n) || v("rPhone-" + n) || v("rPhone2-" + n)
+               || v("rZone-" + n) || v("rOrderPrice-" + n) || v("rNote-" + n)
+               || (window._rowImages?.[n] || []).length
+               || window.rowIsReceipt(n));
+      });
+    };
+
+    /* 🔴 `beforeunload` وحدها مش كفاية على أندرويد: المتصفح بيقتل
+       الصفحة من غير ما ينده عليها لما التليفون يضغط على الذاكرة.
+       `visibilitychange` هو اللي بيتنده فعلًا لما المستخدم يطلع من
+       التطبيق — فبنحفظ على الاتنين. */
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") window.saveDraft?.();
+    });
+    window.addEventListener("pagehide", () => window.saveDraft?.());
+
+    /* الصفوف بترتيب ظهورها — الترتيب ده هو مصدر الترقيم المعروض */
+    function parcelRows() {
+      return Array.from(document.querySelectorAll("#delivContainer .parcel-card"));
+    }
+
+    /* الرقم المعروض للطرد ذي الرقم الداخلي n (يبدأ من 1، و0 لو مش موجود) */
+    window.parcelDisplayNo = function (n) {
+      return parcelRows().findIndex(r => r.id === "row-" + n) + 1;
+    };
+
+    /* نفس التلات حقول اللي saveOrder بتتحقق منهم بالظبط — لو اتغيّروا
+       هناك لازم يتغيّروا هنا، والحارس بيتأكد إن الاتنين متطابقين. */
+    function parcelIsIncomplete(n) {
+      const v = id => (document.getElementById(id)?.value || "").trim();
+      // المنطقة إجبارية في الحالتين — منها بيتحسب سعر التوصيل
+      if (!v("rZone-" + n)) return true;
+      // سعر الطلب إجباري في الحالتين — لازم رقم حتى لو صفر
+      if (v("rOrderPrice-" + n) === "") return true;
+      /* سعر التوصيل تحت الحد الأدنى بيوقف الإرسال، فلازم يبان على الزرار.
+         من غير السطر ده المحل بيدوس إرسال ويتوقف على حاجة مافيش عليها
+         أي علامة — وده بالظبط اللي منظومة النقط موجودة عشانه. */
+      const _p = parseFloat(v("rPrice-" + n));
+      const _f = parseFloat(document.getElementById("rPrice-" + n)?.dataset.floor || "0") || 0;
+      if (_f > 0 && v("rPrice-" + n) !== "" && _p < _f - 0.001) return true;
+      /* الطرد اللي بصورة ريسيت: مالوش حقول مستلم يتحقق منها، والصورة
+         اختيارية — فالمنطقة وسعر الطلب فوق هما كل اللي عليه. */
+      if (window.rowIsReceipt(n)) return false;
+      return !v("rName-" + n) || !v("rPhone-" + n);
+    }
+
+    window.renderParcelTabs = function () {
+      const box = document.getElementById("parcelTabs");
+      if (!box) return;
+      const rows = parcelRows();
+
+      let html = `<button type="button" class="ptab-add" onclick="addRow()">➕ طرد آخر</button>`;
+      rows.forEach((r, i) => {
+        const n   = r.id.replace("row-", "");
+        const cls = ["ptab"];
+        if (String(n) === String(window._activeRow)) cls.push("active");
+        if (window._parcelChecked && parcelIsIncomplete(n)) cls.push("bad");
+        html += `<button type="button" class="${cls.join(" ")}" ` +
+                `title="الطرد ${i + 1}" onclick="showRow(\'${esc(n)}\')">${i + 1}</button>`;
+
+        // الترقيم المعروض جوه الكارت لازم يتماشى مع الزرار
+        const lbl = r.querySelector(".parcel-label");
+        if (lbl) lbl.textContent = "📦 الطرد #" + (i + 1);
+        // الحذف بيختفي لو ده الطرد الوحيد — الشحنة لازم يفضل فيها طرد
+        const rm = r.querySelector(".rm-btn");
+        if (rm) rm.style.display = rows.length > 1 ? "" : "none";
+      });
+      box.innerHTML = html;
+
+      /* زرار «إرسال الكل» مالوش لازمة مع طرد واحد — زراره جواه بيعمل
+         نفس الحاجة، ووجود زرارين لنفس الفعل بيلخبط. */
+      const all = document.getElementById("sendAllBtn");
+      if (all) all.style.display = rows.length > 1 ? "" : "none";
+
+      /* الزرار النشط يفضل في المنظور لما الطرود تكتر. block:"nearest"
+         مهمة: من غيرها المتصفح بيسكرول الصفحة رأسيًا كمان. */
+      box.querySelector(".ptab.active")?.scrollIntoView({ inline: "center", block: "nearest" });
+    };
+
+    window.showRow = function (n) {
+      const rows = parcelRows();
+      if (!rows.length) return;
+      rows.forEach(r => { r.style.display = (r.id === "row-" + n) ? "" : "none"; });
+      window._activeRow = String(n);
+      window.renderParcelTabs();
+    };
+
     window.addRow = function () {
       window._delivCount++;
       const n   = window._delivCount;
@@ -1383,14 +2444,30 @@
       div.innerHTML = `
         <div class="parcel-head">
           <span class="parcel-label">📦 الطرد #${n}</span>
-          ${n > 1 ? `<button class="rm-btn" onclick="rmRow(${n})">✕ إزالة</button>` : ""}
+          <!-- الزرار بيتحط دايمًا، و renderParcelTabs بتخفيه لو الطرد
+               ده الوحيد الفاضل. قبل كده كان الشرط n > 1 وقت الإنشاء،
+               فلو الطرد الأول اتحذف كان بيفضل طرد واحد **بزرار حذف** —
+               والمحل يقدر يفضّي الشحنة بالكامل. -->
+          <button class="rm-btn" onclick="rmRow(${n})">✕ إزالة</button>
         </div>
+        <!-- 🧾 «مش معايا بيانات المستلم» — للطرد ده لوحده. الشرح تحته
+             بيتغيّر مع الحالة عشان المحل يعرف المطلوب منه دلوقتي. -->
+        <label class="rcv-receipt" id="rReceiptBox-${n}">
+          <input type="checkbox" id="rReceipt-${n}" onchange="onRowReceipt(${n})" />
+          <span>
+            <b>مش معايا بيانات المستلم</b>
+            <small id="rReceiptHint-${n}">هرفع صورة الريسيت بدل ما أكتب الاسم والتليفون والعنوان</small>
+          </span>
+          <span class="ic">🧾</span>
+        </label>
+
+        <div id="rIdent-${n}">
         <div class="fg" style="position:relative">
           <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <span>اسم المستلِم <span class="req">*</span></span>
             <button type="button" onclick="fillShopAsReceiver(${n})"
               style="background:rgba(232,25,44,.12);color:var(--sky);border:1px solid var(--sky);border-radius:7px;padding:3px 9px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit">
-              🏪 المحل هو المستلِم
+              🏪 بياناتي
             </button>
           </label>
           <input type="text" id="rName-${n}" placeholder="اكتب اسم المستلِم" autocomplete="off"
@@ -1401,7 +2478,7 @@
         <div class="grid2">
           <div class="fg" style="position:relative">
             <label>هاتف المستلِم <span class="req">*</span></label>
-            <input type="tel" id="rPhone-${n}" dir="ltr" placeholder="01xxxxxxxxx"
+            <input type="tel" id="rPhone-${n}" dir="ltr" placeholder="01xxxxxxxxx أو أرضي"
               oninput="filterContacts(${n},'phone')" onfocus="filterContacts(${n},'phone')" onblur="hideDropdown(${n},200)" />
           </div>
           <div class="fg">
@@ -1411,38 +2488,51 @@
         </div>
         <!-- منظومة الثقة: بادچ سمعة المستلم بيظهر أول ما الرقم يكتمل -->
         <div id="rTrust-${n}" class="trust-box" style="display:none"></div>
+        </div><!-- /rIdent — المنطقة تحت بتفضل ظاهرة في الحالتين -->
         <div class="fg">
           <label>المنطقة <span class="req">*</span></label>
           <select id="rZone-${n}" onchange="onZone(${n})" data-zonepick>
             <option value="">— اختر المنطقة —</option>
           </select>
         </div>
-        <div class="fg">
+        <div class="fg" id="rAddrBlock-${n}">
           <label>عنوان التوصيل</label>
           <div id="rAddrWidget-${n}"></div>
           <div id="rGeoBox-${n}" style="margin-top:8px"></div>
         </div>
         <div class="fg">
           <label>سعر التوصيل</label>
-          <input id="rPrice-${n}" type="text" readonly class="price-ro" value="—" />
+          <!-- مفتوح للتعديل من 2026-08-31: المحل يقدر يزوّد السعر،
+               و data-floor بيمسك الحد الأدنى (سعر المنطقة).
+               ⚠️ من غير باك-تيك: التعليق ده جوه template literal. -->
+          <input id="rPrice-${n}" type="number" min="0" step="0.5" class="price-ro"
+                 data-floor="0" placeholder="—" oninput="onPriceEdit(${n})"
+                 ${window.storeCanEditPrice() ? "" : 'readonly title="سعر المنطقة — تعديل السعر خاصية بتتفتح من الإدارة"'} />
         </div>
         <div class="fg">
-          <label>سعر الطلب <span class="req">*</span></label>
-          <input type="number" id="rOrderPrice-${n}" placeholder="0" min="0" oninput="recalcTotal()" />
+          <label>سعر الطلب (العهدة) <span class="req">*</span></label>
+          <!-- من غير قيمة افتراضية عن قصد: خانة فيها صفر جاهز بتتعدّى
+               بالسهو، والصفر لازم يبقى قرار مكتوب. -->
+          <input type="number" id="rOrderPrice-${n}" placeholder="لو مفيش تحصيل اكتب 0" min="0"
+                 oninput="recalcTotal(); window.renderParcelTabs?.()" />
         </div>
         <div class="fg">
           <label>ملاحظات الطرد</label>
           <input type="text" id="rNote-${n}" placeholder="هش — لا تكسر / إلخ…" />
         </div>
         <div class="fg">
-          <label>📷 صور الإيصال / العنوان (اختياري)</label>
+          <label id="rImgLabel-${n}">📷 صور الإيصال / العنوان (اختياري)</label>
           <input type="file" id="rImgInput-${n}" accept="image/*" multiple
                  style="display:none" onchange="handleReceiptImages(${n}, this)" />
           <button type="button" class="img-add-btn" onclick="document.getElementById('rImgInput-${n}').click()">
             📷 إضافة صور
           </button>
           <div class="img-strip" id="rImgs-${n}"></div>
-        </div>`;
+        </div>
+        <!-- إرسال الطرد ده لوحده. كل طرد بيبقى أوردر مستقل برقمه
+             المتسلسل — مافيش أرقام بشرطة. -->
+        <button type="button" class="row-send" id="sendBtn-${n}"
+                onclick="saveOrder(${n})">📤 إرسال الطرد</button>`;
       $("delivContainer").appendChild(div);
       window.renderAddressWidget(`rAddrWidget-${n}`, { required: false, simple: true });
       window.renderGeoPicker(`rGeoBox-${n}`, `r${n}`, "نقطة التسليم");
@@ -1457,6 +2547,25 @@
       }
       fillZones(n);
       bindTrustToRow(n);
+
+      /* النقطة الحمرا بتتحدّث أول ما الخانة تتملى — من غير كده كانت تفضل
+         حمرا لحد ما المحل يدوس إرسال تاني ويكتشف إنه كمّلها أصلًا.
+         التلات حقول دي بالظبط هي اللي parcelIsIncomplete بتقرأها. */
+      /* أي تغيير في الطرد بيتحفظ. القايمة أوسع من قايمة النقط الحمرا
+         عن قصد: النقطة بتهم الحقول المطلوبة، والمسوّدة بتهم **كل** حاجة
+         المحل كتبها — ملاحظة أو رقم تاني ضايع زي الاسم بالظبط. */
+      [`rName-${n}`, `rPhone-${n}`, `rZone-${n}`,
+       `rPhone2-${n}`, `rOrderPrice-${n}`, `rNote-${n}`,
+       `rPrice-${n}`].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("input",  () => { window.renderParcelTabs?.(); window.queueSaveDraft?.(); });
+        el.addEventListener("change", () => { window.renderParcelTabs?.(); window.queueSaveDraft?.(); });
+      });
+
+      // الطرد الجديد بيتفتح على طول — المحل دوس «طرد آخر» عشان يكتب فيه
+      window.showRow(n);
+      window.queueSaveDraft?.();
     };
 
     /* ══════════════════════════════════════════════════════
@@ -1541,19 +2650,283 @@
       if (box) box.style.display = on ? "block" : "none";
       const lbl = document.querySelector(".sender-label");
       if (lbl) lbl.textContent = on ? "المُرسِل — مكان آخر" : "المُرسِل — محلك";
+      /* «مكان تاني» بيفتح البلوك إجباريًا (البيانات مؤقتة ولازم يشوفها)،
+         وإلغاء التشييك بيرجّعه للطيّ لو الملف مكتمل. */
+      if (on) window._pickupOpen = true;
+      else    window._pickupOpen = false;
+      window.refreshPickupSummary?.();
     };
 
-    /* يملأ بيانات المستلِم ببيانات المحل (لما المحل هو اللي هيستلم) */
+
+
+    /* ══ بوابة «كمّل بيانات محلك» — مرة واحدة في عمر الحساب ═════════════
+       الشركة بتفتح الحساب (اسم مستخدم وباسورد بس)، **والمحل هو اللي
+       بيكمّل بياناته**. البوابة دي بتوقف التطبيق لحد ما يكمّلها.
+
+       ═══ إيه اللي بتطلبه وليه ═══
+       البيانات دي هي **هوية المُرسِل** اللي بتتبعت مع كل شحنة:
+         • الاسم    → `senderName` — السيرفر بيرفض الأوردر من غيره
+         • الهاتف   → `senderPhone` — الطيار بيتصل بيه لما ييجي يستلم
+         • المنطقة  → منها بيتحدّد الفرع المسؤول
+         • العنوان + الدبوس → الطيار بيمشي عليهم
+
+       ⚠️ اتوسّعت 2026-08-31: كانت «حدّد موقع محلك» وبتطلب المنطقة والعنوان
+       والدبوس بس. الاسم والهاتف كانوا في `storeProfileIncomplete` بس —
+       يعني بانر بيتقفل ويتعدّى، والمحل يفضل شغّال بلا هاتف والطيار
+       مش لاقي حد يكلمه. البوابة والتعريف بقوا **نفس القايمة بالظبط**.
+
+       ═══ ليه إجبارية وليه مرة واحدة ═══
+       «مرة واحدة» بتتقاس من **السيرفر** (الملف المحفوظ) مش من
+       `localStorage`: مفتاح محلي بيتمسح مع الكاش وبيرجع يسأل، وبيسأل من
+       جديد على كل جهاز. لو البيانات محفوظة في القاعدة، البوابة مابتظهرش
+       خالص مهما اتعمل ريفريش.
+
+       ⚠️ الإدارة اللي داخلة تتفرّج على محل (`viaAdmin`) بتتخطّاها —
+       مش شغلها تكتب بيانات محل حد تاني، والحبس في مودال هيمنعها تشتغل.
+
+       ⚠️ الاسم مقفول بعد ما يتسجّل: هو اللي العملاء والطيارين شايفينه على
+       الشحنات القديمة، وتغييره من التطبيق بيخلي سجلين لنفس المحل. لو غلط،
+       الإدارة بتصلّحه من لوحة المحلات. */
+    window.storeNeedsLocation = function () {
+      const u = window._currentUser || {};
+      if (u.viaAdmin) return false;
+      const p = window._pickupProfile;
+      /* نداء فاشل = مش عارفين. مانوقفش المحل على معلومة مش مؤكدة —
+         نفس منطق التلميحة اللي فوق. */
+      if (!p) return false;
+
+      /* 🔴 نفس تعريف «الملف ناقص» بالظبط — مش نسخة تانية من الشروط.
+         قبل كده كانت البوابة بتفحص الدبوس والمنطقة بإيدها، والتعريف
+         الحقيقي أطول (فيه الاسم والهاتف والعنوان) — فالمحل كان بيعدّي
+         البوابة وحسابه لسه ناقص. الحارس بيمنع رجوع أي شرط مكتوب هنا. */
+      return storeProfileIncomplete();
+    };
+
+    window.openStoreLocationGate = function () {
+      const ov = document.getElementById("storeGateOverlay");
+      if (!ov) return;
+      const p = window._pickupProfile || {};
+      const u = window._currentUser   || {};
+      ov.style.display = "flex";
+
+      /* الاسم: لو الإدارة سجّلته وقت فتح الحساب بيتعبّى ويتقفل — المحل
+         بيأكّده مش بيكتبه. ولو فاضي بيكتبه بنفسه ويبقى ملكه بعد الحفظ. */
+      const nm = document.getElementById("gateShopName");
+      if (nm) {
+        // من الملف المحفوظ بس — شوف السبب الكامل على `applyShopNameLock`
+        const saved = p.shopName || "";
+        nm.value    = saved;
+        nm.readOnly = !!saved;
+        const hint  = document.getElementById("gateShopNameHint");
+        if (hint) hint.textContent = saved
+          ? "الاسم ده مسجّل من الشركة — لو فيه غلط كلّم الإدارة تصلّحه."
+          : "اكتب اسم المحل زي ما العميل يعرفه — هيظهر على كل شحنة كاسم المُرسِل.";
+      }
+      const ph1 = document.getElementById("gatePhone");
+      const ph2 = document.getElementById("gatePhone2");
+      if (ph1 && !ph1.value) ph1.value = p.shopPhone  || u.shopPhone  || "";
+      if (ph2 && !ph2.value) ph2.value = p.shopPhone2 || u.shopPhone2 || "";
+
+      // المنطقة: نفس قايمة الاستلام بالظبط (zonepick بيربطها لوحده)
+      fillPickupZones("gateZone");
+      const zs = document.getElementById("gateZone");
+      if (zs && p.zoneId != null) zs.value = String(p.zoneId);
+
+      if (!window._gateWidgetsReady) {
+        window.renderAddressWidget("gateAddrWidget", { edit: true, required: true, value: p.address || "" });
+        window._gateWidgetsReady = true;
+      }
+      if (p.lat && p.lng) window._geoPins.gatepin = { lat: p.lat, lng: p.lng };
+      window.renderGeoPicker("gateGeoBox", "gatepin", "موقع المحل على الخريطة");
+    };
+
+    window.saveStoreLocationGate = async function () {
+      const btn  = document.getElementById("gateSaveBtn");
+      const name = (document.getElementById("gateShopName")?.value || "").trim();
+      const ph1  = (document.getElementById("gatePhone")?.value  || "").replace(/\D/g, "");
+      const ph2  = (document.getElementById("gatePhone2")?.value || "").replace(/\D/g, "");
+      const zone = document.getElementById("gateZone")?.value || "";
+      const addr = window.getAddressValue ? (window.getAddressValue("gateAddrWidget") || "") : "";
+      const pin  = window._geoPins?.gatepin;
+
+      /* نفس ترتيب الحقول على الشاشة — الرسالة بتوقف عند أول ناقص من فوق
+         لتحت عشان المحل يلاقيه من غير ما يدوّر. */
+      if (name.length < 2) { toast("اكتب اسم المحل", "err"); document.getElementById("gateShopName")?.focus(); return; }
+      if (ph1.length < 8)  { toast("اكتب هاتف المحل — الطيار بيتصل بيه", "err"); document.getElementById("gatePhone")?.focus(); return; }
+      if (ph2 && ph2.length < 8) { toast("الهاتف الإضافي غير صحيح — امسحه أو صحّحه", "err"); document.getElementById("gatePhone2")?.focus(); return; }
+      if (!zone)      { toast("اختار منطقة محلك", "err"); return; }
+      if (!addr.trim()) { toast("اكتب عنوان المحل", "err"); return; }
+      /* الدبوس هو سبب البوابة كلها — من غيره مفيش داعي ليها أصلًا */
+      if (!pin)       { toast("حدّد موقع المحل على الخريطة", "err"); return; }
+
+      btn.disabled = true;
+      const old = btn.textContent;
+      btn.textContent = "جاري الحفظ…";
+      try {
+        const r = await api.put("/api/store/pickup-profile", {
+          shopName: name, phone: ph1, phone2: ph2,
+          address: addr, zoneId: zone, lat: pin.lat, lng: pin.lng
+        });
+        window._pickupProfile = r.profile || null;
+        /* 🔴 الدبوس لازم يتنسخ للمفتاحين التانيين كمان.
+           `saveOrder` بتحفظ الملف تلقائيًا من `_geoPins.pickup`، و
+           `saveStoreSettings` من `_geoPins.profpin`. لو سيبناهم فاضيين،
+           أول شحنة أو أول حفظ إعدادات كان هيكتب فوق اللي لسه اتحفظ. */
+        window._geoPins.pickup  = { lat: pin.lat, lng: pin.lng };
+        window._geoPins.profpin = { lat: pin.lat, lng: pin.lng };
+        document.getElementById("storeGateOverlay").style.display = "none";
+        try {
+          applySavedPickup();
+          renderStoreSettings();
+          renderStoreSetupHint();
+          renderStoreIdentity();
+          window.refreshPickupSummary?.();
+        } catch (e) {}
+        /* 🔴 لقطة الدخول لازم تتحدّث كمان — `saveOrder` وشريط المُرسِل
+           بيقروا من `_currentUser`، ولولا كده أول شحنة بعد البوابة كانت
+           هتتبعت بالاسم والهاتف القدام (أو فاضيين) لحد أول ريفريش. */
+        try {
+          const cu = window._currentUser || {};
+          cu.shopName = name; cu.shopPhone = ph1; cu.shopPhone2 = ph2 || "";
+          cu.shopAddress = addr; cu.shopZoneId = Number(zone);
+          saveSession(cu);
+          const nEl = document.getElementById("sender-name");  if (nEl) nEl.textContent = name;
+          const pEl = document.getElementById("sender-phone"); if (pEl) pEl.textContent = ph1 || "—";
+        } catch (e) {}
+        toast("تمام — بيانات محلك اتسجّلت ✓", "ok");
+      } catch (e) {
+        toast("تعذّر الحفظ: " + (e.message || "جرّب تاني"), "err");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = old;
+      }
+    };
+
+    /* ── طيّ بلوك الاستلام ────────────────────────────────────────────
+       المحل هو المُرسِل في الغالبية العظمى من الشحنات، والبيانات محفوظة
+       من آخر مرة — فعرض «منطقة الاستلام» و«العنوان» و«الخريطة» قدام كل
+       طلب كان بيحط ٣ حقول المحل بيعدّيهم زي ما هم.
+
+       الطيّ **عرض بس، مش تغيير في المنطق**: الحقول موجودة في الـDOM
+       ومتعبّية زي ما هي، و`saveOrder` بتقراها من نفس الأماكن. لو اتشال
+       الطي بكرة، الفورم بيشتغل زي ما هو.
+
+       بيتفتح إجباريًا في تلات حالات:
+         • الملف الدائم ناقص (مفيش منطقة محفوظة) — لازم يملاها
+         • المحل شيّك «الاستلام من مكان تاني» — البيانات ساعتها مؤقتة
+         • المحل دوس «تغيير» بنفسه */
+    /* 🔴 `_pickupOpen` معناها «**المحل** فتحه بإيده» — مش «مفتوح دلوقتي».
+
+       الفرق ده باج وقعت فيه وأنا بجرّب: الفتح الإجباري (مفيش منطقة) كان
+       بيرفع نفس العلم، فأول ما المحل يختار المنطقة الملخّص يلاقي العلم
+       مرفوع ويقول «المحل فاتحه بإيده، مش هقفل عليه» — والبلوك يفضل مفتوح
+       للأبد. `byUser` بتفصل النيّة عن الحالة. */
+    window._pickupOpen = false;
+
+    window.togglePickupDetails = function (open, byUser) {
+      const det = document.getElementById("pickupDetails");
+      const sum = document.getElementById("pickupSummary");
+      if (!det || !sum) return;
+      if (byUser !== false) window._pickupOpen = !!open;
+      det.style.display = open ? "" : "none";
+      sum.style.display = open ? "none" : "";
+
+      /* هوية المحل والأيقونة وحشو الكارت بيتشالوا مع الطي — الهدف من
+         الطي توفير مساحة، ولو الكارت فضل بحجمه ماتوفرش حاجة. */
+      const ident = document.getElementById("senderIdent");
+      if (ident) ident.style.display = open ? "" : "none";
+      const icon = document.querySelector(".sender-icon");
+      if (icon) icon.style.display = open ? "" : "none";
+      document.querySelector(".sender-bar")?.classList.toggle("collapsed", !open);
+    };
+
+    /** بيقرّر مفتوح ولا مطويّ، وبيكتب سطر الملخّص. بيتنادى بعد أي تغيير. */
+    window.refreshPickupSummary = function () {
+      const sum = document.getElementById("pickupSummary");
+      if (!sum) return;
+
+      const elsewhere = document.getElementById("pickupElsewhere")?.checked;
+      const zoneSel   = document.getElementById("pickupZone");
+      /* نص الخيار مبني «المنطقة — السعر ج.م». السعر ده سعر **توصيل**
+         المنطقة، ومالوش معنى في سطر الاستلام — بيخلّي السطر يقرا كأن
+         الاستلام بفلوس. بناخد الجزء اللي قبل الشرطة بس. */
+      const zoneRaw   = zoneSel?.options?.[zoneSel.selectedIndex]?.textContent?.trim() || "";
+      const zoneName  = zoneRaw.split(" — ")[0].trim() || zoneRaw;
+      const hasZone   = !!(zoneSel && zoneSel.value);
+      const addr      = window.getAddressValue ? (window.getAddressValue("pickupAddrWidget") || "") : "";
+
+      /* مافيش منطقة = الفورم مش هيعدّي أصلًا (saveOrder بترفض). طيّه
+         ساعتها بيخبّي سبب الرفض عن المحل. */
+      if (!hasZone || elsewhere) {
+        // فتح إجباري مش نيّة المحل — `false` عشان العلم مايترفعش
+        window.togglePickupDetails(true, false);
+
+        return;
+      }
+      if (window._pickupOpen) return;   // المحل فاتحه بإيده — مانقفلوش عليه
+
+      const shop = window._pickupProfile?.shopName
+        || window._currentUser?.shopName || window._currentUser?.username || "محلك";
+      document.getElementById("pickupSummaryLine").textContent = `الاستلام من ${shop} — ${zoneName}`;
+      /* التفاصيل بقت في `title` بدل سطر تاني — بتلزم عند المراجعة مش
+         عند كل طلب، والسطر التاني كان بياخد ٢٠ بكسل من كل شاشة. */
+      const pin = window._geoPins?.pickup;
+      const btn = document.getElementById("pickupSummaryBtn");
+      if (btn) btn.title = (addr || "من غير عنوان تفصيلي")
+        + (pin ? " · 📍 الموقع محدّد" : " · مفيش دبوس") + " — اضغط للتعديل";
+      window.togglePickupDetails(false, false);
+    };
+
+    /* يملأ بيانات المستلِم ببيانات المحل (لما المحل هو اللي هيستلم).
+
+       ═══ كان بيملا نص الشغل ═══
+       الاسم والتليفونات والعنوان بس. المنطقة والدبوس كانوا بيتسابوا
+       فاضيين — والمنطقة **إجبارية ومنها بيتحسب السعر**، فالمحل كان لازم
+       يكمّل بإيده بعد ما يدوس على زرار اسمه «املا بياناتي».
+
+       وكان بيقرا من `_currentUser` (لقطة وقت الدخول) بدل
+       `_pickupProfile` (الملف المحفوظ الأحدث)، فأي تعديل عمله المحل في
+       الإعدادات مكانش بيبان هنا غير بعد ما يخرج ويدخل تاني. */
     window.fillShopAsReceiver = function(n) {
-      const u = window._currentUser;
-      if (!u) return;
+      const u    = window._currentUser || {};
+      const prof = window._pickupProfile || {};
+      /* الملف المحفوظ بيغلب لقطة الدخول — هو الأحدث */
+      const name   = prof.shopName   || u.shopName || u.username;
+      const phone  = prof.shopPhone  || u.shopPhone;
+      const phone2 = prof.shopPhone2 || u.shopPhone2;
+      const addr   = prof.address    || u.shopAddress;
+      const zoneId = prof.zoneId     ?? u.shopZoneId;
+      const lat    = prof.lat        ?? u.shopLat;
+      const lng    = prof.lng        ?? u.shopLng;
+
+      if (!name && !phone) {
+        toast("لسه مافيش بيانات محفوظة للمحل — حدّثها من الإعدادات الأول", "err");
+
+        return;
+      }
+
       const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-      set(`rName-${n}`,   u.shopName || u.username);
-      set(`rPhone-${n}`,  u.shopPhone);
-      set(`rPhone2-${n}`, u.shopPhone2);
-      if (u.shopAddress) window.setAddressValue(`rAddrWidget-${n}`, u.shopAddress);
+      set(`rName-${n}`,   name);
+      set(`rPhone-${n}`,  phone);
+      set(`rPhone2-${n}`, phone2);
+      if (addr) window.setAddressValue(`rAddrWidget-${n}`, addr);
+
+      /* المنطقة: `onZone` بتحسب السعر منها، فلازم نبعت الحدث بنفسنا —
+         تعيين `.value` بالكود مابيشغّلش `onchange`. */
+      const zs = document.getElementById(`rZone-${n}`);
+      if (zs && zoneId) {
+        zs.value = String(zoneId);
+        if (zs.value === String(zoneId)) window.onZone(n);
+      }
+
+      // الدبوس — الطيار بيمشي عليه، فسيبانه فاضي بيضيّع نص الفايدة
+      if (lat && lng) {
+        window._geoPins[`r${n}`] = { lat: Number(lat), lng: Number(lng) };
+        window.renderGeoPicker(`rGeoBox-${n}`, `r${n}`, "نقطة التسليم (اختياري)");
+      }
+
       document.getElementById(`rPhone-${n}`)?.dispatchEvent(new Event("input"));
-      toast("تم ملء بيانات المحل كمستلِم ✓", "ok");
+      toast("اتملت ببياناتك ✓", "ok");
     };
 
     /* صور كل طرد: { رقم الطرد: [روابط] } */
@@ -1581,6 +2954,12 @@
           toast("تعذّر رفع الصورة: " + e.message, "err");
         }
         renderRowImages(n);
+        // النقطة الحمرا بتروح أول ما صورة الريسيت ترفع بنجاح
+        window.renderParcelTabs?.();
+        /* الحفظ مؤجّل، فالنداء ده مع كل صورة بيدمج في كتابة واحدة بعد
+           آخر رفع — مش كتابة لكل صورة. والمؤقّت `{uploading:true}`
+           مابيتحفظش أصلًا (`readDraft` بتفلتر النصوص بس). */
+        window.queueSaveDraft?.();
       }
     };
 
@@ -1604,10 +2983,49 @@
       }).join("");
     }
 
-    window.rmRow = function (n) {
+    /**
+     * بيشيل طرد **اتبعت بنجاح** ويخلّي الباقي زي ما هو.
+     *
+     * الفرق عن `rmRow`: ده بيشيل حتى لو ده الطرد الوحيد — لأنه اتبعت
+     * مش اتلغى. وساعتها `resetForm` بتفضّي وتحط طرد فاضي جديد،
+     * فالمحل يلاقي نفسه جاهز للشحنة اللي بعدها على طول.
+     */
+    window.removeSentRow = function (n) {
+      const rows = parcelRows();
+      if (rows.length <= 1) {
+        /* آخر طرد: تفضية كاملة — بترجّع ملف الاستلام وتضيف طرد فاضي.
+           ومعاها بتصفّر `_parcelChecked` فالنقط الحمرا مابتفضلش من
+           الشحنة اللي فاتت. */
+        resetForm();
+        /* هنا بالظبط معناها «خلصنا» — آخر طرد اتبعت. ده المكان الوحيد
+           اللي المسح فيه صح، مش جوه `resetForm` اللي بتتنده وقت
+           الإقلاع كمان. */
+        window.clearDraft?.();
+        return;
+      }
+      const i    = rows.findIndex(r => r.id === "row-" + n);
+      const next = rows[i + 1] || rows[i - 1] || null;
       document.getElementById(`row-${n}`)?.remove();
       delete window._rowImages[n];
+      if (next) window.showRow(next.id.replace("row-", ""));
       recalc();
+      recalcTotal();
+      window.saveDraft?.();          // فورًا مش مؤجّل — الطرد اتبعت خلاص
+    };
+
+    window.rmRow = function (n) {
+      /* بنمسك جاره **قبل** الحذف — بعده الصف بيبقى مش موجود ومفيش
+         طريقة نعرف منها كان فين، فالمحل كان هيلاقي نفسه على غير طرد. */
+      const rows = parcelRows();
+      const i    = rows.findIndex(r => r.id === "row-" + n);
+      const next = rows[i + 1] || rows[i - 1] || null;
+
+      document.getElementById(`row-${n}`)?.remove();
+      delete window._rowImages[n];
+      if (next) window.showRow(next.id.replace("row-", ""));
+      else window.renderParcelTabs();
+      recalc();
+      window.saveDraft?.();
     };
 
     /* ══════════════════════════════════════════════════════
@@ -1629,8 +3047,11 @@
       return src == null || src === "" || String(src) === String(dst);
     };
 
-    function fillPickupZones() {
-      const sel = document.getElementById("pickupZone");
+    /* `targetId` عشان بوابة أول دخول تستعمل **نفس** القايمة بنفس الفلتر
+       (الصف البيتي + إزالة التكرار). قايمة تانية مبنية بإيد كانت هتفرق
+       عن دي مع أول تعديل على الفلتر. */
+    function fillPickupZones(targetId) {
+      const sel = document.getElementById(targetId || "pickupZone");
       if (!sel) return;
       const prev = sel.value;
       const seen = new Set();
@@ -1654,10 +3075,19 @@
     ══════════════════════════════════════════════════════════════════ */
     window._profSettingsReady = false;
 
+    /* تعريف واحد لـ«الملف مكتمل» — بيتنده من التلميحة ومن قايمة الناقص
+       ومن البوابة (`storeNeedsLocation`) ومن `saveOrder`.
+       الموقع بقى جزء منه بعد ما البوابة بقت بتفرضه، وإلا كان هيبقى فيه
+       تعريفين متضاربين: المحل شايف حسابه «مكتمل» والبوابة بتفتحله.
+
+       🆕 `shopName` (2026-08-31): الاسم بيتبعت كـ`senderName` في كل شحنة،
+       والسيرفر بيرفض الأوردر من غيره. كان بره التعريف ده فالمحل اللي
+       الإدارة فتحت له حساب من غير اسم كان بيعدّي كل الحرّاس وبعدين أول
+       شحنة ترجع «يرجى اختيار أو إدخال العميل استلام» وهو مش فاهم ليه. */
     function storeProfileIncomplete() {
       const p = window._pickupProfile;
       // الهاتف الأول جزء من البيانات الناقصة — من غيره الطيار مش هيعرف يتصل
-      return !p || !p.zoneId || !p.address || !p.shopPhone;
+      return !p || !p.shopName || !p.zoneId || !p.address || !p.shopPhone || !(p.lat && p.lng);
     }
 
     /** بتبني خانات صفحة الإعدادات وتملاها من الملف المحفوظ */
@@ -1667,14 +3097,29 @@
       const p = window._pickupProfile || {};
       const u = window._currentUser || {};
 
-      const list = (window._allZones || []).slice()
+      /* 🔴 نفس فلتر فورم الشحنة بالحرف — «الصف البيتي» + إزالة
+         التكرار بالاسم. القايمة دي كانت بلا فلتر خالص، فالمحل كان
+         يحفظ منطقة مالهاش option في فورم الشحنة، وبعدين كل محاولة
+         إرسال ترجع «اختر منطقة الاستلام» وهو شايف حسابه مكتمل.
+         وكمان كانت بتعرض نفس اسم المنطقة أكتر من مرة (من/إلى). */
+      const seenP = new Set();
+      const list = (window._allZones || [])
+        .filter(z => {
+          if (!isHomeZone(z)) return false;
+          const k = String(zoneLabelOf(z)).trim();
+          if (seenP.has(k)) return false;
+          seenP.add(k); return true;
+        })
         .sort((a, b) => zoneLabelOf(a).localeCompare(zoneLabelOf(b), "ar"));
       const cur = sel.value || (p.zoneId != null ? String(p.zoneId) : "");
       sel.innerHTML = `<option value="">— اختر منطقة الاستلام —</option>` +
         list.map(z => `<option value="${ esc(z.id) }">${zoneLabelOf(z)}</option>`).join("");
       if (cur && list.some(z => String(z.id) === String(cur))) sel.value = String(cur);
 
-      // التليفونات بتتعبّى من بيانات الحساب (مش بنمسح لو المحل بيكتب دلوقتي)
+      // الاسم والتليفونات بيتعبّوا من بيانات الحساب (مش بنمسح لو المحل بيكتب دلوقتي)
+      const nm = document.getElementById("profShopName");
+      if (nm && !nm.value && document.activeElement !== nm) nm.value = p.shopName || "";
+      applyShopNameLock();
       const ph1 = document.getElementById("profPhone");
       const ph2 = document.getElementById("profPhone2");
       if (ph1 && !ph1.value && document.activeElement !== ph1) ph1.value = p.shopPhone || u.shopPhone || "";
@@ -1682,7 +3127,7 @@
 
       // العنوان والدبوس بيتبنوا مرة واحدة عشان ما نمسحش كتابة المحل
       if (!window._profSettingsReady) {
-        window.renderAddressWidget("profAddrWidget", {
+        window.renderAddressWidget("profAddrWidget", { edit: true,
           required: true, value: p.address || u.shopAddress || ""
         });
         if (p.lat && p.lng) window._geoPins.profpin = { lat: p.lat, lng: p.lng };
@@ -1693,7 +3138,37 @@
       renderSettingsView();
       renderStoreIdentity();
       renderProfileTodo();
+      // كارت خدمة العملاء يترسم أول ما الصفحة تتفتح بدل ما يستنّى نبضة الـ٥ دقايق
+      renderSupportBits();
     };
+
+    /* ── قفل اسم المحل بعد ما يتسجّل ─────────────────────────────────
+       الاسم بيتكتب مرة (من الإدارة وقت فتح الحساب، أو من المحل في
+       البوابة) وبعدين بيتقفل. السبب: هو الاسم اللي متبصوم على كل شحنة
+       قديمة كـ`senderName`، والعملاء والطيارين شايفينه. لو المحل غيّره
+       من هنا بيبقى فيه اسمين لنفس المحل في السجل ومحدش عارف مين مين —
+       ولا العميل يعرف يقول «الشحنة من مين».
+       التغيير من الإدارة (`EntitiesController` — لوحة المحلات) عشان
+       يتعمل بقرار مش بالغلط. */
+    function applyShopNameLock() {
+      const nm = document.getElementById("profShopName");
+      if (!nm) return;
+      const p = window._pickupProfile || {};
+      /* 🔴 القفل بيتقاس من **الملف المحفوظ على السيرفر بس** — مش من لقطة
+         الدخول. لقطة الدخول بتبني اسم المحل بسلسلة بدائل بتنتهي باسم
+         المستخدم، يعني قيمتها **مستحيل تبقى فاضية**. لما كان القفل
+         بيقراها، كان بيبقى مرفوع من أول ثانية حتى لو العمود فاضي في
+         القاعدة — فالمحل عمره ما كان هيقدر يكتب اسمه، والبوابة كانت
+         هتبصم اسم المستخدم كاسم مُرسِل دائم على كل شحنة.
+         وده بالظبط عكس الهدف من الميزة. */
+      const locked = !!p.shopName;
+      nm.readOnly = locked;
+      nm.style.opacity = locked ? ".65" : "";
+      const help = document.getElementById("profShopNameHelp");
+      if (help) help.textContent = locked
+        ? "الاسم مقفول بعد التسجيل — بيظهر على شحناتك القديمة. للتعديل كلّم الإدارة."
+        : "بيظهر على كل شحنة كاسم المُرسِل — للعميل وللطيار";
+    }
 
     /* ── حالة العرض: صفوف مضغوطة بدل الفورم المفتوح على طول ──
        البيانات ليها مصدر واحد بس على الصفحة (الكارت ده) — قبل كده كانت
@@ -1707,12 +3182,30 @@
         el.textContent = has ? val : fallback;
         el.classList.toggle("none", !has);
       };
+      /* في وضع الإدارة الملف مش مقروء (403) فبنعرض لقطة منتقي المحلات؛
+         للمحل نفسه بنعرض المحفوظ **بس** عشان الشاشة ماتقولش «الاسم مسجّل»
+         وشريط «ناقصك» تحتيها يقول «ناقصك اسم المحل» في نفس اللحظة. */
+      set("v-shopname", p.shopName || (u.viaAdmin ? u.shopName : null),
+                                                    "مش مسجّل — الشحنة مش هتتبعت من غيره");
       set("v-phone",  p.shopPhone  || u.shopPhone,  "مش مسجّل — الطيار مش هيعرف يتصل");
       set("v-phone2", p.shopPhone2 || u.shopPhone2, "مش مسجّل (اختياري)");
       set("v-zone",   p.zoneName,                   "مش محددة");
       set("v-addr",   p.address    || u.shopAddress,"مش مسجّل");
       const pin = (p.lat && p.lng) || window._geoPins?.profpin;
       set("v-pin",    pin ? "متحدّد ✓" : "",        "مش متحدّد (اختياري)");
+
+      /* في وضع الإدارة أزرار «تعديل» كلها بتودّي لفورم بيرجّع 403 —
+         بنشيلها ونقول السبب بدل ما الأدمن يكتشفه بالتجربة. ولاحظ إن
+         القيم فوق بتيجي من `u` (منتقي المحلات) لأن `p` بيفضل null. */
+      const viaAdmin = !!u.viaAdmin;
+      document.querySelectorAll("#setView .sa .link-btn")
+        .forEach(b => { b.style.display = viaAdmin ? "none" : ""; });
+      const note = document.getElementById("setAdminNote");
+      if (note) {
+        note.style.display = viaAdmin ? "" : "none";
+        if (viaAdmin) note.textContent =
+          "👑 إنت داخل كإدارة — البيانات دي بيكمّلها صاحب المحل بنفسه، وتعديلها من لوحة المحلات.";
+      }
     }
 
     /* ── هوية المحل: الفرع الحقيقي بدل النص الثابت «حسب منطقة الاستلام» ──
@@ -1733,8 +3226,11 @@
         sEl.textContent = blocked ? "⛔ موقوف" : "✓ نشط";
         sEl.className   = "ph-chip " + (blocked ? "bad" : "ok");
       }
+      /* الملف المحفوظ بيغلب لقطة الدخول — هو الأحدث. من غير كده الاسم
+         اللي المحل سجّله في البوابة مكانش يبان في الهيدر غير بعد ريفريش. */
       const shop = document.getElementById("prof-shop");
-      if (shop && (u.shopName || u.username)) shop.textContent = u.shopName || u.username;
+      const shopName = p.shopName || u.shopName || u.username;
+      if (shop && shopName) shop.textContent = shopName;
       const usr = document.getElementById("prof-user");
       if (usr && u.username) usr.textContent = u.username;
     };
@@ -1742,11 +3238,19 @@
     /* ── شريط «ناقصك إيه» — بيظهر بس لما يكون في ناقص، وبيقول ناقص إيه ── */
     function renderProfileTodo() {
       const box = document.getElementById("profTodo"); if (!box) return;
+      /* في وضع الإدارة `_pickupProfile` بيفضل null (الـGET بيرجّع 403)،
+         فالقايمة كانت بتقول «ناقصك كل حاجة» عن محل ملفه ممكن يكون كامل —
+         معلومة غلط والأدمن مايقدرش يعملها حاجة أصلًا. */
+      if ((window._currentUser || {}).viaAdmin) { setHtml(box, ""); return; }
       const p = window._pickupProfile || {};
       const missing = [];
-      if (!(p.shopPhone)) missing.push("هاتف المحل");
-      if (!(p.zoneId))    missing.push("منطقة الاستلام");
-      if (!(p.address))   missing.push("عنوان المحل");
+      if (!(p.shopName))      missing.push("اسم المحل");
+      if (!(p.shopPhone))     missing.push("هاتف المحل");
+      if (!(p.zoneId))        missing.push("منطقة الاستلام");
+      if (!(p.address))       missing.push("عنوان المحل");
+      /* لازم يبقى مع `storeProfileIncomplete` بالظبط — لو الاتنين اختلفوا
+         المحل بيشوف «مفيش ناقص» والبوابة بتفتحله، أو العكس. */
+      if (!(p.lat && p.lng))  missing.push("موقع المحل على الخريطة");
       if (!missing.length) { setHtml(box, ""); return; }
       setHtml(box, `
         <div class="todo-bar">
@@ -1762,14 +3266,29 @@
       const view = document.getElementById("setView");
       const edit = document.getElementById("setEdit");
       if (!view || !edit) return;
+      /* 🔒 دخول الإدارة على محل (`viaAdmin`): جلسة السيرفر **أدمن**،
+         و`store/pickup-profile` مقفول على `role:store` — فالقراية والكتابة
+         الاتنين بيرجّعوا 403. الفورم كان بيتفتح عادي والحفظ يرجّع
+         «غير مسموح لك بهذه العملية» من غير ما الأدمن يفهم ليه.
+         نفس قاعدة زرار التقييم تحت: مانعرضش زرار السيرفر هيرفضه.
+         والقاعدة الأصلية: بيانات المحل **بيكمّلها صاحب المحل**، والإدارة
+         بتعدّلها من لوحة المحلات مش من هنا. */
+      if (on && (window._currentUser || {}).viaAdmin) {
+        toast("بيانات المحل بيكمّلها صاحبه — للتعديل استخدم لوحة المحلات", "err");
+
+        return;
+      }
       view.style.display = on ? "none"  : "";
       edit.style.display = on ? "block" : "none";
       if (on) {
         // الفورم بيتعبّى من المحفوظ كل مرة يتفتح فيها — عشان «إلغاء» ترجّع القديم
         const p = window._pickupProfile || {}, u = window._currentUser || {};
+        const nm  = document.getElementById("profShopName");
         const ph1 = document.getElementById("profPhone");
         const ph2 = document.getElementById("profPhone2");
         const sel = document.getElementById("profZone");
+        if (nm) nm.value = p.shopName || "";
+        applyShopNameLock();
         if (ph1) ph1.value = p.shopPhone  || u.shopPhone  || "";
         if (ph2) ph2.value = p.shopPhone2 || u.shopPhone2 || "";
         if (sel && p.zoneId != null) sel.value = String(p.zoneId);
@@ -1790,6 +3309,15 @@
       const addr = window.getAddressValue ? window.getAddressValue("profAddrWidget") : "";
       const ph1  = (document.getElementById("profPhone")?.value  || "").replace(/\D/g, "");
       const ph2  = (document.getElementById("profPhone2")?.value || "").replace(/\D/g, "");
+      /* الاسم بيتبعت **بس** لو لسه مااتسجّلش — بعد كده الحقل `readOnly`
+         والقيمة اللي فيه هي المحفوظة نفسها، فإرسالها بيبقى كتابة بلا داعي
+         على عمود بيتبصم على كل شحنة. `applyShopNameLock` هو الحاكم. */
+      const nmEl = document.getElementById("profShopName");
+      const name = (nmEl?.value || "").trim();
+      if (nmEl && !nmEl.readOnly && name.length < 2) {
+        toast("اكتب اسم المحل — بيظهر كاسم المُرسِل على كل شحنة", "err");
+        nmEl.focus(); return;
+      }
       if (!ph1 || ph1.length < 8) {
         toast("اكتب هاتف المحل — الطيار بيتصل بيه", "err");
         document.getElementById("profPhone")?.focus(); return;
@@ -1800,24 +3328,38 @@
       }
       if (!zone) { toast("اختر منطقة الاستلام", "err"); return; }
       if (!addr)  { toast("اكتب عنوان المحل", "err"); return; }
+      /* 🔴 الموقع بقى إجباري من بوابة أول دخول — فمنعه هنا كمان.
+         من غير السطر ده المحل يقدر يفتح الإعدادات، يمسح الدبوس، يحفظ،
+         وبوابة «حدّد موقع محلك» ترجع تفتحله تاني أول ريفريش وهو مش فاهم
+         ليه. قاعدة واحدة في المكانين. */
+      const pin = window._geoPins.profpin || null;
+      if (!pin) {
+        toast("حدّد موقع المحل على الخريطة — الطيار بيمشي عليه", "err");
+        document.getElementById("profGeoBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        return;
+      }
 
       btn.disabled = true; btn.textContent = "⏳ جاري الحفظ…";
       try {
-        const pin = window._geoPins.profpin || null;
         const r = await api.put("/api/store/pickup-profile", {
+          ...(nmEl && !nmEl.readOnly ? { shopName: name } : {}),
           phone: ph1, phone2: ph2,
           address: addr, zoneId: zone,
-          lat: pin ? pin.lat : null, lng: pin ? pin.lng : null
+          lat: pin.lat, lng: pin.lng
         });
         window._pickupProfile = r.profile || null;
         const cu = window._currentUser || {};
         cu.shopAddress = addr; cu.shopZoneId = Number(zone);
         cu.shopPhone = ph1; cu.shopPhone2 = ph2 || "";
+        if (r.profile?.shopName) cu.shopName = r.profile.shopName;
         // لازم يتحفظ في localStorage كمان — من غير كده الكاش يفضل قديم
         // وأول ريفريش يرجّع الأرقام القديمة على الشاشة
         try { saveSession(cu); } catch (e) {}
-        // شريط المُرسِل في فورم الشحنة بيعرض الرقم الجديد فورًا
+        // شريط المُرسِل في فورم الشحنة بيعرض الاسم والرقم الجديد فورًا
         $("sender-phone").textContent = ph1 || "—";
+        if (cu.shopName) $("sender-name").textContent = cu.shopName;
+        applyShopNameLock();
         renderSettingsView();
         renderStoreIdentity();
         renderProfileTodo();
@@ -1836,6 +3378,8 @@
     window.renderStoreSetupHint = function () {
       const box = document.getElementById("storeSetupHint");
       if (!box) return;
+      // نفس سبب `renderProfileTodo`: الملف مش مقروء في وضع الإدارة مش ناقص
+      if ((window._currentUser || {}).viaAdmin) { box.style.display = "none"; return; }
       if (!storeProfileIncomplete()) { box.style.display = "none"; return; }
       box.style.display = "";
       box.innerHTML = `<div style="background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.4);
@@ -1869,6 +3413,18 @@
         onZone(n);
       });
       renderPickupBranch();
+      /* 🔴 الطيّ بيتحسب هنا مش عند التهيئة.
+
+         الباج اللي اتصلّح: قايمة المناطق بتوصل من مستطلع `/api/zones`
+         **بعد** ما الفورم يترسم، والمنطقة المحفوظة بتتختار في اللحظة
+         دي (`applySavedPickup` جوه `onChange`). فوقت التهيئة القايمة
+         لسه فاضية، `sel.value` فاضية، والملخّص بيقرّر «مفيش منطقة ⟵
+         افتح» — وبعدين محدش بينده عليه تاني فالبلوك بيفضل مفتوح للأبد.
+
+         `applyPickupZone` هي نقطة العبور الوحيدة لكل تغيير في المنطقة
+         (التهيئة · المستطلع · اختيار المحل · استرجاع الملف المحفوظ)،
+         فالنداء منها بيغطّي المسارات كلها بسطر واحد. */
+      window.refreshPickupSummary?.();
     }
 
     function renderPickupBranch() {
@@ -1884,6 +3440,7 @@
         🏢 الفرع المسؤول: ${ esc(b?.name || "—") }</div>`;
     }
 
+    // `applyPickupZone` بتنده الملخّص في آخرها — مفيش داعي لنداء تاني
     window.onPickupZone = function () { applyPickupZone({ keepSelection: true }); };
 
     function fillZones(n) {
@@ -1910,8 +3467,48 @@
       const sel   = document.getElementById(`rZone-${n}`);
       const price = parseFloat(sel.options[sel.selectedIndex]?.dataset.price) || 0;
       const el    = document.getElementById(`rPrice-${n}`);
-      if (el) el.value = price + " ج.م";
+      if (el) {
+        /* سعر المنطقة بيبقى **الحد الأدنى والقيمة الافتراضية** مع بعض.
+           لو المحل كان زوّده وغيّر المنطقة، بنرجّعه للسعر الجديد — سعر
+           منطقة قديمة مالوش معنى على منطقة تانية. */
+        el.dataset.floor = String(price);
+        // المفتوح له التعديل ينزل تحت سعر المنطقة — الـmin مايقفش قدامه
+        el.min = window.storeCanEditPrice() ? "0" : String(price);
+        el.value = price ? String(price) : "";
+        onPriceEdit(n);
+      }
       recalc();
+    };
+
+    /* بيلوّن الخانة لو السعر نزل تحت الحد الأدنى، ويحدّث الإجمالي.
+       التلوين فوري عشان المحل يشوف الغلط وهو بيكتب مش عند الإرسال. */
+    /* 🏪 تعديل السعر خاصية بتتفتح لبعض المحلات من الإدارة (طلب 2026-09-03):
+       المفتوح له يزوّد أو ينقّص من غير أرضية؛ المقفول الخانة عنده
+       readonly بسعر المنطقة. البوابة الحقيقية على السيرفر
+       (OrdersController::deliveryPrice) — ده للراحة. */
+    window.storeCanEditPrice = function () {
+      return !!(window._pickupProfile && window._pickupProfile.canEditPrice);
+    };
+    window.applyPriceEditPerm = function () {
+      const can = window.storeCanEditPrice();
+      document.querySelectorAll('input[id^="rPrice-"]').forEach(el => {
+        el.readOnly = !can;
+        el.title = can ? "" : "سعر المنطقة — تعديل السعر خاصية بتتفتح من الإدارة";
+        if (!can) { const f = parseFloat(el.dataset.floor || "0") || 0; if (f) el.value = String(f); el.style.borderColor = ""; }
+      });
+    };
+    window.onPriceEdit = function (n) {
+      const el = document.getElementById(`rPrice-${n}`);
+      if (!el) return;
+      const val = parseFloat(el.value) || 0;
+      const bad = el.value !== "" && val < 0;
+      el.style.borderColor = bad ? "#ef4444" : "";
+      if (window.storeCanEditPrice()) {
+        const floor = parseFloat(el.dataset.floor || "0") || 0;
+        el.title = floor > 0 ? `سعر المنطقة ${floor} ج.م — تقدر تزوّد أو تنقّص` : "";
+      }
+      recalc();
+      window.renderParcelTabs?.();
     };
 
     function recalc() {
@@ -1919,7 +3516,8 @@
       for (let i = 1; i <= window._delivCount; i++) {
         const el = document.getElementById(`rPrice-${i}`);
         if (!el) continue;
-        total += parseFloat(el.value.replace(/[^0-9.]/g, "")) || 0;
+        // الخانة بقت رقمية — مفيش «ج.م» نشيلها، بس بنسيب التنضيف احتياطًا
+        total += parseFloat(String(el.value).replace(/[^0-9.]/g, "")) || 0;
       }
       $("orderTotal").textContent = total + " ج.م";
     }
@@ -1941,7 +3539,71 @@
       try { console.debug("storeDiag", { at: new Date().toISOString(), ...info }); } catch (_) {}
     }
 
-    window.saveOrder = async function () {
+    /* بينقل الشاشة للطرد الناقص، يقول الرسالة، ويحدّد الخانة الفاضية.
+       الترتيب مقصود: `showRow` الأول عشان `focus` و`scrollIntoView`
+       مايشتغلوش على عنصر مخفي. */
+    function _jumpToParcel(n, fieldId, msg) {
+      window.showRow?.(n);
+      toast(msg, "err");
+      const el = document.getElementById(fieldId);
+      if (!el) return;
+      el.style.borderColor = "#ef4444";
+      el.style.boxShadow   = "0 0 0 3px rgba(239,68,68,.25)";
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.focus();
+      // الإبراز بيروح أول ما يكتب — ومعاه النقطة الحمرا بتتحدّث
+      el.addEventListener("input", function _clr() {
+        el.style.borderColor = ""; el.style.boxShadow = "";
+        window.renderParcelTabs?.();
+        el.removeEventListener("input", _clr);
+      });
+    }
+
+    /**
+     * بتبعت **طرد واحد** كأوردر مستقل. `onlyRow` هو رقمه الداخلي.
+     *
+     * الباراميتر اختياري عشان لو اتندهت من غيره (كود قديم أو تجربة)
+     * تبعت كل الطرود كأوردر واحد زي الأول — سلوك مايتكسرش صامت.
+     */
+    /**
+     * بيبعت كل الطرود — **كل واحد أوردر مستقل** بنفس مسار الإرسال
+     * الفردي. مافيش مسار تاني بترقيم تاني.
+     *
+     * ⚠️ بنلفّ على **لقطة** من المعرّفات: `saveOrder` بتشيل الصف بعد
+     * النجاح، فالقايمة الحيّة بتتغيّر تحت رجلينا والحلقة بتتخبّط.
+     *
+     * ⚠️ بنقف عند أول فشل. علامة النجاح إن الصف اتشال — `saveOrder`
+     * مابتشيلوش غير بعد ما السيرفر يرد بنجاح. من غير الوقفة، المحل
+     * يلاقي طرود اتبعتت وطرود لأ ومايعرفش مين فيهم.
+     */
+    window.sendAllParcels = async function () {
+      const btn = document.getElementById("sendAllBtn");
+      const ids = parcelRows().map(r => r.id.replace("row-", ""));
+      if (!ids.length) return;
+
+      if (btn) { btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…"; }
+      window._bulkCodes = [];
+      let stopped = null;
+      for (const n of ids) {
+        if (!document.getElementById(`row-${n}`)) continue;   // اتشال من تاب تاني
+        await window.saveOrder(n);
+        if (document.getElementById(`row-${n}`)) { stopped = n; break; }
+      }
+      const codes = window._bulkCodes || [];
+      window._bulkCodes = null;
+      if (btn) { btn.disabled = false; btn.textContent = "📤 إرسال كل الطلبات"; }
+
+      if (codes.length) {
+        /* التحذير جوه المودال مش توست: التوست بيتغطّى ورا المودال
+           والمحل يقفل ومايعرفش إن في طرد وقف. */
+        const left = stopped
+          ? `طرد واحد وقف — كمّل بياناته وابعته لوحده` : "";
+        renderCodesModal(`${codes.length} ${codes.length === 1 ? "طلب" : "طلبات"}`, codes, left);
+      }
+      window.renderParcelTabs?.();
+    };
+
+    window.saveOrder = async function (onlyRow) {
       // مصيدة تغطّي الدالة كلها — حتى أخطاء التحقق أو أي throw غير متوقع
       // (زي لو عنصر مش موجود) بتتسجّل، فمفيش فشل صامت تاني
       try {
@@ -1949,8 +3611,18 @@
       if (!u) { await _storeDiag({ step: "no-user" }); return; }
 
       const notes    = $("orderNotes").value.trim();
-      const rows     = document.querySelectorAll(".parcel-card");
+      /* صف واحد بس لما يتحدّد — كل طرد بيتبعت كأوردر مستقل.
+         الـ`filter(Boolean)` مش زيادة: الصف ممكن يكون اتشال من تاب تاني. */
+      const rows     = onlyRow
+        ? [document.getElementById(`row-${onlyRow}`)].filter(Boolean)
+        : Array.from(document.querySelectorAll(".parcel-card"));
       if (!rows.length) { toast("أضف وجهة توصيل واحدة على الأقل", "err"); await _storeDiag({ step: "no-parcels" }); return; }
+
+      /* من هنا ورايح النقط الحمرا بتبان على أزرار الطرود الناقصة.
+         قبل أول محاولة إرسال بتفضل مطفية — فورم لسه اتفتح مايستاهلش
+         يبان كأنه غلطان. */
+      window._parcelChecked = true;
+      window.renderParcelTabs?.();
 
       const pickupAddress = window.getAddressValue("pickupAddrWidget");
       if (!pickupAddress) { toast("يرجى إدخال عنوان استلام الطلب", "err"); await _storeDiag({ step: "no-pickup" }); return; }
@@ -1967,15 +3639,47 @@
         const zoneId  = zoneSel?.value;
         const zoneTxt = zoneSel?.options[zoneSel.selectedIndex]?.text || "";
         const zoneName= zoneTxt.split(" — ")[0] || "";
-        const price   = parseFloat(document.getElementById(`rPrice-${n}`)?.value.replace(/[^0-9.]/g, "")) || 0;
+        const priceEl = document.getElementById(`rPrice-${n}`);
+        const price   = parseFloat(String(priceEl?.value ?? "").replace(/[^0-9.]/g, "")) || 0;
+        const floor   = parseFloat(priceEl?.dataset.floor ?? "0") || 0;
         const addr       = window.getAddressValue(`rAddrWidget-${n}`);
         const note       = document.getElementById(`rNote-${n}`)?.value.trim() || "";
-        const orderPrice = parseFloat(document.getElementById(`rOrderPrice-${n}`)?.value) || 0;
+        /* 🔴 سعر الطلب إجباري — حتى لو صفر لازم يكتبه بإيده. الخانة
+           الفاضية كانت بتتقرا صفر صامت، والمحل يكتشف إن العهدة ضاعت
+           بعد ما الطيار يسلّم. صفر مكتوب = قرار، صفر صامت = سهو. */
+        const codRaw     = String(document.getElementById(`rOrderPrice-${n}`)?.value ?? "").trim();
+        if (codRaw === "") {
+          _jumpToParcel(n, `rOrderPrice-${n}`, `اكتب سعر الطلب — لو مفيش تحصيل اكتب 0 — طرد #${window.parcelDisplayNo(n)}`);
+          await _storeDiag({ step: "no-cod", parcel: n });
+          return;
+        }
+        const orderPrice = parseFloat(codRaw) || 0;
 
-        if (!name)   { toast(`يرجى إدخال اسم المستلِم — طرد #${n}`, "err"); await _storeDiag({ step: "no-name", parcel: n }); return; }
-        if (!phone)  { toast(`يرجى إدخال هاتف المستلِم — طرد #${n}`, "err"); await _storeDiag({ step: "no-phone", parcel: n }); return; }
+        /* 🧾 الطرد اللي بصورة ريسيت: مابنطلبش منه اسم ولا تليفون —
+           الحقول مخفية أصلًا فمفيش مخرج لو طلبناهم.
+           والصورة **اختيارية** (قرار صاحب النظام 2026-08-31): المحل
+           ساعات بيبعت الورقة مع الطيار بدل ما يصوّرها، وإجبارها كان
+           بيوقف شحنة سليمة. الفرع بيشوف شارة «العنوان على الريسيت»
+           من `fromReceipt` مش من وجود الصورة. */
+        const isRcpt = window.rowIsReceipt(n);
+        if (!isRcpt) {
+          if (!name)   { _jumpToParcel(n, `rName-${n}`, `يرجى إدخال اسم المستلِم — طرد #${window.parcelDisplayNo(n)}`); await _storeDiag({ step: "no-name", parcel: n }); return; }
+          if (!phone)  { _jumpToParcel(n, `rPhone-${n}`, `يرجى إدخال هاتف المستلِم — طرد #${window.parcelDisplayNo(n)}`); await _storeDiag({ step: "no-phone", parcel: n }); return; }
+        }
+        /* 🏪 المفتوح له تعديل السعر يزوّد أو ينقّص (طلب 2026-09-03) — بس مش
+           بالسالب. المقفول الخانة readonly بسعر المنطقة، والسيرفر بيتجاهل
+           أي سعر مبعوت منه على أي حال (`OrdersController::deliveryPrice`). */
+        if (price < 0) {
+          _jumpToParcel(n, `rPrice-${n}`, `سعر التوصيل مينفعش يكون بالسالب — طرد #${window.parcelDisplayNo(n)}`);
+          await _storeDiag({ step: "price-negative", parcel: n, price, floor });
+          return;
+        }
+
         if (!zoneId) {
-          toast(`⚠️ لازم تختار المنطقة أولاً — طرد #${n}`, "err");
+          /* النقلة الأول: الطرد ممكن يكون مخفي ورا زراره، والإبراز تحت
+             مالوش أي أثر على عنصر جوه `display:none`. */
+          window.showRow?.(n);
+          toast(`⚠️ لازم تختار المنطقة أولاً — طرد #${window.parcelDisplayNo(n)}`, "err");
           // نبرز حقل المنطقة الفاضي ونوديه لعين المستخدم
           if (zoneSel) {
             zoneSel.style.borderColor = "#ef4444";
@@ -1989,16 +3693,28 @@
         }
 
         // إحداثيات التسليم — الخرايط في اللوحات بتقرا منها مباشرة
-        const _rgeo = window._geoPins[`r${n}`] || null;
+        // مع الريسيت مفيش دبوس — المحل نفسه مايعرفش العنوان
+        const _rgeo = isRcpt ? null : (window._geoPins[`r${n}`] || null);
         deliveries.push({
           // رقم ثابت للطرد جوّه الطلب — منه بيتبني رقم الجزء المفصول لو الفرع
           // حمّل بعض الطرود بس على طيار (مثال: STR-260805-004-2). والعهدة
           // (orderPrice) جوّه الطرد أصلاً، فكل جزء بياخد عهدته معاه.
           parcelNo: deliveries.length + 1,
-          receiverId: null, receiverName: name,
-          receiverPhone: phone, receiverPhone2: phone2,
+          receiverId: null,
+          /* نص واضح بدل الفاضي عشان جداول الفرع والإدارة وتطبيق الطيار
+             ما تبانش فيها خانة فاضية — نفس نص تطبيق العميل بالحرف. */
+          receiverName: isRcpt ? "🧾 البيانات على صورة الريسيت" : name,
+          receiverPhone: isRcpt ? "" : phone,
+          receiverPhone2: isRcpt ? "" : phone2,
+          /* 🔴 العلامة دي هي اللي بتخلّي السيرفر يقبل الاسم الفاضي
+             ويكتب `order_deliveries.receiver_from_receipt` — ومنها
+             لوحة الفرع بتوري شارة «العنوان على صورة الريسيت» للطيار. */
+          fromReceipt: isRcpt,
           zoneId, zoneName, zonePrice: price,
-          orderPrice, address: addr, note, status: "قيد التنفيذ",
+          orderPrice,
+          // العنوان بيبقى اسم المنطقة — التفاصيل على الصورة
+          address: isRcpt ? zoneName : addr,
+          note, status: "قيد التنفيذ",
           ...(_rgeo ? { lat: _rgeo.lat, lng: _rgeo.lng,
                         geo: { lat: _rgeo.lat, lng: _rgeo.lng, src: "store-pin" } } : {}),
           // الروابط بس — أي صورة لسه بترفع بتتستبعد
@@ -2008,15 +3724,55 @@
 
       // بيانات المُرسِل: المحل نفسه، أو مكان آخر لو المفتاح مفعّل
       const _elsewhere = document.getElementById("pickupElsewhere")?.checked;
+      const _prof = window._pickupProfile || {};
+      /* 🔴 المحل هو المُرسِل: البيانات من **الملف المحفوظ الأول** بعدين
+         لقطة الدخول. `_currentUser` لقطة وقت الدخول — أي تعديل عمله المحل
+         في الإعدادات أو البوابة مكانش بيوصل للشحنة غير بعد ما يخرج ويدخل،
+         فالشحنة كانت بتتبعت باسم وهاتف قدام. نفس ترتيب `fillShopAsReceiver`. */
       const _snd = _elsewhere
         ? {
             name  : (document.getElementById("senderNameIn")?.value   || "").trim(),
             phone : (document.getElementById("senderPhoneIn")?.value  || "").trim(),
             phone2: (document.getElementById("senderPhone2In")?.value || "").trim(),
           }
-        : { name: u.shopName, phone: u.shopPhone, phone2: u.shopPhone2 || "" };
+        : {
+            name  : _prof.shopName   || u.shopName   || "",
+            phone : _prof.shopPhone  || u.shopPhone  || "",
+            phone2: _prof.shopPhone2 || u.shopPhone2 || "",
+          };
       if (_elsewhere && !_snd.name)  { toast("يرجى إدخال اسم المُرسِل", "err"); await _storeDiag({ step: "no-sender-name" }); return; }
       if (_elsewhere && !_snd.phone) { toast("يرجى إدخال هاتف المُرسِل", "err"); await _storeDiag({ step: "no-sender-phone" }); return; }
+      /* 🔴 المحل هو المُرسِل والملف لسه ناقص = وقف هنا وافتح البوابة.
+         من غير الحارس ده الطلب كان بيروح للسيرفر باسم فاضي ويرجع
+         «يرجى اختيار أو إدخال العميل استلام» — رسالة من عالم تاني خالص،
+         والمحل مايعرفش إن المطلوب منه يكمّل بياناته. */
+      /* 🔴 الإدارة (`viaAdmin`) بتتستثنى — مش تساهل، الحارس **بيقيس حاجة
+         غلط** في الوضع ده: `GET /api/store/pickup-profile` مقفول على
+         `role:store` وجلسة الإدارة أدمن، فبيرجّع 403 و`_pickupProfile`
+         بيفضل `null` مهما كان ملف المحل مكتمل. يعني الشرط كان بيمنع
+         الإدارة تعمل أوردر نيابة عن أي محل خالص.
+         بيانات المُرسِل في الوضع ده بتيجي من منتقي المحلات (`/api/users`)
+         اللي بيجيب `shopName`/`shopPhone`، ومنطقة الاستلام الإدارة
+         بتختارها بإيدها في الفورم — فالأوردر كامل. */
+      /* 🔴 `window._pickupProfile &&` شرط لازم مش زيادة.
+         `storeProfileIncomplete()` أول شرط فيها `!p` — يعني «الملف ماوصلش»
+         بتحسبه «ناقص». و`storeNeedsLocation()` جنبها عاملة العكس بالنص
+         («نداء فاشل = مش عارفين. مانوقفش المحل على معلومة مش مؤكدة»)،
+         وأنا كنت بنده الأولى فوقعت في اللي التعليق بيحذّر منه.
+
+         النداء بيتعمل **مرة واحدة عند الدخول** ومفيش إعادة محاولة، فأي
+         تهزهزة في النت بتخلي `_pickupProfile = null` للجلسة كلها. النتيجة
+         كانت: محل ملفه مكتمل ١٠٠٪ يملا شحنة بصورها، يدوس «إرسال»، فتتفتح
+         عليه بوابة **فاضية** مالهاش زرار إغلاق ولا Esc — وشغله يضيع.
+
+         ولاحظ إن السماح هنا آمن: `_snd.name` بيقع على `u.shopName` من لقطة
+         الدخول، فالأوردر بيوصل السيرفر كامل. */
+      if (!_elsewhere && !u.viaAdmin && window._pickupProfile && storeProfileIncomplete()) {
+        toast("كمّل بيانات محلك الأول — من غيرها الشحنة مش هتتبعت", "err");
+        await _storeDiag({ step: "profile-incomplete" });
+        window.openStoreLocationGate();
+        return;
+      }
 
       /* نقطة الاستلام على الخريطة **اختيارية** (قرار صاحب النظام):
          لو المحل حدّدها بتظهر للطيار على الخريطة، ولو لأ الطيار بيمشي
@@ -2035,8 +3791,12 @@
 
       await _storeDiag({ step: "validated", branchId: window._pickupBranchId, parcels: deliveries.length });
 
-      const btn = $("saveBtn");
+      /* زرار الطرد نفسه — والاحتياطي كائن وهمي عشان الكود اللي تحت
+         بيلمس `btn.disabled` في تلات مواضع من غير فحص. */
+      const btn = document.getElementById(onlyRow ? `sendBtn-${onlyRow}` : "saveBtn")
+        || { disabled: false, textContent: "" };
       btn.disabled = true; btn.textContent = "⏳ جاري الإرسال…";
+      let _orderSavedOk = false;   // بيتقلب true أول ما السيرفر يرد بنجاح
       try {
         /* لو فرع منطقة الاستلام موقوف مؤقتًا من الإدارة، الأوردر بيتسجّل على
            الفرع البديل — خطوة واحدة بس عشان لو حصل تحويل دائري
@@ -2056,7 +3816,14 @@
            TODO-API (شوف أول الملف): الخصم التلقائي من المحفظة
            (applyWalletToSavedOrder القديمة) مستني endpoint ذرّي يبصم
            wallet_used على الأوردر — لحد ساعتها مفيش خصم من هنا. */
+        /* 🔁 مفتاح مانع التكرار — ثابت لحد ما حفظ ينجح، فالضغطة التانية
+           بعد أي خطأ بترجّع الأوردر المتسجّل بدل نسخة جديدة. */
+        if (!window._orderClientRef) {
+          window._orderClientRef = (crypto.randomUUID && crypto.randomUUID())
+            || (Date.now().toString(36) + "-" + Math.random().toString(36).slice(2));
+        }
         const res = await api.post("/api/orders", {
+          clientRef   : window._orderClientRef,
           branchId    : Number(branchId),
           senderName  : _snd.name,
           senderPhone : _snd.phone,
@@ -2070,13 +3837,26 @@
             senderLng: window._geoPins.pickup.lng,
             geoSrc   : "store-pin"
           } : {}),
-          notes,
+          /* 📝 مافيش ملاحظة عامة — ملاحظة كل طرد بتروح مع طرده (note جوه
+             deliveries) والسيرفر بيخلّيها ملاحظة الأوردر الناتج */
+          notes: "",
           deliveries,
           storePrepaidNote: "",
           source: "store"
         });
+        /* 🔒 من هنا الأوردر متسجّل على السيرفر — الكاتش تحت بيفرّق بين فشل
+           الحفظ (قبل السطر ده) وعثرة الشاشة بعده، وممنوع «تعذّر الإرسال»
+           على أوردر متسجّل (درس الكول سنتر وتطبيق العميل 2026-09). */
+        window._orderClientRef = null;
+        _orderSavedOk = true;
         const saved    = nrm(res.order || {});
         const orderNum = saved.orderNum || "";
+        /* كل طرد بقى أوردر بذاته (قرار 2026-09-01) — السيرفر بيفرّق تلقائيًا.
+           بنلزق رقم كل أوردر على طرده بالترتيب عشان الباركود يطلع بالرقم
+           الحقيقي (STR-260901-005) مش بلاحقة التفريق القديمة (-2). */
+        const allOrders = Array.isArray(res.orders) && res.orders.length
+          ? res.orders.map(o => nrm(o || {})) : [saved];
+        allOrders.forEach((o, i) => { if (deliveries[i]) deliveries[i]._orderNum = o.orderNum || ""; });
 
         // حفظ بيانات المستلمين في جهات اتصال المحل
         for (const d of deliveries) {
@@ -2092,40 +3872,60 @@
            مش بيوقف حاجة لو فشل — بيانات راحة مش بيانات الشحنة. */
         if (!_elsewhere) {
           const pin = window._geoPins.pickup || null;
-          api.put("/api/store/pickup-profile", {
-            address: pickupAddress || "",
-            zoneId : pickupZone.id,
-            lat    : pin ? pin.lat : null,
-            lng    : pin ? pin.lng : null
-          }).then(r => {
+          /* 🔴 الدبوس بيتبعت **بس لو موجود**.
+
+             اللسعة اللي اتشالت هنا: الكود كان بيبعت `lat: null, lng: null`
+             لما الشحنة تبقى من غير دبوس. والسيرفر موثّق إن «أي واحد فيهم
+             فاضي/null = مسح الاتنين» — يعني كل شحنة من غير دبوس كانت
+             **بتمسح موقع المحل المحفوظ** من القاعدة.
+
+             المحل يحدد موقعه مرة، وأول شحنة عادية بعدها تمسحه، وهو مش
+             عارف ليه بيتسأل عليه تاني. والمسار بيعدّل جزئيًا بـ
+             `array_key_exists`، فعدم إرسال المفتاح = «ماتلمسوش». */
+          const body = { address: pickupAddress || "", zoneId: pickupZone.id };
+          if (pin) { body.lat = pin.lat; body.lng = pin.lng; }
+          api.put("/api/store/pickup-profile", body).then(r => {
             window._pickupProfile = r.profile || null;
             // الملف بقى مكتمل دلوقتي — نخفي تلميحة «سجّل بياناتك» ونحدّث كارت الإعدادات
             try { renderStoreSetupHint(); renderStoreSettings(); } catch (e) {}
           }).catch(() => {});
         }
 
-        await _storeDiag({ step: "success", orderNum });
-        toast(`✅ تمّ إرسال الطلب ${orderNum}`, "ok");
+        await _storeDiag({ step: "success", orderNum, count: allOrders.length });
+        toast(res.duplicate
+          ? `✅ الطلب ده كان اتبعت خلاص من شوية (${orderNum}) — مافيش نسخة جديدة اتعملت`
+          : allOrders.length > 1
+            ? `✅ اتسجّلوا ${allOrders.length} أوردرات — كل طرد أوردر بذاته`
+            : `✅ تمّ إرسال الطلب ${orderNum}`, "ok");
         // مهم: نرجّع الزر والفورم لحالتهم فورًا. من غير كده الزر بيفضل
         // عالق على "جاري الإرسال…" فالمحل يفتكر إن مفيش حاجة حصلت ويضغط
         // تاني فيتبعت الطلب مرتين.
-        btn.disabled = false; btn.textContent = "📤 إرسال الطلب";
-        // باركود لكل طرد قبل ما نفضّي الفورم — المحل يبعته للمستلم
-        showOrderCodes(orderNum, deliveries);
-        resetForm();
+        btn.disabled = false; btn.textContent = "📤 إرسال الطرد";
+        // الباركود قبل ما الطرد يخرج — المحل يطبعه ويلزقه عليه
+        showOrderCodes(allOrders.length > 1 ? `${allOrders.length} أوردرات` : orderNum, deliveries);
+        if (onlyRow) removeSentRow(onlyRow); else resetForm();
       } catch (e) {
+        if (_orderSavedOk) {
+          /* 🔒 عثرة شاشة **بعد** حفظ ناجح — ممنوع أي صيغة «تعذّر الإرسال»:
+             المحل بيصدّقها وبيضغط تاني والطلب بيتكرر. */
+          await _storeDiag({ step: "post-success-ui-error", error: String(e && e.message ? e.message : e) });
+          toast("✅ الطلب اتبعت واتسجّل — بس الشاشة اتعثرت بعده، اعمل تحديث للصفحة قبل طلب جديد", "err");
+          btn.disabled = false; btn.textContent = "📤 إرسال الطرد";
+          return;
+        }
         // فشل أثناء الحفظ في قاعدة البيانات
         await _storeDiag({ step: "save-error", error: String(e && e.message ? e.message : e) });
         try { alert("تعذّر إرسال الطلب:\n" + (e && e.message ? e.message : e)); } catch(_) {}
         toast("خطأ: " + e.message, "err");
-        btn.disabled = false; btn.textContent = "📤 إرسال الطلب";
+        btn.disabled = false; btn.textContent = "📤 إرسال الطرد";
       }
       } catch (outer) {
         // أي خطأ غير متوقع في التحقق نفسه (عنصر مفقود، إلخ) — كان بيسبب
         // "مفيش حاجة بتحصل" الصامت. دلوقتي بيتسجّل ويظهر
         await _storeDiag({ step: "outer-error", error: String(outer && outer.message ? outer.message : outer) });
         try { alert("خطأ غير متوقع:\n" + (outer && outer.message ? outer.message : outer)); } catch(_) {}
-        const b = $("saveBtn"); if (b) { b.disabled = false; b.textContent = "📤 إرسال الطلب"; }
+        const b = document.getElementById(onlyRow ? `sendBtn-${onlyRow}` : "saveBtn");
+        if (b) { b.disabled = false; b.textContent = "📤 إرسال الطرد"; }
       }
     };
 
@@ -2137,6 +3937,9 @@
        الطرد بياخده لو الفرع فرّقه على طيار لوحده.
     ══════════════════════════════════════════════════════ */
     function parcelCodeOf(orderNum, d, total) {
+      /* مع التفريق التلقائي كل طرد بقى أوردر بذاته برقمه هو — الرقم
+         الحقيقي المُلزق على الطرد بيغلب لاحقة التفريق القديمة. */
+      if (d && d._orderNum) return d._orderNum;
       const no = Number(d && d.parcelNo) || 0;
       return (total > 1 && no) ? `${orderNum}-${no}` : orderNum;
     }
@@ -2151,37 +3954,74 @@
       return new URL("?track=" + encodeURIComponent(code), "https://aldahshan.cloud/").href;
     }
 
+    /* الإغلاق في مكان واحد: تلات أزرار بتنده عليه، والدوسة برّه المودال
+       كمان. تكرار `remove()` في كل واحد كان بيسيب واحد ينسى. */
+    window.closeCodesBox = function () {
+      document.getElementById("_codesBox")?.remove();
+    };
+
     window.showOrderCodes = function (orderNum, deliveries) {
       const list = Array.isArray(deliveries) && deliveries.length ? deliveries : [{}];
-      window._orderCodes = list.map(d => ({
+      const codes = list.map(d => ({
         code : parcelCodeOf(orderNum, d, list.length),
         phone: d.receiverPhone || "",
         name : d.receiverName  || "",
         zone : d.zoneName      || ""
       }));
+      /* 🔴 في الإرسال الجماعي بنجمّع بدل ما نفتح مودال لكل طلب —
+         تلات طلبات كانوا هيفتحوا تلات مودالات فوق بعض. */
+      if (Array.isArray(window._bulkCodes)) { window._bulkCodes.push(...codes); return; }
+      renderCodesModal(orderNum, codes);
+    };
+
+    /** بيرسم مودال الأكواد. `headline` بيبقى رقم الطلب، أو عدد الطلبات
+     *  في الإرسال الجماعي. `note` سطر تحذير اختياري (طرد وقف مثلًا). */
+    window.renderCodesModal = function (headline, codes, note) {
+      window._orderCodes = codes;
+      const orderNum = headline;
 
       const box = document.createElement("div");
       box.id = "_codesBox";
       box.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;" +
         "display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto";
       box.innerHTML = `
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;
+        <div style="position:relative;background:var(--panel);border:1px solid var(--border);border-radius:16px;
                     padding:22px;max-width:440px;width:100%;max-height:92vh;overflow:auto;text-align:center">
+          <!-- ✕ فوق: أسرع خروج، ومتوقّعة في أي مودال -->
+          <button onclick="closeCodesBox()" aria-label="إغلاق"
+                  style="position:absolute;top:10px;left:12px;background:transparent;border:none;
+                         color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;
+                         padding:4px 8px;font-family:inherit">✕</button>
           <div style="font-size:2rem">✅</div>
           <div style="font-weight:800;font-size:1.05rem;margin-top:4px">تمّ إرسال الطلب</div>
           <div style="direction:ltr;font-weight:900;font-size:1.15rem;color:var(--sky);margin-top:4px">${orderNum}</div>
           <div style="font-size:.78rem;color:var(--muted);margin:8px 0 14px">
             ابعت لكل مستلم الباركود بتاعه — بيتقرا من الطيار عند التسليم
           </div>
+          ${note ? `<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);
+                 border-radius:10px;padding:10px;font-size:.78rem;font-weight:700;margin-bottom:12px">
+                 ⚠️ ${esc(note)}</div>` : ""}
           <div id="_codesList"></div>
-          <button onclick="document.getElementById('_codesBox').remove(); navigateTo('my-orders')"
-                  style="width:100%;margin-top:6px;background:var(--sky);color:#fff;border:none;
-                         padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit">
-            تمام — روح لطلباتي
-          </button>
+          <!-- زرارين مش واحد: الزرار القديم كان بينقل لصفحة الطلبات
+               إجباريًا، فالمحل اللي عايز يكمّل شحنة تانية كان لازم
+               يرجع بإيده. دلوقتي «تمام» بتقفل وتسيبه مكانه. -->
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button onclick="closeCodesBox()"
+                    style="flex:1;background:var(--sky);color:#fff;border:none;
+                           padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit">
+              تمام
+            </button>
+            <button onclick="closeCodesBox(); navigateTo('my-orders')"
+                    style="flex:1;background:transparent;color:inherit;border:1px solid var(--border);
+                           padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit">
+              طلباتي
+            </button>
+          </div>
         </div>`;
       document.body.appendChild(box);
 
+      // الدوسة على الخلفية بتقفل كمان — مش على الصندوق نفسه
+      box.addEventListener("click", e => { if (e.target === box) window.closeCodesBox(); });
       const listBox = box.querySelector("#_codesList");
       listBox.innerHTML = window._orderCodes.map((c, i) => `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:11px">
@@ -2230,6 +4070,111 @@
       const row = document.getElementById("installRow");
       const on = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
       if (row && !on) row.style.display = "";
+    });
+
+    /* ══════════════════════════════════════════════════════
+       تحديث ذاتي — منقول من تطبيق العملاء (customer.html)
+       ──────────────────────────────────────────────────────
+       من غيره البوابة المفتوحة في الخلفية بتفضل شغالة بالنسخة
+       القديمة للأبد — حصلت فعلًا في تطبيق العملاء أول يوم لايف
+       (2026-09-01): باج اتصلح واترفع والتليفونات فضلت بتضرب بيه
+       لأن مافيش أي فحص غير الريفريش اليدوي.
+    ══════════════════════════════════════════════════════ */
+
+    /* نسخة البوابة الشغّالة دلوقتي — من الـmeta في <head>. */
+    const APP_VERSION =
+      document.querySelector('meta[name="app-version"]')?.content || "—";
+
+    /* بيجيب store.html من السيرفر ويقرا نسخته. cache:"reload" بيتخطّى كاش
+       المتصفح **وكاش الـservice worker** — من غيره ممكن نقارن النسخة بنفسها. */
+    async function latestVersion() {
+      const res = await fetch("store.html?_v=" + Date.now(), { cache: "reload" });
+      const txt = await res.text();
+      const doc = new DOMParser().parseFromString(txt, "text/html");
+      return doc.querySelector('meta[name="app-version"]')?.content || null;
+    }
+
+    /* فحص التحديث اليدوي — بيتنده من صف «نسخة البوابة» في حسابي.
+       لو فيه نسخة أحدث: بنجبر الـservice worker يجيب نسخته كمان (وإلا ممكن
+       يفضل مخدّم الشِل القديم) وبعدين نعيد التحميل مرة واحدة. */
+    async function doAppUpdate(btnId) {
+      const btn = btnId ? document.getElementById(btnId) : null;
+      const old = btn ? btn.textContent : "";
+      if (btn) { btn.textContent = "بنشوف…"; btn.disabled = true; }
+      try {
+        const latest = await latestVersion();
+        if (latest && latest !== APP_VERSION) {
+          if (btn) btn.textContent = "بننزّل " + latest + "…";
+          toast("فيه نسخة جديدة — بنحدّث", "ok");
+          if ("serviceWorker" in navigator) {
+            try {
+              const rs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(rs.map(r => r.update().catch(() => {})));
+            } catch (_) {}
+          }
+          setTimeout(() => location.reload(), 700);
+          return;
+        }
+        toast("إنت على أحدث نسخة (" + APP_VERSION + ") ✓", "ok");
+      } catch (_) {
+        toast("مفيش نت — جرّب تاني", "err");
+      }
+      if (btn) { btn.textContent = old; btn.disabled = false; }
+    }
+    window.doAppUpdate = doAppUpdate;
+
+    // صف «نسخة البوابة» في حسابي بيعرض النسخة الشغّالة
+    document.addEventListener("DOMContentLoaded", () => {
+      const l = document.getElementById("appVerLabel");
+      if (l) l.textContent = APP_VERSION;
+    });
+
+    let _updBusy = false, _updLastAt = 0;
+
+    async function autoUpdateCheck(mode) {
+      if (_updBusy || !navigator.onLine) return;
+      _updBusy = true;
+      try {
+        const latest = await latestVersion();
+        if (latest && latest !== APP_VERSION) {
+          if (mode === "boot") {
+            /* المحل لسه ماكتبش حرف — إعادة تحميل صامتة آمنة. العلامة بتمنع
+               حلقة لو في النص بروكسي بيقدّم نسخة قديمة متكاشية. */
+            let tried = null;
+            try { tried = sessionStorage.getItem("store-upd-tried"); } catch (_) {}
+            if (tried !== latest) {
+              try { sessionStorage.setItem("store-upd-tried", latest); } catch (_) {}
+              if ("serviceWorker" in navigator) {
+                try {
+                  const rs = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(rs.map(r => r.update().catch(() => {})));
+                } catch (_) {}
+              }
+              location.reload();
+              return;
+            }
+          } else {
+            /* راجع للبوابة وممكن يكون في نص أوردر — التحميل من جديد هنا
+               خطر: المسودة (saveDraft) بتحفظ فورم الطلب بس، مش كل حاجة
+               (بيانات مُرسِل بتتكتب، صور بترفع، حوار مفتوح). توست بس،
+               وقفلة وفتحة أو زرار «حسابي» بيكمّلوا. */
+            toast("فيه نسخة جديدة من البوابة — اقفلها وافتحها تاني أول ما تخلّص 🔄", "ok");
+          }
+        }
+      } catch (_) {}
+      _updBusy = false;
+    }
+
+    /* عند الإقلاع — متأخر ثانيتين عشان مايزاحمش تحميل البيانات الأولى */
+    setTimeout(() => autoUpdateCheck("boot"), 2000);
+
+    /* وعند الرجوع للبوابة من الخلفية — متباعد ١٠ دقايق */
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      const now = Date.now();
+      if (now - _updLastAt < 10 * 60 * 1000) return;
+      _updLastAt = now;
+      autoUpdateCheck("visible");
     });
 
     function _codeMsg(c) {
@@ -2284,6 +4229,137 @@
       renderOrders();
     };
 
+  /* ══════════════════════════════════════════════════════════════
+     ⏰ «الأوردر جاهز — برجاء الاستعجال»
+     ───────────────────────────────────────────────────────────────
+     الزرار بيبان على الشحنة الجارية بس. التنبيه بيروح **للطيار** لو
+     الشحنة متحمّلة عليه، و**للفرع** لو لسه في المكتب — والسيرفر هو
+     اللي بيقرر ده مش الواجهة (بيقرا pilot_id من الأوردر نفسه)، عشان
+     الواجهة ممكن تكون شايفة نسخة قديمة من الأوردر.
+
+     الحد: استعجال كل 4 دقايق لكل شحنة. العدّاد اللي هنا **للعرض بس** —
+     الحارس الحقيقي على السيرفر، لأن أي حد يقدر ينده الـAPI مباشرة.
+     الغرض من عدّاد الواجهة إن المحل يشوف الوقت الفاضل بدل ما يدوس
+     ويتقال له «مرفوض» من غير سبب مفهوم.
+  ══════════════════════════════════════════════════════════════ */
+  window._urgedAt = window._urgedAt || {};       // { orderId: طابع زمني }
+  const URGE_COOLDOWN_MS = 4 * 60 * 1000;
+
+  function urgeLeftMs(id) {
+    const t = window._urgedAt[String(id)] || 0;
+    return Math.max(0, URGE_COOLDOWN_MS - (Date.now() - t));
+  }
+
+  /* الشحنة الجارية بس — المنتهية مالهاش معنى تستعجلها.
+     القيم دي هي اللي بتيجي على السلك (Vocab) مش أكواد إنجليزية. */
+  function canUrge(o) {
+    return ["قيد التنفيذ", "جاري التوصيل", "مؤجل"].includes(o.status);
+  }
+
+  window.urgeBtnHtml = function(o) {
+    if (!canUrge(o)) return "";
+    const left = urgeLeftMs(o.id);
+    const mins = Math.ceil(left / 60000);
+    const to   = o.pilotId ? "الطيار" : "الفرع";
+    return left > 0
+      ? `<button class="urge-btn" disabled>⏳ استنى ${mins} دقيقة</button>`
+      : `<button class="urge-btn" onclick="urgeOrder('${ escJs(o.id) }',this)">⏰ الأوردر جاهز — استعجل ${to}</button>`;
+  };
+
+  window.urgeOrder = async function(orderId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "جاري الإرسال…"; }
+    try {
+      const r = await api.post(`/api/orders/${orderId}/urge`, {});
+      window._urgedAt[String(orderId)] = Date.now();
+      showToast(r.message || "التنبيه اتبعت ✓", "ok");
+    } catch (e) {
+      /* السيرفر بيرجّع 429 برسالة فيها الوقت الفاضل — بنعرضها زي ما هي
+         وبنقفل الزرار محليًا كمان عشان مايفضلش يدوس. */
+      const m = String((e && e.message) || "");
+      if (m.includes("استنى")) window._urgedAt[String(orderId)] = Date.now();
+      showToast(m || "تعذّر إرسال التنبيه", "err");
+    } finally {
+      renderOrders();
+    }
+  };
+
+  /* تحديث العدّاد كل نص دقيقة — عشان الزرار يفتح لوحده لما المهلة تخلص
+     من غير ما المحل يحدّث الصفحة. */
+  setInterval(() => {
+    const ids = Object.keys(window._urgedAt);
+    if (ids.length && ids.some(id => urgeLeftMs(id) > 0)) renderOrders();
+  }, 30000);
+
+  /* ══════════════════════════════════════════════════════════════
+     ✅ «سلّمت الأوردر للطيار»
+     ───────────────────────────────────────────────────────────────
+     المشكلة اللي بيحلّها: الأوردر بيبقى «جاري التوصيل» من اللحظة اللي
+     الفرع بيحمّله فيها على طيار — مش من لحظة ما الطيار يشيله. يعني
+     المحل كان بيبص على الشاشة يلاقي الشحنة «مع الطيار» وهي لسه قدامه
+     على الرف، وممكن تفضل كده ربع ساعة لحد ما الطيار يوصل.
+
+     دلوقتي الكارت بيفرّق: «🛵 الطيار جاي يستلم» ← «🚀 خرج للعميل».
+
+     التأكيد **مش بوابة** على الطيار: لو المحل نسي يدوس، أول ما الطيار
+     يبدأ رحلته السيرفر بيملا الطابع لوحده والكارت بيتصلّح. محل واحد
+     نسي مايوقّفش طيار في الشارع.
+  ══════════════════════════════════════════════════════════════ */
+  function isActive(o) {
+    return ["قيد التنفيذ", "جاري التوصيل", "مؤجل"].includes(o.status);
+  }
+  function awaitingPickup(o) {
+    return isActive(o) && !!o.pilotId && !o.handedOverAt;
+  }
+
+  /* الشارة اللي فوق الكارت. الفلتر لسه شغّال على `o.status` الحقيقي —
+     اللي بيتغيّر هنا هو **العرض** بس، مش تصنيف الأوردر. */
+  window.statusView = function(o) {
+    if (o.status === "جاري التوصيل") {
+      return o.handedOverAt
+        ? { cls: "st-deliv", txt: "🚀 خرج للعميل" }
+        : { cls: "st-wait",  txt: "🛵 الطيار جاي يستلم" };
+    }
+    return { cls: statusCls(o.status), txt: o.status || "—" };
+  };
+
+  window.handoverHtml = function(o) {
+    /* الأوردر اللي خلص مالوش السطر ده: الكارت بيقول «تم التسليم» خلاص،
+       وسطر «سلّمتها للطيار» تحته بيبقى ضوضاء مش معلومة. */
+    if (!isActive(o)) return "";
+    if (o.handedOverAt) {
+      const t = new Date(o.handedOverAt);
+      const at = isNaN(t) ? "" : t.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+      return `<div class="ho-done">✅ سلّمتها للطيار${ at ? " — " + esc(at) : "" }</div>`;
+    }
+    if (!awaitingPickup(o)) return "";
+    return `<button class="ho-btn" onclick="handoverOrder('${ escJs(o.id) }',this)">✅ سلّمت الأوردر للطيار</button>`;
+  };
+
+  window.handoverOrder = async function(orderId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "جاري التسجيل…"; }
+    try {
+      const r = await api.post(`/api/orders/${orderId}/handover`, {});
+      /* الرد فيه الأوردر بعد التعديل — بنحطّه في الكاش عشان الشارة تتغيّر
+         في نفس اللحظة بدل ما تستنى دورة الاستطلاع.
+
+         🔴 الكتابة لازم تروح لـ`_ordersById` (الكاش الحقيقي) مش لـ
+         `_ordersData` — دي مصفوفة **مشتقّة** بيعيد `rebuildOrders` بناءها
+         من الكاش مع كل دورة، فالكتابة فيها كانت بتتمسح بعد 8 ثواني
+         والشارة ترجع لورا. و`nrm` ضرورية: الكاش كله أرقامه نصوص. */
+      if (r.order && window._ordersById) {
+        const o = nrm(r.order);
+        window._ordersById.set(o.id, o);
+        rebuildOrders((window._currentUser || {}).username);
+        return;
+      }
+      showToast("اتسجّل ✓ الشحنة بقت مع الطيار", "ok");
+    } catch (e) {
+      showToast(String((e && e.message) || "") || "تعذّر تسجيل التسليم", "err");
+    } finally {
+      renderOrders();
+    }
+  };
+
     function renderOrders() {
       const el  = $("ordersList");
       let list  = window._ordersData || [];
@@ -2321,8 +4397,9 @@
       }
 
       setHtml(el, list.map(o => {
-        const cls = statusCls(o.status);
-        const lbl = o.status || "—";
+        const sv = statusView(o);
+        const cls = sv.cls;
+        const lbl = sv.txt;
         const parts = o.deliveries || [];
         const d = new Date(o.createdAt);
         const dt = d.toLocaleDateString("ar-EG", { day: "2-digit", month: "short" })
@@ -2341,6 +4418,8 @@
             <span>📦 ${ esc(parts.length) } ${ esc(parts.length === 1 ? "طرد" : "طرود") }</span>
           </div>
           ${o.pilotName ? `<div class="pilot-row">🛵 الطيار: <b>${ esc(o.pilotName) }</b></div>` : ""}
+          ${urgeBtnHtml(o)}
+          ${handoverHtml(o)}
           <div class="order-det${ (window._openDets||new Set()).has(String(o.id)) ? " open" : "" }" id="det-${ esc(o.id) }">
             ${parts.map((d, i) => `
               <div class="det-parcel">
@@ -2396,6 +4475,21 @@
       if (window._currentPage === "home") renderHome();
     }
 
+    /** باقي أرقام الدعم — شرايط صغيرة تحت الكارت، فاضية لو رقم واحد بس */
+    function extraNumsHtml(s) {
+      const rest = []
+        .concat((s.phones || []).slice(1).map(x => ({ ...x, wa: false })))
+        .concat((s.whatsapps || []).slice(1).map(x => ({ ...x, wa: true })));
+      if (!rest.length) return "";
+      return `<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px">
+        ${rest.map(x => `<a href="${ x.wa ? `https://wa.me/${ esc(x.n) }` : `tel:${ esc(x.n) }` }"
+            ${ x.wa ? 'target="_blank" rel="noopener"' : "" }
+            style="text-decoration:none;background:var(--tint);border:1px solid var(--tint-bd);
+              color:var(--text);padding:6px 11px;border-radius:999px;font-size:.74rem;font-weight:700">
+            ${ x.wa ? "💬" : "📞" } ${ esc(x.label || x.n) }</a>`).join("")}
+      </div>`;
+    }
+
     /** كارت خدمة العملاء — بيظهر في الرئيسية لما الإدارة تسجّل أرقام */
     function supportCardHtml() {
       const s = window._support || {};
@@ -2417,12 +4511,19 @@
           ${wa ? `<a href="https://wa.me/${ esc(wa) }" target="_blank" rel="noopener"
             style="text-decoration:none;background:rgba(34,197,94,.16);color:var(--green);
             padding:9px 13px;border-radius:10px;font-weight:800;font-size:.8rem">💬</a>` : ""}
-        </div>`;
+        </div>
+        ${extraNumsHtml(s)}`;
     }
 
     function renderSupportBits() {
-      const box = $("profSupport");
-      if (box) setHtml(box, supportCardHtml());
+      /* نداء واحد بدل اتنين — الدالة كانت بتتنده مرتين في نفس السطر
+         (مرة للفحص ومرة للطباعة). */
+      const html = supportCardHtml();
+      const box  = $("profSupport");
+      if (box) setHtml(box, html);
+      // العنوان يختفي لو الإدارة ماسجّلتش أرقام — عنوان فوق فراغ بيبان عطل
+      const head = $("supportHead");
+      if (head) head.style.display = html ? "" : "none";
       if (window._currentPage === "home") renderHome();
     }
 
@@ -2511,7 +4612,8 @@ window.renderReports = function () {
         <span style="font-size:.83rem;color:var(--muted)">أكتر يوم شحنات</span>
         <b style="font-size:.86rem">${(() => {
           const byDay = {};
-          os.forEach(o => { const d = new Date(o.createdAt || 0).toLocaleDateString("ar-EG"); byDay[d] = (byDay[d] || 0) + 1; });
+          // تجميع باليوم التجاري — شحنة بعد نص الليل تبع يوم امبارح
+          os.forEach(o => { const d = window.bizDayKey(o.createdAt || 0); byDay[d] = (byDay[d] || 0) + 1; });
           const top = Object.entries(byDay).sort((a, b) => b[1] - a[1])[0];
           return top ? esc(top[0]) + " (" + top[1] + ")" : "—";
         })()}</b></div>
@@ -2545,16 +4647,14 @@ window.renderHome = function () {
       const cod = os.filter(o => o.status !== "ملغي")
                     .reduce((a, o) => a + (Number(o.storePrepaid) || 0), 0);
 
+      /* كارت الترحيب اتشال من هنا — بقى شاشة كاملة بتظهر مرة واحدة عند
+         فتح التطبيق (`showWelcome`)، فتكراره في الرئيسية كان بياخد مساحة
+         من غير معلومة جديدة.
+         وكارت خدمة العملاء اتنقل لصفحة «حسابي» تحت قسم مستقل. */
       setHtml(el, `
-        <div style="background:linear-gradient(135deg,var(--tint),var(--tint-s));
-          border:1px solid var(--tint-bd);border-radius:16px;padding:18px;margin-bottom:14px">
-          <div style="font-size:.8rem;color:var(--muted)">أهلًا بيك 👋</div>
-          <div style="font-size:1.25rem;font-weight:900;margin-top:2px">${ esc(u.shopName || u.username || "—") }</div>
+        <div onclick="navigateTo('wallet')" style="cursor:pointer">
+          ${balanceBarHtml(w.balance, { showZero: true, style: "margin-bottom:14px" })}
         </div>
-
-        ${balanceBarHtml(w.balance, { showZero: true, style: "margin-bottom:14px" })}
-
-        ${supportCardHtml() ? `<div style="margin-bottom:14px">${supportCardHtml()}</div>` : ""}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin-bottom:14px">
           ${[["إجمالي الشحنات", os.length, "var(--text)"],
@@ -2590,7 +4690,11 @@ window.renderHome = function () {
         ${w.txns.length ? `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;
           padding:15px;margin-top:12px">
-          <div style="font-size:.85rem;font-weight:800;margin-bottom:10px">👛 آخر حركات المحفظة</div>
+          <div onclick="navigateTo('wallet')" style="display:flex;justify-content:space-between;
+            align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
+            <span style="font-size:.85rem;font-weight:800">👛 آخر حركات المحفظة</span>
+            <span style="font-size:.74rem;color:var(--sky);font-weight:700">السجل كامل ←</span>
+          </div>
           ${w.txns.slice(0, 5).map(t => {
             const up = Number(t.amount) > 0;
             return `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;
@@ -2832,6 +4936,18 @@ window.renderHome = function () {
       --blue-bg: rgba(56,189,248,.15);
       --R : 14px; --Rs: 9px;
       --nav: 62px;
+      /* حواف الشاشة الآمنة — بتساوي صفر على الأجهزة اللي مالهاش نتش */
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-t: env(safe-area-inset-top, 0px);
+      /* قد إيه زرار «طلب جديد» طالع فوق الشريط */
+      --fab-up: 20px;
+      /* ترتيب الطبقات — مكتوب في مكان واحد بدل أرقام متفرقة في الملف.
+         الأعلى منهم مكتوب بالإيد في مكانه: بوابة الموقع 8500 ·
+         مودال الخريطة 9000 · شاشة الدخول 9999 · منتقي الإدارة والأكواد
+         99999 · التوست 100000. السايد بار **تحتهم كلهم** عن قصد:
+         بوابة الموقع إجبارية وممنوع حاجة تغطّيها. */
+      --z-drawer : 7000;
+      --z-welcome: 9500;
     }
 
     /* ─── الوضع النهاري ─── */
@@ -2951,7 +5067,9 @@ window.renderHome = function () {
     /* ─── Pages ─── */
     .page {
       display: none; flex: 1; overflow-y: auto;
-      padding: 14px 13px calc(var(--nav) + 14px);
+      /* المسافة السفلية بتحسب الشريط + حافة الجهاز + الجزء الطالع من
+         الدايرة — من غير الأخير آخر كارت في أي صفحة بيتغطّي. */
+      padding: 14px 13px calc(var(--nav) + var(--safe-b) + var(--fab-up) + 14px);
     }
     .page.active { display: block; }
 
@@ -2960,8 +5078,9 @@ window.renderHome = function () {
       position: fixed; bottom: 0;
       left: 50%; transform: translateX(-50%);
       width: 100%; max-width: 480px;
-      height: var(--nav); background: var(--panel);
+      height: calc(var(--nav) + var(--safe-b)); background: var(--panel);
       border-top: 1px solid var(--border);
+      padding-bottom: var(--safe-b);
       display: flex; z-index: 200;
     }
 
@@ -2970,7 +5089,7 @@ window.renderHome = function () {
        وبيبلع دوسة «الرئيسية» و«طلب جديد» على الموبايل، وبيفضل طايف فوق
        شاشة الدخول بعد الخروج. بنرفعه فوق الشريط وننزّله تحته في الطبقات. */
     #api-refresh-fab {
-      bottom: calc(var(--nav) + 12px) !important;
+      bottom: calc(var(--nav) + var(--safe-b) + var(--fab-up) + 12px) !important;
       z-index: 150 !important;
     }
 
@@ -2998,6 +5117,172 @@ window.renderHome = function () {
       display: none; align-items: center; justify-content: center;
     }
 
+
+    /* ══════════════════════════════════════════════════════════════
+       واجهة جديدة: ترحيب · سايد بار · إشعارات · محفظة · شريط بـFAB
+       ──────────────────────────────────────────────────────────────
+       كل الألوان من متغيّرات `:root` / `:root.light` — مفيش لون مكتوب
+       بالإيد، عشان الوضع النهاري يشتغل لوحده زي باقي الصفحة.
+    ══════════════════════════════════════════════════════════════ */
+
+    /* ─── الشريط العلوي: أيقونات دائرية موحّدة ─── */
+    .tb-side { display: flex; align-items: center; gap: 8px; flex: none; }
+    .tb-icon {
+      position: relative;
+      background: var(--soft); border: 1px solid var(--border); color: var(--text);
+      width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+      font-size: 15px; line-height: 1; display: grid; place-items: center;
+      font-family: inherit; flex: none; padding: 0;
+    }
+    .tb-icon:active { transform: scale(.94); }
+    .tb-logo img { display: block; height: 30px; width: auto; object-fit: contain;
+                   filter: drop-shadow(0 0 8px rgba(232,25,44,.45)); }
+    :root.light .tb-logo img { filter: drop-shadow(0 0 6px rgba(209,23,42,.28)); }
+
+    /* بادج الجرس — الحلقة بلون الهيدر عشان يبان مفصول عن الأيقونة */
+    .tb-badge {
+      position: absolute; top: -4px; left: -4px;
+      background: var(--red); color: #fff;
+      font-size: .58rem; font-weight: 900;
+      min-width: 17px; height: 17px; border-radius: 9px; padding: 0 4px;
+      display: none; align-items: center; justify-content: center;
+      border: 2px solid var(--panel); line-height: 1;
+    }
+
+    /* ─── شاشة الترحيب ─── */
+    .wel {
+      position: fixed; inset: 0; z-index: var(--z-welcome);
+      background: var(--night);
+      display: none; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .35s ease;
+    }
+    .wel.on  { display: flex; opacity: 1; }
+    .wel.out { opacity: 0; }
+    .wel-in  { text-align: center; transform: scale(.86); opacity: 0;
+               transition: transform .5s cubic-bezier(.2,.9,.3,1.25), opacity .45s ease; }
+    .wel.on .wel-in { transform: scale(1); opacity: 1; }
+    .wel-logo { height: 78px; width: auto; object-fit: contain; margin-bottom: 16px;
+                filter: drop-shadow(0 0 22px rgba(232,25,44,.45)); }
+    :root.light .wel-logo { filter: drop-shadow(0 0 18px rgba(209,23,42,.26)); }
+    .wel-hi   { font-size: .95rem; color: var(--muted); }
+    .wel-shop { font-size: 1.5rem; font-weight: 900; color: var(--text);
+                margin-top: 4px; padding: 0 24px; }
+
+    /* ─── السايد بار (من اليمين لأن الواجهة RTL) ─── */
+    .dr-scrim {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      z-index: var(--z-drawer); opacity: 0; pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    .dr-scrim.on { opacity: 1; pointer-events: auto; }
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 78%; max-width: 300px;
+      background: var(--panel); border-left: 1px solid var(--border);
+      z-index: calc(var(--z-drawer) + 1);
+      transform: translateX(100%);
+      transition: transform .28s cubic-bezier(.3,.8,.3,1);
+      display: flex; flex-direction: column;
+      padding-top: var(--safe-t);
+      overflow-y: auto;
+    }
+    .drawer.on { transform: translateX(0); }
+    .dr-head {
+      display: flex; align-items: center; gap: 11px;
+      padding: 18px 16px 14px; border-bottom: 1px solid var(--border);
+    }
+    .dr-head img { height: 38px; width: auto; object-fit: contain; flex: none; }
+    .dr-name { font-size: .95rem; font-weight: 900; color: var(--text);
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dr-sub  { font-size: .7rem; color: var(--muted); margin-top: 2px; }
+    .dr-link {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      padding: 13px 16px; background: none; border: none; cursor: pointer;
+      color: var(--text); font-family: inherit; font-size: .88rem;
+      text-align: start; position: relative;
+    }
+    .dr-link:active { background: var(--soft); }
+    .dr-link.active { color: var(--sky); background: var(--tint); font-weight: 800; }
+    .dr-link.active::before {
+      content: ""; position: absolute; right: 0; top: 8px; bottom: 8px;
+      width: 3px; background: var(--sky); border-radius: 3px 0 0 3px;
+    }
+    .dr-ic   { font-size: 1.1rem; width: 24px; text-align: center; flex: none; }
+    .dr-cnt  { margin-inline-start: auto; background: var(--red); color: #fff;
+               font-size: .62rem; font-weight: 800; min-width: 18px; height: 18px;
+               border-radius: 9px; padding: 0 5px; display: none;
+               align-items: center; justify-content: center; }
+    .dr-sep  { height: 1px; background: var(--border); margin: 8px 0; }
+    .dr-out  { color: var(--red); }
+    .dr-foot { margin-top: auto; padding: 14px 16px calc(14px + var(--safe-b));
+               font-size: .68rem; color: var(--muted); text-align: center; }
+
+    /* ─── لوحة الإشعارات ─── */
+    .nf-panel {
+      position: fixed; top: 0; left: 50%;
+      transform: translateX(-50%) translateY(-102%);
+      width: 100%; max-width: 480px; max-height: 78vh; overflow-y: auto;
+      background: var(--panel); border-bottom: 1px solid var(--border);
+      border-radius: 0 0 16px 16px; box-shadow: var(--shadow);
+      z-index: calc(var(--z-drawer) + 2);
+      transition: transform .26s cubic-bezier(.3,.8,.3,1);
+      padding-top: var(--safe-t);
+    }
+    .nf-panel.on { transform: translateX(-50%) translateY(0); }
+    .nf-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px; }
+    .nf-head b { flex: 1; font-size: .95rem; color: var(--text); }
+    .nf-row  { display: flex; gap: 11px; align-items: flex-start;
+               padding: 12px 16px; border-top: 1px solid var(--border); cursor: pointer; }
+    .nf-row:active { background: var(--soft); }
+    .nf-row.new    { background: var(--tint); }
+    .nf-ic   { font-size: 1.05rem; flex: none; width: 22px; text-align: center; }
+    .nf-b    { flex: 1; min-width: 0; }
+    .nf-t    { font-size: .85rem; font-weight: 700; line-height: 1.6; color: var(--text); }
+    .nf-d    { font-size: .7rem; color: var(--muted); margin-top: 3px; }
+    .nf-empty{ text-align: center; color: var(--muted); padding: 32px 16px;
+               font-size: .85rem; line-height: 2; }
+    .nf-note { font-size: .67rem; color: var(--muted); text-align: center;
+               padding: 11px 16px 15px; line-height: 1.8; border-top: 1px solid var(--border); }
+
+    /* ─── زرار «طلب جديد» الدائري في نص الشريط ─── */
+    .nav-fab { position: relative; overflow: visible; }
+    .nav-fab .fab {
+      position: absolute; top: calc(var(--fab-up) * -1);
+      left: 50%; transform: translateX(-50%);
+      width: 54px; height: 54px; border-radius: 50%;
+      background: var(--sky); color: #fff;
+      display: grid; place-items: center; font-size: 26px; line-height: 1;
+      box-shadow: 0 6px 18px rgba(232,25,44,.42);
+      border: 3px solid var(--panel);
+      transition: transform .18s ease;
+    }
+    .nav-fab:active .fab { transform: translateX(-50%) scale(.93); }
+    /* الجزء الطالع من الدايرة جوّه الزرار نفسه، فالدوسة عليه بتشغّل
+       «طلب جديد» — مش طبقة عايمة بتبلع دوسات اللي تحتها. */
+    .nav-fab.active .fab   { box-shadow: 0 6px 22px rgba(232,25,44,.6); }
+    .nav-fab.active::after { display: none; }   /* الخط العلوي بيتقطع مع الدايرة */
+    .nav-fab .fab-t { margin-top: 22px; font-size: .7rem; }
+
+    /* ─── صفحة المحفظة ─── */
+    .wl-hero {
+      border-radius: 16px; padding: 20px 18px; margin-bottom: 14px;
+      background: linear-gradient(135deg, var(--tint), var(--tint-s));
+      border: 1px solid var(--tint-bd);
+    }
+    .wl-lbl  { font-size: .78rem; color: var(--muted); }
+    .wl-val  { font-size: 2rem; font-weight: 900; direction: ltr;
+               text-align: start; margin-top: 2px; }
+    .wl-note { font-size: .72rem; color: var(--muted); margin-top: 8px; line-height: 1.7; }
+    .wl-tx   { display: flex; justify-content: space-between; gap: 10px;
+               padding: 11px 0; border-bottom: 1px solid var(--border); }
+    .wl-tx:last-child { border-bottom: none; }
+    .wl-amt  { font-weight: 900; white-space: nowrap; direction: ltr; }
+
+    /* الحركة بتتلغي لمين طالب تقليلها من إعدادات جهازه */
+    @media (prefers-reduced-motion: reduce) {
+      .wel, .wel-in, .drawer, .dr-scrim, .nf-panel, .nav-fab .fab { transition: none; }
+    }
+
     /* ─── Section Title ─── */
     .sec { font-size: .73rem; font-weight: 700; color: var(--muted);
            text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
@@ -3008,6 +5293,11 @@ window.renderHome = function () {
       border: 1px solid var(--tint-bd);
       border-radius: var(--R); padding: 12px 14px; margin-bottom: 16px;
       display: flex; align-items: flex-start; gap: 10px;
+    }
+    /* مطويّ: الكارت بيبقى إطار السطر نفسه — من غير خلفية ولا حشو،
+       عشان مايبانش كارت جوه كارت. */
+    .sender-bar.collapsed {
+      background: none; border: none; padding: 0; margin-bottom: 12px; gap: 0;
     }
     .sender-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
     .sender-label{ font-size: .7rem; color: var(--sky); margin-bottom: 2px; }
@@ -3062,6 +5352,15 @@ window.renderHome = function () {
     .fg input::placeholder { color: rgba(110,144,174,.6); }
 
     .price-ro { color: var(--green) !important; font-weight: 700; text-align: center; }
+    /* زرار إرسال الطرد — نفس وزن الزرار الكبير القديم عشان يبان إنه
+       الإجراء الأساسي، بس جوه الكارت. */
+    .row-send {
+      width: 100%; margin-top: 14px; padding: 12px;
+      background: var(--sky); color: #fff; border: none;
+      border-radius: 10px; font-size: .92rem; font-weight: 800;
+      cursor: pointer; font-family: inherit;
+    }
+    .row-send:disabled { opacity: .6; cursor: default; }
 
     /* ─── Autocomplete Dropdown ─── */
     .ac-drop {
@@ -3088,6 +5387,57 @@ window.renderHome = function () {
     .trust-note { font-size: .72rem; line-height: 1.7; margin-top: 5px; }
 
     /* ─── Parcel Card ─── */
+    /* مفتاح «مش معايا بيانات المستلم» — جوه كل طرد */
+    .rcv-receipt {
+      display: flex; align-items: center; gap: 11px; cursor: pointer;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px; margin-bottom: 12px;
+    }
+    .rcv-receipt.on { border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.09); }
+    .rcv-receipt input { width: 19px; height: 19px; flex: none; accent-color: var(--sky); }
+    .rcv-receipt span { flex: 1; }
+    .rcv-receipt b { font-size: .82rem; display: block; }
+    .rcv-receipt small { font-size: .7rem; color: var(--muted); line-height: 1.6; display: block; }
+    .rcv-receipt .ic { flex: none; font-size: 1.15rem; }
+
+    /* صف التنقّل بين الطرود — بيسكرول أفقيًا لوحده لما الطرود تكتر،
+       عشان مايلفّش على سطرين ويزقّ الفورم لتحت. */
+    .parcel-tabs {
+      display: flex; align-items: center; gap: 7px;
+      overflow-x: auto; overflow-y: hidden; padding: 3px 2px 9px;
+      scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+    }
+    .parcel-tabs::-webkit-scrollbar { height: 4px; }
+    .parcel-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    /* زر الإضافة أول الصف عشان مكانه مايتغيّرش مع كل طرد بيتضاف —
+       لو كان في الآخر كان بيهرب من تحت الصباع مع كل دوسة. */
+    .ptab-add {
+      flex: 0 0 auto; height: 34px;
+      background: var(--tint); color: var(--sky);
+      border: 1px dashed var(--sky); border-radius: 9px;
+      padding: 0 13px; font-size: .8rem; font-weight: 700;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .ptab-add:active { opacity: .75; }
+    .ptab {
+      position: relative; flex: 0 0 auto;
+      min-width: 38px; height: 34px; padding: 0 11px;
+      background: var(--card); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 9px;
+      font-size: .88rem; font-weight: 700; cursor: pointer;
+      font-family: inherit; font-variant-numeric: tabular-nums;
+    }
+    .ptab.active {
+      background: var(--sky); color: #fff; border-color: var(--sky);
+    }
+    /* النقطة الحمرا = الطرد ناقص بيانات مطلوبة. بتظهر بعد أول محاولة
+       إرسال بس — قبلها الفورم لسه نضيف. */
+    .ptab.bad::after {
+      content: ""; position: absolute; top: -3px; left: -3px;
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--red); border: 2px solid var(--bg);
+    }
+
     .parcel-card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--R); padding: 14px; margin-bottom: 11px;
@@ -3173,6 +5523,11 @@ window.renderHome = function () {
     }
     .o-total { font-weight: 700; color: var(--green); }
 
+    /* زرار الاستعجال — بارز عن باقي الكارت لأنه إجراء مش معلومة */
+    .urge-btn{display:block;width:100%;margin-top:10px;padding:11px 14px;border:none;
+      border-radius:10px;background:var(--sky);color:#fff;font-family:inherit;
+      font-size:.85rem;font-weight:800;cursor:pointer}
+    .urge-btn:disabled{background:rgba(128,128,128,.18);color:var(--muted);cursor:default}
     .pilot-row {
       padding: 5px 14px 8px;
       font-size: .78rem; color: var(--orng);
@@ -3207,6 +5562,18 @@ window.renderHome = function () {
     .st-done   { background: rgba(34,197,94,.15);  color: var(--green);}
     .st-fail   { background: rgba(249,115,22,.15); color: var(--orng); }
     .st-cancel { background: rgba(239,68,68,.15);  color: var(--red);  }
+    /* الطيار متحمّل عليه الأوردر بس لسه ما شالوش من المحل — حالة كانت
+       مخفية تحت «جاري التوصيل» وخلّت المحل يفتكر إن الشحنة مشيت وهي
+       لسه على الرف قدامه */
+    .st-wait   { background: rgba(249,115,22,.15); color: var(--orng); }
+
+    /* زرار تأكيد التسليم — نفس مقاس زرار الاستعجال عشان الكارت يفضل هادي */
+    .ho-btn{display:block;width:100%;margin-top:10px;padding:11px 14px;border:none;
+      border-radius:10px;background:var(--green,#22c55e);color:#fff;font-family:inherit;
+      font-size:.85rem;font-weight:800;cursor:pointer}
+    .ho-btn:disabled{opacity:.6;cursor:default}
+    .ho-done{margin-top:10px;padding:9px 12px;border-radius:10px;font-size:.78rem;
+      font-weight:700;background:rgba(34,197,94,.12);color:var(--green,#22c55e)}
 
     /* ─── Empty State ─── */
     .empty {
@@ -3710,10 +6077,18 @@ window.renderHome = function () {
 <div id="app">
 
   <!-- Top Bar -->
+  <!-- الشريط العلوي: القايمة والجرس على اليمين (جهة فتح السايد بار في RTL)،
+       واللوجو على الشمال مكان زرار الثيم القديم. زرار الثيم اتشال من هنا —
+       وظيفته موجودة أصلًا في «حسابي ← التطبيق» كصف بمفتاح. -->
   <div class="topbar">
-    <button class="tb-theme" id="themeBtn" onclick="toggleTheme()" title="الوضع النهاري / الليلي">🌙</button>
+    <span class="tb-side">
+      <button class="tb-icon" id="drawerBtn" onclick="openDrawer()"
+              aria-label="القائمة" aria-expanded="false">☰</button>
+      <button class="tb-icon" id="notifBtn" onclick="toggleNotifs()"
+              aria-label="الإشعارات" aria-expanded="false">🔔<span class="tb-badge" id="notifBadge"></span></button>
+    </span>
     <span class="tb-title" id="top-title">طلب جديد</span>
-    <span class="tb-logo"><img src="assets/logo.png" alt="الدهشان" style="height:30px;width:auto;object-fit:contain;display:block;filter:drop-shadow(0 0 8px rgba(232,25,44,.45))" /></span>
+    <span class="tb-logo"><img src="assets/logo.png" alt="الدهشان" /></span>
   </div>
 
   <!-- ── PAGE: New Order ── -->
@@ -3726,11 +6101,40 @@ window.renderHome = function () {
     <div class="sender-bar">
       <span class="sender-icon">🏪</span>
       <div style="flex:1; min-width:0">
-        <div class="sender-label">المُرسِل — محلك</div>
-        <div class="sender-name"  id="sender-name">—</div>
-        <div class="sender-meta">
-          <span dir="ltr" id="sender-phone">—</span>
+        <!-- هوية المحل بتتخفي مع الطي: اسم المحل موجود أصلًا في سطر
+             الملخّص تحت، فعرضه مرتين كان بياخد مساحة بلا معلومة زيادة.
+             بترجع تبان أول ما البلوك يتفتح. -->
+        <div id="senderIdent">
+          <div class="sender-label">المُرسِل — محلك</div>
+          <div class="sender-name"  id="sender-name">—</div>
+          <div class="sender-meta">
+            <span dir="ltr" id="sender-phone">—</span>
+          </div>
         </div>
+
+        <!-- ملخّص الاستلام — الحالة الافتراضية.
+             المحل هو المُرسِل في الغالبية العظمى من الشحنات، فعرض بلوك
+             الاستلام كامل (منطقة + عنوان + خريطة) في كل مرة كان بيحط
+             ٣ حقول قدام كل طلب والمحل بيعدّيهم زي ما هم. الملخّص بيقول
+             نفس المعلومة في سطر، والبلوك بيتفتح بضغطة لما يحتاجه. -->
+        <!-- سطر واحد بدل سطرين: العنوان التفصيلي وحالة الدبوس اتنقلوا
+             لـ`title` — معلومة بتلزم عند المراجعة مش عند كل طلب.
+             والصف كله زرار: الدوسة في أي مكان بتفتح البلوك، مش على
+             زرار صغير لازم تصوّبه بالصباع. -->
+        <div id="pickupSummary" style="display:none">
+          <button type="button" id="pickupSummaryBtn" onclick="togglePickupDetails(true)"
+            style="width:100%;display:flex;align-items:center;gap:8px;padding:9px 10px;
+                   border-radius:9px;cursor:pointer;text-align:right;font-family:inherit;
+                   background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35)">
+            <span style="font-size:.95rem;flex:0 0 auto">📤</span>
+            <span id="pickupSummaryLine" style="flex:1;min-width:0;font-size:.78rem;font-weight:700;
+                  color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</span>
+            <span style="flex:0 0 auto;border:1px solid var(--border);border-radius:7px;
+                  padding:3px 9px;font-size:.7rem;font-weight:700;opacity:.85">✏️ تغيير</span>
+          </button>
+        </div>
+
+        <div id="pickupDetails">
 
         <!-- المحل مش شرط يكون هو المرسِل: ممكن الاستلام من مكان تاني -->
         <label style="display:flex;align-items:center;gap:8px;margin:10px 0 0;cursor:pointer;font-size:.8rem;color:var(--text)">
@@ -3747,13 +6151,19 @@ window.renderHome = function () {
           <div class="grid2">
             <div class="fg">
               <label>هاتف المُرسِل 1 <span class="req">*</span></label>
-              <input type="tel" id="senderPhoneIn" dir="ltr" placeholder="01xxxxxxxxx" />
+              <input type="tel" id="senderPhoneIn" dir="ltr" placeholder="01xxxxxxxxx أو أرضي" />
             </div>
             <div class="fg">
               <label>هاتف المُرسِل 2</label>
               <input type="tel" id="senderPhone2In" dir="ltr" placeholder="—" />
             </div>
           </div>
+        </div>
+
+        <!-- «عناويني»: بيظهر بس لما يكون فيه عناوين محفوظة -->
+        <div class="fg" id="pickupAddrChoiceWrap" style="display:none;margin:10px 0 0">
+          <label>⭐ استلام من عنوان محفوظ</label>
+          <select id="pickupAddrChoice" onchange="applyPickupSavedAddr()"></select>
         </div>
 
         <div class="fg" style="margin:10px 0 0">
@@ -3769,14 +6179,18 @@ window.renderHome = function () {
           <div id="pickupAddrWidget"></div>
           <div id="pickupGeoBox" style="margin-top:8px"></div>
         </div>
+        </div><!-- /pickupDetails -->
       </div>
     </div>
 
     <!-- Parcels container -->
     <div class="sec">📦 الطرود</div>
-    <div id="delivContainer"></div>
 
-    <button class="add-btn" onclick="addRow()">➕ إضافة طرد آخر</button>
+    <!-- صف التنقّل: زر الإضافة ثابت أول الصف، وبعده زرار لكل طرد.
+         الطرود بقت واحد ظاهر في المرة — التنقّل من هنا مش بالسكرول. -->
+    <div id="parcelTabs" class="parcel-tabs"></div>
+
+    <div id="delivContainer"></div>
 
     <!-- Total bar -->
     <div class="total-bar">
@@ -3790,12 +6204,23 @@ window.renderHome = function () {
       <label>إجمالي أسعار الطلبات (العهدة)</label>
       <input type="number" id="orderPrepaid" placeholder="0" min="0" readonly class="price-ro" />
     </div>
-    <div class="fg">
+    <!-- 📝 الملاحظة العامة اتشالت من الفورم (طلب 2026-09-03: «كل ملاحظة
+         خاصة بطرد»): كل طرد بيتبعت أوردر لوحده، والخانة دي كانت بتتبعت
+         مع **كل** طرد فتظهر ملاحظة الطرد الأول على التاني. ملاحظة الطرد
+         نفسه (rNote) هي اللي بتوصل الفرع دلوقتي. العنصر متسايب مخفي
+         عشان resetForm والمسوّدات القديمة مايتكسّروش. -->
+    <div class="fg" style="display:none">
       <label>ملاحظات عامة للفرع</label>
       <input type="text" id="orderNotes" placeholder="مثال: استلم قبل الساعة 2" />
     </div>
 
-    <button class="submit-btn" id="saveBtn" onclick="saveOrder()">📤 إرسال الطلب</button>
+    <!-- زرار «إرسال الطلب» الكبير القديم اتشال 2026-08-31 — كان بيبعت
+         الطرود كأوردر واحد بأرقام بشرطة.
+         اللي مكانه دلوقتي بيلفّ على الطرود ويبعت كل واحد **كأوردر
+         مستقل** — نفس مسار الإرسال الفردي بالحرف، فالترقيم واحد.
+         بيظهر بس لما يبقى في أكتر من طرد (`renderParcelTabs` بتتحكم). -->
+    <button class="submit-btn" id="sendAllBtn" style="display:none"
+            onclick="sendAllParcels()">📤 إرسال كل الطلبات</button>
   </div>
 
   <!-- ── PAGE: My Orders ── -->
@@ -3814,6 +6239,11 @@ window.renderHome = function () {
     <div id="homeBody"></div>
   </div>
 
+  <!-- ── PAGE: Wallet ── -->
+  <div class="page" id="page-wallet">
+    <div id="walletBody"></div>
+  </div>
+
   <div class="page" id="page-my-orders">
     <!-- Filter chips -->
     <div class="chips">
@@ -3830,6 +6260,28 @@ window.renderHome = function () {
   </div>
 
   <!-- ── PAGE: Profile ── -->
+  <!-- ═══ 📍 عناويني — دفتر عناوين المحل (طلب 2026-09-02) ═══ -->
+  <div class="page" id="page-addressbook">
+    <button class="link-btn" style="margin-bottom:10px" onclick="navigateTo('profile')">‹ رجوع لحسابي</button>
+    <button class="submit-btn" style="margin-bottom:14px" onclick="openAddrModal()">＋ إضافة عنوان جديد</button>
+    <div style="font-size:.76rem;color:var(--muted);line-height:1.8;margin-bottom:12px">
+      احفظ أماكن الاستلام بتاعتك (المحل، المخزن، فرع تاني…) — وقت الشحنة
+      هتختار العنوان من قايمة «استلام من عنوان محفوظ» والمنطقة والعنوان
+      والدبوس هيتملوا لوحدهم. العنوان «الافتراضي» بيتطبق تلقائيًا مع كل شحنة جديدة.
+    </div>
+    <div id="addrBookList"></div>
+  </div>
+
+  <!-- ═══ 👥 عملائي — المستلمون المحفوظون (طلب 2026-09-02) ═══ -->
+  <div class="page" id="page-clients">
+    <button class="link-btn" style="margin-bottom:10px" onclick="navigateTo('profile')">‹ رجوع لحسابي</button>
+    <div style="font-size:.76rem;color:var(--muted);line-height:1.8;margin-bottom:12px">
+      كل عميل بتبعت له بيتحفظ هنا تلقائيًا — اضغط «ابعت له» عشان تبدأ شحنة
+      ببياناته جاهزة من غير ما تكتبها تاني.
+    </div>
+    <div id="clientsList"></div>
+  </div>
+
   <div class="page" id="page-profile">
 
     <!-- ① هوية المحل — مين انت في النظام -->
@@ -3843,6 +6295,23 @@ window.renderHome = function () {
       </div>
     </div>
 
+    <!-- «عناويني» و«عملائي» — نفس شاشتي تطبيق العملاء (طلب 2026-09-02) -->
+    <div class="sec-h">دفاتري</div>
+    <div class="info-card" style="margin-bottom:14px">
+      <div class="srow" style="cursor:pointer" onclick="navigateTo('addressbook')">
+        <span class="si">📍</span>
+        <div class="sb"><div class="sk">عناويني</div>
+          <div class="sv" style="font-size:.76rem;color:var(--muted)">أماكن الاستلام المحفوظة — تتملي بضغطة وقت الشحنة</div></div>
+        <div class="sa"><span class="link-btn">فتح ›</span></div>
+      </div>
+      <div class="srow" style="cursor:pointer" onclick="navigateTo('clients')">
+        <span class="si">👥</span>
+        <div class="sb"><div class="sk">عملائي</div>
+          <div class="sv" style="font-size:.76rem;color:var(--muted)">كل مستلم بعت له — «ابعت له» تاني من غير كتابة</div></div>
+        <div class="sa"><span class="link-btn">فتح ›</span></div>
+      </div>
+    </div>
+
     <!-- ② بيانات محلي — كارت واحد بحالتين: عرض مضغوط أو تعديل.
          البيانات مالهاش غير مصدر واحد على الصفحة دي. -->
     <div class="sec-h">بيانات محلي</div>
@@ -3850,8 +6319,19 @@ window.renderHome = function () {
 
     <div class="info-card" id="storeSettingsCard">
 
+      <!-- ملاحظة دخول الإدارة — بتظهر بدل أزرار التعديل في وضع viaAdmin -->
+      <div id="setAdminNote" style="display:none;padding:11px 14px;font-size:.76rem;
+           line-height:1.7;color:var(--muted);background:rgba(249,115,22,.10);
+           border-bottom:1px solid var(--border)"></div>
+
       <!-- (أ) حالة العرض -->
       <div id="setView">
+        <div class="srow">
+          <span class="si">🏪</span>
+          <div class="sb"><div class="sk">اسم المحل (بيظهر كاسم المُرسِل)</div>
+            <div class="sv" id="v-shopname">—</div></div>
+          <div class="sa"><button class="link-btn" onclick="setEditMode(true,'profShopName')">تعديل</button></div>
+        </div>
         <div class="srow">
           <span class="si">📞</span>
           <div class="sb"><div class="sk">هاتف المحل</div>
@@ -3890,8 +6370,13 @@ window.renderHome = function () {
           سجّلها مرة واحدة، والنظام هيعبّيها لوحده في كل شحنة — مش هتكتبها تاني.
         </div>
 
+        <label class="set-lbl">🏪 اسم المحل <span style="color:var(--red)">*</span></label>
+        <input id="profShopName" class="set-field" type="text" placeholder="اسم المحل زي ما العميل يعرفه"
+               style="margin-bottom:4px" />
+        <div class="set-help" id="profShopNameHelp">بيظهر على كل شحنة كاسم المُرسِل — للعميل وللطيار</div>
+
         <label class="set-lbl">📞 هاتف المحل <span style="color:var(--red)">*</span></label>
-        <input id="profPhone" class="set-field" type="tel" dir="ltr" placeholder="01xxxxxxxxx"
+        <input id="profPhone" class="set-field" type="tel" dir="ltr" placeholder="01xxxxxxxxx أو أرضي"
                style="margin-bottom:4px" />
         <div class="set-help">ده الرقم اللي الطيار بيتصل بيه لما ييجي يستلم منك</div>
 
@@ -3927,9 +6412,17 @@ window.renderHome = function () {
       </div>
     </div>
 
-    <!-- ③ التطبيق -->
+    <!-- ③ خدمة العملاء — اتنقلت هنا من الرئيسية.
+         `#profSupport` كان موجود في الكود من الأول (`renderSupportBits`
+         بتدوّر عليه) بس الـdiv نفسه مكانش في الصفحة، فمجرد إضافته
+         بتشغّل الكارت من غير أي JS جديد. الأرقام والمواعيد بييجوا من
+         إعدادات الموقع في لوحة الإدارة — مش مكتوبين هنا. -->
+    <div class="sec-h" id="supportHead" style="display:none">خدمة العملاء</div>
+    <div id="profSupport"></div>
+
+    <!-- ④ التطبيق -->
     <div class="sec-h">التطبيق</div>
-    <div class="info-card">
+    <div class="info-card" id="appSettingsCard">
       <div class="srow">
         <span class="si" id="themeRowIcon">🌙</span>
         <div class="sb"><div class="sk">شكل التطبيق</div>
@@ -3948,6 +6441,15 @@ window.renderHome = function () {
           <button class="link-btn" id="installStoreBtn" onclick="installStoreApp()">ثبّت</button>
         </div>
       </div>
+      <!-- البوابة بتحدّث نفسها لوحدها عند الفتح — الزرار ده للتأكيد اليدوي -->
+      <div class="srow">
+        <span class="si">🔄</span>
+        <div class="sb"><div class="sk">نسخة البوابة</div>
+          <div class="sv" id="appVerLabel" style="direction:ltr"></div></div>
+        <div class="sa">
+          <button class="link-btn" id="storeUpdBtn" onclick="doAppUpdate('storeUpdBtn')">فحص التحديثات</button>
+        </div>
+      </div>
     </div>
 
     <div style="margin-top:16px">
@@ -3955,20 +6457,23 @@ window.renderHome = function () {
     </div>
   </div>
 
-  <!-- Bottom Navigation -->
+  <!-- الشريط السفلي: «طلب جديد» بقى دايرة بارزة في النص.
+       الترتيب في RTL بيتقرا من اليمين: الرئيسية · طلباتي · [طلب جديد] ·
+       تقاريري · حسابي — فالدايرة في النص بالظبط. -->
   <div class="bottom-nav">
     <button class="nav-btn" data-page="home" onclick="navigateTo('home')">
       <span class="ni">🏠</span>
       <span>الرئيسية</span>
     </button>
-    <button class="nav-btn active" data-page="new-order" onclick="navigateTo('new-order')">
-      <span class="ni">➕</span>
-      <span>طلب جديد</span>
-    </button>
     <button class="nav-btn" data-page="my-orders" onclick="navigateTo('my-orders')">
       <span class="ni">📋</span>
       <span>طلباتي</span>
       <span class="nav-badge" id="orders-badge"></span>
+    </button>
+    <button class="nav-btn nav-fab active" data-page="new-order" onclick="navigateTo('new-order')"
+            aria-label="طلب جديد">
+      <span class="fab">➕</span>
+      <span class="fab-t">طلب جديد</span>
     </button>
     <button class="nav-btn" data-page="reports" onclick="navigateTo('reports')">
       <span class="ni">📊</span>
@@ -3983,7 +6488,158 @@ window.renderHome = function () {
 
 <div id="toast"></div>
 
+<!-- ═══ شاشة الترحيب — مرة واحدة لكل فتح للتطبيق ═══
+     z-index 9500: فوق كل حاجة جوّه التطبيق، وتحت شاشة الدخول (9999)
+     عشان لو الجلسة انتهت شاشة الدخول تغطّيها.
+     بوابة الموقع (8500) مابتتفتحش أصلًا غير بعد ما دي تختفي — شوف
+     `afterWelcome` في السكربت. -->
+<div id="welcomeOverlay" class="wel" aria-hidden="true">
+  <div class="wel-in">
+    <img class="wel-logo" src="assets/logo.png" alt="" />
+    <div class="wel-hi">أهلًا بيك 👋</div>
+    <div class="wel-shop" id="wel-shop">—</div>
+  </div>
+</div>
+
+<!-- ═══ السايد بار — بينزلق من اليمين لأن الواجهة RTL ═══ -->
+<div id="drawerScrim" class="dr-scrim" onclick="closeDrawer()"></div>
+<aside id="drawer" class="drawer" aria-hidden="true" aria-label="القائمة">
+  <div class="dr-head">
+    <img src="assets/logo.png" alt="" />
+    <div style="flex:1;min-width:0">
+      <div class="dr-name" id="dr-shop">—</div>
+      <div class="dr-sub"  id="dr-user">—</div>
+    </div>
+    <button class="tb-icon" onclick="closeDrawer()" aria-label="إغلاق">✕</button>
+  </div>
+
+  <!-- `data-nav` مش `data-page`: الراوتر بيدوّر على `[data-page]` عشان
+       يلوّن الشريط السفلي، ولو العناصر دي حملت نفس السمة كان أول match
+       هيبقى عنصر السايد بار والشريط مش هيتلوّن. -->
+  <button class="dr-link" data-nav="home"      onclick="drawerGo('home')"><span class="dr-ic">🏠</span>الرئيسية</button>
+  <button class="dr-link" data-nav="wallet"    onclick="drawerGo('wallet')"><span class="dr-ic">👛</span>المحفظة</button>
+  <button class="dr-link" data-nav="my-orders" onclick="drawerGo('my-orders')"><span class="dr-ic">📋</span>طلباتي<span class="dr-cnt" id="dr-orders-cnt"></span></button>
+  <button class="dr-link" data-nav="reports"   onclick="drawerGo('reports')"><span class="dr-ic">📊</span>تقاريري</button>
+  <button class="dr-link" data-nav="profile"   onclick="drawerGo('profile')"><span class="dr-ic">👤</span>حسابي</button>
+  <div class="dr-sep"></div>
+  <!-- «الإعدادات» مش صفحة لوحدها — بتودّي «حسابي» وتمرّر لقسم التطبيق،
+       عشان مانقسمش صفحة الإعدادات ونكسر `renderStoreSettings`. -->
+  <button class="dr-link" onclick="drawerGo('profile','appSettingsCard')"><span class="dr-ic">⚙️</span>الإعدادات</button>
+  <div class="dr-sep"></div>
+  <button class="dr-link dr-out" onclick="closeDrawer();doLogout()"><span class="dr-ic">🚪</span>تسجيل الخروج</button>
+
+  <div class="dr-foot">الدهشان — بوابة المحلات</div>
+</aside>
+
+<!-- ═══ لوحة الإشعارات — بتنزل من فوق ═══ -->
+<div id="notifScrim" class="dr-scrim" onclick="closeNotifs()"></div>
+<div id="notifPanel" class="nf-panel" role="dialog" aria-hidden="true" aria-label="الإشعارات">
+  <div class="nf-head">
+    <b>🔔 الإشعارات</b>
+    <button class="tb-icon" onclick="closeNotifs()" aria-label="إغلاق">✕</button>
+  </div>
+  <div id="notifList"></div>
+  <div class="nf-note">
+    ده سجل تغيّرات حالة شحناتك، بيتبني على الجهاز ده من نفس البيانات اللي
+    الشاشة بتعرضها — مش إشعارات فورية من السيرفر.
+  </div>
+</div>
+
+<!-- بوابة أول دخول: موقع المحل.
+     z-index أقل من مودال الخريطة (9000) عن قصد — البوابة بتفتحه فوقها،
+     ولو كانت أعلى منه كان هيتفتح تحتها والمحل يشوف شاشة متجمّدة. -->
+<div id="storeGateOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);
+     z-index:8500;align-items:center;justify-content:center;padding:14px;overflow:auto">
+  <div style="background:var(--card,#0f172a);border:1px solid var(--border,#334155);border-radius:16px;
+       width:100%;max-width:460px;padding:18px 16px 16px;max-height:92vh;overflow:auto">
+    <div style="text-align:center;margin-bottom:4px;font-size:1.9rem">🏪</div>
+    <div style="text-align:center;font-weight:800;font-size:1.05rem;margin-bottom:6px">
+      أهلاً بيك — كمّل بيانات محلك
+    </div>
+    <div style="text-align:center;font-size:.8rem;opacity:.75;line-height:1.7;margin-bottom:14px">
+      دي بيانات المُرسِل اللي هتتبعت مع كل شحنة — الطيار بيتصل بيك عليها
+      وبيوصلك بالموقع ده. هتكتبها مرة واحدة بس، وبعد كده كل شحنة
+      هتتعبّى لوحدها من غير ما تكتب حاجة.
+    </div>
+
+    <div class="fg">
+      <label>🏪 اسم المحل <span class="req">*</span></label>
+      <input type="text" id="gateShopName" placeholder="اسم المحل زي ما العميل يعرفه" />
+      <div id="gateShopNameHint" style="font-size:.7rem;opacity:.65;margin-top:5px;line-height:1.6"></div>
+    </div>
+
+    <div class="fg">
+      <label>📞 هاتف المحل <span class="req">*</span></label>
+      <input type="tel" id="gatePhone" dir="ltr" placeholder="01xxxxxxxxx أو أرضي" />
+      <div style="font-size:.7rem;opacity:.65;margin-top:5px;line-height:1.6">
+        ده الرقم اللي الطيار بيتصل بيه لما ييجي يستلم منك.
+      </div>
+    </div>
+
+    <div class="fg">
+      <label>☎️ هاتف إضافي <span style="opacity:.6;font-weight:600">(اختياري)</span></label>
+      <input type="tel" id="gatePhone2" dir="ltr" placeholder="رقم تاني للطوارئ" />
+    </div>
+
+    <div class="fg">
+      <label>🗺️ منطقة المحل <span class="req">*</span></label>
+      <select id="gateZone" data-zonepick>
+        <option value="">— اختر المنطقة —</option>
+      </select>
+    </div>
+
+    <div class="fg">
+      <label>📍 عنوان المحل <span class="req">*</span></label>
+      <div id="gateAddrWidget"></div>
+    </div>
+
+    <div class="fg">
+      <label>🗺️ موقع المحل على الخريطة <span class="req">*</span></label>
+      <div id="gateGeoBox"></div>
+      <div style="font-size:.7rem;opacity:.65;margin-top:5px;line-height:1.6">
+        دوس وحدّد مكان المحل على الخريطة — دي أهم خطوة، الطيار بيمشي عليها.
+      </div>
+    </div>
+
+    <button class="submit-btn" id="gateSaveBtn" onclick="saveStoreLocationGate()"
+            style="margin-top:10px">💾 حفظ وابدأ</button>
+  </div>
+</div>
+
 <!-- مودال تحديد الموقع على الخريطة -->
+<!-- ═══ مودال إضافة/تعديل عنوان — «عناويني» (طلب 2026-09-02) ═══
+     z-index أقل من خريطة الدبوس (9000) عن قصد: «حدّد على الخريطة»
+     بتفتح خريطة الدبوس **فوق** المودال ده وترجع له. -->
+<div id="addrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+     z-index:8500;align-items:center;justify-content:center;padding:14px">
+  <div style="background:var(--card,#0f172a);border:1px solid var(--border,#334155);border-radius:16px;
+       width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:16px 18px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px">
+      <b id="addrModalTitle" style="flex:1;font-size:.98rem">📍 إضافة عنوان جديد</b>
+      <button type="button" onclick="closeAddrModal()" style="background:none;border:none;color:inherit;
+              font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <div class="fg">
+      <label>تسمية العنوان</label>
+      <input type="text" id="addrLabelIn" placeholder="المحل / المخزن / فرع وسط البلد…" />
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <label>🗺️ المنطقة <span class="req">*</span></label>
+      <select id="addrZoneIn"></select>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <label>📍 العنوان بالتفصيل <span class="req">*</span></label>
+      <div id="addrModalWidget"></div>
+      <div id="addrGeoBox" style="margin-top:8px"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:9px;margin:13px 0;font-size:.84rem;cursor:pointer">
+      <input type="checkbox" id="addrDefaultIn" style="width:17px;height:17px" />
+      اجعله العنوان الافتراضي — يتملي تلقائيًا مع كل شحنة جديدة
+    </label>
+    <button class="submit-btn" id="addrSaveBtn" onclick="saveStoreAddr()">💾 حفظ العنوان</button>
+  </div>
+</div>
+
 <div id="pinMapOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
      z-index:9000;align-items:center;justify-content:center;padding:12px">
   <div style="background:var(--card,#0f172a);border:1px solid var(--border,#334155);border-radius:16px;

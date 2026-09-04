@@ -28,8 +28,10 @@
   <!-- طبقة REST المشتركة: constants.js (خرائط الحالات) + api.js (window.API والـ Poller) -->
   <script src="assets/js/constants.js"></script>
   <script src="assets/js/api.js"></script>
-  <script src="assets/js/zonepick.js?v=20260826"></script>
-  <script src="assets/js/commadj.js?v=20260826"></script>
+  <script src="assets/js/zonepick.js?v=20260830b"></script>
+  <script src="assets/js/commadj.js?v=20260903"></script>
+  <script src="assets/js/geoloc.js?v=20260903"></script>
+  <script src="assets/js/locfresh.js?v=20260830"></script>
 
   <!-- ══════════════════════════════════════════════════════════════
        التحديث الفوري (Reverb) — **جنب** الاستطلاع مش مكانه
@@ -43,7 +45,7 @@
        نداءاته تحت متلفوفة بحارس — والصفحة تفضل بالاستطلاع زي ما هي.
   ══════════════════════════════════════════════════════════════ -->
   <script src="assets/js/vendor/pusher.min.js"></script>
-  <script src="assets/js/realtime.js?v=20260822a"></script>
+  <script src="assets/js/realtime.js?v=20260829a"></script>
 
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
@@ -107,12 +109,27 @@
       const p = window.cairoParts(d);
       return p.y + p.m + p.d;
     };
-    /* هل التاريخ ده النهاردة بتوقيت مصر؟ */
+    /* ── اليوم التجاري (بلاغ صاحب النظام 2026-09-02) ─────────────
+       «البرنامج بيقلب التاريخ الساعة 12 بالليل والوردية من 9ص لـ5
+       فجرًا يوم واحد». أي لحظة قبل 9ص بتتبع اليوم اللي قبلها — نفس
+       dayStartHour بتاع تقفيلة الطيارين، والسيرفر بيرقّم الأوردرات
+       بنفس القاعدة (App\Support\BizDay).
+       ⚠️ للتجميع و«النهارده» بس — تنسيق تاريخ من date picker يفضل
+       بـcairoDayKey (التاريخ المختار مالوش ساعة تتفحص). */
+    window.BIZ_DAY_START = 9;
+    window.bizDayKey = function (d) {
+      const t = d ? new Date(d) : new Date();
+      const h = +new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Africa/Cairo", hour: "2-digit", hour12: false
+      }).format(t);
+      return window.cairoDayKey(h < window.BIZ_DAY_START ? new Date(t.getTime() - 864e5) : t);
+    };
+    /* هل اللحظة دي «النهاردة»؟ — باليوم التجاري مش الميلادي */
     window.isCairoToday = function (iso) {
       if (!iso) return false;
       const t = new Date(iso);
       if (isNaN(t)) return false;
-      return window.cairoDayKey(t) === window.cairoDayKey(new Date());
+      return window.bizDayKey(t) === window.bizDayKey(new Date());
     };
 
     window.escJs = function (v) {
@@ -125,12 +142,17 @@
        البيانات القديمة — الـ serializers في PHP بترجّع اللسان القديم. */
     const api = window.API;
 
+    /* 🔒 كود التطبيق ده — بيتبعت مع الدخول والسيرفر بيرفض لو الحساب مش
+       مصرّح له بيه (AuthController::login + appsFor). الصفحة كانت بتقبل
+       أي دور بيصادق بنجاح، والـURL المباشر بيتخطّى بوابة home.html. */
+    const APP_KEY = "admin";
+
     /* توحيد المعرّفات كنصوص — الواجهة القديمة كانت بتقارن مفاتيح فايربيز
        النصية بـ ===، والـ API بيرجّع ids رقمية. من غير التوحيد ده كل
        المقارنات (o.pilotId === p.id ...) بتقع بصمت. */
     const ID_FIELDS = ["id","pilotId","branchId","orderId","zoneId","shiftId","senderId",
       "receiverId","storeId","splitFrom","fromBranchId","toBranchId","requestingBranchId",
-      "acceptedByBranchId","deliveryBranchId","sourceBranchId","customerId","assignedBranchId",
+      "acceptedByBranchId","deliveryBranchId","sourceBranchId","customerId","assignedBranchId","homeBranchId",
       "fromShiftId","toShiftId","transferredFrom","expenseId","failoverBranchId","senderZoneId",
       "cashStoreId","cashTxnId","relatedPilotId","relatedExpenseId","fromId","toId"];
     function nrm(it) {
@@ -796,6 +818,11 @@
           ]
     };
 
+    /* ══ الافتراضي لأي عنوان جديد ══
+       الدقهلية / المنصورة — ده مقر الشغل، فأغلب الإدخالات عليه
+       والموظف بيوفّر اختيارين في كل فورم. */
+    window.ADDR_DEFAULT = { gov: 'الدقهلية', city: 'المنصورة' };
+
     window.renderAddressWidget = function(containerId, opts = {}) {
       const el  = document.getElementById(containerId);
       if (!el) return;
@@ -829,7 +856,16 @@
       // أول ما المحافظة تتغيّر نملأ مدنها
       const _govEl = document.getElementById(`${containerId}-gov`);
       if (_govEl) _govEl.addEventListener('change', () => window.fillCities(containerId));
-      window.fillCities(containerId);
+      /* الافتراضي بيتحط بس لما يكون فيه سجل جديد بيتفتح:
+         • `opts.edit` = بنعدّل سجل موجود — ممنوع نكتب فيه حاجة من عندنا،
+           لأن الموظف ممكن يحفظ من غير ما ياخد باله فيتخزّن عنوان ما اختارهوش.
+         • `opts.blank` = مخرج صريح لو حد عايز الحقل فاضي. */
+      if (_govEl && !opts.edit && !opts.blank && !_govEl.value) {
+        _govEl.value = window.ADDR_DEFAULT.gov;
+        window.fillCities(containerId, window.ADDR_DEFAULT.city);
+      } else {
+        window.fillCities(containerId);
+      }
 
       ['gov','area','detail'].forEach(k => {
         document.getElementById(`${containerId}-${k}`)
@@ -958,7 +994,7 @@
       try {
         const pt = JSON.parse(raw);
         if (!pt?.username || !pt?.password) return;
-        const res = await api.login(pt.username, pt.password);
+        const res = await api.login(pt.username, pt.password, APP_KEY);
         const u = res.user || {};
         if (u.role !== "admin") { api.logout().catch(() => {}); return; }
         saveSession(u.username, "مدير");
@@ -1072,8 +1108,8 @@
        عند الدخول مجدداً = سجل جديد يُضاف فوق السابق
     ══════════════════════════════════════════════════════════════════════ */
     function todayKey() {
-      // بتوقيت القاهرة مش توقيت الجهاز
-      return window.cairoDayKey();
+      // اليوم التجاري — الشغل بعد نص الليل تبع يوم امبارح
+      return window.bizDayKey();
     }
 
     // مفتاح الجلسة الحالية في localStorage لاستخدامه عند beforeunload
@@ -1126,7 +1162,7 @@
       if (!user || !pass) { err.textContent = "يرجى إدخال بيانات الدخول"; return; }
       btn.disabled = true; btn.textContent = "جاري التحقق…";
       try {
-        const res = await api.login(user, pass);
+        const res = await api.login(user, pass, APP_KEY);
         const u = res.user || {};
         if (u.role !== "admin") {
           api.logout().catch(() => {});
@@ -1236,7 +1272,26 @@
       const commissionType  = document.getElementById("commissionType").value || "percent";
       const commissionValue = Number(document.getElementById("commissionValue").value) || 0;
       const notes = document.getElementById("pilotNotes").value.trim();
-      const assignedBranchId = document.getElementById("pilotBranch").value || null;
+      /* الحقل ده في المودال اسمه «الفرع المعيّن» ومعناه الفرع **الثابت**.
+
+         🔴 القيمة الفاضية بتتبعت `null` والسيرفر بيكتبها `home_branch_id = NULL`
+         — يعني الحفظ بيمسح الفرع. ده كان بيتضافر مع باج تعبئة القايمة
+         (`homeBranchId` مكانش في `ID_FIELDS` فبيفضل رقم والفروع نصوص،
+         والمقارنة الصارمة بترجع false دايمًا) وينتج السلوك اللي اتبلّغ عنه:
+         تحفظ الفرع، تفتح التعديل تلاقي «بلا فرع»، تحفظ أي حاجة تانية
+         فيتمسح فعلًا. توحيد المعرّف صلّح التعبئة، والحارس ده بيمنع المسح
+         الصامت لو حصل أي فشل تعبئة تاني في المستقبل. */
+      const _branchSel   = document.getElementById("pilotBranch");
+      const homeBranchId = _branchSel.value || null;
+      if (!homeBranchId && window._editState.active && window._editState.type === 'pilot') {
+        const _old = window._pilotsData?.find(x => x.id === window._editState.id);
+        if (_old && (_old.homeBranchId ?? _old.assignedBranchId)) {
+          showToast("اختار فرع الطيار — سيبها فاضية هيمسح فرعه الحالي", "error");
+          _branchSel.focus();
+
+          return;
+        }
+      }
       const pilotUsername = document.getElementById("pilotUsername").value.trim();
       const pilotPassword = document.getElementById("pilotPassword").value.trim();
       if (!name || !phone1 || !cardNum || !address || !vehicleNo) {
@@ -1252,7 +1307,7 @@
       const btn = document.getElementById("submitBtn");
       btn.disabled = true; btn.textContent = "جاري الحفظ…";
       try {
-        const pilotData = { name, phone1, phone2, cardNum, address, vehicleNo, commissionType, commissionValue, notes, assignedBranchId };
+        const pilotData = { name, phone1, phone2, cardNum, address, vehicleNo, commissionType, commissionValue, notes, homeBranchId };
         if (isEditingPilot) {
           const pilotId = window._editState.id;
           const oldPilot = window._pilotsData?.find(x => x.id === pilotId);
@@ -1287,8 +1342,10 @@
           }
           const created = await api.post("/api/pilots", pilotData);
           const newPilotId = String(created.id);
-          if (assignedBranchId) {
-            try { await api.put("/api/pilots/" + newPilotId, { assignedBranchId }); } catch(e) { console.warn("assign branch:", e); }
+          /* الإنشاء بقى بيحفظ الفرع بنفسه (كان بيتجاهله قبل كده)،
+             والـPUT ده فضل كحزام أمان لو السيرفر لسه نسخة قديمة. */
+          if (homeBranchId) {
+            try { await api.put("/api/pilots/" + newPilotId, { homeBranchId }); } catch(e) { console.warn("home branch:", e); }
           }
           await api.post("/api/users", { username: pilotUsername, password: pilotPassword, role: "طيار", name, pilotId: newPilotId });
           showToast("تمّ إضافة الطيار بنجاح ✓ — اسم المستخدم: " + pilotUsername, "success");
@@ -1304,25 +1361,77 @@
        الحوار، وساعتها confirm() بترجّع false على طول وبصمت فالحذف
        مابيحصلش ومفيش أي رسالة تفسّر ليه. */
     window._delArmed = null;
-    window.deletePilot = async function (id) {
+    /* 🗄️ الأرشفة بدل الحذف (قرار صاحب النظام 2026-09-01).
+       الحذف كان بيفشل مع **كل** طيار: `pilots` عليه ١٨ مفتاح أجنبي RESTRICT
+       وكل طيار عنده حساب دخول مربوط. ولو اشتغل كان أسوأ — اسم الطيار مبصوم
+       على أوردرات وحركات عهدة وتقفيلات شهرية، والحذف كان هيفضّي التقارير
+       المالية بأثر رجعي.
+       السيرفر بيرفض لو عليه عهدة أو وردية مفتوحة أو أوردرات جارية،
+       وبيقفل حساب دخوله — فمش محتاجين نمسح الحساب من هنا زي الأول. */
+    window.archivePilot = async function (id) {
       if (window._delArmed !== id) {
         window._delArmed = id;
-        showToast("اضغط «حذف» تاني خلال 5 ثواني لتأكيد حذف الطيار", "error");
+        showToast("اضغط «أرشفة» تاني خلال 5 ثواني — الطيار هيتنقل للمؤرشفين", "error");
         clearTimeout(window._delTimer);
         window._delTimer = setTimeout(() => { window._delArmed = null; }, 5000);
         return;
       }
       window._delArmed = null; clearTimeout(window._delTimer);
       try {
-        // حذف الطيار — حساب الدخول المرتبط بيتشال معاه
-        const acct = (window._usersData || []).find(u => String(u.pilotId || "") === String(id));
-        await api.del("/api/pilots/" + id);
-        if (acct) { try { await api.del("/api/users/" + acct.id); } catch(e) { console.warn("pilot user cleanup:", e); } }
-        showToast("تمّ حذف الطيار وحساب الدخول ✓", "success");
+        await api.post("/api/pilots/" + id + "/archive", {});
+        showToast("تمّت أرشفة الطيار — بياناته التاريخية زي ما هي ✓", "success");
       }
-      // نعرض رسالة الخطأ الحقيقية — قبل كده كانت بتتبلع فمكانش فيه دليل على السبب
-      catch (e) { console.error("deletePilot:", e);
-        showToast("تعذّر الحذف: " + (e?.message || e), "error"); }
+      // رسالة السيرفر الحقيقية: بتقول العهدة بكام أو الوردية مفتوحة
+      catch (e) { console.error("archivePilot:", e);
+        showToast("تعذّرت الأرشفة: " + (e?.message || e), "error"); }
+    };
+
+    /** رجوع الطيار المؤرشف للخدمة — بيرجّعه لفرعه الثابت ويفك قفل حسابه */
+    window.unarchivePilot = async function (id) {
+      if (window._unArmed !== id) {
+        window._unArmed = id;
+        showToast("اضغط «رجّعه» تاني خلال 5 ثواني لتأكيد رجوع الطيار للخدمة", "error");
+        clearTimeout(window._unTimer);
+        window._unTimer = setTimeout(() => { window._unArmed = null; }, 5000);
+        return;
+      }
+      window._unArmed = null; clearTimeout(window._unTimer);
+      try {
+        await api.post("/api/pilots/" + id + "/unarchive", {});
+        showToast("رجع للخدمة ✓ — افتحله وردية من الفرع", "success");
+        loadArchivedPilots();
+      } catch (e) { console.error("unarchivePilot:", e);
+        showToast("تعذّر الرجوع: " + (e?.message || e), "error"); }
+    };
+
+    /* قايمة المؤرشفين — نداء منفصل بـ`?archived=1`. مش مستطلع: القايمة
+       دي بتتغير نادر، والاستطلاع عليها بيضرب الشبكة بلا فايدة. */
+    window._archivedPilots = [];
+    window.loadArchivedPilots = async function () {
+      const box = document.getElementById("archivedPilotsBox");
+      if (!box) return;
+      try {
+        const d = await api.get("/api/pilots", { archived: 1 });
+        window._archivedPilots = window._nrmList ? window._nrmList(d.items) : (d.items || []);
+      } catch (e) { window._archivedPilots = []; }
+      const rows = window._archivedPilots;
+      if (!rows.length) {
+        box.innerHTML = `<div style="padding:26px;text-align:center;color:var(--muted)">
+          مفيش طيارين مؤرشفين</div>`;
+        return;
+      }
+      box.innerHTML = `<table class="tbl"><thead><tr>
+          <th>#</th><th>الاسم</th><th>الهاتف</th><th>الفرع الثابت</th>
+          <th>اتأرشف</th><th>بمعرفة</th><th></th></tr></thead><tbody>` +
+        rows.map((p, i) => `<tr>
+          <td class="idx">${i + 1}</td>
+          <td><span class="name-badge">${ esc(p.name) }</span></td>
+          <td dir="ltr">${ esc(p.phone1 || "—") }</td>
+          <td>${ esc(p.homeBranchName || "—") }</td>
+          <td>${ p.archivedAt ? esc(new Date(p.archivedAt).toLocaleDateString("ar-EG")) : "—" }</td>
+          <td>${ esc(p.archivedBy || "—") }</td>
+          <td><button class="edit-btn" onclick="unarchivePilot('${ escJs(p.id) }')">رجّعه للخدمة</button></td>
+        </tr>`).join("") + `</tbody></table>`;
     };
     window.openEditPilot = async function (id) {
       const p = window._pilotsData?.find(x => x.id === id);
@@ -1331,17 +1440,19 @@
       document.getElementById("phone1").value       = p.phone1;
       document.getElementById("phone2").value       = p.phone2 || "";
       document.getElementById("cardNum").value      = p.cardNum;
-      window.renderAddressWidget("pilotAddrWidget", { required: true, value: p.address || "" });
+      window.renderAddressWidget("pilotAddrWidget", { edit: true, required: true, value: p.address || "" });
       document.getElementById("vehicleNo").value    = p.vehicleNo;
       document.getElementById("commissionType").value  = p.commissionType || "percent";
       document.getElementById("commissionValue").value = p.commissionValue || "";
       document.getElementById("pilotNotes").value       = p.notes || "";
-      fillPilotBranchSelect(p.assignedBranchId);
+      /* الثابت مش الجاري: لو الطيار في دعم بفرع تاني والموظف عدّل رقم
+         تليفونه، التعبئة من الجاري كانت هتحفظ فرع الدعم كفرعه الدائم. */
+      fillPilotBranchSelect(p.homeBranchId ?? p.assignedBranchId);
       // بيانات دخول التطبيق
       document.getElementById("pilotUsername").value = p.username || "";
       // الباسورد bcrypt على السيرفر — مش بيتقري. فاضي = من غير تغيير
       document.getElementById("pilotPassword").value = "";
-      document.getElementById("pilotPassword").placeholder = "اتركها فارغة للإبقاء على كلمة المرور الحالية";
+      window.setPilotPassRequired(false);        // تعديل: الباسورد اختيارية
       document.querySelector("#modal-pilot .modal-title").textContent = "✈ تعديل بيانات طيار";
       document.getElementById("submitBtn").textContent = "تحديث الطيار";
       setEditMode(id, 'pilots', 'pilot');
@@ -1417,19 +1528,29 @@
       const now = new Date();
       let from, to;
       if (val === "today") {
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        to   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
+        /* اليوم التجاري: 9ص → 9ص (ملاحظة تدقيق المناورة 2026-09-03) */
+        const bd = window.bizDayKey(now);
+        const r = window._bizRangeOf(bd, bd);
+        from = r.from; to = r.to;
       } else if (val === "week") {
-        to   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
-        from = new Date(to); from.setDate(from.getDate() - 6); from.setHours(0,0,0,0);
+        /* آخر ٧ أيام تجارية — لحد نهاية اليوم التجاري الحالي */
+        const bd = window.bizDayKey(now);
+        const r = window._bizRangeOf(window._bizAddDays(bd, -6), bd);
+        from = r.from; to = r.to;
       } else if (val === "month") {
-        from = new Date(now.getFullYear(), now.getMonth(), 1);
-        to   = new Date(now.getFullYear(), now.getMonth()+1, 0, 23,59,59,999);
+        /* الشهر التجاري: من أول يوم 9ص لأول الشهر الجاي 9ص */
+        const bd = window.bizDayKey(now);
+        const [y, m] = bd.split("-").map(Number);
+        const lastD = new Date(y, m, 0).getDate();
+        const mm = String(m).padStart(2, "0");
+        const r = window._bizRangeOf(`${y}-${mm}-01`, `${y}-${mm}-${String(lastD).padStart(2, "0")}`);
+        from = r.from; to = r.to;
       } else { // custom
         const fromVal = document.getElementById("accFromDate").value;
         const toVal   = document.getElementById("accToDate").value;
-        from = fromVal ? new Date(fromVal + "T00:00:00") : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        to   = toVal   ? new Date(toVal   + "T23:59:59") : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
+        const bd = window.bizDayKey(now);
+        const r = window._bizRangeOf(fromVal || bd, toVal || bd);
+        from = r.from; to = r.to;
       }
       return { from, to };
     }
@@ -1489,7 +1610,30 @@
       return type === "fixed" ? val * parcelCount(order) : (price * val / 100);
     }
 
-    window.renderAccountingPage = function() {
+    /* 💰 override map للفترة كلها بنداء واحد (أدمن/محاسب) — العمولة
+       المكتوبة بالإيد بتغلب النسبة، وoverride على مرتجع = عمولة «من
+       جيب الشركة» (طلب 2026-09-03). بيتقارن pilotId عشان أوردر اتنقل
+       بين طيارين ماياخدش override مكتوب لطيار تاني. */
+    window._loadAllCommOv = async function (from, to) {
+      const map = {};
+      try {
+        const fk = window.cairoDayKey(new Date(from.getTime() - 864e5));
+        const tk = window.cairoDayKey(to);
+        const r = await fetch(`/api/pilot-commission-adjustments?from=${fk}&to=${tk}`, { headers: { Accept: "application/json" } });
+        const d = await r.json();
+        (d.items || []).forEach(a => {
+          if (a.kind === "override" && a.orderId != null)
+            map[String(a.orderId)] = { amount: Number(a.amount) || 0, pilotId: String(a.pilotId) };
+        });
+      } catch (e) { /* دور مايقراش (403) — بالحساب التلقائي */ }
+      return map;
+    };
+    window._ovAmountOf = function (ovMap, o) {
+      const v = ovMap[String(o.id)];
+      return v && v.pilotId === String(o.pilotId) ? v.amount : null;
+    };
+
+    window.renderAccountingPage = async function() {
       const branchesBody  = document.getElementById("accBranchesBody");
       const pilotsBody    = document.getElementById("accPilotsBody");
       const expensesBody  = document.getElementById("accExpensesBody");
@@ -1502,15 +1646,27 @@
       const expenses = window._expensesData || [];
 
       const deliveredInRange = orders.filter(o => o.status === "تم التسليم" && inRange(o.deliveredAt || o.createdAt, from, to));
+      /* 💵 مرتجعات اتدفع توصيلها — إيراد فعلي اتحصّل من الطيار (درس المناورة 2026-09-03) */
+      const fareReturnsInRange = orders.filter(o => o.status === "لم يتم التوصيل"
+        && (o.undeliveredFareBy === "receiver" || o.undeliveredFareBy === "sender")
+        && inRange(o.undeliveredAt || o.createdAt, from, to));
+      /* كل المرتجعات — عشان عمولة «من جيب الشركة» المكتوبة عليها */
+      const returnsInRange = orders.filter(o => o.status === "لم يتم التوصيل"
+        && inRange(o.undeliveredAt || o.createdAt, from, to));
       const expensesInRange  = expenses.filter(e => inRange(e.date ? (e.date + "T12:00:00") : null, from, to));
+      const ovMap = await window._loadAllCommOv(from, to);
 
-      const totalRevenue = deliveredInRange.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+      const totalRevenue = deliveredInRange.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0)
+        + fareReturnsInRange.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
       const totalStorePrepaid = deliveredInRange.reduce((s,o) => s + (Number(o.storePrepaid) || 0), 0);
       const totalExpenses = expensesInRange.reduce((s,e) => s + (Number(e.amount) || 0), 0);
       const totalCommissions = deliveredInRange.reduce((s,o) => {
         const pilot = pilots.find(p => p.id === o.pilotId);
-        return s + pilotCommissionFor(pilot, o);
-      }, 0);
+        const v = window._ovAmountOf(ovMap, o);
+        return s + (v !== null ? v : pilotCommissionFor(pilot, o));
+      }, 0)
+      /* عمولة «من جيب الشركة» على المرتجعات — بمبلغ الـoverride بس */
+      + returnsInRange.reduce((s,o) => { const v = window._ovAmountOf(ovMap, o); return s + (v !== null ? v : 0); }, 0);
 
       // خارج = عدد أوردرات الفروع المسلَّمة في الفترة × 2 ج.م
       const branchOrdersCount = deliveredInRange.filter(o => o.branchId).length;
@@ -1531,7 +1687,9 @@
       } else {
         branchesBody.innerHTML = branches.map((b,i) => {
           const bOrders  = deliveredInRange.filter(o => o.branchId === b.id);
-          const bRevenue = bOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+          const bRevenue = bOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0)
+            /* مرتجعات الفرع المدفوع توصيلها — إيراد فعلي */
+            + fareReturnsInRange.filter(o => o.branchId === b.id).reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
           const bPrepaid = bOrders.reduce((s,o) => s + (Number(o.storePrepaid) || 0), 0);
           const bOutgoing = bOrders.length * 2;   // رسوم تطوير: عدد الأوردرات × 2 ج.م
           const bNet      = bRevenue - bOutgoing;
@@ -1554,8 +1712,13 @@
       } else {
         const rows = pilots.map((p,i) => {
           const pOrders = deliveredInRange.filter(o => o.pilotId === p.id);
-          const pRevenue = pOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
-          const pCommission = pOrders.reduce((s,o) => s + pilotCommissionFor(p, o), 0);
+          const pRevenue = pOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0)
+            + fareReturnsInRange.filter(o => o.pilotId === p.id).reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+          const pCommission = pOrders.reduce((s,o) => {
+            const v = window._ovAmountOf(ovMap, o);
+            return s + (v !== null ? v : pilotCommissionFor(p, o));
+          }, 0)
+          + returnsInRange.filter(o => o.pilotId === p.id).reduce((s,o) => { const v = window._ovAmountOf(ovMap, o); return s + (v !== null ? v : 0); }, 0);
           const typeLabel = (p.commissionType || "percent") === "fixed" ? "ثابتة لكل طلب" : "نسبة %";
           const valLabel  = (p.commissionType || "percent") === "fixed" ? `${ esc(p.commissionValue || 0) } ج.م` : `${ esc(p.commissionValue || 0) }%`;
           return { i, p, pOrders, pParcels: totalParcelsOf(pOrders), pRevenue, pCommission, typeLabel, valLabel };
@@ -1719,6 +1882,9 @@
         const el2 = document.getElementById("pilotUpdateUrl");
         if (el2 && document.activeElement !== el2)
           el2.value = window._settingsData.pilotApp?.updateUrl || "";
+        const el3 = document.getElementById("pilotLatestVersion");
+        if (el3 && document.activeElement !== el3)
+          el3.value = window._settingsData.pilotApp?.latestVersion || "";
         /* محتوى تطبيق الطيار (دعم + أسئلة) — بنملى الحقول من غير ما
            ندهس اللي المدير بيكتبه دلوقتي: لو أي حقل من القسم عليه فوكس،
            أو فيه تعديل لسه ما اتحفظش (الفلاج بيترفع مع أول كتابة)،
@@ -1727,10 +1893,7 @@
           const pc = window._settingsData.pilotAppContent || {};
           const active = document.activeElement?.closest?.("#pilotContentCard");
           if (!active) {
-            const wa = document.getElementById("pilotSupWa");
-            const tl = document.getElementById("pilotSupTel");
-            if (wa) wa.value = pc.support?.whatsapp || "";
-            if (tl) tl.value = pc.support?.phone || "";
+            if (typeof fillPilotNums === "function") fillPilotNums(pc.support || {});
             if (typeof renderPilotFaq === "function")
               renderPilotFaq(Array.isArray(pc.faq) ? pc.faq : []);
           }
@@ -1784,7 +1947,7 @@
       const wrap = document.getElementById("shiftsPeriodInputs");
       if (!wrap) return;
       const now      = new Date();
-      const todayStr = window.cairoDayKey(now);
+      const todayStr = window.bizDayKey(now);   // «اليوم» الافتراضي = اليوم التجاري
       const yearNow  = now.getFullYear();
       const monthNow = String(now.getMonth() + 1).padStart(2, "0");
       if (type === "day") {
@@ -1803,33 +1966,55 @@
       if (window.renderShiftsPage) renderShiftsPage();
     };
 
+    /* ── حدود اليوم التجاري للفلاتر (ملاحظة تدقيق المناورة 2026-09-03) ──
+       «يوم D» = من D الساعة 9ص قاهرة لحد D+1 الساعة 9ص — فوردية بتفتح
+       بعد نص الليل بتفضل باينة في يومها التجاري بدل ما تختفي من فلتر
+       «اليوم». فرق القاهرة بيتحسب بتاريخ اليوم نفسه (+2 شتاء/+3 صيف). */
+    function bizDayStartMs(dateStr) {
+      const probe = new Date(dateStr + "T12:00:00Z");
+      const h = +new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", hour12: false }).format(probe);
+      const off = ((h - 12) + 24) % 24;
+      return Date.parse(dateStr + "T09:00:00Z") - off * 3600e3;
+    }
+    function _addDaysStr(dateStr, n) {
+      const d = new Date(dateStr + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    }
+    function _bizRange(fromStr, toStrInclusive) {
+      return {
+        from: new Date(bizDayStartMs(fromStr)),
+        to:   new Date(bizDayStartMs(_addDaysStr(toStrInclusive, 1)) - 1)
+      };
+    }
+    /* التقارير في بلوك سكريبت تاني — الموديول مقفول عليهم */
+    window.bizDayStartMs = bizDayStartMs;
+    window._bizAddDays = _addDaysStr;
+    window._bizRangeOf = _bizRange;
     function getShiftsDateRange() {
       const type = document.getElementById("shiftsPeriodType")?.value || "day";
       const now  = new Date();
       if (type === "day") {
-        const val = document.getElementById("shiftsDay")?.value;
-        const d = val ? new Date(val + "T00:00:00") : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        return {
-          from: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0),
-          to:   new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
-        };
+        const val = document.getElementById("shiftsDay")?.value || window.bizDayKey(now);
+        return _bizRange(val, val);
       }
       if (type === "month") {
         const val = document.getElementById("shiftsMonth")?.value; // YYYY-MM
         let y = now.getFullYear(), m = now.getMonth();
         if (val) { const [yy, mm] = val.split("-").map(Number); y = yy; m = mm - 1; }
-        return { from: new Date(y, m, 1, 0, 0, 0, 0), to: new Date(y, m + 1, 0, 23, 59, 59, 999) };
+        const first = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+        const lastD = new Date(y, m + 1, 0).getDate();
+        return _bizRange(first, `${y}-${String(m + 1).padStart(2, "0")}-${String(lastD).padStart(2, "0")}`);
       }
       if (type === "year") {
         const val = Number(document.getElementById("shiftsYear")?.value) || now.getFullYear();
-        return { from: new Date(val, 0, 1, 0, 0, 0, 0), to: new Date(val, 11, 31, 23, 59, 59, 999) };
+        return _bizRange(`${val}-01-01`, `${val}-12-31`);
       }
       if (type === "custom") {
         const fromVal = document.getElementById("shiftsFrom")?.value;
         const toVal   = document.getElementById("shiftsTo")?.value;
         return {
-          from: fromVal ? new Date(fromVal + "T00:00:00") : null,
-          to:   toVal   ? new Date(toVal   + "T23:59:59") : null
+          from: fromVal ? new Date(bizDayStartMs(fromVal)) : null,
+          to:   toVal   ? new Date(bizDayStartMs(_addDaysStr(toVal, 1)) - 1) : null
         };
       }
       return { from: null, to: null }; // "all" — بدون فلتر تاريخ، تظهر كل الورديات
@@ -1843,7 +2028,11 @@
     function renderNotOpenedShiftPanel() {
       const box = document.getElementById("notOpenedShiftBox");
       if (!box) return;
-      const pilots = (window._pilotsData || []).filter(p => p.assignedBranchId && !p.pilotStatus);
+      /* 🔴 الفرع الحاكم = الثابت ثم المُعيّن — نفس قاعدة السيرفر
+         (shifts/open بيفتح على home_branch_id الأول). الفحص على المُعيّن
+         بس كان بيخفي الطيار الجديد اللي اتحدد له فرع ثابت وعمره ما دخل
+         وردية (المُعيّن لسه NULL) — حصل فعلًا مع طيارين فرع المدير. */
+      const pilots = (window._pilotsData || []).filter(p => (p.homeBranchId ?? p.assignedBranchId) && !p.pilotStatus);
       const countEl = document.getElementById("notOpenedShiftCount");
       if (countEl) countEl.textContent = pilots.length;
       if (!pilots.length) { box.style.display = "none"; return; }
@@ -1851,7 +2040,7 @@
       const tbody = document.getElementById("notOpenedShiftBody");
       if (!tbody) return;
       tbody.innerHTML = pilots.map((p, i) => {
-        const branch = (window._branchesList || []).find(b => b.id === p.assignedBranchId);
+        const branch = (window._branchesList || []).find(b => b.id === (p.homeBranchId ?? p.assignedBranchId));
         return `
           <tr>
             <td class="idx">${i + 1}</td>
@@ -2027,8 +2216,16 @@
       const tbody = document.getElementById("pilotsBody");
       if (!pilots.length) { tbody.innerHTML = `<tr><td colspan="10" class="empty-row">لا يوجد طيارون مسجّلون بعد</td></tr>`; return; }
       tbody.innerHTML = pilots.map((p, i) => {
-        const branch = (window._branchesList || []).find(b => b.id === p.assignedBranchId);
-        const branchHtml = branch ? `<span style="color:var(--sky);font-size:.8rem">🏢 ${ esc(branch.name) }</span>` : `<span style="color:var(--muted);font-size:.78rem">—</span>`;
+        /* الفرع الثابت هو اللي بيتعرض. ولو الطيار شغّال النهارده في فرع
+           تاني (دعم مؤقت) بتبان سطر تحته — الفرعين مايتخلطوش في خانة واحدة. */
+        const homeId = p.homeBranchId ?? p.assignedBranchId;
+        const branch = (window._branchesList || []).find(b => b.id === homeId);
+        const atNow  = p.assignedBranchId && p.assignedBranchId !== homeId
+          ? (window._branchesList || []).find(b => b.id === p.assignedBranchId) : null;
+        const branchHtml = (branch
+          ? `<span style="color:var(--sky);font-size:.8rem">🏢 ${ esc(branch.name) }</span>`
+          : `<span style="color:var(--muted);font-size:.78rem">—</span>`)
+          + (atNow ? `<div style="color:var(--orange);font-size:.7rem;margin-top:2px">↗ دعم مؤقت: ${ esc(atNow.name) }</div>` : "");
         const statusHtml = p.pilotStatus === "delivering" ? `<span class="status-badge status-delivering">🛵 في التوصيل</span>`
           : p.pilotStatus === "waiting" ? `<span class="status-badge status-pending">⏳ انتظار</span>`
           : p.pilotStatus === "onLeave" ? `<span class="status-badge status-cancelled">🔴 في إذن</span>`
@@ -2043,7 +2240,7 @@
           ? `<span style="color:var(--muted);font-size:.75rem">— لسه ما فتحش</span>`
           : `<span style="font-size:.78rem;font-weight:700;color:${_old ? "var(--red)" : "var(--green)"}">${ esc(_pv) }${_old ? " ⚠️ قديمة" : ""}</span>`;
 
-        const canOpenShift = !p.pilotStatus && p.assignedBranchId;
+        const canOpenShift = !p.pilotStatus && (p.homeBranchId ?? p.assignedBranchId);
         const shiftBtn = canOpenShift
           ? `<button class="add-btn" style="padding:5px 10px;font-size:.75rem" onclick="adminOpenShiftDirect('${ escJs(p.id) }')">▶️ فتح وردية</button>`
           : "";
@@ -2054,7 +2251,7 @@
           : (p.pilotStatus === "waiting" || p.pilotStatus === "delivering")
           ? `<button class="del-btn" style="background:rgba(239,68,68,.13);color:var(--red);border:1px solid var(--red)" onclick="forcePilotLeave('${ escJs(p.id) }','${ escJs(p.name) }')">🛑 إيقاف/إذن</button>`
           : "";
-        return `<tr><td class="idx">${i+1}</td><td><span class="name-badge">${ esc(p.name) }</span></td><td dir="ltr">${ esc(p.phone1) }</td><td dir="ltr">${ esc(p.phone2 || "—") }</td><td>${ esc(p.cardNum) }</td><td>${ esc(p.address) }</td><td>${ esc(p.vehicleNo) }</td><td>${branchHtml}</td><td>${verHtml}</td><td>${statusHtml}</td><td>${shiftBtn}<button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button><button class="del-btn" onclick="deletePilot('${ escJs(p.id) }')">حذف</button>${leaveBtn}</td></tr>`;
+        return `<tr><td class="idx">${i+1}</td><td><span class="name-badge">${ esc(p.name) }</span></td><td dir="ltr">${ esc(p.phone1) }</td><td dir="ltr">${ esc(p.phone2 || "—") }</td><td>${ esc(p.cardNum) }</td><td>${ esc(p.address) }</td><td>${ esc(p.vehicleNo) }</td><td>${branchHtml}</td><td>${verHtml}</td><td>${statusHtml}</td><td>${shiftBtn}<button class="edit-btn" onclick="openEditPilot('${ escJs(p.id) }')">تعديل</button><button class="del-btn" onclick="archivePilot('${ escJs(p.id) }')" title="بينقله للمؤرشفين — بياناته التاريخية بتفضل زي ما هي">أرشفة</button>${leaveBtn}</td></tr>`;
       }).join("");
     }
 
@@ -2096,7 +2293,9 @@
     window.adminOpenShiftDirect = async function(pilotId) {
       const p = (window._pilotsData || []).find(x => x.id === pilotId);
       if (!p) return;
-      if (!p.assignedBranchId) { showToast("لازم الطيار يكون مضافاً لفرع الأول", "error"); return; }
+      /* الفرع الحاكم = الثابت ثم المُعيّن — الفحص على المُعيّن بس كان
+         بيرفض طيار الصفحة عارضة فرعه (الثابت) قدام عين المدير. */
+      if (!(p.homeBranchId ?? p.assignedBranchId)) { showToast("لازم الطيار يكون مضافاً لفرع الأول", "error"); return; }
       if (p.pilotStatus) { showToast("الطيار عنده وردية مفتوحة بالفعل أو في إذن", "error"); return; }
       if (!confirm(`فتح وردية الآن لـ "${p.name}"؟`)) return;
       try {
@@ -2156,13 +2355,14 @@
       if (!p) return;
       window._openShiftSelectedPilotId = pilotId;
       document.getElementById("openShiftPilotSelect").value = pilotId;
-      const branch = (window._branchesList || []).find(b => b.id === p.assignedBranchId);
+      // الفرع الحاكم = الثابت ثم المُعيّن — نفس قاعدة السيرفر
+      const branch = (window._branchesList || []).find(b => b.id === (p.homeBranchId ?? p.assignedBranchId));
       document.getElementById("openShiftPilotSearch").value = p.name + (branch ? " — " + branch.name : " — بدون فرع");
       document.getElementById("openShiftPilotDropdown").style.display = "none";
 
       const branchWrap = document.getElementById("openShiftBranchWrap");
       const branchSel  = document.getElementById("openShiftBranchSelect");
-      if (!p.assignedBranchId) {
+      if (!(p.homeBranchId ?? p.assignedBranchId)) {
         branchSel.innerHTML = `<option value="">— اختر فرعاً —</option>` +
           (window._branchesList || []).map(b => `<option value="${ esc(b.id) }">${ esc(b.name) }</option>`).join("");
         branchWrap.style.display = "block";
@@ -2182,7 +2382,8 @@
       if (!pilotId) { showToast("اختر طياراً أولاً", "error"); return; }
       const p = (window._pilotsData || []).find(x => x.id === pilotId);
       if (!p) return;
-      let branchId = p.assignedBranchId;
+      // الثابت الأول — السيرفر أصلًا بيحكم بيه، ودي بس عشان القايمة المنسدلة
+      let branchId = p.homeBranchId ?? p.assignedBranchId;
       if (!branchId) {
         branchId = document.getElementById("openShiftBranchSelect")?.value || "";
         if (!branchId) { showToast("هذا الطيار بدون فرع — اختر الفرع اللي هيفتح فيه الوردية", "error"); return; }
@@ -2197,9 +2398,10 @@
 
     /* ── Pilots Panel (in orders page) ────────────────────────────────── */
     function renderPilotsPanel(pilots) {
-      // تقسيم الطيارين: في فرع (assignedBranchId موجود) — دول بس اللي
-      // ينفع يتضافوا للوحة، الحرّ (بدون فرع) اتشال لأنه مالوش فرع يتفتح فيه
-      const inBranch   = pilots.filter(p => p.assignedBranchId);
+      // تقسيم الطيارين: في فرع (ثابت أو مُعيّن — الثابت هو الحاكم في
+      // shifts/open) — دول اللي ينفع يتضافوا للوحة، والحرّ (بدون أي فرع)
+      // اتشال لأنه مالوش فرع يتفتح فيه
+      const inBranch   = pilots.filter(p => (p.homeBranchId ?? p.assignedBranchId));
       const waiting    = pilots.filter(p => p.pilotStatus === "waiting")
         .sort((a,b) => (a.queueNo||999) - (b.queueNo||999));
       const delivering = pilots.filter(p => p.pilotStatus === "delivering");
@@ -2295,7 +2497,7 @@
         const p = window._pilotsData.find(x => x.id === pilotId);
         if (!p) { showToast("تعذّر العثور على الطيار", "error"); return; }
         // دخول الدور + فتح/نقل الوردية — POST /api/shifts/open في معاملة واحدة
-        await api.post("/api/shifts/open", { pilotId, branchId: p.assignedBranchId || null });
+        await api.post("/api/shifts/open", { pilotId, branchId: (p.homeBranchId ?? p.assignedBranchId) || null });
         showToast("تمّ إضافة الطيار للوحة وفتح ورديته ✓", "success");
         sel.value = "";
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
@@ -2336,6 +2538,18 @@
               </label>
             </div>
             <div class="_undelReasonWrap" id="_undelReasonWrap_${idx}" style="display:none;margin-top:8px">
+            <div style="margin-top:8px;font-size:.75rem;color:var(--muted);font-weight:700">💵 مين دفع تمن التوصيل للطيار؟</div>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:5px">
+              <label style="display:flex;align-items:center;gap:7px;font-size:.79rem;cursor:pointer;padding:5px 7px;border:1px solid var(--border);border-radius:7px">
+                <input type="radio" name="_retFare_${idx}" value="none" checked style="accent-color:var(--orange)" /> 🚪 محدش استقبل — من غير أي تحصيل
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;font-size:.79rem;cursor:pointer;padding:5px 7px;border:1px solid rgba(34,197,94,.35);border-radius:7px">
+                <input type="radio" name="_retFare_${idx}" value="receiver" style="accent-color:var(--green)" /> 💵 المستلم رفض الأوردر و<b>دفع التوصيل</b>
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;font-size:.79rem;cursor:pointer;padding:5px 7px;border:1px solid rgba(34,197,94,.35);border-radius:7px">
+                <input type="radio" name="_retFare_${idx}" value="sender" style="accent-color:var(--green)" /> 🏪 المحل / الراسل <b>دفع التوصيل</b>
+              </label>
+            </div>
               <input type="text" id="_undelReason_${idx}" placeholder="سبب عدم التوصيل (مثال: العميل لم يردّ)" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:var(--font)" />
             </div>
           </div>`;
@@ -2427,7 +2641,11 @@
               return {
                 orderId: o.id,
                 choice,
-                reason: choice === "undelivered" ? ((reasonInput?.value || "").trim() || "—") : ""
+                reason: choice === "undelivered" ? ((reasonInput?.value || "").trim() || "—") : "",
+                // 💵 مين دفع توصيل المرتجع — السيرفر بيحسبه في «المتوقع من الطيار»
+                fareBy: choice === "undelivered"
+                  ? (box.querySelector(`input[name="_retFare_${idx}"]:checked`)?.value || "none")
+                  : undefined
               };
             });
             const deliveredParcels = activeOrders
@@ -2772,7 +2990,7 @@
       document.getElementById("branchCode").value    = b.code;
       document.getElementById("branchPhone").value   = b.phone;
       document.getElementById("branchManager").value = b.manager || "";
-      window.renderAddressWidget("branchAddrWidget", { value: b.address || "" });
+      window.renderAddressWidget("branchAddrWidget", { edit: true, value: b.address || "" });
       /* توافق مع البيانات القديمة: إذا كان الفرع يحتوي على area قديمة فقط */
       const areasToLoad = b.areas && b.areas.length ? b.areas : (b.area ? [b.area] : [""]);
       window.loadAreasIntoForm(areasToLoad);
@@ -2880,6 +3098,19 @@
     };
 
     /* ── جمع البيانات من النموذج ─────────────────────────────────────────── */
+    /* اسم الفرع المختار — من `data-name` مش من نص الـ option.
+       قبل كده كان بيتقرا بـ`text.split(' –')[0]` لأن النص كان مكتوب فيه
+       اسم الفرع + كل مناطقه. المناطق اتشالت من القوايم، والقراءة من
+       سمة مستقلة بتخلّي اسم الفرع مايتأثرش بأي علامة بتتحط في النص
+       (زي «⏸️ (موقوف)») ولا بشرطة جوه اسم الفرع نفسه. */
+    function _branchNameOf(sel) {
+      const opt = sel && sel.options ? sel.options[sel.selectedIndex] : null;
+      if (!opt) return "";
+      if (opt.dataset && opt.dataset.name) return opt.dataset.name;
+      const byId = (window._branchesList || []).find(b => b.id === sel.value);
+      return byId ? byId.name : "";
+    }
+
     function _collectZones(deliveryBranchId, deliveryBranchName) {
       const sourceType = document.querySelector('input[name="zoneSourceType"]:checked')?.value;
       if (sourceType === 'manual') {
@@ -2892,7 +3123,7 @@
       /* من فرع */
       const srcSel         = document.getElementById("zoneSourceBranch");
       const sourceBranchId = srcSel.value;
-      const sourceBranchName = srcSel.options[srcSel.selectedIndex]?.text.split(' –')[0].trim() || "";
+      const sourceBranchName = _branchNameOf(srcSel);
       if (!sourceBranchId) { showToast("يرجى اختيار الفرع المصدر", "error"); return null; }
       const checked = Array.from(document.querySelectorAll(".zone-area-cb:checked"));
       if (!checked.length) { showToast("يرجى اختيار منطقة واحدة على الأقل", "error"); return null; }
@@ -2917,24 +3148,61 @@
     window.addZone = async function () {
       const dSel             = document.getElementById("zoneDeliveryBranch");
       const deliveryBranchId = dSel.value;
-      const deliveryBranchName = dSel.options[dSel.selectedIndex]?.text.split(' –')[0].trim() || "";
+      const deliveryBranchName = _branchNameOf(dSel);
       if (!deliveryBranchId) { showToast("يرجى اختيار الفرع المسؤول عن التوصيل", "error"); return; }
       const zones = _collectZones(deliveryBranchId, deliveryBranchName);
       if (!zones) return;
       const btn = document.getElementById("submitZoneBtn");
       btn.disabled = true; btn.textContent = "جاري الحفظ…";
+      /* بيتحدد جوه فرع الإضافة: نجاح جزئي بيقفل، وفشل حقيقي بيسيب المودال
+         مفتوح. فرع التعديل (PUT) بيفضل بيقفل زي ما كان. */
+      let zoneBatchDone = true;
       try {
         if (window._editState.active && window._editState.type === 'zone') {
           await api.put("/api/zones/" + window._editState.id, zones[0]);
           showToast("تمّ تحديث بيانات المنطقة ✓", "success");
         } else {
-          for (const z of zones) await api.post("/api/zones", z);
-          showToast(zones.length > 1 ? `تمّ إضافة ${ esc(zones.length) } مناطق بنجاح ✓` : "تمّ إضافة المنطقة بنجاح ✓", "success");
+          /* 🔴 كل منطقة لوحدها. كان `for (…) await api.post(…)` جوه الـtry
+             اللي بره — أول منطقة متكوّدة قبل كده كانت بتوقف الحلقة فالباقي
+             مايتبعتش، واللي اتبعت قبلها بتفضل محفوظة. المدير يختار ٢٠
+             وماتتكوّدش غير ٥ ويشوف «خطأ» فيفتكر إن مافيش حاجة اتحفظت.
+             (بلاغ صاحب النظام 2026-09-01، أول يوم شغل.)
+             المنطقة المتكرّرة **لازم** تترفض — القيد صح — بس مالهاش حق
+             توقف الباقي. ومابنحدّثش سعر الموجودة: الدوس بصمت على سعر
+             متحطّ = فلوس غلط على العميل. */
+          const done = [], dup = [], failed = [];
+          for (const z of zones) {
+            try { await api.post("/api/zones", z); done.push(z.areaName); }
+            catch (e) {
+              const m = (e && e.message) || "";
+              /* كشف مزدوج: الحالة لو اتضبطت يومًا، والنص هو الشغّال دلوقتي.
+                 لو الاتنين فشلوا بتتحسب «فشلت» والدفعة بتكمّل برضه. */
+              if ((e && e.status === 409) || /موجودة قبل كده|Duplicate entry|1062/.test(m)) dup.push(z.areaName);
+              else failed.push(z.areaName);
+            }
+          }
+          const bits = [];
+          if (done.length)   bits.push(`اتكوّدت ${done.length}`);
+          if (dup.length)    bits.push(`${dup.length} متكوّدة قبل كده`);
+          if (failed.length) bits.push(`${failed.length} فشلت`);
+          const summary = bits.join(" · ");
+          if (failed.length) {
+            /* فشل حقيقي (مش تكرار) — نسيب المودال مفتوح عشان يقدر يعيد */
+            showToast(`⚠️ ${summary} — ${failed.slice(0, 3).join("، ")}${failed.length > 3 ? "…" : ""}`, "error");
+            zoneBatchDone = false;
+          } else if (!done.length) {
+            showToast(`كل المناطق المختارة (${dup.length}) متكوّدة قبل كده لفرع التوصيل ده`, "error");
+            zoneBatchDone = false;
+          } else {
+            showToast(`تمّ ✓ ${summary}`, "success");
+          }
         }
-        document.getElementById("addZoneForm").reset();
-        _resetZoneFormUI();
-        resetEditState();
-        closeModal("zone");
+        if (zoneBatchDone) {
+          document.getElementById("addZoneForm").reset();
+          _resetZoneFormUI();
+          resetEditState();
+          closeModal("zone");
+        }
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
       finally { btn.disabled = false; btn.textContent = window._editState.active ? "تحديث المنطقة" : "حفظ المنطقة"; }
     };
@@ -2997,7 +3265,7 @@
 
     function _fillBranchSelect(sel, selectedId) {
       sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-        window._branchesList.map(b => `<option value="${ esc(b.id) }" ${ esc(b.id === selectedId ? 'selected' : '') }>${ esc(b.name) } – ${ esc(b.areas?.join('، ') || b.area || '') }</option>`).join("");
+        window._branchesList.map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }" ${ esc(b.id === selectedId ? 'selected' : '') }>${ esc(b.name) }</option>`).join("");
     }
 
     /* ── جدول المناطق ───────────────────────────────────────────────────── */
@@ -3209,7 +3477,7 @@
       // الفرع الموقوف بيتعلّم عليه — الموظف هنا بيختار بإيده فمابنحوّلش
       // من ورا ظهره، بس لازم يشوف إنه موقوف قبل ما يختاره
       sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-        window._branchesList.map(b => `<option value="${ esc(b.id) }">${ esc(b.paused ? "⏸️ (موقوف) " : "") }${ esc(b.name) } – ${ esc(b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '')) }</option>`).join("");
+        window._branchesList.map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.paused ? "⏸️ (موقوف) " : "") }${ esc(b.name) }</option>`).join("");
       if (cur) sel.value = cur;
     }
 
@@ -3275,6 +3543,8 @@
           <div class="form-group"><label>هاتف جهة التسليم</label><input id="dPhone-${n}" type="tel" dir="ltr" readonly /></div>
           <div class="form-group"><label>هاتف 2</label><input id="dPhone2-${n}" type="tel" dir="ltr" readonly /></div>
           <div class="form-group full"><label>عنوان التسليم</label><input id="dAddr-${n}" type="text" readonly /></div>
+          <!-- 📍 لوكيشن بالإحداثيات (طلب 2026-09-03) — من غيره النقطة كانت «بدون موقع» -->
+          <div class="form-group full">${ GeoLoc.fieldHtml(`dLoc-${n}`, "") }</div>
           <div class="form-group full" id="recvEditBtnRow-${n}" style="display:none">
             <button type="button" onclick="openInlineEdit('receiver',${n})" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">✏️ تعديل بيانات هذا العميل</button>
           </div>
@@ -3383,18 +3653,27 @@
         }
       }
       if (type === "zone") {
-        const branchOpts = `<option value="">— اختر الفرع —</option>` +
-          window._branchesList.map(b => `<option value="${ esc(b.id) }">${ esc(b.name) } – ${ esc(b.areas?.join('، ') || b.area || '') }</option>`).join("");
-        const dSel = document.getElementById("zoneDeliveryBranch");
-        const sSel = document.getElementById("zoneSourceBranch");
-        if (dSel) dSel.innerHTML = branchOpts;
-        if (sSel) sSel.innerHTML = branchOpts;
+        /* 🔴 الحارس ده هو اللي بيخلّي «تعديل منطقة» يشتغل أصلًا.
+           `openEditZone` بتملّي السيلكتين بالفرع الحالي (_fillBranchSelect
+           بتحط selected) وبعدين بتنده openModal — ومن غير الشرط ده كان
+           السطرين تحت بيدوسوا على الاختيار ويرجّعوه «— اختر الفرع —»،
+           فـ`addZone` تقع عند فحص deliveryBranchId وتطلع «يرجى اختيار
+           الفرع» ومايحصلش تعديل. يعني مافيش طريق شغّال لتصحيح سعر منطقة
+           — وده فلوس على العميل. نفس حارس فرعي sender و receiver فوق. */
+        if (!window._editState?.active) {
+          const branchOpts = `<option value="">— اختر الفرع —</option>` +
+            window._branchesList.map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) }</option>`).join("");
+          const dSel = document.getElementById("zoneDeliveryBranch");
+          const sSel = document.getElementById("zoneSourceBranch");
+          if (dSel) dSel.innerHTML = branchOpts;
+          if (sSel) sSel.innerHTML = branchOpts;
+        }
       }
       if (type === "user") {
         const sel = document.getElementById("newUserBranch");
         if (sel) {
           sel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-            window._branchesList.map(b => `<option value="${ esc(b.id) }">${ esc(b.name) } (${ esc(b.areas && b.areas.length ? b.areas.join('، ') : (b.area || '')) })</option>`).join("");
+            window._branchesList.map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) }</option>`).join("");
         }
       }
       if (type === "order") {
@@ -3430,11 +3709,10 @@
       const senderId    = senderState?.selectedId || "";
       const senderName  = senderState?.selectedData?.name || document.getElementById("senderSearchInput").value.trim();
       const branchId    = branchSel.value;
-      // نص الـ option مكتوب فيه اسم الفرع + مناطقه ("حي الجامعة – احمد ماهر،
-      // الترعه")، فلو أخدناه زي ما هو بيتسجّل في الأوردر اسم فرع ملوّث بيبان
-      // في الفرع والطيار والتقارير. الاسم الصح من قائمة الفروع نفسها.
+      // الاسم من قائمة الفروع نفسها — نص الـ option فيه علامات زي «⏸️ (موقوف)»
+      // ولو اتسجّل زي ما هو بيبان اسم فرع ملوّث في الفرع والطيار والتقارير.
       const branchName  = window._branchesList?.find(b => b.id === branchId)?.name
-                          || (branchSel.options[branchSel.selectedIndex]?.text || "").split(" – ")[0];
+                          || _branchNameOf(branchSel);
 
       if (!senderId && !senderName) { showToast("يرجى اختيار أو إدخال العميل استلام", "error"); return; }
       if (!branchId) { showToast("يرجى اختيار الفرع المسؤول", "error"); return; }
@@ -3468,7 +3746,11 @@
         const dPrepaid = parseFloat(document.getElementById(`dPrepaid-${n}`)?.value) || 0;
         if (!recvName) { showToast("يرجى إدخال اسم جهة التسليم لكل طرد", "error"); return; }
         if (!zoneId)   { showToast("يرجى اختيار المنطقة لكل طرد", "error"); return; }
+        /* 📍 لوكيشن اختياري — بس لو مكتوب لازم يكون مفهوم */
+        const dLoc = GeoLoc.read(`dLoc-${n}`);
+        if (!dLoc.ok) { showToast(`لوكيشن الطرد #${n} مش مفهوم — الصق إحداثيات زي 31.0187, 31.2283 أو لينك خرائط جوجل`, "error"); return; }
         deliveries.push({
+          lat: dLoc.geo ? dLoc.geo.lat : null, lng: dLoc.geo ? dLoc.geo.lng : null,
           // parcelNo = رقم ثابت للطرد جوّه الطلب، منه بيتبني رقم الجزء المفصول
           parcelNo      : deliveries.length + 1,
           receiverId    : recvId || null,
@@ -3485,10 +3767,18 @@
 
       const btn = document.getElementById("submitOrderBtn");
       btn.disabled = true; btn.textContent = "جاري الحفظ…";
+      /* 🔁 مفتاح مانع التكرار — ثابت لحد ما حفظ ينجح، فإعادة المحاولة بعد
+         خطأ بترجّع الأوردر المتسجّل بدل نسخة جديدة (درس 2026-09-02). */
+      if (!window._orderClientRef) {
+        window._orderClientRef = (crypto.randomUUID && crypto.randomUUID())
+          || (Date.now().toString(36) + "-" + Math.random().toString(36).slice(2));
+      }
+      let res;
       try {
         // الترقيم اليومي الذري (HAL-260804-001) وإنشاء المُرسِل الجديد لو لزم —
         // كله جوه POST /api/orders في معاملة SQL واحدة على السيرفر
-        const res = await api.post("/api/orders", {
+        res = await api.post("/api/orders", {
+          clientRef: window._orderClientRef,
           senderId: finalSenderId || null,
           senderName: finalSenderName,
           senderPhone  : document.getElementById("orderSenderPhone").value,
@@ -3499,8 +3789,22 @@
           storePrepaidNote  : storePrepaidNote || "",
           source     : "admin"
         });
-        const orderNum = res.order?.orderNum || "";
-        showToast(`تمّ حفظ الطلب ${orderNum} بنجاح ✓`, "success");
+      } catch(e) {
+        showToast("خطأ أثناء الحفظ: " + e.message, "error");
+        btn.disabled = false; btn.textContent = "💾 حفظ الطلب";
+        return;
+      }
+      /* 🔒 من هنا الأوردر متسجّل — أي عثرة شاشة ماينفعش تتقال «فشل حفظ». */
+      window._orderClientRef = null;
+      try {
+        /* كل طرد بقى أوردر بذاته (قرار 2026-09-01) — السيرفر بيفرّق تلقائيًا
+           وبيرجّع `orders` بكل الناتج، فالتوست بيوري الموظف كل الأرقام. */
+        const _created = (res.orders || (res.order ? [res.order] : [])).map(o => o?.orderNum).filter(Boolean);
+        showToast(res.duplicate
+          ? `الأوردر ده كان اتسجّل خلاص من شوية (${_created.join("، ")}) ✓ — مافيش نسخة جديدة اتعملت`
+          : _created.length > 1
+            ? `اتسجّلوا ${_created.length} أوردرات — كل طرد أوردر بذاته: ${_created.join("، ")} ✓`
+            : `تمّ حفظ الطلب ${_created[0] || ""} بنجاح ✓`, "success");
         document.getElementById("addOrderForm").reset();
         document.getElementById("orderStorePrepaidNote").value = "";
         document.getElementById("deliveriesContainer").innerHTML = "";
@@ -3508,8 +3812,11 @@
         window._deliveryCount = 0;
         window._smartSearchState['senderSearchInput'] = { selectedId: null, selectedData: null };
         closeModal("order");
-      } catch(e) { showToast("خطأ أثناء الحفظ: " + e.message, "error"); }
-      finally { btn.disabled = false; btn.textContent = "💾 حفظ الطلب"; }
+      } catch(e) {
+        console.error("خطأ شاشة بعد حفظ ناجح:", e);
+        showToast("الأوردر اتسجّل بنجاح ✓ — بس الشاشة اتعثرت بعد الحفظ، اعمل تحديث للصفحة قبل أوردر جديد", "error");
+      }
+      btn.disabled = false; btn.textContent = "💾 حفظ الطلب";
     };
 
     /* TODO-API: DELETE /api/orders/{id} لسه ما اتبنيش — الحذف النهائي معطّل
@@ -3519,6 +3826,30 @@
     };
 
     // إلغاء طلب من قبل الإدارة — يُنقل الطلب إلى صفحة "الطلبات الملغاة" بدل حذفه نهائياً
+
+    /* ══ تأجيل الأوردر ══
+       السيرفر بيحفظ الحالة السابقة في prev_status وبيرجّعها عند فك
+       التأجيل، فمابنبعتش الحالة من هنا. متاح للأوردر غير المحمّل بس
+       (قيد التنفيذ · لم يتم التوصيل) — وأي حاجة تانية بيردّ 409. */
+    window.postponeOrder = async function(orderId) {
+      const o = (window._ordersData || []).find(x => x.id === orderId);
+      if (!confirm("تأجيل الطلب " + (o?.orderNum || "") + "؟\n" +
+                   "هيفضل في الطلبات النشطة بحالة «مؤجل» لحد ما تفك التأجيل.")) return;
+      try {
+        await api.post(`/api/orders/${orderId}/postpone`, {});
+        showToast("تمّ تأجيل الطلب ✓", "success");
+        /* الجدول بيتحدّث لوحده: السيرفر بيعمل broadcastOrder واللوحة مشتركة في البث. */
+      } catch (e) { showToast("خطأ أثناء التأجيل: " + e.message, "error"); }
+    };
+
+    /* ══ فك التأجيل ══ — السيرفر بيرجّع الأوردر لحالته السابقة لوحده */
+    window.unpostponeOrder = async function(orderId) {
+      try {
+        await api.post(`/api/orders/${orderId}/unpostpone`, {});
+        showToast("تمّ فك التأجيل ✓ — رجع لحالته السابقة", "success");
+      } catch (e) { showToast("خطأ أثناء فك التأجيل: " + e.message, "error"); }
+    };
+
     window.cancelOrder = async function (id) {
       const reason = prompt("يرجى كتابة سبب إلغاء هذا الطلب:");
       if (reason === null) return; // المستخدم ضغط إلغاء
@@ -3555,6 +3886,29 @@
     /* ═══════════════════════════════════════════════════════════════
        MARK ORDER AS NOT DELIVERED (لم يتم التوصيل — رجع الطيار بالطلب)
     ═══════════════════════════════════════════════════════════════ */
+    /* 💵 اختيار «مين دفع التوصيل؟» للمرتجع (طلب صاحب النظام 2026-09-02) —
+       بترجع 'receiver' | 'sender' | 'none' أو null لو اتلغى. المدفوع
+       (receiver/sender) بيدخل «المتوقع من الطيار» في التسوية زي أوردر
+       متسلّم — عشان الحسابات تبقى مظبوطة. */
+    window.askUndeliverFare = function (title, sub) {
+      return new Promise(resolve => {
+        const ov = document.createElement("div");
+        ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:10001;padding:16px";
+        const btn = (v, txt, green) => `<button data-fare="${v}" style="width:100%;text-align:right;background:var(--card);border:1px solid ${green ? "rgba(34,197,94,.4)" : "var(--border)"};color:var(--text);padding:11px 13px;border-radius:9px;cursor:pointer;font-size:.86rem;font-weight:700;margin-bottom:8px">${txt}</button>`;
+        ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 24px;max-width:440px;width:100%">
+          <div style="font-weight:800;margin-bottom:4px">${title}</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px">${sub}</div>
+          ${btn("receiver", "💵 المستلم رفض الأوردر و<b>دفع التوصيل</b>", true)}
+          ${btn("sender", "🏪 المحل / الراسل <b>دفع التوصيل</b>", true)}
+          ${btn("none", "🚪 محدش استقبل — من غير أي تحصيل")}
+          <button data-fare="" style="width:100%;background:none;border:none;color:var(--muted);padding:8px;cursor:pointer">إلغاء</button>
+        </div>`;
+        ov.querySelectorAll("[data-fare]").forEach(b =>
+          b.onclick = () => { ov.remove(); resolve(b.dataset.fare || null); });
+        document.body.appendChild(ov);
+      });
+    };
+
     window.markOrderNotDelivered = async function(orderId, pilotId) {
       const order = (window._ordersData || []).find(o => o.id === orderId);
       if (!order) return;
@@ -3562,11 +3916,15 @@
 
       const reason = prompt(`سبب عدم التوصيل لطلب ${order.orderNum}${pilot ? ' — ' + pilot.name : ''}:\n(مثال: العميل لم يردّ / العنوان غير صحيح / تم رفض الطلب)`);
       if (reason === null) return;
-      if (!confirm(`تأكيد: لم يتم توصيل الطلب ${order.orderNum} وسيعود الطيار${pilot ? ' (' + pilot.name + ')' : ''} بدون تحصيل أي مبلغ. هل أنت متأكد؟`)) return;
+      /* المودال ده هو التأكيد — واختيار «دفع التوصيل» بيدخل الفلوس حسابات الطيار */
+      const fareBy = await askUndeliverFare(
+        `↩️ عدم توصيل ${esc(order.orderNum || "")} — مين دفع التوصيل؟`,
+        `تمن التوصيل ${esc(order.totalDeliveryPrice || 0)} ج.م — لو اتدفع للطيار هيتحسب عليه في التسوية.`);
+      if (fareBy === null) return;
 
       try {
         // السيرفر بيسجّل عدم التوصيل وبيرجّع الطيار للانتظار لو ده آخر أوردر معاه
-        await api.post(`/api/orders/${orderId}/undeliver`, { reason: reason || "—" });
+        await api.post(`/api/orders/${orderId}/undeliver`, { reason: reason || "—", fareBy });
         if (pilotId) {
           const remaining = (window._ordersData || []).filter(o => o.pilotId === pilotId && o.status === "جاري التوصيل" && o.id !== orderId);
           if (!remaining.length) showToast("تمّ تسجيل عدم التوصيل ✓ الطيار عاد للانتظار", "success");
@@ -3955,7 +4313,7 @@
       const sel = document.getElementById("transferOrderBranch");
       sel.innerHTML = `<option value="">— اختر الفرع الصحيح —</option>` +
         branches.filter(b => b.id !== o.branchId)
-          .map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) } — ${ esc(b.areas && b.areas.length ? b.areas.join('، ') : (b.area || "")) }</option>`).join("");
+          .map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) }</option>`).join("");
       document.getElementById("modal-transfer-order").classList.add("open");
     };
 
@@ -4019,8 +4377,8 @@
               <span class="od-info-label">العنوان</span>
               <span class="od-info-val">📍 ${ esc(p.address || "—") }</span>
             </div>
-            ${p.branchName ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">الفرع الحالي</span><span class="od-info-val">${ esc(p.branchName) }</span></div>` : ""}
-            ${p.pilotStatus ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">الحالة</span><span class="od-info-val" style="color:var(--sky)">${ esc(p.pilotStatus === "waiting" ? "⏳ في الانتظار" : p.pilotStatus === "delivering" ? "🛵 جاري التوصيل" : p.pilotStatus) }</span></div>` : ""}
+            ${p.assignedBranchName ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">الفرع الحالي</span><span class="od-info-val">${ esc(p.assignedBranchName) }</span></div>` : ""}
+            ${p.pilotStatus ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">الحالة</span><span class="od-info-val" style="color:var(--sky)">${ esc(p.pilotStatus === "waiting" ? "⏳ في الانتظار" : p.pilotStatus === "delivering" ? "🛵 جاري التوصيل" : p.pilotStatus === "onLeave" ? "🔴 في إذن" : "غير نشط") }</span></div>` : ""}
           </div>
         </div>`;
       document.body.appendChild(box);
@@ -4070,6 +4428,7 @@
             <span class="od-info-label">العنوان</span>
             <span class="od-info-val">📍 ${ esc(d.address || "—") }</span>
           </div>
+          ${ (d.lat && d.lng) ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">لوكيشن العميل</span><span class="od-info-val">${ GeoLoc.actionsHtml(d.lat, d.lng) }</span></div>` : "" }
           ${(d.images && d.images.length) ? `
           <div class="od-info-block" style="margin-top:8px;display:block">
             <span class="od-info-label" style="display:block;margin-bottom:6px">📷 صور الإيصال / العنوان</span>
@@ -4083,7 +4442,7 @@
             <span>سعر التوصيل</span>
             <span class="od-price-val">${ esc(d.zonePrice || 0) } ج.م</span>
           </div>
-          ${(d.note || d.parcelNote) ? `<div class="od-note-row">📝 ${ esc(d.note || d.parcelNote) }</div>` : ""}
+          ${((d.note || d.parcelNote) && (d.note || d.parcelNote) !== o.notes) ? `<div class="od-note-row">📝 ${ esc(d.note || d.parcelNote) }</div>` : ""}
         </div>`).join("");
       const box = document.createElement("div");
       box.className = "od-overlay";
@@ -4173,7 +4532,11 @@
                 if (o.deliveredAt) {
                   stages.push({ icon:"✅", label:"تم التسليم", time:o.deliveredAt, color:"34,197,94" });
                 } else if (o.undeliveredAt) {
-                  stages.push({ icon:"↩️", label:"لم يتم التوصيل", time:o.undeliveredAt, color:"239,68,68", note:o.undeliveredReason });
+                  stages.push({ icon:"↩️", label:"لم يتم التوصيل", time:o.undeliveredAt, color:"239,68,68",
+                    note: (o.undeliveredReason || "") + (
+                      o.undeliveredFareBy === "receiver" ? " · 💵 المستلم دفع التوصيل"
+                      : o.undeliveredFareBy === "sender" ? " · 🏪 المحل دفع التوصيل"
+                      : o.undeliveredFareBy === "none" ? " · من غير تحصيل" : "") });
                 } else if (o.tripStartedAt) {
                   liveRow = `
                     <tr style="border-top:1px solid var(--border)">
@@ -4308,6 +4671,7 @@
               ${phoneBlock(o.senderPhone, o.senderPhone2)}
             </div>
             ${o.senderAddress ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">العنوان</span><span class="od-info-val">📍 ${ esc(o.senderAddress) }</span></div>` : ""}
+            ${(o.senderLat && o.senderLng) ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">لوكيشن المرسل</span><span class="od-info-val">${ GeoLoc.actionsHtml(o.senderLat, o.senderLng) }</span></div>` : ""}
           </div>
           <div class="od-card">
             <div class="od-card-title">📦 جهات التسليم (${ esc(parcels.length) } طرد)</div>
@@ -4613,7 +4977,10 @@
       window._ordersUiSig = sig;
 
       const active    = list.filter(o => o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل");
-      const pending   = list.filter(o => o.status === "قيد التنفيذ");
+      /* «مؤجل» بيتعرض مع «قيد التنفيذ»: نفس المرحلة بس متوقّفة مؤقتًا.
+         باقي الجداول بتفلتر حالات تانية، فلو مابانش هنا مايبقاش في أي
+         جدول — وفك التأجيل مايبقاش ليه باب. */
+      const pending   = list.filter(o => o.status === "قيد التنفيذ" || o.status === "مؤجل");
       const delivering = list.filter(o => o.status === "جاري التوصيل");
       const delivered = list.filter(o => o.status === "تم التسليم");
       const cancelled = list.filter(o => o.status === "ملغي");
@@ -4664,11 +5031,16 @@
             <td><span class="status-badge status-pending">⏳ ${ esc(o.status) }</span></td>
             <td><span class="order-timer" id="otimer-${ esc(o.id) }">${formatElapsed(o.statusSince)}</span></td>
             <td style="font-size:.75rem;color:var(--muted)">${ esc(new Date(o.createdAt).toLocaleDateString("ar-EG")) }</td>
-            ${o.notes ? `<td style="font-size:.78rem;color:var(--orange);max-width:110px;white-space:normal">📝 ${ esc(o.notes) }</td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
+            ${o.notes ? `<td class="note-cell" title="اضغط لعرض الملاحظة كاملة" onclick="this.classList.toggle('open')"><div class="note-clamp">📝 ${ esc(o.notes) }</div></td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
             <td>
               <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
-              <button class="assign-btn" onclick="assignPilotToOrder('${ escJs(o.id) }')">🛵 تحميل</button>
+              ${o.status === "مؤجل"
+                /* المؤجل: فك التأجيل بس — التحميل والنقل بيرجّعوا 409 وهو
+                   في الحالة دي، فمابنعرضهمش. */
+                ? `<button class="assign-btn" style="background:rgba(34,197,94,.15);color:var(--green);border:1px solid var(--green)" onclick="unpostponeOrder('${ escJs(o.id) }')">▶️ فك التأجيل</button>`
+                : `<button class="assign-btn" onclick="assignPilotToOrder('${ escJs(o.id) }')">🛵 تحميل</button>
               <button class="del-btn" style="background:rgba(249,115,22,.15);color:var(--orange);border:1px solid var(--orange)" onclick="openTransferOrderModal('${ escJs(o.id) }')">🔁 نقل لفرع آخر</button>
+              <button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>`}
               <button class="del-btn" style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red)" onclick="cancelOrder('${ escJs(o.id) }')">❌ إلغاء</button>
               <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>
             </td>
@@ -4713,10 +5085,11 @@
               </td>
               <td><span class="order-timer" id="otimer-${ esc(o.id) }" style="${isOrderOverdue(o) ? 'color:var(--red);font-weight:800' : ''}">${formatElapsed(o.statusSince)}</span></td>
               <td style="font-size:.75rem;color:var(--muted)">${ esc(new Date(o.createdAt).toLocaleDateString("ar-EG")) }</td>
-              ${o.notes ? `<td style="font-size:.78rem;color:var(--orange);max-width:110px;white-space:normal">📝 ${ esc(o.notes) }</td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
+              ${o.notes ? `<td class="note-cell" title="اضغط لعرض الملاحظة كاملة" onclick="this.classList.toggle('open')"><div class="note-clamp">📝 ${ esc(o.notes) }</div></td>` : `<td style="width:0;padding:0;border:none;overflow:hidden"></td>`}
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
                 <button class="transfer-btn" style="background:rgba(249,115,22,.15);color:var(--orange);border:1px solid var(--orange)" onclick="transferOrderPilot('${ escJs(o.id) }')">🔄 نقل لطيار آخر</button>
+                <button class="del-btn" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7" onclick="postponeOrder('${ escJs(o.id) }')">⏸️ تأجيل</button>
                 <button class="del-btn" style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid var(--red)" onclick="cancelOrder('${ escJs(o.id) }')">❌ إلغاء</button>
                 <button class="del-btn" onclick="deleteOrder('${ escJs(o.id) }')">حذف</button>
                 <button class="finish-btn" style="margin-right:4px" onclick="finishSingleOrder('${ escJs(o.id) }','${ escJs(o.pilotId||'') }')">✅ إنهاء</button>
@@ -4817,7 +5190,10 @@
               <td>${ esc(o.branchName || "—") }</td>
               <td>${ esc(o.pilotName || "—") }</td>
               <td><span style="color:var(--green);font-weight:700">${ esc(o.totalDeliveryPrice || 0) } ج.م</span></td>
-              <td style="font-size:.8rem;color:var(--orange);max-width:160px;white-space:normal">${ esc(o.undeliveredReason || "—") }</td>
+              <td style="font-size:.8rem;color:var(--orange);max-width:160px;white-space:normal">${ esc(o.undeliveredReason || "—") }${
+              o.undeliveredFareBy === "receiver" ? ` <span style="display:inline-block;margin-top:3px;font-size:.68rem;background:rgba(34,197,94,.15);color:var(--green);border-radius:6px;padding:2px 6px">💵 المستلم دفع التوصيل</span>`
+              : o.undeliveredFareBy === "sender" ? ` <span style="display:inline-block;margin-top:3px;font-size:.68rem;background:rgba(34,197,94,.15);color:var(--green);border-radius:6px;padding:2px 6px">🏪 المحل دفع التوصيل</span>`
+              : ` <span style="display:inline-block;margin-top:3px;font-size:.68rem;background:var(--card);color:var(--muted);border-radius:6px;padding:2px 6px">من غير تحصيل</span>` }</td>
               <td style="font-size:.75rem;color:var(--muted)">${ esc(o.undeliveredAt ? new Date(o.undeliveredAt).toLocaleString("ar-EG") : "—") }</td>
               <td>
                 <button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button>
@@ -4864,7 +5240,7 @@
       if (role === "مشرف فرع") {
         const branchSel = document.getElementById("newUserBranch");
         branchId = branchSel.value;
-        branchName = branchSel.options[branchSel.selectedIndex]?.text || "";
+        branchName = _branchNameOf(branchSel);
         if (!branchId) { showToast("يرجى اختيار الفرع المسؤول عنه", "error"); return; }
       }
 
@@ -4873,7 +5249,7 @@
       if (role === "صاحب محل") {
         const storeSel = document.getElementById("newStoreBranch");
         branchId   = storeSel.value;
-        branchName = storeSel.options[storeSel.selectedIndex]?.text || "";
+        branchName = _branchNameOf(storeSel);
         shopName   = document.getElementById("newShopName").value.trim();
         shopPhone  = document.getElementById("newShopPhone").value.trim();
         shopPhone2 = document.getElementById("newShopPhone2").value.trim();
@@ -4984,7 +5360,7 @@
           if (u.shopName)    document.getElementById("newShopName").value    = u.shopName;
           if (u.shopPhone)   document.getElementById("newShopPhone").value   = u.shopPhone;
           if (u.shopPhone2)  document.getElementById("newShopPhone2").value  = u.shopPhone2;
-          if (u.shopAddress) window.renderAddressWidget("shopAddrWidget", { value: u.shopAddress });
+          if (u.shopAddress) window.renderAddressWidget("shopAddrWidget", { edit: true, value: u.shopAddress });
           // استعادة ربط عميل الاستلام
           if (u.senderId) {
             window._selectedSenderForStore = u.senderId;
@@ -5031,8 +5407,8 @@
       return parts.join(" و ");
     }
     function todayKeyHR() {
-      // بتوقيت القاهرة مش توقيت الجهاز
-      return window.cairoDayKey();
+      // اليوم التجاري — الشغل بعد نص الليل تبع يوم امبارح
+      return window.bizDayKey();
     }
 
     window._hrTodayData = {};
@@ -5432,6 +5808,282 @@
       return () => clearInterval(t);
     });
 
+    /* ══════════════════════════════════════════════════════════════
+       🏦 إدارة الخزن — إضافة · تعديل · حذف · تحويل
+       ───────────────────────────────────────────────────────────────
+       الشاشة كانت **للقراءة بس**: جدول بالأرصدة وخلاص. السيرفر كان عنده
+       الإضافة والتعديل والحذف من زمان بس مافيش أي زرار بينده عليهم،
+       والتحويل بين الخزن مكانش موجود خالص — فنقل فلوس من خزنة لخزنة كان
+       بيتعمل بحركتين يدويتين منفصلتين، وأي غلط بينهم بيسيب فرق في
+       الدفاتر محدش يعرف يفسّره.
+    ══════════════════════════════════════════════════════════════ */
+
+    /** بيملا أي <select> بقايمة الخزن — مع الرصيد عشان المدير يشوف قبل ما يختار */
+    function fillStoreSelect(el, opts) {
+      if (!el) return;
+      const o = opts || {};
+      const keep = el.value;
+      const stores = window._cashStoresData || [];
+      el.innerHTML = `<option value="">${ o.placeholder || "— اختر —" }</option>` +
+        stores
+          .filter(s => !o.exclude || String(s.id) !== String(o.exclude))
+          .map(s => {
+            const bal = (Number(s.balance) || 0).toFixed(2);
+            const where = s.branchId ? (s.branchName || "فرع") : "الإدارة";
+            return `<option value="${ esc(s.id) }">${ esc(s.name) } — ${ esc(where) } (${ esc(bal) } ج.م)</option>`;
+          }).join("");
+      if (keep && stores.some(s => String(s.id) === String(keep))) el.value = keep;
+    }
+
+    function fillBranchSelect(el) {
+      if (!el) return;
+      const keep = el.value;
+      el.innerHTML = `<option value="">🏛️ الإدارة (خزنة مركزية بلا فرع)</option>` +
+        (window._branchesData || []).map(b =>
+          `<option value="${ esc(b.id) }">${ esc(b.name) }</option>`).join("");
+      el.value = keep;
+    }
+
+    window.openStoreModal = function(id) {
+      const store = id ? (window._cashStoresData || []).find(s => String(s.id) === String(id)) : null;
+      document.getElementById("storeModalTitle").textContent = store ? "✏️ تعديل الخزنة" : "🏦 خزنة جديدة";
+      document.getElementById("storeId").value   = store ? store.id : "";
+      document.getElementById("storeName").value = store ? (store.name || "") : "";
+      fillBranchSelect(document.getElementById("storeBranch"));
+      document.getElementById("storeBranch").value = store && store.branchId ? String(store.branchId) : "";
+      openModal("store");
+    };
+
+    window.submitStore = async function() {
+      const btn = document.getElementById("submitStoreBtn");
+      const id   = document.getElementById("storeId").value;
+      const name = document.getElementById("storeName").value.trim();
+      const br   = document.getElementById("storeBranch").value;
+      if (!name) { showToast("اكتب اسم الخزنة", "error"); return; }
+      btn.disabled = true;
+      try {
+        // `branchId: null` معناها «خزنة إدارة» — لازم تتبعت صراحةً عشان
+        // التعديل يقدر يشيل الفرع مش بس يضيفه
+        const payload = { name, branchId: br || null };
+        if (id) await api.put(`/api/cash-stores/${id}`, payload);
+        else    await api.post("/api/cash-stores", payload);
+        closeModal("store");
+        showToast(id ? "اتعدّلت ✓" : "الخزنة اتعملت ✓", "success");
+        await refreshStores();
+      } catch (e) {
+        showToast(e.message || "تعذّر الحفظ", "error");
+      } finally { btn.disabled = false; }
+    };
+
+    window.deleteStore = async function(id) {
+      const s = (window._cashStoresData || []).find(x => String(x.id) === String(id));
+      if (!s) return;
+      const bal = Number(s.balance) || 0;
+      /* السيرفر بيرفض الحذف لو فيها رصيد أو عليها حركات — بنقول السبب
+         قبل النداء بدل ما المدير ياخد رفض من غير ما يفهم. */
+      if (bal !== 0) {
+        showToast(`«${s.name}» فيها ${bal.toFixed(2)} ج.م — حوّلها لخزنة تانية الأول`, "error");
+        return;
+      }
+      if (!confirm(`تحذف خزنة «${s.name}»؟\n\nلو عليها أي حركات مسجّلة، السيرفر هيرفض — الأرشيف لازم يفضل.`)) return;
+      try {
+        await api.del(`/api/cash-stores/${id}`);
+        showToast("اتحذفت ✓", "success");
+        await refreshStores();
+      } catch (e) {
+        showToast(e.message || "تعذّر الحذف", "error");
+      }
+    };
+
+    /**
+     * 💰 عهدة مسبقة — الإدارة بتحطّ فلوس في خزنة.
+     *
+     * بتتسجّل كحركة `in` عادية على نفس المسار اللي مشرف الفرع بيستعمله
+     * (`POST /api/cash-stores/{id}/transactions`). مافيش مسار خاص ولا
+     * عمود خاص: الرصيد بيتحدّث على السيرفر بقفل صف جوه معاملة، والحركة
+     * بتفضل في سجل الخزنة بسببها.
+     */
+    window.openDepositModal = function(id) {
+      const st = (window._cashStoresData || []).find(x => String(x.id) === String(id));
+      if (!st) { showToast("الخزنة مش موجودة — اعمل تحديث", "error"); return; }
+      document.getElementById("depStoreId").value = st.id;
+      document.getElementById("depStoreName").textContent = st.name || "—";
+      document.getElementById("depBal").textContent =
+        (Number(st.balance) || 0).toFixed(2) + " ج.م";
+      document.getElementById("depAmount").value = "";
+      /* السبب متعبّى بالافتراضي: حركة بلا سبب واضح في سجل فلوس بتبقى
+         سؤال محدش بيعرف يجاوبه بعد شهر. */
+      document.getElementById("depReason").value = "عهدة مسبقة";
+      document.getElementById("depNotes").value = "";
+      openModal("deposit");
+    };
+
+    window.submitDeposit = async function() {
+      const btn    = document.getElementById("submitDepositBtn");
+      const id     = document.getElementById("depStoreId").value;
+      const amount = parseFloat(document.getElementById("depAmount").value);
+      const reason = document.getElementById("depReason").value.trim();
+      const notes  = document.getElementById("depNotes").value.trim();
+
+      if (!id) { showToast("الخزنة مش محدّدة", "error"); return; }
+      if (!(amount > 0)) { showToast("اكتب مبلغ أكبر من صفر", "error"); return; }
+      if (!reason) { showToast("اكتب سبب العهدة", "error"); return; }
+
+      /* 🔴 الزرار بيتقفل قبل النداء ومابيترجعش غير في `finally`.
+         من غير كده دوسة تانية وقت التحميل بتسجّل الحركة مرتين —
+         والفلوس بتتضاعف في الخزنة من غير ما حد ياخد باله. */
+      btn.disabled = true;
+      try {
+        await api.post(`/api/cash-stores/${encodeURIComponent(id)}/transactions`, {
+          type: "in", amount, reason, notes
+        });
+        closeModal("deposit");
+        showToast("العهدة اتسجّلت ✓", "success");
+        await refreshStores();
+      } catch (e) {
+        showToast(e.message || "تعذّر تسجيل العهدة", "error");
+      } finally { btn.disabled = false; }
+    };
+
+    window.openTransferModal = function() {
+      const stores = window._cashStoresData || [];
+      if (stores.length < 2) {
+        showToast("محتاج خزنتين على الأقل عشان تحوّل بينهم", "error");
+        return;
+      }
+      document.getElementById("trAmount").value = "";
+      document.getElementById("trReason").value = "";
+      fillStoreSelect(document.getElementById("trFrom"), { placeholder: "— من أنهي خزنة —" });
+      document.getElementById("trFrom").value = "";
+      fillStoreSelect(document.getElementById("trTo"), { placeholder: "— إلى أنهي خزنة —" });
+      document.getElementById("trTo").value = "";
+      document.getElementById("trFromBal").textContent = "";
+      openModal("cash-transfer");
+    };
+
+    /* اختيار المصدر بيشيله من قايمة الوجهة — التحويل لنفس الخزنة مرفوض
+       على السيرفر، فالأحسن إنه مايبقاش مختار من أصله. */
+    window.onTransferFromChange = function() {
+      const from = document.getElementById("trFrom").value;
+      fillStoreSelect(document.getElementById("trTo"), { placeholder: "— إلى أنهي خزنة —", exclude: from });
+      const s = (window._cashStoresData || []).find(x => String(x.id) === String(from));
+      const hint = document.getElementById("trFromBal");
+      hint.textContent = s ? `الرصيد المتاح: ${(Number(s.balance)||0).toFixed(2)} ج.م` : "";
+      hint.style.color = s && (Number(s.balance)||0) > 0 ? "var(--green)" : "var(--muted)";
+    };
+
+    window.submitCashTransfer = async function() {
+      const btn = document.getElementById("submitTransferBtn");
+      const fromId = document.getElementById("trFrom").value;
+      const toId   = document.getElementById("trTo").value;
+      const amount = Number(document.getElementById("trAmount").value);
+      const reason = document.getElementById("trReason").value.trim();
+      if (!fromId || !toId) { showToast("اختر الخزنتين", "error"); return; }
+      if (!(amount > 0))    { showToast("اكتب مبلغ أكبر من صفر", "error"); return; }
+      btn.disabled = true;
+      try {
+        const r = await api.post("/api/cash-stores/transfer", { fromId, toId, amount, reason });
+        closeModal("cash-transfer");
+        showToast(r.message || "التحويل تم ✓", "success");
+        await refreshStores();
+      } catch (e) {
+        showToast(e.message || "تعذّر التحويل", "error");
+      } finally { btn.disabled = false; }
+    };
+
+    /** بيجيب الخزن من السيرفر ويعيد رسم الجدول — بعد أي تعديل */
+    async function refreshStores() {
+      try {
+        const d = await api.get("/api/cash-stores");
+        window._cashStoresData = nrmList(d.items || []);
+        renderBranchTreasury();
+      } catch (_) { /* الاستطلاع كل 60ث هيمسكها */ }
+    }
+
+    /* السقف المعروض. يوم شغل عادي ممكن يطلّع مئات الحركات، وعرضهم
+       كلهم بيبطّئ الصفحة ويخلّي المهم ضايع. */
+    window._txnLimit = 50;
+    window.txnShowMore = function() {
+      window._txnLimit += 50;
+      renderCashTxns();
+    };
+
+    /**
+     * 📋 جدول حركات الخزن — بيقرا من `_cashTxnsData` اللي
+     * `refreshCashTxns` بتملاه. مافيش نداء جديد.
+     */
+    window.renderCashTxns = function() {
+      const body = document.getElementById("cashTxnsBody");
+      if (!body) return;
+      const stores = window._cashStoresData || [];
+      const all    = window._cashTxnsData   || [];
+
+      /* قايمة الخزن في الفلتر بتتبني من الخزن الموجودة فعلًا —
+         مش من قايمة الفروع كلها، عشان مايبانش فرع مالوش خزنة. */
+      const sel = document.getElementById("txnStoreFilter");
+      if (sel && sel.options.length <= 1 && stores.length) {
+        const keep = sel.value;
+        sel.innerHTML = `<option value="">كل الخزن</option>` +
+          stores.map(x => `<option value="${ esc(x.id) }">${ esc(x.name) }</option>`).join("");
+        sel.value = keep;
+      }
+
+      const fStore = sel ? sel.value : "";
+      const fType  = document.getElementById("txnTypeFilter")?.value || "";
+
+      const rows = all
+        .filter(t => !fStore || String(t.storeId) === String(fStore))
+        .filter(t => !fType  || t.type === fType)
+        /* الأحدث الأول — الترتيب على النص شغّال لأن `toWire` بيطلّع
+           ISO بصيغة ثابتة (بادئة صفر وZ)، فالمقارنة النصية = زمنية. */
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+      const cnt = document.getElementById("txnCount");
+      if (cnt) cnt.textContent = rows.length ? `(${rows.length} حركة)` : "";
+
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="7" class="empty-row">مافيش حركات${fStore || fType ? " بالفلتر ده" : " لسه"}</td></tr>`;
+        const mb = document.getElementById("txnMoreBtn"); if (mb) mb.style.display = "none";
+        return;
+      }
+
+      const TYPE = {
+        in:      { t: "وارد",   c: "var(--green)",  bg: "rgba(34,197,94,.14)" },
+        out:     { t: "منصرف",  c: "var(--red)",    bg: "rgba(232,25,44,.14)" },
+        pending: { t: "معلّق",   c: "var(--orange)", bg: "rgba(249,115,22,.14)" },
+      };
+
+      const shown = rows.slice(0, window._txnLimit);
+      body.innerHTML = shown.map(t => {
+        const st = stores.find(x => String(x.id) === String(t.storeId));
+        const ty = TYPE[t.type] || { t: t.type, c: "var(--muted)", bg: "transparent" };
+        /* الوقت: `toWire` بيبعت ISO بـZ فالتحويل للمحلي بيحصل صح.
+           نفس الطريقة المتبعة في باقي اللوحة. */
+        const when = t.createdAt ? new Date(t.createdAt).toLocaleString("ar-EG") : "—";
+        /* الخزنة اللي بلا فرع = خزنة الإدارة. بنقولها بالنص بدل «—»
+           عشان تبان مقصودة مش بيانات ناقصة — زي جدول الخزن فوق. */
+        const br = st && !st.branchId
+          ? `<span style="color:var(--purple,#a855f7);font-weight:700">🏛️ الإدارة</span>`
+          : esc((st && st.branchName) || "—");
+        return `<tr>
+          <td style="font-size:.78rem;color:var(--muted);white-space:nowrap">${ esc(when) }</td>
+          <td>${ esc((st && st.name) || "—") }</td>
+          <td>${br}</td>
+          <td><span style="background:${ty.bg};color:${ty.c};padding:3px 9px;border-radius:6px;font-size:.74rem;font-weight:700">${ esc(ty.t) }</span></td>
+          <td style="font-weight:800;color:${ty.c};white-space:nowrap">${ esc((Number(t.amount) || 0).toFixed(2)) } ج.م</td>
+          <td style="font-size:.82rem">${ esc(t.reason || "—") }${ t.notes ? `<div style="font-size:.74rem;color:var(--muted);margin-top:2px">${ esc(t.notes) }</div>` : "" }</td>
+          <td style="font-size:.78rem;color:var(--muted)">${ esc(t.createdBy || "—") }</td>
+        </tr>`;
+      }).join("");
+
+      const mb = document.getElementById("txnMoreBtn");
+      if (mb) {
+        const left = rows.length - shown.length;
+        mb.style.display = left > 0 ? "" : "none";
+        mb.textContent = `عرض المزيد (${left} فاضلين)`;
+      }
+    };
+
     window.renderBranchTreasury = function() {
       // تُرندر فقط إذا كانت صفحة الخزن مفتوحة
       if (!document.getElementById("page-treasury")?.classList.contains("active")) return;
@@ -5440,24 +6092,42 @@
       const stores  = window._cashStoresData || [];
       const txns    = window._cashTxnsData   || [];
       if (!stores.length) {
-        body.innerHTML = `<tr><td colspan="5" class="empty-row">لا توجد خزن مسجّلة في الفروع</td></tr>`;
+        body.innerHTML = `<tr><td colspan="6" class="empty-row">لا توجد خزن — دوس «➕ خزنة جديدة» عشان تفتح واحدة</td></tr>`;
         return;
       }
       body.innerHTML = stores.map((s,i) => {
         const bal = Number(s.balance) || 0;
         const lastTxn = [...txns].filter(t => t.storeId === s.id).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""))[0];
         const lastStr = lastTxn ? new Date(lastTxn.createdAt).toLocaleString("ar-EG") : "—";
+        /* الخزنة بلا فرع = خزنة الإدارة. بنقولها بالنص بدل «—» عشان
+           المدير يعرف إنها مقصودة مش ناقصة بيانات. */
+        const isAdminStore = !s.branchId;
         return `<tr>
           <td>${i+1}</td>
           <td>${ esc(s.name) }</td>
-          <td>${ esc(s.branchName || "—") }</td>
+          <td>${ isAdminStore
+                ? `<span style="background:rgba(168,85,247,.14);color:var(--purple,#a855f7);padding:3px 9px;border-radius:6px;font-size:.76rem;font-weight:700">🏛️ الإدارة</span>`
+                : esc(s.branchName || "—") }</td>
           <td style="font-weight:800;color:${bal>=0?'var(--green)':'var(--red)'}">${ esc(bal.toFixed(2)) } ج.م</td>
           <td style="font-size:.78rem;color:var(--muted)">${lastStr}</td>
+          <td style="white-space:nowrap">
+            <!-- 💰 أول مدخل فلوس للخزن. قبل كده الشاشة كان فيها تعديل
+                 وحذف وتحويل بس — وكل خزنة بتتخلق بصفر، فالتحويل كان
+                 دايري ومافيش أول جنيه يدخل من أي مكان. -->
+            <button onclick="openDepositModal('${ escJs(s.id) }')" title="عهدة مسبقة"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px 5px">💰</button>
+            <button onclick="openStoreModal('${ escJs(s.id) }')" title="تعديل"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px 5px">✏️</button>
+            <button onclick="deleteStore('${ escJs(s.id) }')" title="حذف"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px 5px">🗑️</button>
+          </td>
         </tr>`;
       }).join("");
       const total = stores.reduce((s,st) => s + (Number(st.balance)||0), 0);
       const el = document.getElementById("branchTreasuryTotal");
       if (el) el.textContent = total.toFixed(2) + " ج.م";
+      // جدول الحركات بيترسم مع كل تحديث للخزن — نفس مصدر البيانات
+      window.renderCashTxns();
     };
 
     _regListener("pilotJoinRequests", (snap) => {
@@ -5718,11 +6388,15 @@
     window.approveReturnRequest = async function(reqId) {
       const r = (window._returnRequestsData||[]).find(x => x.id === reqId);
       if (!r) return;
-      if (!confirm(`الموافقة على إرجاع الطلب #${r.orderNum || ""}${r.pilotName ? ' — ' + r.pilotName : ''}؟\nسيتحوّل الطلب إلى "لم يتم التوصيل" بدون تحصيل.`)) return;
+      /* المودال هو التأكيد — والاختيار بيحدد هل توصيل المرتجع اتدفع ولا لأ */
+      const fareBy = await askUndeliverFare(
+        `↩️ الموافقة على إرجاع ${esc(r.orderNum || "")}${r.pilotName ? " — " + esc(r.pilotName) : ""}`,
+        `الطلب هيتحوّل «لم يتم التوصيل». حدد مين دفع تمن التوصيل للطيار — المدفوع بيتحسب عليه في التسوية.`);
+      if (fareBy === null) return;
       try {
         // السيرفر بيحوّل الأوردر «لم يتم التوصيل» وبيمسح علامة الإرجاع
         // وبيرجّع الطيار للانتظار لو مفيش أوردرات تانية — معاملة واحدة
-        await api.post(`/api/return-requests/${reqId}/approve`);
+        await api.post(`/api/return-requests/${reqId}/approve`, { fareBy });
         showToast("تمّت الموافقة على الإرجاع ✓ الطلب أصبح «لم يتم التوصيل»", "success");
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
     };
@@ -5825,16 +6499,19 @@
       const activeOrders = allOrders.filter(o => o.pilotId === pilotId && o.status === "جاري التوصيل");
       const pendingSettlementOrders = allOrders.filter(o => o.pilotId === pilotId && o.status === "تم التسليم" && !o.moneySettled);
 
-      if (activeOrders.length || pendingSettlementOrders.length) {
-        openShiftEndSettlementModal(shiftId, pilot, activeOrders, pendingSettlementOrders);
-        return;
-      }
-      if (!confirm(`هل تريد إنهاء وردية ${pilot.name}؟`)) return;
-      await finalizeShiftEnd(shiftId, pilot);
+      /* المودال بيفتح دايمًا — فيه إخلاء طرف العهدة والعمولة،
+         والسيرفر بيرفض القفل والعهدة مش صفر. */
+      openShiftEndSettlementModal(shiftId, pilot, activeOrders, pendingSettlementOrders);
     };
 
     // مودال تسوية الطلبات/الفلوس مع الطيار قبل إنهاء الوردية مباشرة
     function openShiftEndSettlementModal(shiftId, pilot, activeOrders, pendingSettlementOrders) {
+      /* 💵 مرتجعات اتدفع توصيلها أثناء الوردية ولسه فلوسها متسوتش (درس
+         المناورة 2026-09-03) — التعريف جوه دالة المودال عشان دوال الحسبة
+         الداخلية تشوفه (تعريفه بره كان بيرمي ReferenceError). */
+      const farePaidReturns = (window._ordersData || []).filter(o =>
+        o.pilotId === pilot.id && o.status === "لم يتم التوصيل"
+        && (o.undeliveredFareBy === "receiver" || o.undeliveredFareBy === "sender") && !o.moneySettled);
       const pilotId = pilot.id;
       const box = document.createElement("div");
       box.id = "_shiftEndBox";
@@ -5855,6 +6532,18 @@
             </label>
           </div>
           <div class="_undelReasonWrap" id="_seUndelReasonWrap_${idx}" style="display:none;margin-top:8px">
+            <div style="margin-top:8px;font-size:.75rem;color:var(--muted);font-weight:700">💵 مين دفع تمن التوصيل للطيار؟</div>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:5px">
+              <label style="display:flex;align-items:center;gap:7px;font-size:.79rem;cursor:pointer;padding:5px 7px;border:1px solid var(--border);border-radius:7px">
+                <input type="radio" name="_seFare_${idx}" value="none" checked style="accent-color:var(--orange)" /> 🚪 محدش استقبل — من غير أي تحصيل
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;font-size:.79rem;cursor:pointer;padding:5px 7px;border:1px solid rgba(34,197,94,.35);border-radius:7px">
+                <input type="radio" name="_seFare_${idx}" value="receiver" style="accent-color:var(--green)" /> 💵 المستلم رفض الأوردر و<b>دفع التوصيل</b>
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;font-size:.79rem;cursor:pointer;padding:5px 7px;border:1px solid rgba(34,197,94,.35);border-radius:7px">
+                <input type="radio" name="_seFare_${idx}" value="sender" style="accent-color:var(--green)" /> 🏪 المحل / الراسل <b>دفع التوصيل</b>
+              </label>
+            </div>
             <input type="text" id="_seUndelReason_${idx}" placeholder="سبب عدم التوصيل (مثال: العميل لم يردّ)" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:var(--font)" />
           </div>
         </div>`;
@@ -5902,6 +6591,48 @@
               </div>
             </div>
           </div>
+
+          <!-- 🔒 إخلاء طرف العهدة -->
+          <div style="border:1px solid rgba(232,25,44,.35);border-radius:9px;padding:12px 14px;margin-top:10px;background:rgba(232,25,44,.05)">
+            <div style="font-size:.88rem;font-weight:700;color:var(--red);margin-bottom:6px">🔒 إخلاء طرف العهدة</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-bottom:6px">
+              على الطيار حاليًا: <b style="color:var(--text)">${ esc((Number(pilot.custody) || 0).toFixed(2)) } ج.م</b>
+              · المتوقع بعد التسوية: <b id="_seCustodyProjected" style="color:var(--red)">—</b>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <input type="number" id="_seCustodyReturn" min="0" step="0.01" placeholder="المبلغ المرجّع" style="flex:1;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem" />
+              <select id="_seCustodyStore" style="flex:1;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem">
+                <option value="">— خزنة الردّ —</option>
+                ${(window._cashStoresData || []).map(cs => `<option value="${ esc(cs.id) }">${ esc(cs.name) }</option>`).join("")}
+              </select>
+            </div>
+            <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--orange);cursor:pointer">
+              <input type="checkbox" id="_seCustodyCarry" style="accent-color:var(--orange)" />
+              قفل مع ترحيل باقي العهدة على الطيار (قرار إداري — بيتسجّل على الوردية)
+            </label>
+          </div>
+
+          <!-- 💰 عمولة التقفيلة -->
+          <div style="border:1px solid rgba(14,165,233,.35);border-radius:9px;padding:12px 14px;margin-top:10px;background:rgba(14,165,233,.05)">
+            <div style="font-size:.88rem;font-weight:700;color:var(--sky);margin-bottom:8px">💰 عمولة الوردية</div>
+            <select id="_seCommMode" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem;margin-bottom:8px">
+              <option value="keep">حسب حساب الطيار (زي ما هو)</option>
+              <option value="percent">نسبة % من سعر توصيل كل أوردر</option>
+              <option value="fixed">مبلغ ثابت لكل أوردر</option>
+              <option value="custom">تحديد يدوي لكل أوردر (أوردر سفر…)</option>
+            </select>
+            <input type="number" id="_seCommValue" min="0" step="0.01" placeholder="القيمة" style="display:none;width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem;margin-bottom:8px" />
+            <div id="_seCommCustom" style="display:none">${
+              [...activeOrders, ...pendingSettlementOrders].map(o => `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <span style="flex:1;font-size:.8rem">${ esc(o.orderNum || "—") } <span style="color:var(--muted)">(${ esc(o.totalDeliveryPrice || 0) } ج)</span></span>
+                  <input type="number" min="0" step="0.01" data-commorder="${ esc(o.id) }"
+                         value="${ esc(pilotCommissionFor(pilot, o).toFixed(2)) }"
+                         style="width:100px;padding:7px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:.83rem" />
+                </div>`).join("") || `<div style="font-size:.78rem;color:var(--muted)">مافيش أوردرات في الوردية دي</div>`
+            }</div>
+            <div style="font-size:.72rem;color:var(--muted)">«حسب حساب الطيار» = مافيش أي تعديل. غير كده بيتسجّل لكل أوردر متسلّم وبيدخل مستحقاته.</div>
+          </div>
           <div style="display:flex;gap:10px;margin-top:12px">
             <button id="_shiftEndConfirm" style="flex:1;background:var(--red);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">✅ تسوية وإنهاء الوردية</button>
             <button onclick="document.getElementById('_shiftEndBox').remove()" style="flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);padding:11px;border-radius:8px;cursor:pointer">إلغاء</button>
@@ -5912,14 +6643,54 @@
       box.querySelectorAll("input[name='_seCashCollect']").forEach(r => {
         r.addEventListener("change", () => {
           document.getElementById("_seCashCollectDetails").style.display = r.value === "yes" ? "block" : "none";
+          recalcSeCustody();
         });
       });
 
+      /* المتوقع بعد التسوية = العهدة الحالية + (المستحق − المحصَّل).
+         «لم يتم بعد» = محصَّل صفر فكله بيروح عهدة والخانة بتتعبى بيه. */
+      const _seCustodyInput = document.getElementById("_seCustodyReturn");
+      let _seCustodyEdited = false;
+      _seCustodyInput.addEventListener("input", () => { _seCustodyEdited = true; });
+      function recalcSeCustody() {
+        const collectChoice = box.querySelector("input[name='_seCashCollect']:checked")?.value || "no";
+        const collected = collectChoice === "yes"
+          ? (Number(document.getElementById("_seCollectAmount")?.value) || 0) : 0;
+        let expected = 0;
+        activeOrders.forEach((o, idx) => {
+          const choice = box.querySelector(`input[name="_se_${idx}"]:checked`)?.value || "delivered";
+          /* الصافي بعد المحفظة — نفس Money::netCollect على السيرفر */
+          if (choice === "delivered") expected += (Number(o.totalDeliveryPrice) || 0) - (Number(o.walletUsed) || 0);
+          else {
+            /* مرتجع بقرار المودال ومدفوع توصيله — فلوسه مع الطيار برضه */
+            const fare = box.querySelector(`input[name="_seFare_${idx}"]:checked`)?.value || "none";
+            if (fare !== "none") expected += (Number(o.totalDeliveryPrice) || 0) - (Number(o.walletUsed) || 0);
+          }
+        });
+        pendingSettlementOrders.forEach(o => { expected += (Number(o.totalDeliveryPrice) || 0) - (Number(o.walletUsed) || 0); });
+        /* المرتجعات المدفوعة اللي اتعلّمت أثناء الوردية */
+        farePaidReturns.forEach(o => { expected += (Number(o.totalDeliveryPrice) || 0) - (Number(o.walletUsed) || 0); });
+        const projected = Math.max(0, (Number(pilot.custody) || 0) + expected - collected);
+        const el = document.getElementById("_seCustodyProjected");
+        if (el) el.textContent = projected.toFixed(2) + " ج.م";
+        if (!_seCustodyEdited) _seCustodyInput.value = projected ? projected.toFixed(2) : "";
+      }
+      document.getElementById("_seCollectAmount")?.addEventListener("input", recalcSeCustody);
+      recalcSeCustody();
+
+      document.getElementById("_seCommMode").addEventListener("change", function() {
+        document.getElementById("_seCommValue").style.display =
+          (this.value === "percent" || this.value === "fixed") ? "block" : "none";
+        document.getElementById("_seCommCustom").style.display =
+          this.value === "custom" ? "block" : "none";
+      });
+
       activeOrders.forEach((o, idx) => {
-        box.querySelectorAll(`input[name="_se_${idx}"]`).forEach(radio => {
+        box.querySelectorAll(`input[name="_se_${idx}"], input[name="_seFare_${idx}"]`).forEach(radio => {
           radio.addEventListener("change", () => {
             const wrap = document.getElementById(`_seUndelReasonWrap_${idx}`);
             if (wrap) wrap.style.display = radio.value === "undelivered" && radio.checked ? "block" : "none";
+            recalcSeCustody();
           });
         });
       });
@@ -5942,7 +6713,11 @@
             return {
               orderId: o.id,
               choice,
-              reason: choice === "undelivered" ? ((reasonInput?.value || "").trim() || "—") : ""
+              reason: choice === "undelivered" ? ((reasonInput?.value || "").trim() || "—") : "",
+              // 💵 مين دفع توصيل المرتجع — السيرفر بيحسبه في «المتوقع من الطيار»
+              fareBy: choice === "undelivered"
+                ? (box.querySelector(`input[name="_seFare_${idx}"]:checked`)?.value || "none")
+                : undefined
             };
           });
 
@@ -5958,11 +6733,47 @@
           }
           // اللي مش متحصّل بيتسجّل تلقائيًا عهدة على الطيار (فرق التحصيل)
 
+          /* 🔒 ردّ العهدة — خزنته الخاصة لأن التحصيل ممكن يكون «لم يتم» */
+          const custodyAmount = Number(document.getElementById("_seCustodyReturn").value) || 0;
+          const custodyStore  = document.getElementById("_seCustodyStore").value || storeId || "";
+          if (custodyAmount > 0 && !custodyStore) {
+            showToast("اختر الخزنة اللي هترجع لها العهدة", "error");
+            _btn.disabled = false; _btn.style.opacity = ""; _btn.style.cursor = ""; _btn.textContent = _origText;
+            return;
+          }
+          const allowCustodyCarry = !!document.getElementById("_seCustodyCarry")?.checked;
+
+          /* 💰 العمولة */
+          const commMode = document.getElementById("_seCommMode").value;
+          let commission = null;
+          if (commMode === "percent" || commMode === "fixed") {
+            const v = Number(document.getElementById("_seCommValue").value);
+            if (!(v >= 0)) {
+              showToast("اكتب قيمة العمولة", "error");
+              _btn.disabled = false; _btn.style.opacity = ""; _btn.style.cursor = ""; _btn.textContent = _origText;
+              return;
+            }
+            commission = { mode: commMode, value: v };
+          } else if (commMode === "custom") {
+            const deliveredIds = new Set(pendingSettlementOrders.map(o => String(o.id)));
+            activeOrders.forEach((o, idx) => {
+              const choice = box.querySelector(`input[name="_se_${idx}"]:checked`)?.value || "delivered";
+              if (choice === "delivered") deliveredIds.add(String(o.id));
+            });
+            const perOrder = [...box.querySelectorAll("[data-commorder]")]
+              .filter(inp => deliveredIds.has(inp.getAttribute("data-commorder")) && inp.value !== "")
+              .map(inp => ({ orderId: Number(inp.getAttribute("data-commorder")), amount: Number(inp.value) || 0 }));
+            commission = { mode: "custom", perOrder };
+          }
+
           box.remove();
           await finalizeShiftEnd(shiftId, pilot, {
             orders: decisions,
             collectedAmount,
-            cashStoreId: collectedAmount > 0 ? storeId : null
+            cashStoreId: collectedAmount > 0 ? storeId : null,
+            custodyReturn: custodyAmount > 0 ? { amount: custodyAmount, cashStoreId: custodyStore } : null,
+            allowCustodyCarry,
+            commission,
           });
         } catch(e) {
           showToast("خطأ: " + e.message, "error");
@@ -5979,7 +6790,11 @@
     async function finalizeShiftEnd(shiftId, pilot, settlementBody) {
       try {
         const now = new Date().toISOString();
-        await api.post(`/api/shifts/${shiftId}/end`, settlementBody || {});
+        const endRes = await api.post(`/api/shifts/${shiftId}/end`, settlementBody || {});
+        if (Number(endRes.custodyReturned) > 0)
+          showToast(`🔒 أخلى طرف: رجّع ${Number(endRes.custodyReturned).toFixed(2)} ج للخزنة`, "success");
+        if (Number(endRes.custodyCarried) > 0)
+          showToast(`⚠️ اتقفلت بترحيل ${Number(endRes.custodyCarried).toFixed(2)} ج عهدة على الطيار`, "error");
         showToast("تمّ إنهاء وردية الطيار — وأصبح متاحًا لأي فرع ✓", "success");
         const shift = (window._allShiftsData || window._shiftsData || []).find(s => s.id === shiftId);
         showShiftReport({ id: shiftId, ...(shift || {}), status: "ended", endedAt: now, pilotId: pilot.id, pilotName: pilot.name }, pilot);
@@ -5993,10 +6808,35 @@
       const shiftOrders  = orders.filter(o => o.shiftId === shift.id);
       const delivered    = shiftOrders.filter(o => o.status === "تم التسليم");
       const undelivered  = shiftOrders.filter(o => o.status === "لم يتم التوصيل");
+      /* 💵 مرتجعات اتدفع توصيلها (المستلم رفض ودفع / المحل دفع) — الفلوس
+         دي حصّلها الطيار فبتدخل المتوقع منه، من غير عمولة (مش تسليم). */
+      const farePaidReturns = undelivered.filter(o => o.undeliveredFareBy === "receiver" || o.undeliveredFareBy === "sender");
+      const returnFareTotal = farePaidReturns.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
       const totalRevenue = delivered.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
       const commissionType  = pilot.commissionType || "percent";
       const commissionValue = Number(pilot.commissionValue) || 0;
-      const totalCommission = delivered.reduce((s,o) => s + pilotCommissionFor(pilot, o), 0);
+      /* عمولة الأوردر في التقرير = override التقفيلة لو مكتوب، وإلا حساب
+         النسبة الافتراضي — التقرير كان بيتجاهل المكتوب في التقفيلة
+         (ملاحظة تدقيق المناورة 2026-09-03). CommAdj بيتحمّل في showShiftReport. */
+      const reportCommOf = o => (window.CommAdj
+        ? CommAdj.amountFor(o, pilotCommissionFor(pilot, o))
+        : pilotCommissionFor(pilot, o));
+      /* عمولة «من جيب الشركة» على مرتجع — بمبلغ الـoverride بس، مافيش
+         حساب تلقائي للمرتجع (طلب 2026-09-03) */
+      const undeliveredCommission = undelivered.reduce((s,o) => {
+        const a = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
+        return s + (a ? (Number(a.amount) || 0) : 0);
+      }, 0);
+      const totalCommission = delivered.reduce((s,o) => s + reportCommOf(o), 0) + undeliveredCommission;
+      /* الباقي غير المصروف كاش من الخزنة — العمولة المكتوبة من صفحة
+         أوردرات الطيار بتتصرف لحظتها (paid_amount)، فمستحق التقفيلة
+         هو الفرق بس. نفس معادلة السيرفر GREATEST(amount − paid, 0). */
+      const _unpaidCommOf = o => {
+        const a = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
+        if (a) return Math.max(0, (Number(a.amount) || 0) - (Number(a.paidAmount) || 0));
+        return o.status === "تم التسليم" ? pilotCommissionFor(pilot, o) : 0;
+      };
+      const unpaidCommission = [...delivered, ...undelivered].reduce((s,o) => s + _unpaidCommOf(o), 0);
       const netForBranch = totalRevenue - totalCommission;
       const startMs = new Date(shift.startedAt).getTime();
       const endMs   = new Date(shift.endedAt || Date.now()).getTime();
@@ -6018,17 +6858,22 @@
       const advanceSettle    = shift.advanceSettle    || "monthly";
       // مستحق الوردية اليومي = البنود المُسوّاة "في نفس اليوم" فقط
       const pilotFinalDue =
-          (commissionSettle === "daily" ? totalCommission : 0)
+          (commissionSettle === "daily" ? (shift.commissionPaidAt ? 0 : unpaidCommission) : 0)
         + (bonusSettle      === "daily" ? bonusAmount      : 0)
         - (deductionSettle  === "daily" ? deductionAmount  : 0)
         - (advanceSettle    === "daily" ? advanceAmount    : 0);
       return {
         shift, pilot, shiftOrders, delivered, undelivered,
+        farePaidReturns, returnFareTotal,
         totalRevenue, commissionType, commissionValue, totalCommission, netForBranch,
         durationMs, typeLabel, valueLabel,
         bonusAmount, bonusReason, deductionAmount, deductionReason,
         advanceAmount, advanceReason,
-        commissionSettle, bonusSettle, deductionSettle, advanceSettle, pilotFinalDue
+        commissionSettle, bonusSettle, deductionSettle, advanceSettle, pilotFinalDue,
+        unpaidCommission,
+        /* 💵 صرف العمولة كاش من الخزنة (طلب 2026-09-03) */
+        commissionPaidAmount: Number(shift.commissionPaidAmount) || 0,
+        commissionPaidAt: shift.commissionPaidAt || null
       };
     }
 
@@ -6052,12 +6897,15 @@
       const bonus     = Number(document.getElementById("srBonusAmount")?.value) || 0;
       const deduction = Number(document.getElementById("srDeductionAmount")?.value) || 0;
       const advance   = Number(document.getElementById("srAdvanceAmount")?.value) || 0;
-      const cS = _srSettleVal("srCommissionSettle");
+      const cS = data.commissionPaidAt ? "daily" : _srSettleVal("srCommissionSettle");
       const bS = _srSettleVal("srBonusSettle");
       const dS = _srSettleVal("srDeductionSettle");
       const aS = _srSettleVal("srAdvanceSettle");
+      /* اختيار خزنة الصرف بيبان بس لما العمولة «في نفس اليوم» */
+      const pw = document.getElementById("srCommPayoutWrap");
+      if (pw) pw.style.display = cS === "daily" ? "block" : "none";
       const daily =
-          (cS === "daily" ? data.totalCommission : 0)
+          (cS === "daily" ? (data.commissionPaidAt ? 0 : (data.unpaidCommission ?? data.totalCommission)) : 0)
         + (bS === "daily" ? bonus : 0)
         - (dS === "daily" ? deduction : 0)
         - (aS === "daily" ? advance : 0);
@@ -6066,7 +6914,16 @@
       if (el) el.textContent = `${ daily.toFixed(2) } ج.م`;
     };
 
-    window.showShiftReport = function(shift, pilot) {
+    window.showShiftReport = async function(shift, pilot) {
+      /* تحميل تعديلات العمولة (override التقفيلة) قبل بناء التقرير —
+         effective_date = يوم التسليم، فبنوسّع المدى يوم قبل وبعد الوردية */
+      if (window.CommAdj) {
+        try {
+          const d0 = (shift.startedAt || "").slice(0, 10);
+          const d1 = (shift.endedAt || new Date().toISOString()).slice(0, 10);
+          await CommAdj.load(pilot.id, d0 ? _addDaysStr(d0, -1) : undefined, _addDaysStr(d1, 1));
+        } catch (e) {}
+      }
       const data = buildShiftReportData(shift, pilot);
       window._lastShiftReportData = data;
       const box = document.createElement("div");
@@ -6088,6 +6945,8 @@
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">نهاية الوردية</span><span class="od-info-val">${fmtShiftDT(shift.endedAt)}</span></div>
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">مدة الوردية</span><span class="od-info-val" style="color:var(--sky);font-weight:700">${fmtShiftDuration(data.durationMs)}</span></div>
           </div>
+          <!-- 📊 تفاصيل العهدة والأذونات — بتتحقن بعد فتح المودال -->
+          <div id="_srCloseoutDetails"><div style="font-size:.76rem;color:var(--muted);padding:4px 0">جاري تحميل تفاصيل العهدة والأذونات…</div></div>
           <div class="od-card" style="margin-top:14px">
             <div class="od-card-title">📦 عدد الطلبات خلال الوردية</div>
             <div class="od-info-block"><span class="od-info-label">إجمالي عدد الطلبات</span><span class="od-info-val" style="font-weight:700">${ esc(data.shiftOrders.length) }</span></div>
@@ -6097,10 +6956,20 @@
           <div class="od-card" style="margin-top:14px;border:2px solid var(--sky)">
             <div class="od-card-title">💰 المبلغ الناتج وعمولة الطيار</div>
             <div class="od-info-block"><span class="od-info-label">إجمالي قيمة التوصيل (المبلغ الناتج)</span><span class="od-info-val" style="color:var(--green);font-weight:700">${ esc(data.totalRevenue.toFixed(2)) } ج.م</span></div>
+            ${ data.returnFareTotal > 0 ? `<div class="od-info-block" style="margin-top:8px"><span class="od-info-label">↩️ مرتجعات اتدفع توصيلها (${data.farePaidReturns.length} أوردر — تُحصَّل من الطيار)</span><span class="od-info-val" style="color:var(--green);font-weight:700">${ esc(data.returnFareTotal.toFixed(2)) } ج.م</span></div>` : "" }
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">نوع عمولة الطيار</span><span class="od-info-val">${ esc(data.typeLabel) }</span></div>
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">قيمة عمولته من الأوردرات</span><span class="od-info-val">${ esc(data.valueLabel) }</span></div>
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">إجمالي عمولة الطيار</span><span class="od-info-val" style="color:var(--sky);font-weight:800">${ esc(data.totalCommission.toFixed(2)) } ج.م</span></div>
-            ${_settleRadiosHtml('srCommissionSettle', data.commissionSettle)}
+            ${ data.commissionPaidAt
+              ? `<div style="margin-top:8px;font-size:.8rem;color:var(--green);font-weight:700">✅ العمولة اتصرفت من الخزنة: ${ esc((Number(data.commissionPaidAmount) || 0).toFixed(2)) } ج.م — مقفولة على «في نفس اليوم»</div>`
+              : `${_settleRadiosHtml('srCommissionSettle', data.commissionSettle)}
+            <div id="srCommPayoutWrap" style="margin-top:8px;display:${ data.commissionSettle === "daily" ? "block" : "none" }">
+              <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">💸 الخزنة اللي هتتصرف منها العمولة — بتتسجل حركة خروج بقيمتها عند الحفظ (الفلوس دخلت الخزنة كاملة في التحصيل):</label>
+              <select id="srCommCashStore" style="width:100%;padding:8px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.83rem;font-family:var(--font)">
+                <option value="">— اختر الخزنة —</option>
+                ${ (window._cashStoresData || []).map((s,i) => `<option value="${ esc(s.id) }" ${i===0 ? "selected" : ""}>${ esc(s.name) }</option>`).join("") }
+              </select>
+            </div>` }
           </div>
           <div class="od-card" style="margin-top:14px;border:2px dashed var(--orange)">
             <div class="od-card-title">🎁 بونص / خصم / سلفة للطيار</div>
@@ -6153,7 +7022,72 @@
           </div>
         </div>`;
       document.body.appendChild(box);
+      /* التفاصيل بتتحمّل بعد الفتح — التقرير مش مستنيها */
+      _loadShiftCloseoutDetails(shift.id);
     };
+
+    const _crLeaveLabel = { rest: "استراحة", dayoff: "عطلة / انصراف", incident: "حادث" };
+    const _crCustodyLabel = {
+      give: "استلم عهدة", "return": "ردّ للخزنة",
+      order_pending: "فرق تحصيل (عليه)", order_extra: "فرق تحصيل (له)",
+    };
+    /**
+     * بيجيب تفاصيل التقفيلة وبيحقنها في التقرير المفتوح.
+     * التقرير الأساسي مش مستنيها — لو النداء وقع بيبان سطر خطأ مكانها.
+     */
+    async function _loadShiftCloseoutDetails(shiftId) {
+      const slot = document.getElementById("_srCloseoutDetails");
+      if (!slot) return;
+      let d;
+      try { d = await api.get(`/api/shifts/${encodeURIComponent(shiftId)}/closeout-details`); }
+      catch (e) {
+        slot.innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:6px 0">تعذّر تحميل تفاصيل العهدة والأذونات: ${ esc(e.message || "") }</div>`;
+        return;
+      }
+      /* الطبع بياخد من الكاش ده بدل نداء تاني */
+      window._lastCloseoutDetails = { shiftId: String(shiftId), data: d };
+      const c = d.custody || {};
+      const money = v => (Number(v) || 0).toFixed(2);
+      const custodyRows = (c.rows || []).map(r => `
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:.76rem;padding:4px 0;border-bottom:1px dashed var(--border)">
+          <span>${ esc(_crCustodyLabel[r.type] || r.type) }${ r.storeName ? " ← " + esc(r.storeName) : "" }${ r.reason ? `<span style="color:var(--muted)"> — ${ esc(r.reason) }</span>` : "" }</span>
+          <b style="white-space:nowrap">${ esc(money(r.amount)) } ج</b>
+        </div>`).join("");
+
+      const leaves = (d.leaves || []).map(lv => {
+        const fromT = lv.from ? new Date(lv.from).toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" }) : "—";
+        const toT = lv.to ? new Date(lv.to).toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" }) : "لسه ساري";
+        const mins = lv.from && lv.to ? Math.max(0, Math.round((Date.parse(lv.to) - Date.parse(lv.from)) / 60000)) : null;
+        return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.76rem;padding:4px 0;border-bottom:1px dashed var(--border)">
+          <span>${ esc(_crLeaveLabel[lv.type] || lv.type) }${ lv.forced ? " (إيقاف من الإدارة)" : "" }${ lv.reason ? `<span style="color:var(--muted)"> — ${ esc(lv.reason) }</span>` : "" }
+            <span style="color:var(--muted)"> · وافق: ${ esc(lv.approvedBy || "—") }</span></span>
+          <b style="white-space:nowrap">${ esc(fromT) } → ${ esc(toT) }${ mins !== null ? " (" + mins + " د)" : "" }</b>
+        </div>`;
+      }).join("");
+
+      const comm = d.commissions || {};
+      slot.innerHTML = `
+        <div class="od-card" style="margin-top:14px;border:2px solid var(--red)">
+          <div class="od-card-title">🔒 العهدة خلال الوردية — إثبات إخلاء الطرف</div>
+          <div class="od-info-block"><span class="od-info-label">استلم عهدة</span><span class="od-info-val">${ esc(money(c.given)) } ج.م</span></div>
+          <div class="od-info-block" style="margin-top:6px"><span class="od-info-label">اتسوّى عليه من الأوردرات</span><span class="od-info-val" style="color:var(--orange)">${ esc(money(c.settledOn)) } ج.م</span></div>
+          <div class="od-info-block" style="margin-top:6px"><span class="od-info-label">سلّم (رجّع للخزنة)</span><span class="od-info-val" style="color:var(--green);font-weight:800">${ esc(money(c.returned)) } ج.م</span></div>
+          <div class="od-info-block" style="margin-top:6px"><span class="od-info-label">منها عند التقفيلة</span><span class="od-info-val">${ esc(money(c.closeReturned)) } ج.م</span></div>
+          <div class="od-info-block" style="margin-top:6px"><span class="od-info-label">الباقي عليه بعد القفل</span><span class="od-info-val" style="color:${ Number(c.closeCarried) > 0 ? "var(--red)" : "var(--green)" };font-weight:800">${ Number(c.closeCarried) > 0 ? esc(money(c.closeCarried)) + " ج.م (بموافقة الإدارة)" : "صفر — أخلى طرف ✓" }</span></div>
+          ${ custodyRows ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)"><div style="font-size:.74rem;color:var(--muted);margin-bottom:4px">حركات النافذة دي:</div>${custodyRows}</div>` : "" }
+        </div>
+        ${ leaves ? `
+        <div class="od-card" style="margin-top:14px">
+          <div class="od-card-title">🕐 أذونات خلال الوردية</div>
+          ${leaves}
+        </div>` : "" }
+        ${ (comm.count || 0) > 0 ? `
+        <div class="od-card" style="margin-top:14px">
+          <div class="od-card-title">💰 عمولات مكتوبة من التقفيلة (${ esc(comm.count) })</div>
+          ${ (comm.rows || []).map(r => `<div style="display:flex;justify-content:space-between;font-size:.76rem;padding:3px 0"><span>${ esc(r.orderNum || "—") }${ r.reason ? `<span style="color:var(--muted)"> — ${ esc(r.reason) }</span>` : "" }</span><b>${ esc(money(r.amount)) } ج</b></div>`).join("") }
+          <div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:800;padding-top:6px;border-top:1px solid var(--border)"><span>الإجمالي</span><span>${ esc(money(comm.total)) } ج.م</span></div>
+        </div>` : "" }`;
+    }
 
     /* ── تطبيق وحفظ بونص/خصم إضافي على وردية الطيار ────────────────────
        بيتحفظ في سجل الوردية نفسه (shifts/{id}) وبيتحدّث فورًا في نافذة
@@ -6167,10 +7101,18 @@
       const deductionReason = (document.getElementById("srDeductionReason")?.value || "").trim();
       const advanceAmount   = Number(document.getElementById("srAdvanceAmount")?.value) || 0;
       const advanceReason   = (document.getElementById("srAdvanceReason")?.value || "").trim();
-      const commissionSettle = _srSettleVal("srCommissionSettle");
+      /* بعد الصرف التسوية مقفولة daily — السيرفر بيرفض الرجوع شهري */
+      const commissionSettle = data.commissionPaidAt ? "daily" : _srSettleVal("srCommissionSettle");
       const bonusSettle      = _srSettleVal("srBonusSettle");
       const deductionSettle  = _srSettleVal("srDeductionSettle");
       const advanceSettle    = _srSettleVal("srAdvanceSettle");
+
+      /* 💸 عمولة «في نفس اليوم» لسه ماتصرفتش وفيه عمولة → لازم خزنة */
+      let commCashStoreId = null;
+      if (commissionSettle === "daily" && !data.commissionPaidAt && data.totalCommission > 0) {
+        commCashStoreId = document.getElementById("srCommCashStore")?.value || "";
+        if (!commCashStoreId) { showToast("اختر الخزنة اللي هتتصرف منها عمولة الوردية", "error"); return; }
+      }
 
       data.bonusAmount     = bonusAmount;
       data.bonusReason     = bonusReason;
@@ -6186,11 +7128,21 @@
       recomputeShiftDue();
 
       try {
-        await api.post(`/api/shifts/${data.shift.id}/settlement`, {
+        const res = await api.post(`/api/shifts/${data.shift.id}/settlement`, {
           bonusAmount, bonusReason, deductionAmount, deductionReason, advanceAmount, advanceReason,
-          commissionSettle, bonusSettle, deductionSettle, advanceSettle
+          commissionSettle, bonusSettle, deductionSettle, advanceSettle,
+          cashStoreId: commCashStoreId || undefined
         });
-        showToast("✔️ تم حفظ البنود واختيارات التسوية", "success");
+        if (Number(res.commissionPaid) > 0) {
+          /* الخزنة سجّلت حركة الخروج — بنقفل الاختيار في الواجهة فورًا */
+          data.commissionPaidAmount = Number(res.commissionPaid);
+          data.commissionPaidAt = new Date().toISOString();
+          const pw = document.getElementById("srCommPayoutWrap");
+          if (pw) pw.outerHTML = `<div style="margin-top:8px;font-size:.8rem;color:var(--green);font-weight:700">✅ العمولة اتصرفت من الخزنة: ${ esc(data.commissionPaidAmount.toFixed(2)) } ج.م — مقفولة على «في نفس اليوم»</div>`;
+          showToast(`💸 اتسجلت حركة خروج من الخزنة بعمولة الوردية: ${ data.commissionPaidAmount.toFixed(2) } ج.م`, "success");
+        } else {
+          showToast("✔️ تم حفظ البنود واختيارات التسوية", "success");
+        }
       } catch(e) {
         showToast("خطأ في الحفظ: " + e.message, "error");
       }
@@ -6275,6 +7227,24 @@
       try {
         const res = await api.get("/api/closeouts/monthly", { pilot: pilotId, month: data.monthKey });
         saved = res.saved || null;
+        /* أرقام السيرفر (buildMonthlyData) هي المرجع — بتحسب override
+           التقفيلات والعمولات المصروفة كاش (الباقي بس) والمستقلة،
+           والحساب المحلي مايعرفهمش (ملاحظة مسح الشاشات 2026-09-03) */
+        const c = res.computed;
+        if (c) {
+          if (c.totalCommission != null) data.totalCommission = Number(c.totalCommission) || 0;
+          if (c.totalBonus      != null) data.totalBonus      = Number(c.totalBonus) || 0;
+          if (c.totalDeduction  != null) data.totalDeduction  = Number(c.totalDeduction) || 0;
+          if (c.totalAdvance    != null) data.totalAdvance    = Number(c.totalAdvance) || 0;
+          if (c.workDays        != null) data.workDays        = Number(c.workDays) || 0;
+          if (c.shiftsCount     != null) data.shiftsCount     = Number(c.shiftsCount) || 0;
+          if (c.deliveredCount  != null) data.deliveredCount  = Number(c.deliveredCount) || 0;
+          if (c.totalOrders     != null) data.totalOrders     = Number(c.totalOrders) || 0;
+          if (c.totalHours      != null) {
+            data.totalHours   = Number(c.totalHours) || 0;
+            data.totalHoursMs = data.totalHours * 3600000;
+          }
+        }
       } catch (_) {}
       showMonthlyCloseout(data, saved);
     };
@@ -6467,10 +7437,68 @@
       showShiftReport(shift, pilot);
     };
 
-    window.printShiftReport = function() {
+    /* كاش تفاصيل التقفيلة — المودال بيملاه، والطبع بياخد منه أو بيجيب */
+    async function _closeoutDetailsFor(shiftId) {
+      const c = window._lastCloseoutDetails;
+      if (c && String(c.shiftId) === String(shiftId)) return c.data;
+      const d = await api.get(`/api/shifts/${encodeURIComponent(shiftId)}/closeout-details`);
+      window._lastCloseoutDetails = { shiftId: String(shiftId), data: d };
+      return d;
+    }
+
+    /* قسما العهدة والأذونات بصيغة الطباعة (نفس كلاسات row/table بتاعة
+       صفحة الطبع). الإيقاف الإجباري (العقاب) معلّم صراحةً — التقرير
+       بيتبعت PDF للإدارة ولازم يبان فيه. */
+    function _closeoutPrintSections(d) {
+      if (!d) return `<h2>🔒 العهدة والأذونات</h2><div class="row"><span>التفاصيل غير متاحة وقت الطباعة</span><span>—</span></div>`;
+      const c = d.custody || {};
+      const money = v => (Number(v) || 0).toFixed(2);
+      const typeLabel = { give: "استلم عهدة", "return": "ردّ للخزنة",
+        order_pending: "فرق تحصيل (عليه)", order_extra: "فرق تحصيل (له)" };
+      const lvLabel = { rest: "استراحة", dayoff: "عطلة / انصراف", incident: "حادث" };
+      const t = v => v ? new Date(v).toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" }) : "—";
+
+      const custodyRows = (c.rows || []).map((r, i) => `<tr>
+        <td>${i + 1}</td><td>${ esc(typeLabel[r.type] || r.type) }</td>
+        <td>${ esc(money(r.amount)) } ج.م</td>
+        <td>${ esc(r.storeName || "—") }</td>
+        <td>${ esc(r.reason || "—") }</td>
+      </tr>`).join("");
+
+      const leaveRows = (d.leaves || []).map((lv, i) => {
+        const mins = lv.from && lv.to ? Math.max(0, Math.round((Date.parse(lv.to) - Date.parse(lv.from)) / 60000)) + " د" : "—";
+        return `<tr>
+          <td>${i + 1}</td>
+          <td>${ esc(lvLabel[lv.type] || lv.type) }${ lv.forced ? " — <b>إيقاف من الإدارة/الفرع</b>" : "" }</td>
+          <td>${ esc(t(lv.from)) } → ${ esc(lv.to ? t(lv.to) : "ساري") }</td>
+          <td>${ esc(mins) }</td>
+          <td>${ esc(lv.reason || "—") }</td>
+          <td>${ esc(lv.approvedBy || "—") }</td>
+        </tr>`;
+      }).join("");
+
+      return `
+        <h2>🔒 العهدة — إثبات إخلاء الطرف</h2>
+        <div class="row"><span>استلم عهدة خلال الوردية</span><span>${ esc(money(c.given)) } ج.م</span></div>
+        <div class="row"><span>اتسوّى عليه من الأوردرات</span><span>${ esc(money(c.settledOn)) } ج.م</span></div>
+        <div class="row"><span>سلّم (رجّع للخزنة)</span><span>${ esc(money(c.returned)) } ج.م</span></div>
+        <div class="row"><span>منها عند التقفيلة</span><span>${ esc(money(c.closeReturned)) } ج.م</span></div>
+        <div class="row" style="font-weight:800"><span>الباقي عليه بعد القفل</span><span>${ Number(c.closeCarried) > 0 ? esc(money(c.closeCarried)) + " ج.م (بموافقة الإدارة)" : "صفر — أخلى طرف ✓" }</span></div>
+        ${ custodyRows ? `<table><thead><tr><th>#</th><th>الحركة</th><th>المبلغ</th><th>الخزنة</th><th>السبب</th></tr></thead><tbody>${custodyRows}</tbody></table>` : "" }
+        ${ leaveRows ? `
+        <h2>🕐 الأذونات والإيقافات خلال الوردية</h2>
+        <table><thead><tr><th>#</th><th>النوع</th><th>من → إلى</th><th>المدة</th><th>السبب</th><th>وافق/أوقف</th></tr></thead><tbody>${leaveRows}</tbody></table>` : "" }`;
+    }
+
+    window.printShiftReport = async function() {
       const data = window._lastShiftReportData;
       if (!data) return;
       const { shift, pilot } = data;
+      /* التقرير بيتبعت PDF للإدارة — العهدة والأذونات لازم يكونوا فيه.
+         لو التفاصيل لسه ماتحملتش في المودال بنجيبها هنا، ولو النداء
+         وقع بنطبع بسطر «غير متاحة» بدل ما الطبع كله يقف. */
+      let _cd = null;
+      try { _cd = await _closeoutDetailsFor(shift.id); } catch (_) {}
       const html = `
         <html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير تقفيل وردية — ${ esc(pilot.name) }</title>
         <style>
@@ -6494,15 +7522,17 @@
         <div class="row"><span>لم يتم التوصيل</span><span>${ esc(data.undelivered.length) }</span></div>
         <h2>💰 المبلغ وعمولة الطيار</h2>
         <div class="row"><span>إجمالي قيمة التوصيل</span><span>${ esc(data.totalRevenue.toFixed(2)) } ج.م</span></div>
+        ${ data.returnFareTotal > 0 ? `<div class="row"><span>↩️ مرتجعات اتدفع توصيلها (${data.farePaidReturns.length})</span><span>${ esc(data.returnFareTotal.toFixed(2)) } ج.م</span></div>` : "" }
         <div class="row"><span>نوع العمولة</span><span>${ esc(data.typeLabel) }</span></div>
         <div class="row"><span>قيمة العمولة</span><span>${ esc(data.valueLabel) }</span></div>
         <div class="row"><span>إجمالي عمولة الطيار</span><span>${ esc(data.totalCommission.toFixed(2)) } ج.م</span></div>
         ${data.bonusAmount ? `<div class="row"><span>🎁 بونص${ esc(data.bonusReason ? " ("+data.bonusReason+")" : "") }</span><span>+${ esc(data.bonusAmount.toFixed(2)) } ج.م</span></div>` : ""}
         ${data.deductionAmount ? `<div class="row"><span>➖ خصم${ esc(data.deductionReason ? " ("+data.deductionReason+")" : "") }</span><span>-${ esc(data.deductionAmount.toFixed(2)) } ج.م</span></div>` : ""}
         <div class="row" style="font-weight:800;border-top:2px solid #444;margin-top:4px;padding-top:8px"><span>💵 الإجمالي المستحق للطيار</span><span>${ esc(data.pilotFinalDue.toFixed(2)) } ج.م</span></div>
+        ${_closeoutPrintSections(_cd)}
         <h2>📋 تفاصيل الطلبات</h2>
         <table><thead><tr><th>#</th><th>رقم الأوردر</th><th>الحالة</th><th>القيمة</th><th>عمولة الطيار</th></tr></thead>
-        <tbody>${data.shiftOrders.map((o,i) => `<tr><td>${i+1}</td><td>${ esc(o.orderNum||"—") }</td><td>${ esc(o.status||"—") }</td><td>${ esc(o.totalDeliveryPrice||0) } ج.م</td><td>${pilotCommissionFor(pilot,o).toFixed(2)} ج.م</td></tr>`).join("") || '<tr><td colspan="5">لا توجد طلبات</td></tr>'}</tbody></table>
+        <tbody>${data.shiftOrders.map((o,i) => `<tr><td>${i+1}</td><td>${ esc(o.orderNum||"—") }</td><td>${ esc(o.status||"—") }</td><td>${ esc(o.totalDeliveryPrice||0) } ج.م</td><td>${(window.CommAdj ? CommAdj.amountFor(o, pilotCommissionFor(pilot,o)) : pilotCommissionFor(pilot,o)).toFixed(2)} ج.م</td></tr>`).join("") || '<tr><td colspan="5">لا توجد طلبات</td></tr>'}</tbody></table>
         <script>window.onload = () => { window.print(); };<\/script>
         </body></html>`;
       const w = window.open("", "_blank");
@@ -6538,14 +7568,14 @@
       const ordersSheet = XLSX.utils.json_to_sheet(data.shiftOrders.map((o,i) => ({
         "#": i+1, "رقم الأوردر": o.orderNum || "—", "الحالة": o.status || "—",
         "قيمة التوصيل": Number(o.totalDeliveryPrice) || 0,
-        "عمولة الطيار": Number(pilotCommissionFor(pilot,o).toFixed(2))
+        "عمولة الطيار": Number((window.CommAdj ? CommAdj.amountFor(o, pilotCommissionFor(pilot,o)) : pilotCommissionFor(pilot,o)).toFixed(2))
       })));
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, summarySheet, "ملخص الوردية");
       XLSX.utils.book_append_sheet(wb, ordersSheet, "طلبات الوردية");
 
-      const dateStr = window.cairoDayKey();
+      const dateStr = window.bizDayKey();   // ملف التقفيلة باسم يومها التجاري
       XLSX.writeFile(wb, `تقفيل_وردية_${ esc(pilot.name) }_${dateStr}.xlsx`);
     };
 
@@ -6651,12 +7681,15 @@
                 </div>
                 <div style="font-size:.77rem;color:var(--muted);margin-top:4px">
                   📅 ${ esc(r.requestedAt ? new Date(r.requestedAt).toLocaleString("ar-EG") : "—") }
-                  &nbsp;|&nbsp; 👤 ${ esc(r.requestedBy || "—") }
                   ${r.pilotName ? `&nbsp;|&nbsp; ✈ ${ esc(r.pilotName) }` : ""}
                 </div>
                 ${r.notes ? `<div style="font-size:.81rem;color:var(--text);margin-top:4px">📝 ${ esc(r.notes) }</div>` : ""}
               </div>
-              ${ esc(statusMap[r.status] || "") }
+              ${/* 🔴 من غير esc: القيم دي HTML مكتوب في الكود فوق
+                     (statusMap)، و`r.status` بيتستعمل كمفتاح بس — مفيش
+                     أي نص من المستخدم بيعدّي من هنا. الـesc كانت بتحوّل
+                     الشارة لحروف ظاهرة على الشاشة. */""}
+              ${ statusMap[r.status] || "" }
             </div>
           </div>`;
         }).join("");
@@ -6756,7 +7789,7 @@
         }).join("");
       if (cur) pilotSel.value = cur;
       branchSel.innerHTML = `<option value="">— اختر الفرع —</option>` +
-        (window._branchesList || []).map(b => `<option value="${ esc(b.id) }">${ esc(b.name) } — ${ esc(b.areas && b.areas.length ? b.areas.join('، ') : (b.area||"")) }</option>`).join("");
+        (window._branchesList || []).map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) }</option>`).join("");
       pilotSel.onchange = function() {
         const opt = this.options[this.selectedIndex];
         const bId = opt?.dataset?.branch;
@@ -6855,7 +7888,6 @@
               <div style="font-size:1rem;font-weight:700;color:var(--text)">✈ ${ esc(r.name) }</div>
               <div style="font-size:.78rem;color:var(--muted);margin-top:3px">
                 🏢 ${ esc(r.branchName || "—") } &nbsp;|&nbsp; 📅 ${ esc(r.createdAt ? new Date(r.createdAt).toLocaleString("ar-EG") : "—") }
-                &nbsp;|&nbsp; 👤 ${ esc(r.requestedBy || "—") }
               </div>
             </div>
             ${statusHtml}
@@ -6935,6 +7967,9 @@
       { key: "callcenter", label: "الكول سنتر",          icon: "📞" },
       { key: "store",      label: "بوابة المحلات",       icon: "🏪" },
       { key: "accounts",   label: "النظام المحاسبي",     icon: "💰" },
+      /* 🔑 مفتاح مستقل: بيفتح `accounts.html` من غير ما يشتق روح دمشق،
+         عشان مشرف الفرع ياخد تقفيل الطيارين لوحده. */
+      { key: "pilotacct",  label: "تقفيل الطيارين",      icon: "🧾" },
       { key: "damascus",   label: "تقفيل روح دمشق",      icon: "🧾" },
       { key: "hr",         label: "الموارد البشرية",     icon: "🧑‍💼" },
       { key: "hrOld",      label: "الموارد البشرية (القديمة)", icon: "🗄️" },
@@ -6954,12 +7989,12 @@
     window.roleDefaultApps = function roleDefaultApps(role) {
       const r = (role || "").trim();
       if (["مدير", "مدير عام", "admin"].includes(r))
-        return ["admin","branch","store","hr","hrOld","accounts","callcenter","damascus","customer","customers","site","siteadmin","perf","storesadmin","pilotsadmin"];
+        return ["admin","branch","store","hr","hrOld","accounts","pilotacct","callcenter","damascus","customer","customers","site","siteadmin","perf","storesadmin","pilotsadmin"];
       /* مشرف الطيارين — لوحته هي وبس. مايتضافش هنا أي مفتاح تاني: الدور ده
          مالوش فلوس ولا تقارير ولا عملاء، والقايمة دي هي اللي بتتخزن في
          user_app_permissions لما الأدمن مايختارش صلاحيات بإيده. */
       if (["مشرف الطيارين", "pilot_supervisor"].includes(r))         return ["pilotsadmin","site"];
-      if (["محاسب", "مدير حسابات", "accountant"].includes(r))       return ["accounts","damascus","site"];
+      if (["محاسب", "مدير حسابات", "accountant"].includes(r))       return ["accounts","damascus","pilotacct","site"];
       if (["موارد بشرية", "شؤون عاملين", "hr", "HR"].includes(r))   return ["hr","hrOld","perf","site"];
       if (["كول سنتر", "خدمة عملاء", "callcenter"].includes(r))     return ["callcenter","customer","site"];
       if (["مشرف فرع", "مشرف", "branch"].includes(r))               return ["branch","site"];
@@ -6991,7 +8026,7 @@
         ["neworder","أوردر جديد"], ["ccsearch","بحث"], ["orders","الطلبات النشطة"],
         ["delivering","قيد التوصيل"], ["delivered","الطلبات المسلَّمة"], ["undelivered","لم يتم التوصيل"],
         ["cancelled","الطلبات الملغاة"], ["clients","العملاء"], ["ccomplaints","الشكاوى"],
-        ["cczones","المناطق"], ["ccperf","الأداء"], ["transfers","نقل الطيارين"],
+        ["cczones","المناطق"], ["ccperf","الأداء"], ["ccnotifs","رسايل العملاء"], ["transfers","نقل الطيارين"],
         ["pilotmap","خريطة الطيارين"], ["pilots","الطيارون"], ["joinrequests","طلبات الانضمام"],
         ["pilotleave","الأذونات والورديات"], ["shifts","الورديات"], ["shift-orders","طلبات الوردية"],
         ["pilot-orders","طلبات الطيار"], ["dashboard","لوحة المعلومات"], ["hr","الموارد البشرية"],
@@ -7295,8 +8330,11 @@
         }
       }
       try {
+        /* أحدث نسخة = تنبيه ناعم في التطبيق («فيه نسخة جديدة — نزّلها»)
+           من غير ما يوقف الطيار — الإجبار لسه بأقل نسخة مسموحة فوق. */
+        const latest = (document.getElementById("pilotLatestVersion")?.value || "").trim();
         await api.put("/api/settings", { pilotApp: {
-          minVersion: v, updateUrl: url,
+          minVersion: v, updateUrl: url, latestVersion: latest,
           updatedAt: new Date().toISOString(),
           updatedBy: window._currentUser?.username || "admin"
         }});
@@ -7309,6 +8347,96 @@
          النسخة **عن قصد**: حفظ النسخة بيستبدل مفتاحها بالكامل، فلو كانوا
          مفتاح واحد كان حفظ النسخة بيمسح الأسئلة والعكس). */
       window._pilotContentDirty = false;
+
+      /* ── أرقام دعم الطيار: قايمة مش رقم واحد ──────────────────────
+         الشكل المحفوظ: `support.whatsapps` / `support.phones` مصفوفة من
+         `{n,label}`، و`support.whatsapp`/`support.phone` بيفضلوا = أول
+         رقم عشان نسخ التطبيق القديمة تفضل شغّالة. */
+      const PILOT_NUM_BOX = { wa: "pilotWaRows", tel: "pilotTelRows" };
+
+      window.addPilotNumRow = function(kind, n, label, silent) {
+        const box = document.getElementById(PILOT_NUM_BOX[kind]);
+        if (!box) return;
+        if (!silent) window._pilotContentDirty = true;
+        const row = document.createElement("div");
+        row.className = "pilot-num-row";
+        row.style.cssText = "display:flex;gap:6px;align-items:center";
+        const ni = document.createElement("input");
+        ni.type = "text"; ni.dir = "ltr"; ni.value = n || "";
+        ni.placeholder = "مثال: 01000000000";
+        ni.style.cssText = "flex:0 0 150px;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)";
+        ni.oninput = () => { window._pilotContentDirty = true; };
+        const li = document.createElement("input");
+        li.type = "text"; li.value = label || "";
+        li.placeholder = "الاسم (اختياري)";
+        li.style.cssText = "flex:1;min-width:90px;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)";
+        li.oninput = () => { window._pilotContentDirty = true; };
+        const del = document.createElement("button");
+        del.type = "button"; del.textContent = "🗑";
+        del.style.cssText = "background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:4px 6px";
+        del.onclick = () => { window._pilotContentDirty = true; row.remove(); };
+        row.append(ni, li, del);
+        box.appendChild(row);
+        if (!silent) ni.focus();
+      };
+
+      window.readPilotNums = function(kind) {
+        const box = document.getElementById(PILOT_NUM_BOX[kind]);
+        if (!box) return [];
+        const out = [];
+        box.querySelectorAll(".pilot-num-row").forEach(r => {
+          const ins = r.querySelectorAll("input");
+          const n = ins[0].value.trim();
+          if (!n) return;                     // صف فاضي = مش رقم
+          out.push({ n: n, label: ins[1].value.trim() });
+        });
+        return out;
+      };
+
+      window.fillPilotNums = function(sup) {
+        sup = sup || {};
+        /* 🔴 `inherited` معناها إن السيرفر ملا الأرقام دي من أرقام الموقع
+           لأن خانات الطيار فاضية — مش إن حد كتبها هنا. لو ملينا الخانات
+           بيها، أول ضغطة «حفظ» كانت هتنسخهم فعلًا في `pilotAppContent`
+           ويتفك التوريث من غير ما المدير يقصد: بعد كده أي تغيير في رقم
+           الموقع مايوصلش للطيار. فبنسيب الخانات فاضية ونقول له إنها
+           بتورّث. */
+        /* `inherited` بقت **قايمة قنوات** مش true/false: ممكن التليفون
+           يكون موروث والواتساب متكتوب بالإيد. بنقبل الشكلين عشان لو
+           السيرفر لسه على نسخة قديمة الصفحة ماتكسرش. */
+        const inhRaw = sup.inherited;
+        const inh = Array.isArray(inhRaw)
+          ? inhRaw
+          : (inhRaw === true ? ["phone", "whatsapp"] : []);
+        const hint = document.getElementById("pilotSupInherit");
+        if (hint) {
+          hint.style.display = inh.length ? "" : "none";
+          const which = document.getElementById("pilotSupInheritWhich");
+          if (which) {
+            which.textContent = inh.length === 2
+              ? "الاتنين (التليفون والواتساب)"
+              : (inh[0] === "phone" ? "التليفون بس" : "الواتساب بس");
+          }
+        }
+        [["wa", "whatsapps", "whatsapp", "whatsapp"], ["tel", "phones", "phone", "phone"]]
+          .forEach(([kind, listKey, oneKey, channel]) => {
+          const box = document.getElementById(PILOT_NUM_BOX[kind]);
+          if (!box) return;
+          box.innerHTML = "";
+          /* القناة دي موروثة؟ نسيب خانتها فاضية — الأرقام اللي فيها مش
+             متكتوبة هنا، ولو ملينا بيها الخانة أول حفظ هينسخها ويفك
+             التوريث من غير ما المدير يقصد. */
+          if (inh.indexOf(channel) !== -1) return;
+          let list = Array.isArray(sup[listKey]) ? sup[listKey] : [];
+          // الإعدادات القديمة: رقم مفرد من غير قايمة
+          if (!list.length && sup[oneKey]) list = [{ n: sup[oneKey], label: "" }];
+          list.forEach(x => {
+            const n = typeof x === "string" ? x : (x && x.n) || "";
+            const lb = typeof x === "string" ? "" : (x && x.label) || "";
+            if (String(n).trim()) addPilotNumRow(kind, n, lb, true);
+          });
+        });
+      };
 
       window.renderPilotFaq = function(list) {
         const box = document.getElementById("pilotFaqList");
@@ -7356,10 +8484,16 @@
           showToast("فيه إجابة متكتبة من غير سؤال — اكتب السؤال أو امسح الصف الأول", "error");
           return;
         }
+        /* `whatsapp`/`phone` المفردين بيفضلوا = أول رقم: نسخ التطبيق
+           القديمة بتقراهم، والنسخة الجديدة بتقرا القوايم. */
+        const waList  = readPilotNums("wa");
+        const telList = readPilotNums("tel");
         const payload = {
           support: {
-            whatsapp: document.getElementById("pilotSupWa").value.trim(),
-            phone:    document.getElementById("pilotSupTel").value.trim(),
+            whatsapp:  waList.length  ? waList[0].n  : "",
+            phone:     telList.length ? telList[0].n : "",
+            whatsapps: waList,
+            phones:    telList,
           },
           faq,
           updatedAt: new Date().toISOString(),
@@ -7419,6 +8553,9 @@
        المعاينة والتنفيذ معطّلين بأناقة لحد ما يتبني. */
     async function gatherCleanupTargets(cutoff) { return {}; }
 
+    /* مالهاش نداء دلوقتي — مسح البيانات القديمة بقى عملية سيرفر
+       والواجهة بتاعته لسه جاية (شوف previewCleanup تحت). سايبها عن
+       قصد عشان الأسماء دي هي اللي هتتعرض ساعتها. */
     const CLEANUP_LABELS = {
       orders: "طلبات منتهية", cashTransactions: "حركات خزينة", custodyTransactions: "عُهد طيارين",
       attendance: "أيام حضور وانصراف", manualEmployees: "موظفون خارج النظام", expenses: "مصروفات",
@@ -7623,13 +8760,6 @@
        معناها الموظف مش فاكر وصل لفين، والزرار يرجع مقفول أأمن. */
     const _notifOpened = new Set();
 
-    const NOTIF_TABS = [
-      { key: "pending", label: "⏳ معلّقة" },
-      { key: "sent",    label: "✅ مبعوتة" },
-      { key: "failed",  label: "⚠️ فشلت" },
-      { key: "skipped", label: "⛔ متخطّاة" },
-      { key: "all",     label: "📋 الكل" },
-    ];
 
     const NOTIF_BADGE = {
       pending: `<span class="status-badge status-pending">⏳ معلّقة</span>`,
@@ -7984,6 +9114,12 @@
     .od-price-val { font-size:1rem;font-weight:800;color:var(--green); }
     .od-note-row { margin-top:8px;font-size:.82rem;color:var(--orange);background:rgba(249,115,22,.07);border-radius:7px;padding:7px 10px; }
     .od-notes { font-size:.86rem;color:var(--text);line-height:1.7; }
+    /* خلية الملاحظات في جداول الطلبات: العرض الضيّق القديم (110px) كان
+       بينزّل النوت الطويلة كلمة-كلمة والصف بيبقى بطول الشاشة. القص على
+       ٣ سطور بيثبّت ارتفاع الصف، والضغط على الخلية بيفرد النص ويرجّعه. */
+    .note-cell { font-size:.78rem;color:var(--orange);max-width:230px;min-width:150px;white-space:normal;cursor:pointer; }
+    .note-cell .note-clamp { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.6;word-break:break-word; }
+    .note-cell.open .note-clamp { display:block;overflow:visible;-webkit-line-clamp:none; }
     .od-prepaid { background:rgba(249,115,22,.13);border:2px solid var(--orange);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;margin:14px 16px 0; }
     /* ── Multi-select ── */
     .order-chk { width: 17px; height: 17px; accent-color: var(--sky); cursor: pointer; }
@@ -8593,6 +9729,11 @@
   <aside id="sidebar">
     <div class="sidebar-brand" style="flex-direction:column;gap:6px;justify-content:center"><img src="assets/logo.png" alt="الدهشان" style="height:40px;width:auto;object-fit:contain;display:block;margin:0 auto;filter:drop-shadow(0 0 8px rgba(232,25,44,.45))" /><span style="font-size:.72rem;color:var(--muted);font-weight:600">لوحة الإدارة</span></div>
     <nav class="sidebar-nav">
+      <!-- زرار واحد للبوابة بدل قايمة «التطبيقات الأخرى» اللي كانت آخر
+           السايدبار (قرار صاحب النظام 2026-09-01: «أف الزحمة») — البوابة
+           فيها كل التطبيقات بكروتها حسب صلاحيات كل مستخدم. -->
+      <button class="nav-item nav-external" onclick="openOtherApp('home.html')">
+        🏠 التطبيقات <span class="ext-icon">↗</span></button>
       <span class="sidebar-section-label">الرئيسية</span>
       <button class="nav-item active" onclick="navigateTo('dashboard')">📊 لوحة التحكم</button>
       <span class="sidebar-section-label">الإدارة</span>
@@ -8611,7 +9752,6 @@
         <span id="transfersBadge" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);background:var(--orange);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px;min-width:18px;text-align:center">0</span>
       </button>
       <button class="nav-item" onclick="navigateTo('clients')">👥 العملاء</button>
-      <button class="nav-item" onclick="window.open('tiar_customers.html','_blank')">📱 عملاء التطبيق ↗</button>
       <button class="nav-item" onclick="navigateTo('orders')" id="navOrders" style="position:relative">
         📋 الطلبات
         <span id="ordersBadge" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);background:var(--orange);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px;min-width:18px;text-align:center">0</span>
@@ -8632,28 +9772,6 @@
       <button class="nav-item" onclick="navigateTo('reports')">📊 التقارير</button>
       <span class="sidebar-section-label">الإعدادات</span>
       <button class="nav-item" onclick="navigateTo('settings')">⚙️ الإعدادات</button>
-
-      <!-- روابط للتطبيقات الأخرى — تفتح في تاب جديد حتى لا تُفقد الشاشة الحالية -->
-      <span class="sidebar-section-label">التطبيقات الأخرى</span>
-      <!-- 🔴 النظام المحاسبي والموارد البشرية **لسه ما اتبنوش** — مفيش ملفات
-           ليهم في public/، والزرارين كانوا بيودّوا 404. اتكشفت في مسح شامل
-           لكل الروابط الداخلية بعد أول نشر (2026-08-20).
-           سيبتهم ظاهرين معطّلين بدل ما أشيلهم عشان الخريطة تفضل واضحة —
-           ونفس المعالجة بالظبط في كروت البوابة (APPS_NOT_BUILT). -->
-      <button class="nav-item nav-external is-soon" disabled aria-disabled="true" title="لسه ما اتبنتش">
-        📒 النظام المحاسبي <span class="ext-icon">قريبًا</span></button>
-      <button class="nav-item nav-external is-soon" disabled aria-disabled="true" title="لسه ما اتبنتش">
-        🧑‍💼 الموارد البشرية <span class="ext-icon">قريبًا</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('tiar_callcenter.html')">
-        📞 الكول سنتر <span class="ext-icon">↗</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('tiar_branch.html')">
-        🏢 تطبيق الفروع <span class="ext-icon">↗</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('tiar_store.html')">
-        🏪 بوابة المحلات <span class="ext-icon">↗</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('pilots.html')">
-        🧑‍✈️ إدارة الطيارين <span class="ext-icon">↗</span></button>
-      <button class="nav-item nav-external" onclick="openOtherApp('home.html')">
-        🏠 البوابة الرئيسية <span class="ext-icon">↗</span></button>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user"><div class="user-avatar">A</div><div><span id="sidebar-username">—</span><br><span id="sidebar-role" style="font-size:.74rem">—</span></div></div>
@@ -8697,6 +9815,20 @@
       <div class="stats"><div class="stat-card"><span class="stat-label">إجمالي الطيارين</span><span class="stat-value" id="totalCount">0</span></div></div>
       <div class="sec-header"><span class="sec-title">قائمة الطيارين</span><button class="add-btn" onclick="resetPilotModal();openModal('pilot')">➕ إضافة طيار جديد</button></div>
       <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم</th><th>هاتف1</th><th>هاتف2</th><th>رقم البطاقة</th><th>العنوان</th><th>المركبة</th><th>الفرع</th><th>نسخة التطبيق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="pilotsBody"></tbody></table></div>
+
+      <!-- 🗄️ المؤرشفين — بديل الحذف. الطيار هنا غير فعّال: مش في الدور،
+           مايتحمّلش عليه أوردرات، وحساب دخوله مقفول — لكن أوردراته
+           وتقفيلاته وحركات عهدته القديمة زي ما هي بالاسم. -->
+      <div class="sec-header" style="margin-top:22px">
+        <span class="sec-title">🗄️ الطيارين المؤرشفين</span>
+        <button class="add-btn" onclick="loadArchivedPilots()"
+                style="background:var(--muted,#64748b)">🔄 تحديث</button>
+      </div>
+      <div style="font-size:.8rem;color:var(--muted);margin:0 0 10px;line-height:1.7">
+        الطيار المؤرشف مش بيظهر في الدور ولا بيتحمّل عليه أوردرات وحسابه مقفول —
+        وبياناته القديمة (الأوردرات والتقفيلات والعهدة) بتفضل زي ما هي.
+      </div>
+      <div class="table-wrap" id="archivedPilotsBox"></div>
     </div>
 
     <!-- صفحة خريطة الطيارين -->
@@ -9233,10 +10365,15 @@
     </div>
 
 
+
     <!-- صفحة خزن الفروع -->
     <div class="page" id="page-treasury">
       <div class="sec-header">
         <span class="sec-title">🏦 خزن الفروع</span>
+        <div style="display:flex;gap:8px">
+          <button onclick="openStoreModal()" style="background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.83rem;font-family:inherit">➕ خزنة جديدة</button>
+          <button onclick="openTransferModal()" style="background:rgba(56,189,248,.15);color:var(--sky);border:1px solid rgba(56,189,248,.3);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.83rem;font-family:inherit">🔄 تحويل بين الخزن</button>
+        </div>
       </div>
       <div class="stats" style="margin-bottom:16px">
         <div class="stat-card">
@@ -9247,10 +10384,43 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>#</th><th>اسم الخزنة</th><th>الفرع</th><th>الرصيد الحالي</th><th>آخر عملية</th></tr>
+            <tr><th>#</th><th>اسم الخزنة</th><th>الفرع</th><th>الرصيد الحالي</th><th>آخر عملية</th><th>إجراءات</th></tr>
           </thead>
-          <tbody id="branchTreasuryBody"><tr><td colspan="5" class="empty-row">جاري التحميل…</td></tr></tbody>
+          <tbody id="branchTreasuryBody"><tr><td colspan="6" class="empty-row">جاري التحميل…</td></tr></tbody>
         </table>
+      </div>
+
+      <!-- 📋 حركات الخزن — البيانات محمّلة أصلاً في `_cashTxnsData`
+           وكانت بتتستعمل في عمود «آخر عملية» بس. -->
+      <div class="sec-header" style="margin-top:26px">
+        <span class="sec-title">📋 حركات الخزن <span id="txnCount" style="font-size:.78rem;color:var(--muted);font-weight:600"></span></span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="txnStoreFilter" onchange="renderCashTxns()"
+                  style="padding:7px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem">
+            <option value="">كل الخزن</option></select>
+          <select id="txnTypeFilter" onchange="renderCashTxns()"
+                  style="padding:7px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem">
+            <option value="">كل الأنواع</option>
+            <option value="in">وارد</option>
+            <option value="out">منصرف</option>
+            <option value="pending">معلّق</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:150px">التاريخ</th>
+            <th>الخزنة</th><th>الفرع</th>
+            <th style="width:90px">النوع</th>
+            <th style="width:110px">المبلغ</th>
+            <th>السبب</th><th style="width:120px">بواسطة</th>
+          </tr></thead>
+          <tbody id="cashTxnsBody"><tr><td colspan="7" class="empty-row">جاري التحميل…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="text-align:center;margin-top:12px">
+        <button id="txnMoreBtn" class="view-btn" style="display:none" onclick="txnShowMore()">عرض المزيد</button>
       </div>
     </div>
 
@@ -9500,6 +10670,11 @@
               <input id="pilotMinVersion" type="text" placeholder="مثال: 1.9.2" dir="ltr"
                 style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);width:150px" />
             </div>
+            <div>
+              <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">أحدث نسخة (تنبيه من غير إجبار)</label>
+              <input id="pilotLatestVersion" type="text" placeholder="مثال: 2.5.5" dir="ltr"
+                style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);width:150px" />
+            </div>
             <div style="flex:1;min-width:240px">
               <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رابط تنزيل النسخة الجديدة (اختياري)</label>
               <input id="pilotUpdateUrl" type="text" placeholder="https://…" dir="ltr"
@@ -9520,17 +10695,30 @@
           زرار «تواصل مع الدعم» بيفتح الأرقام دي، وزرار «الأسئلة الشائعة» بيعرض القايمة دي.
           <b style="color:var(--orange)">مفيش حاجة ثابتة في التطبيق — الفاضي هنا فاضي هناك.</b>
         </p>
+        <!-- أرقام متعددة: كل رقم بيطلع زرار مستقل في ورقة «تواصل مع الدعم»
+             جوه التطبيق، والاسم بيتكتب على الزرار عشان الطيار يعرف يكلّم مين. -->
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
-          <div style="flex:1;min-width:200px">
-            <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">واتساب الدعم</label>
-            <input id="pilotSupWa" type="text" placeholder="مثال: 01000000000" dir="ltr" oninput="window._pilotContentDirty=true"
-                   style="width:100%;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+          <div style="flex:1;min-width:240px">
+            <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:6px">أرقام واتساب الدعم</label>
+            <div id="pilotWaRows" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button type="button" onclick="addPilotNumRow('wa')"
+                    style="margin-top:8px;background:none;border:1px dashed var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:.78rem;font-family:inherit">＋ رقم واتساب</button>
           </div>
-          <div style="flex:1;min-width:200px">
-            <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">تليفون الدعم (اتصال مباشر)</label>
-            <input id="pilotSupTel" type="text" placeholder="مثال: 01000000000" dir="ltr" oninput="window._pilotContentDirty=true"
-                   style="width:100%;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+          <div style="flex:1;min-width:240px">
+            <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:6px">أرقام تليفون الدعم (اتصال مباشر)</label>
+            <div id="pilotTelRows" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button type="button" onclick="addPilotNumRow('tel')"
+                    style="margin-top:8px;background:none;border:1px dashed var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:.78rem;font-family:inherit">＋ رقم تليفون</button>
           </div>
+        </div>
+        <!-- بيبان لما خانات الطيار فاضية والسيرفر بيورّث أرقام الموقع -->
+        <div id="pilotSupInherit" style="display:none;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:.8rem;color:var(--green);line-height:1.8">
+          ✅ <b>الطيار شايف أرقام الموقع دلوقتي</b> — الموروث حاليًا:
+          <b id="pilotSupInheritWhich">الاتنين (التليفون والواتساب)</b>.
+          الخانة الفاضية معناها «ورّث من الموقع»، وأي تغيير في أرقام
+          «بيانات التواصل» هيوصل للطيار لوحده.
+          <br>املا خانة هنا <b>بس لو</b> دعم الطيارين رقمه مختلف —
+          وساعتها القناة دي بس هي اللي هتبطّل توريث، والتانية تفضل زي ما هي.
         </div>
         <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:6px">الأسئلة الشائعة</label>
         <div id="pilotFaqList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
@@ -9641,6 +10829,82 @@
 </div>
 
 <!-- Modal: إضافة مصروف -->
+<!-- Modal: إضافة/تعديل خزنة -->
+<div id="modal-store" class="modal-overlay" onclick="if(event.target===this) closeModal('store')">
+  <div class="modal-box">
+    <div class="modal-header"><span class="modal-title" id="storeModalTitle">🏦 خزنة جديدة</span><button class="modal-close" onclick="closeModal('store')">✕</button></div>
+    <form id="storeForm" onsubmit="event.preventDefault(); submitStore();">
+      <div class="form-grid">
+        <input type="hidden" id="storeId" />
+        <div class="form-group full"><label>اسم الخزنة <span class="req">*</span></label>
+          <input id="storeName" type="text" placeholder="مثال: خزنة الإدارة، خزنة فرع المنصورة" required /></div>
+        <div class="form-group full"><label>الفرع</label>
+          <select id="storeBranch"><option value="">🏛️ الإدارة (خزنة مركزية بلا فرع)</option></select>
+          <div style="font-size:.74rem;color:var(--muted);margin-top:5px">
+            سيبها «الإدارة» لو الخزنة دي بتاعتك انت مش بتاعة فرع معيّن.
+          </div>
+        </div>
+      </div>
+      <div class="form-actions"><button type="submit" id="submitStoreBtn" class="submit-btn">حفظ</button><button type="button" class="cancel-btn" onclick="closeModal('store')">إلغاء</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: تحويل بين الخزن -->
+<!-- 💰 عهدة مسبقة — أول مدخل فلوس للخزن -->
+<div id="modal-deposit" class="modal-overlay" onclick="if(event.target===this) closeModal('deposit')">
+  <div class="modal-box">
+    <div class="modal-header"><span class="modal-title">💰 عهدة مسبقة</span><button class="modal-close" onclick="closeModal('deposit')">✕</button></div>
+    <form id="depositForm" onsubmit="event.preventDefault(); submitDeposit();">
+      <input type="hidden" id="depStoreId" />
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>الخزنة</label>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-weight:700">
+            <span id="depStoreName">—</span>
+            <span style="float:left;color:var(--muted);font-weight:600;font-size:.82rem">الرصيد الحالي: <b id="depBal">0 ج.م</b></span>
+          </div>
+        </div>
+        <div class="form-group full"><label>المبلغ (ج.م) <span class="req">*</span></label>
+          <input id="depAmount" type="number" step="0.01" min="0.01" required /></div>
+        <div class="form-group full"><label>السبب <span class="req">*</span></label>
+          <input id="depReason" type="text" required /></div>
+        <div class="form-group full"><label>ملاحظات (اختياري)</label>
+          <input id="depNotes" type="text" placeholder="مثال: تسليم نقدي من المدير" /></div>
+      </div>
+      <div style="font-size:.76rem;color:var(--muted);line-height:1.8;margin-top:-4px">
+        بتتسجّل كحركة <b>وارد</b> على الخزنة وبتزوّد رصيدها فورًا، وبتفضل
+        في سجل الخزنة بسببها — فأي حد يفتح السجل بعدين يعرف الفلوس دي جت منين.
+      </div>
+      <div class="form-actions"><button type="submit" id="submitDepositBtn" class="submit-btn">تسجيل العهدة</button><button type="button" class="cancel-btn" onclick="closeModal('deposit')">إلغاء</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-cash-transfer" class="modal-overlay" onclick="if(event.target===this) closeModal('cash-transfer')">
+  <div class="modal-box">
+    <div class="modal-header"><span class="modal-title">🔄 تحويل بين الخزن</span><button class="modal-close" onclick="closeModal('cash-transfer')">✕</button></div>
+    <form id="cashTransferForm" onsubmit="event.preventDefault(); submitCashTransfer();">
+      <div class="form-grid">
+        <div class="form-group full"><label>من خزنة <span class="req">*</span></label>
+          <select id="trFrom" onchange="onTransferFromChange()" required><option value="">— اختر —</option></select>
+          <div id="trFromBal" style="font-size:.78rem;color:var(--muted);margin-top:5px"></div></div>
+        <div class="form-group full"><label>إلى خزنة <span class="req">*</span></label>
+          <select id="trTo" required><option value="">— اختر —</option></select></div>
+        <div class="form-group full"><label>المبلغ (ج.م) <span class="req">*</span></label>
+          <input id="trAmount" type="number" step="0.01" min="0.01" required /></div>
+        <div class="form-group full"><label>السبب (اختياري)</label>
+          <input id="trReason" type="text" placeholder="مثال: توريد يومي للإدارة" /></div>
+      </div>
+      <div style="font-size:.76rem;color:var(--muted);line-height:1.8;margin-top:-4px">
+        بتتسجّل حركتين مربوطتين: صادر من الأولى ووارد في التانية — في عملية واحدة،
+        فمستحيل تطلع من خزنة وما تدخلش التانية.
+      </div>
+      <div class="form-actions"><button type="submit" id="submitTransferBtn" class="submit-btn">تنفيذ التحويل</button><button type="button" class="cancel-btn" onclick="closeModal('cash-transfer')">إلغاء</button></div>
+    </form>
+  </div>
+</div>
+
 <div id="modal-expense" class="modal-overlay" onclick="if(event.target===this) closeModal('expense')">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title">🧾 إضافة مصروف</span><button class="modal-close" onclick="closeModal('expense')">✕</button></div>
@@ -9714,7 +10978,7 @@
         <div style="font-size:.82rem;font-weight:700;color:var(--sky,#38bdf8);margin-bottom:10px">🔐 بيانات دخول تطبيق الطيار</div>
         <div class="form-grid" style="margin:0">
           <div class="form-group"><label>اسم المستخدم <span class="req">*</span></label><input id="pilotUsername" type="text" dir="ltr" placeholder="مثال: ahmed_pilot" required /></div>
-          <div class="form-group"><label>كلمة المرور <span class="req">*</span></label><input id="pilotPassword" type="text" dir="ltr" placeholder="4 أحرف على الأقل" required /></div>
+          <div class="form-group"><label>كلمة المرور <span class="req">*</span></label><input id="pilotPassword" type="text" dir="ltr" placeholder="4 أحرف على الأقل" /></div>
         </div>
       </div>
       <div class="form-actions"><button type="submit" id="submitBtn" class="submit-btn">حفظ الطيار</button><button type="button" class="cancel-btn" onclick="closeModal('pilot')">إلغاء</button></div>
@@ -10151,6 +11415,8 @@
       btn.classList.remove("active");
       if (btn.getAttribute("onclick")?.includes(`'${page}'`)) btn.classList.add("active");
     });
+    // المؤرشفين نداء منفصل (`?archived=1`) — مش جزء من مستطلع الطيارين
+    if (page === "pilots" && window.loadArchivedPilots) window.loadArchivedPilots();
     if (page === "hr" && window.renderHRPage) window.renderHRPage();
     if (page === "accounting" && window.renderAccountingPage) window.renderAccountingPage();
     if (page === "treasury" && window.renderBranchTreasury) window.renderBranchTreasury();
@@ -10212,6 +11478,7 @@
     });
     if (tab === "history" && window.renderHRHistory) window.renderHRHistory();
   };
+
   window.switchAccTab = function(tab) {
     ["branches","pilots","expenses"].forEach(t => {
       document.getElementById("acctab-" + t).classList.toggle("active", t === tab);
@@ -10247,8 +11514,25 @@
   window.showToast = showToast; // تعريض للـ module scripts
 
   /* ── Reset modal functions (clear edit mode) ── */
+
+    /* ══ كلمة المرور: مطلوبة عند الإضافة بس ══
+       الحقل جوه <form> وزرار الحفظ submit، فالـ`required` بيوقف الحفظ
+       في المتصفح قبل أي كود. عند التعديل الباسورد اختيارية (فاضي =
+       سيبها زي ما هي)، فلازم السمة تترفع — والنجمة تختفي معاها. */
+    window.setPilotPassRequired = function(required) {
+      const inp = document.getElementById("pilotPassword");
+      if (!inp) return;
+      if (required) inp.setAttribute("required", "");
+      else inp.removeAttribute("required");
+      inp.placeholder = required ? "4 أحرف على الأقل"
+                                 : "اتركها فارغة للإبقاء على كلمة المرور الحالية";
+      const star = inp.closest(".form-group")?.querySelector(".req");
+      if (star) star.style.display = required ? "" : "none";
+    };
+
   function resetPilotModal() {
     document.getElementById("addForm").reset();
+    window.setPilotPassRequired(true);          // رجعنا لوضع الإضافة
         window.renderAddressWidget("pilotAddrWidget", { required: true, value: "" });
     document.querySelector("#modal-pilot .modal-title").textContent = "✈ إضافة طيار جديد";
     document.getElementById("submitBtn").textContent = "حفظ الطيار";
@@ -10444,7 +11728,7 @@
     document.getElementById("newShopName").value    = s.name    || "";
     document.getElementById("newShopPhone").value   = s.phone1  || "";
     document.getElementById("newShopPhone2").value  = s.phone2  || "";
-    window.renderAddressWidget("shopAddrWidget", { value: s.address || "" });
+    window.renderAddressWidget("shopAddrWidget", { edit: true, value: s.address || "" });
     // إغلاق الـ dropdown وإظهار الـ selected bar
     document.getElementById("senderSearchForStore").value = s.name;
     document.getElementById("senderDropForStore").style.display  = "none";
@@ -10587,7 +11871,7 @@
     const type = document.getElementById("repPeriodType").value;
     const wrap = document.getElementById("repPeriodInputs");
     const now  = new Date();
-    const todayStr = window.cairoDayKey(now);
+    const todayStr = window.bizDayKey(now);   // «اليوم» الافتراضي = اليوم التجاري
     const yearNow  = now.getFullYear();
     const monthNow = String(now.getMonth()+1).padStart(2,"0");
     if (type === "day") {
@@ -10603,33 +11887,28 @@
     }
   };
 
+  /* نطاقات التقارير باليوم التجاري (9ص→9ص) — «يوم 09/02» كان بيطلع أصفار
+     لأي شغل بعد نص الليل (ملاحظة تدقيق المناورة 2026-09-03) */
   function getRepDateRange() {
     const type = document.getElementById("repPeriodType")?.value || "custom";
     const now = new Date();
     if (type === "day") {
-      const val = document.getElementById("repDay")?.value;
-      const d = val ? new Date(val + "T00:00:00") : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const from = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0);
-      const to   = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59,999);
-      return { from, to };
+      const val = document.getElementById("repDay")?.value || window.bizDayKey(now);
+      return window._bizRangeOf(val, val);
     } else if (type === "month") {
       const val = document.getElementById("repMonth")?.value; // YYYY-MM
       let y = now.getFullYear(), m = now.getMonth();
       if (val) { const [yy,mm] = val.split("-").map(Number); y = yy; m = mm-1; }
-      const from = new Date(y, m, 1, 0,0,0,0);
-      const to   = new Date(y, m+1, 0, 23,59,59,999);
-      return { from, to };
+      const mm2 = String(m + 1).padStart(2, "0");
+      const lastD = new Date(y, m + 1, 0).getDate();
+      return window._bizRangeOf(`${y}-${mm2}-01`, `${y}-${mm2}-${String(lastD).padStart(2, "0")}`);
     } else if (type === "year") {
       const val = Number(document.getElementById("repYear")?.value) || now.getFullYear();
-      const from = new Date(val, 0, 1, 0,0,0,0);
-      const to   = new Date(val, 11, 31, 23,59,59,999);
-      return { from, to };
+      return window._bizRangeOf(`${val}-01-01`, `${val}-12-31`);
     } else {
-      const fromVal = document.getElementById("repFrom")?.value;
-      const toVal   = document.getElementById("repTo")?.value;
-      const from = fromVal ? new Date(fromVal + "T00:00:00") : new Date(now.getFullYear(), now.getMonth(), 1);
-      const to   = toVal   ? new Date(toVal   + "T23:59:59") : new Date(now.getFullYear(), now.getMonth()+1, 0, 23,59,59,999);
-      return { from, to };
+      const fromVal = document.getElementById("repFrom")?.value || window.bizDayKey(now).slice(0, 8) + "01";
+      const toVal   = document.getElementById("repTo")?.value || window.bizDayKey(now);
+      return window._bizRangeOf(fromVal, toVal);
     }
   }
 
@@ -10649,7 +11928,7 @@
     }
   }
 
-  function buildReportData() {
+  async function buildReportData() {
     populateReportFilters();
     if (!document.getElementById("repPeriodInputs").innerHTML.trim()) onRepPeriodChange();
 
@@ -10672,25 +11951,38 @@
     if (pilotFilter)  deliveredInRange = deliveredInRange.filter(o => o.pilotId === pilotFilter);
     if (branchFilter) deliveredInRange = deliveredInRange.filter(o => o.branchId === branchFilter);
 
+    /* ↩️ المرتجعات: المدفوع توصيله بيدخل الإيراد، وأي override عليها
+       عمولة «من جيب الشركة» (طلب 2026-09-03) */
+    let returnsInRange = orders.filter(o => o.status === "لم يتم التوصيل" && inRangeFn(o.undeliveredAt || o.createdAt));
+    if (pilotFilter)  returnsInRange = returnsInRange.filter(o => o.pilotId === pilotFilter);
+    if (branchFilter) returnsInRange = returnsInRange.filter(o => o.branchId === branchFilter);
+    const fareInRange = returnsInRange.filter(o => o.undeliveredFareBy === "receiver" || o.undeliveredFareBy === "sender");
+    const ovMap = await window._loadAllCommOv(from, to);
+    const _retCommOf = list => list.reduce((s,o) => { const v = window._ovAmountOf(ovMap, o); return s + (v !== null ? v : 0); }, 0);
+    const _fareSumOf = list => list.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+
     const expensesInRange  = expenses.filter(e => inRangeFn(e.date ? (e.date + "T12:00:00") : null) && (!branchFilter || e.branchId === branchFilter));
 
-    const totalRevenue      = deliveredInRange.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+    const totalRevenue      = deliveredInRange.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0) + _fareSumOf(fareInRange);
     const totalStorePrepaid = deliveredInRange.reduce((s,o) => s + (Number(o.storePrepaid) || 0), 0);
     const totalExpenses     = expensesInRange.reduce((s,e) => s + (Number(e.amount) || 0), 0);
     const totalCommissions  = deliveredInRange.reduce((s,o) => {
       const pilot = pilots.find(p => p.id === o.pilotId);
-      return s + pilotCommissionFor(pilot, o);
-    }, 0);
+      const v = window._ovAmountOf(ovMap, o);
+      return s + (v !== null ? v : pilotCommissionFor(pilot, o));
+    }, 0) + _retCommOf(returnsInRange);
     const net = totalRevenue - totalCommissions - totalExpenses;
 
     const branchesToShow = branchFilter ? branches.filter(b => b.id === branchFilter) : branches;
     const branchRows = branchesToShow.map(b => {
       const bOrders  = deliveredInRange.filter(o => o.branchId === b.id);
-      const bRevenue = bOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+      const bRevenue = bOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0)
+        + _fareSumOf(fareInRange.filter(o => o.branchId === b.id));
       const bComm    = bOrders.reduce((s,o) => {
         const pilot = pilots.find(p => p.id === o.pilotId);
-        return s + pilotCommissionFor(pilot, o);
-      }, 0);
+        const v = window._ovAmountOf(ovMap, o);
+        return s + (v !== null ? v : pilotCommissionFor(pilot, o));
+      }, 0) + _retCommOf(returnsInRange.filter(o => o.branchId === b.id));
       const bNet = bRevenue - bComm;
       return { name: b.name, ordersCount: totalParcelsOf(bOrders), revenue: bRevenue, net: bNet };
     });
@@ -10698,8 +11990,12 @@
     const pilotsToShow = pilotFilter ? pilots.filter(p => p.id === pilotFilter) : pilots;
     const pilotRows = pilotsToShow.map(p => {
       const pOrders   = deliveredInRange.filter(o => o.pilotId === p.id);
-      const pRevenue  = pOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
-      const pCommission = pOrders.reduce((s,o) => s + pilotCommissionFor(p, o), 0);
+      const pRevenue  = pOrders.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0)
+        + _fareSumOf(fareInRange.filter(o => o.pilotId === p.id));
+      const pCommission = pOrders.reduce((s,o) => {
+        const v = window._ovAmountOf(ovMap, o);
+        return s + (v !== null ? v : pilotCommissionFor(p, o));
+      }, 0) + _retCommOf(returnsInRange.filter(o => o.pilotId === p.id));
       const branch = branches.find(b => b.id === p.assignedBranchId);
       const typeLabel = (p.commissionType || "percent") === "fixed" ? "ثابتة لكل طلب" : "نسبة %";
       return {
@@ -10721,8 +12017,8 @@
     };
   }
 
-  window.renderReportsPage = function() {
-    const data = buildReportData();
+  window.renderReportsPage = async function() {
+    const data = await buildReportData();
 
     document.getElementById("rep-orders").textContent   = data.totalOrders;
     document.getElementById("rep-revenue").textContent  = data.totalRevenue + " ج.م";
@@ -10773,9 +12069,9 @@
     }).join("") : `<tr><td colspan="9" class="empty-row">لا توجد بيانات لهذه الفترة</td></tr>`;
   };
 
-  window.exportReportExcel = function() {
+  window.exportReportExcel = async function() {
     if (typeof XLSX === "undefined") { showToast("تعذّر تحميل مكتبة Excel", "error"); return; }
-    const data = buildReportData();
+    const data = await buildReportData();
 
     const summarySheet = XLSX.utils.json_to_sheet([{
       "إجمالي الطلبات": data.totalOrders,
@@ -10807,8 +12103,8 @@
     XLSX.writeFile(wb, `تقرير_${fromStr}_${toStr}.xlsx`);
   };
 
-  window.exportReportPDF = function() {
-    const data = buildReportData();
+  window.exportReportPDF = async function() {
+    const data = await buildReportData();
     const fromStr = data.from.toLocaleDateString("ar-EG");
     const toStr   = data.to.toLocaleDateString("ar-EG");
 
@@ -10909,12 +12205,34 @@
     const toInput    = document.getElementById("poToDate")?.value;
     const searchVal  = (document.getElementById("poSearch")?.value || "").trim().toLowerCase();
 
-    const from = fromInput ? new Date(fromInput + "T00:00:00") : null;
-    const to   = toInput   ? new Date(toInput   + "T23:59:59") : null;
+    /* النطاق باليوم التجاري (9ص→9ص) زي كل الفلاتر */
+    const from = fromInput ? new Date(window.bizDayStartMs(fromInput)) : null;
+    const to   = toInput   ? new Date(window.bizDayStartMs(window._bizAddDays(toInput, 1)) - 1) : null;
 
     const orders  = window._ordersData || [];
     const pilots  = window._pilotsData || [];
     const branches = window._branchesList || [];
+
+    /* ↩️ المرتجعات كلها بتتعرض هنا (طلب 2026-09-03):
+         • اتدفع توصيلها (receiver/sender) → فلوسها مع الطيار فبتدخل
+           الإجمالي — إخفاؤها كان بيخلّي رقم الصفحة غير رقم الحسابات.
+         • محدش دفع (none) → مافيش فلوس، بس لازم تبان عشان ينفع يتحط
+           لها عمولة «من جيب الشركة» بزرار ✏️ زي المتسلّم بالظبط. */
+    const fareReturns = orders.filter(o => {
+      if (o.status !== "لم يتم التوصيل") return false;
+      if (pilotId && o.pilotId !== pilotId) return false;
+      const dt = new Date(o.undeliveredAt || o.createdAt);
+      if (from && dt < from) return false;
+      if (to   && dt > to)   return false;
+      if (searchVal) {
+        const orderNo = (o.orderNum || o.id || "").toLowerCase();
+        const sender  = (o.senderName || "").toLowerCase();
+        const recv    = ((o.deliveries || []).map(d => d.receiverName || "").join(" ")).toLowerCase();
+        if (!orderNo.includes(searchVal) && !sender.includes(searchVal) && !recv.includes(searchVal)) return false;
+      }
+      return true;
+    });
+    const _farePaid = o => o.undeliveredFareBy === "receiver" || o.undeliveredFareBy === "sender";
 
     let filtered = orders.filter(o => {
       if (o.status !== "تم التسليم") return false;
@@ -10933,7 +12251,9 @@
 
     // إحصائيات
     const totalCount    = filtered.length;
-    const totalRevenue  = filtered.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+    /* الإيراد بيدخل فيه المدفوع بس — «محدش دفع» مافيش فلوس اتقبضت */
+    const fareRevenue   = fareReturns.filter(_farePaid).reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0);
+    const totalRevenue  = filtered.reduce((s,o) => s + (Number(o.totalDeliveryPrice) || 0), 0) + fareRevenue;
     const pilot = pilots.find(p => p.id === pilotId);
     /* الإجمالي لازم يطابق اللي الطيار هياخده فعلًا: العمولة المكتوبة بالإيد
        بتغلب المحسوبة، والعمولات المستقلة (بلا أوردر) بتتضاف فوقهم. نفس
@@ -10944,7 +12264,13 @@
       const adj = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
       return s + (adj ? (Number(adj.amount) || 0)
                       : (window.pilotCommissionFor ? pilotCommissionFor(pt, o) : 0));
-    }, 0) + (window.CommAdj ? CommAdj.extrasTotal() : 0);
+    }, 0) + (window.CommAdj ? CommAdj.extrasTotal() : 0)
+    /* عمولة «من جيب الشركة» المكتوبة على مرتجع — بمبلغها بس، مافيش
+       حساب تلقائي للمرتجع (السيرفر بيجمعها بنفس القاعدة) */
+    + fareReturns.reduce((s,o) => {
+      const adj = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
+      return s + (adj ? (Number(adj.amount) || 0) : 0);
+    }, 0);
 
     // بلوك العمولات المستقلة + زرار الإضافة (للمدير ومشرف الفرع بس)
     const exBox = document.getElementById("poExtrasBox");
@@ -10955,7 +12281,7 @@
     const countEl = document.getElementById("poTotalCount");
     const revEl   = document.getElementById("poTotalRevenue");
     const commEl  = document.getElementById("poTotalComm");
-    if (countEl)  countEl.textContent  = totalCount + " طلب";
+    if (countEl)  countEl.textContent  = totalCount + " طلب" + (fareReturns.length ? ` + ${fareReturns.length} مرتجع` : "");
     if (revEl)    revEl.textContent    = totalRevenue.toFixed(2) + " ج.م";
     if (commEl)   commEl.textContent   = totalComm.toFixed(2) + " ج.م";
 
@@ -10963,10 +12289,38 @@
     const tbody = document.getElementById("pilotOrdersBody");
     if (!tbody) return;
 
-    if (!filtered.length) {
+    if (!filtered.length && !fareReturns.length) {
       tbody.innerHTML = `<tr><td colspan="10" class="empty-row">لا توجد أوردرات لهذا الطيار في هذه الفترة</td></tr>`;
       return;
     }
+
+    /* صفوف المرتجعات — المدفوع توصيله بمبلغه، و«محدش دفع» بيبان عشان
+       عمولة جيب الشركة. خانة العمولة زي المتسلّم: override + زرار ✏️ */
+    const fareRowsHtml = fareReturns.map((o, i) => {
+      const branch = branches.find(b => b.id === o.branchId);
+      const dt = o.undeliveredAt || o.createdAt;
+      const dtStr = dt ? new Date(dt).toLocaleString("ar-EG") : "—";
+      const deliveries = o.deliveries || [];
+      const recvNames = deliveries.map(d => d.receiverName || "—").join("، ");
+      const recvAreas = deliveries.map(d => d.zoneName || d.address || "—").join("، ");
+      const paid = _farePaid(o);
+      const who = o.undeliveredFareBy === "receiver" ? "المستلم دفع التوصيل"
+        : (o.undeliveredFareBy === "sender" ? "المحل دفع التوصيل" : "محدش دفع التوصيل");
+      const _adj = window.CommAdj ? CommAdj.overrideFor(o.id) : null;
+      return `
+        <tr style="background:rgba(249,115,22,.05)">
+          <td class="idx">${filtered.length + i + 1}</td>
+          <td style="font-weight:700;color:var(--sky)">${ esc(o.orderNum || o.id || "—") }</td>
+          <td>${ esc(o.senderName || "—") }</td>
+          <td style="font-size:.8rem">${ esc(recvNames) }</td>
+          <td style="font-size:.8rem;color:var(--muted)">${ esc(recvAreas) }</td>
+          <td>${ esc(branch ? branch.name : "—") }</td>
+          <td style="${paid ? "color:var(--green);font-weight:600" : "color:var(--muted)"}">${ paid ? esc(Number(o.totalDeliveryPrice || 0).toFixed(2)) + " ج.م" : "—" }<div><span style="background:${paid ? "rgba(249,115,22,.15)" : "rgba(232,25,44,.13)"};color:${paid ? "var(--orange)" : "var(--red)"};padding:1px 7px;border-radius:20px;font-size:.66rem;font-weight:700">↩️ مرتجع — ${ esc(who) }</span></div></td>
+          <td style="white-space:nowrap">${_adj ? `<span style="color:var(--orange);font-weight:800">${ esc((Number(_adj.amount) || 0).toFixed(2)) } ج.م</span><span title="${ esc(_adj.reason || "") }" style="margin-inline-start:5px;background:rgba(249,115,22,.16);color:var(--orange);padding:1px 6px;border-radius:20px;font-size:.66rem;font-weight:700">من جيب الشركة</span>` : `<span style="color:var(--muted)">—</span>`}${(window.CommAdj && CommAdj.canEdit() && pilot) ? `<button onclick="editPilotComm('${ escJs(o.id) }')" title="عمولة من جيب الشركة" style="margin-inline-start:6px;background:rgba(14,165,233,.14);color:var(--sky);border:1px solid rgba(14,165,233,.3);padding:2px 7px;border-radius:7px;cursor:pointer;font-size:.72rem">✏️</button>` : ""}</td>
+          <td style="font-size:.78rem;color:var(--muted)">${dtStr}</td>
+          <td><button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
+        </tr>`;
+    }).join("");
 
     tbody.innerHTML = filtered.map((o, i) => {
       const branch  = branches.find(b => b.id === o.branchId);
@@ -10974,7 +12328,8 @@
       const dtStr   = dt ? new Date(dt).toLocaleString("ar-EG") : "—";
       const deliveries = o.deliveries || [];
       const recvNames = deliveries.map(d => d.receiverName || "—").join("، ");
-      const recvAreas = deliveries.map(d => d.zone || d.address || "—").join("، ");
+      // d.zone مش على السلك — الاسم الصح zoneName (branch.html مكتوب صح)
+      const recvAreas = deliveries.map(d => d.zoneName || d.address || "—").join("، ");
       const autoComm   = pilot ? (window.pilotCommissionFor ? pilotCommissionFor(pilot, o) : 0) : 0;
     /* العمولة المكتوبة بالإيد بتغلب الحساب التلقائي — أوردر السفر بيتحسب
        نص سعر الخدمة مش العمولة الثابتة. الرقم ده هو نفسه اللي بيدخل
@@ -10994,7 +12349,7 @@
           <td style="font-size:.78rem;color:var(--muted)">${dtStr}</td>
           <td><button class="view-btn" onclick="viewOrderDetails('${ escJs(o.id) }')">🔍 تفاصيل</button></td>
         </tr>`;
-    }).join("");
+    }).join("") + fareRowsHtml;
   };
 
   /* ── تعديلات عمولة الطيار ──────────────────────────────────────
@@ -11019,7 +12374,10 @@
     const pilot = (window._pilotsData || []).find(p => p.id === f.pilotId);
     const order = (window._ordersData || []).find(o => o.id === orderId);
     if (!pilot || !order || !window.CommAdj) return;
-    const auto = window.pilotCommissionFor ? pilotCommissionFor(pilot, order) : 0;
+    /* المرتجع مالوش عمولة تلقائية — الافتراضي صفر، والمكتوب هو
+       «من جيب الشركة» (طلب 2026-09-03) */
+    const auto = (order.status === "تم التسليم" && window.pilotCommissionFor)
+      ? pilotCommissionFor(pilot, order) : 0;
     CommAdj.openEdit(pilot, order, auto, window._caRefresh);
   };
 
@@ -11152,14 +12510,15 @@
           <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 1</label><input id="edit-recv-phone-${i}" value="${ esc(d.receiverPhone||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
           <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 2</label><input id="edit-recv-phone2-${i}" value="${ esc(d.receiverPhone2||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
           <div style="grid-column:1/-1"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">العنوان</label><div id="edit-recv-addrWidget-${i}"></div></div>
+          ${ GeoLoc.fieldHtml(`edit-recv-loc-${i}`, (d.lat && d.lng) ? GeoLoc.fmt(d.lat, d.lng) : "") }
         </div>
       </div>`;
     });
     document.getElementById("edit-order-data-content").innerHTML = html;
     // تهيئة widgets بعد إدراج الـ HTML
-    window.renderAddressWidget('edit-sender-addrWidget', { required: true, value: o.senderAddress || '' });
+    window.renderAddressWidget('edit-sender-addrWidget', { edit: true, required: true, value: o.senderAddress || '' });
     deliveries.forEach((d, i) => {
-      window.renderAddressWidget(`edit-recv-addrWidget-${i}`, { required: true, value: d.address || '' });
+      window.renderAddressWidget(`edit-recv-addrWidget-${i}`, { edit: true, required: true, value: d.address || '' });
     });
     document.getElementById("modal-edit-order-data").style.display = "flex";
   };
@@ -11177,6 +12536,11 @@
          التحويل لـREST، فالحفظ كان بيرمي ReferenceError ويطلع توست أحمر.
          نفس نداء branch.html وcallcenter.html على PUT /api/orders/{id} */
       const deliveries = o.deliveries || [];
+      for (let i = 0; i < deliveries.length; i++) {
+        if (!GeoLoc.read("edit-recv-loc-" + i).ok) {
+          showToast(`لوكيشن المستلم ${i + 1} مش مفهوم — الصق إحداثيات أو لينك خرائط جوجل، أو سيبه فاضي`, "error"); return;
+        }
+      }
       await window.API.put("/api/orders/" + _editingOrderId, {
         senderName   : document.getElementById("edit-sender-name").value.trim(),
         senderPhone  : document.getElementById("edit-sender-phone").value.trim(),
@@ -11188,6 +12552,9 @@
           receiverPhone : document.getElementById("edit-recv-phone-"+i).value.trim(),
           receiverPhone2: document.getElementById("edit-recv-phone2-"+i).value.trim(),
           address       : window.getAddressValue("edit-recv-addrWidget-"+i),
+          /* 📍 فاضي = مسح اللوكيشن، مكتوب = لازم يكون مفهوم (اتفحص قبل النداء) */
+          lat           : GeoLoc.read("edit-recv-loc-"+i).geo?.lat ?? null,
+          lng           : GeoLoc.read("edit-recv-loc-"+i).geo?.lng ?? null,
         })),
       });
       showToast("تم تحديث البيانات بنجاح ✓", "success");
@@ -11222,11 +12589,14 @@
   let _showOrders        = true;
 
   /* ── أيقونات ────────────────────────────────────────────────────── */
-  function _mkPilotIcon(status) {
+  /* الماركر بيقول عمر الموقع من غير دوس — شوف assets/js/locfresh.js
+     للسبب. `pilot` اختياري عشان أي نداء قديم مايقعش. */
+  function _mkPilotIcon(status, pilot) {
     const bg = status === "onLeave" ? "#ef4444" : status === "delivering" ? "#3b82f6" : "#22c55e";
+    const st = window.LocFresh ? LocFresh.markerStyle(pilot || {}) : { tier:"ok", opacity:1, ring:"#fff", dashed:false, badge:null };
     return L.divIcon({
       className:"",
-      html:`<div style="background:${bg};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:2px solid #fff">🛵</div>`,
+      html:`<div style="position:relative;width:40px;height:40px">${ LocFresh.badgeHtml(st) }<div style="background:${bg};opacity:${st.opacity};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:${st.dashed?"2px dashed":"2px solid"} ${st.ring}">🛵</div></div>`,
       iconSize:[40,40], iconAnchor:[20,20]
     });
   }
@@ -11269,7 +12639,7 @@
         color:${ esc(p.pilotStatus==="onLeave"?"#b91c1c":p.pilotStatus==="delivering"?"#1d4ed8":"#15803d") }">
         ${p.pilotStatus==="onLeave"?`🔴 ${_leaveTypeLabel(p.leaveType)}${ esc(p.leaveReason?" — "+p.leaveReason:"") }`:p.pilotStatus==="delivering"?"🔵 في التوصيل":"🟢 في الانتظار"}
       </div>
-      <div style="color:#94a3b8;font-size:.75rem;margin-top:5px">⏱ ${t}</div>
+      ${ window.LocFresh ? LocFresh.popupLine(p) : `<div style="color:#94a3b8;font-size:.75rem;margin-top:5px">⏱ ${t}</div>` }
     </div>`;
   }
   function _leaveTypeLabel(type) {
@@ -11289,6 +12659,7 @@
       <div style="font-weight:700;color:#3b82f6;font-size:1rem;margin-bottom:4px">📦 ${ esc(o.orderNum||"—") }</div>
       <div style="font-size:.85rem;font-weight:600;color:#1e293b">${ esc(o.senderName||"—") }</div>
       <div style="font-size:.78rem;color:#64748b;margin-top:2px">📍 ${ esc(o.senderAddress||"—") }</div>
+      ${ GeoLoc.popupRow(_appGeoOf(o)) }
       ${pilot ? `<div style="font-size:.78rem;color:#f97316;margin-top:4px;font-weight:600">🛵 ${ esc(pilot.name) }</div>` : ""}
       <div style="font-size:.78rem;font-weight:700;color:#374151;margin-top:8px;margin-bottom:2px">نقاط التسليم (${ esc((o.deliveries||[]).length) }):</div>
       ${dList}
@@ -11304,6 +12675,7 @@
       <div style="font-size:.85rem;font-weight:600">${ esc(d.receiverName||"—") }</div>
       <div style="font-size:.78rem;color:#64748b">${ esc(d.receiverPhone||"") }</div>
       <div style="font-size:.78rem;color:#64748b;margin-top:2px">${ esc(d.address||"") }</div>
+      ${ GeoLoc.popupRow(_appGeoOfDeliv(d)) }
       <div style="font-size:.78rem;color:#64748b;margin-top:2px">📦 ${ esc(o.orderNum||"—") } — ${ esc(d.zoneName||"") }</div>
       <div style="margin-top:6px;font-size:.78rem;font-weight:600;
         color:${ esc(d.status==="تم التسليم"?"#15803d":d.status==="لم يتم التوصيل"?"#dc2626":"#7c3aed") }">${ esc(d.status||"قيد التنفيذ") }</div>
@@ -11327,10 +12699,10 @@
       const lat = parseFloat(loc.lat), lng = parseFloat(loc.lng);
       if (_pilotMarkers[id]) {
         _pilotMarkers[id].setLatLng([lat,lng]);
-        _pilotMarkers[id].setIcon(_mkPilotIcon(p.pilotStatus));
+        _pilotMarkers[id].setIcon(_mkPilotIcon(p.pilotStatus, p));
         _pilotMarkers[id].getPopup()?.setContent(_pilotPopupHtml(p));
       } else {
-        _pilotMarkers[id] = L.marker([lat,lng], {icon:_mkPilotIcon(p.pilotStatus), zIndexOffset:1000})
+        _pilotMarkers[id] = L.marker([lat,lng], {icon:_mkPilotIcon(p.pilotStatus, p), zIndexOffset:1000})
           .addTo(_layerPilots).bindPopup(_pilotPopupHtml(p));
       }
     });
@@ -11552,6 +12924,7 @@
         <span style="background:#eff6ff;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">🛵 ${deliveringCount} في أوردر</span>
         <span style="background:#fef2f2;color:#b91c1c;padding:3px 10px;border-radius:20px;font-size:.8rem">🖐️ ${onLeaveCount} في إذن</span>
         ${noGeo ? `<span title="الموقع بييجي من تطبيق العميل/التاجر — الأوردرات المكتوبة يدويًا من اللوحة مش بيبقى معاها إحداثيات" style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;font-weight:600">⚠️ ${noGeo} أوردر بدون موقع</span>` : ""}
+        ${ window.LocFresh ? LocFresh.statusChip(allPilots) : "" }
         <span style="background:#f8fafc;color:#64748b;padding:3px 10px;border-radius:20px;font-size:.8rem">🔄 ${new Date().toLocaleTimeString("ar-EG")}</span>
         <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.8rem">⚡ تتبع فوري</span>
         <span style="margin-right:auto;display:flex;gap:5px">
@@ -11563,6 +12936,9 @@
           const m = _pilotMarkers[id];
           if (m?.isPopupOpen()) m.getPopup()?.setContent(_pilotPopupHtml({id,...v}));
         });
+        /* الماركر بيترسم مرة واحدة وقت وصول البيانات — من غير السطر ده
+           اللي كان «طازة» بيفضل شكله طازة حتى لو بقاله ساعة ساكت. */
+        if (window.LocFresh) LocFresh.refreshMarkers(_lastPilotsSnap, _pilotMarkers, p => _mkPilotIcon(p.pilotStatus, p));
       }
     }, 1000);
   }
@@ -11571,6 +12947,15 @@
   window.initPilotMap = function() {
     const mapEl = document.getElementById("pilot-map");
     if (!mapEl) return;
+    /* 🔴 Leaflet بيتحمّل من unpkg. لو الشبكة قافلة عليه أو الـCDN
+       اتأخر، `L` بتبقى undefined والاستثناء بيطلع من الدالة دي
+       اللي بتتنده من navigateTo — فبيوقف **باقي التنقّل كله**
+       (الورديات والإذونات والإشعارات بتبطّل تتحدّث). الحارس
+       بيحوّل ده لرسالة مفهومة في مكان الخريطة. */
+    if (!window.L) {
+      mapEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">تعذّر تحميل مكتبة الخرائط — اتأكد إن النت شغّال وحدّث الصفحة.</div>';
+      return;
+    }
 
     if (!_pilotMap) {
       _pilotMap = L.map("pilot-map").setView([30.0444, 31.2357], 11);

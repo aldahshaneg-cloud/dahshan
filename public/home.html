@@ -807,8 +807,11 @@
           <div class="app-name">الموارد البشرية</div>
         </div>
 
-        <!-- Accounts -->
-        <div class="app-card purple" id="card-accounts" onclick="openApp('accounts')">
+        <!-- 🧾 تقفيل الطيارين — الكارت ده هو البرنامج نفسه.
+             المعرّف والمفتاح بقوا `pilotacct` (2026-09-01) عشان الأدمن
+             يقدر يدّيه لمشرف فرع لوحده. صاحب `accounts` بيشتقه فبيشوفه
+             زي ما هو. كارت واحد بالاسم ده — كارتين بنفس الاسم بيلخبطوا. -->
+        <div class="app-card purple" id="card-pilotacct" onclick="openApp('pilotacct')">
           <div class="app-icon">
             <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="6" y="3" width="24" height="30" rx="3" fill="#e8192c" opacity=".12" stroke="#e8192c" stroke-width="1.5"/>
@@ -819,7 +822,9 @@
               <path d="M22 25h4M24 23v4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/>
             </svg>
           </div>
-          <div class="app-name">النظام المحاسبي</div>
+          <!-- الاسم اتغيّر 2026-08-31: البرنامج بياخد تقفيل الطيارين بس
+               (قرار صاحب النظام)، و«النظام المحاسبي» كان بيوعد بأكبر. -->
+          <div class="app-name">تقفيل الطيارين</div>
         </div>
 
         <!-- Call Center -->
@@ -1027,7 +1032,9 @@
 
        لما أي وحدة منهم تتبني: شيل مفتاحها من هنا وضيف ملفها في urls تحت.
        مقصود إن ده المكان الوحيد اللي بيتعدّل. */
-    const APPS_NOT_BUILT = ["hr", "hrOld", "accounts", "perf"];
+    /* `accounts` اتشال 2026-08-31 — البرنامج اتبنى (public/accounts.html).
+   الباقي لسه بيتصرّح في allowedApps من غير ملفات، فكروتهم بتفضل مطفية. */
+const APPS_NOT_BUILT = ["hr", "hrOld", "perf"];
 
     /* ── رسم الكروت — تعتيم غير المصرّح ────────────────────────
        ⚠️ كل سطر اشتقاق تحت بيوسّع الصلاحية، فأي مفتاح جديد لازم يتحط في
@@ -1039,6 +1046,8 @@
     function renderAppCards(allowedApps) {
       if (allowedApps.includes("hr") && !allowedApps.includes("hrOld")) allowedApps = [...allowedApps, "hrOld"];
       if (allowedApps.includes("accounts") && !allowedApps.includes("damascus")) allowedApps = [...allowedApps, "damascus"];
+      // 🔑 `accounts` بيشتق «تقفيل الطيارين» كمان — والعكس مش صحيح
+      if (allowedApps.includes("accounts") && !allowedApps.includes("pilotacct")) allowedApps = [...allowedApps, "pilotacct"];
       if ((allowedApps.includes("admin") || allowedApps.includes("callcenter")) && !allowedApps.includes("customer")) allowedApps = [...allowedApps, "customer"];
       if (allowedApps.includes("admin")) {
         for (const k of ["customers","siteadmin","perf","storesadmin","pilotsadmin"]) if (!allowedApps.includes(k)) allowedApps = [...allowedApps, k];
@@ -1046,7 +1055,7 @@
       if (allowedApps.includes("hr") && !allowedApps.includes("perf")) allowedApps = [...allowedApps, "perf"];
       if (!allowedApps.includes("site")) allowedApps = [...allowedApps, "site"];   // الموقع العام للكل
 
-      const ids = ["admin","branch","store","hr","hrOld","accounts","callcenter","damascus",
+      const ids = ["admin","branch","store","hr","hrOld","accounts","pilotacct","callcenter","damascus",
         "customer","customers","perf","storesadmin","pilotsadmin","site","siteadmin"];
       for (const appKey of ids) {
         const card = document.getElementById("card-" + appKey);
@@ -1075,6 +1084,7 @@
       const ok = allowed.includes(appKey)
         || (appKey === "hrOld"    && allowed.includes("hr"))
         || (appKey === "damascus" && allowed.includes("accounts"))
+        || (appKey === "pilotacct" && allowed.includes("accounts"))
         || (appKey === "customer" && (allowed.includes("admin") || allowed.includes("callcenter")))
         || (["customers","siteadmin","perf","storesadmin","pilotsadmin"].includes(appKey) && allowed.includes("admin"))
         || (appKey === "perf" && allowed.includes("hr"))
@@ -1086,6 +1096,7 @@
         callcenter:"callcenter.html", damascus:"tiar_damascus.html",
         customer:"customer.html", customers:"customers.html",
         storesadmin:"stores.html", pilotsadmin:"pilots.html",
+        accounts:"accounts.html", pilotacct:"accounts.html",
         site:"https://aldahshan.cloud/", siteadmin:"site-admin.html"
       };
       if (urls[appKey]) window.location.href = urls[appKey];

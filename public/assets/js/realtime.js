@@ -31,7 +31,7 @@
  * ═══ الواجهة ═══
  *   REALTIME.available()                 — المكتبة موجودة؟
  *   REALTIME.connect()                   — اتصال واحد مشترك (idempotent)
- *   REALTIME.subscribeBranch(id, cb)     — قناة فرع؛ بترجّع دالة إلغاء
+ *   REALTIME.subscribeBranch(id, cb, cbReq, cbUrge) — قناة فرع؛ بترجّع دالة إلغاء
  *   REALTIME.unsubscribeBranch(id)
  *   REALTIME.syncBranches([ids], cb)     — يخلّي الاشتراكات = القايمة دي بالظبط
  *   REALTIME.unsubscribeAll()
@@ -51,6 +51,11 @@
   var CHANNEL_PREFIX = "private-branch.";
   var EVENT_ORDER_CHANGED = "order.changed";          // OrderChanged::broadcastAs()
   var EVENT_PILOT_REQUEST = "pilot.request.changed";  // PilotRequestChanged::broadcastAs()
+  /* 🔴 الاستثناء الوحيد لقاعدة «جرس مش بيانات» فوق: الاستعجال **مالوش**
+     صف في جدول الأوردرات يتقرا بالاستطلاع — هو حدث لحظي بيحصل وينتهي.
+     فحمولته (المحل · رقم الأوردر · نص جاهز) بتعدّي للصفحة زي ما هي،
+     ومفيش خطر مصدر تاني للحقيقة لأنها مابتكتبش في أي كاش أوردرات. */
+  var EVENT_ORDER_URGED   = "order.urged";            // OrderUrged::broadcastAs()
 
   function _cfg() {
     var https = global.location.protocol === "https:";
@@ -191,7 +196,7 @@
      * اشتراك في قناة فرع. `cb(payload)` بيتنده على كل `order.changed`.
      * بترجّع دالة إلغاء (بترجّع دالة فاضية لو الاشتراك ما حصلش).
      */
-    subscribeBranch: function (branchId, cb, cbRequests) {
+    subscribeBranch: function (branchId, cb, cbRequests, cbUrge) {
       var id = String(branchId == null ? "" : branchId);
       if (!id) return function () {};
       if (_channels[id]) return function () { RT.unsubscribeBranch(id); };
@@ -222,7 +227,16 @@
         ch.bind("pusher:subscription_error", function (st) {
           console.warn("realtime: الاشتراك في " + CHANNEL_PREFIX + id + " اترفض", st && st.status);
         });
-        _channels[id] = { ch: ch, handler: handler, reqHandler: reqHandler };
+        /* استعجال من المحل — نفس نمط الكولباك الاختياري فوق: النداءات
+           القديمة بكولباك أو اتنين شغّالة زي ما هي من غير أي تغيير. */
+        var urgeHandler = null;
+        if (typeof cbUrge === "function") {
+          urgeHandler = function (payload) {
+            try { cbUrge(payload || {}); } catch (_) {}
+          };
+          ch.bind(EVENT_ORDER_URGED, urgeHandler);
+        }
+        _channels[id] = { ch: ch, handler: handler, reqHandler: reqHandler, urgeHandler: urgeHandler };
         return function () { RT.unsubscribeBranch(id); };
       } catch (_) {
         return function () {};
@@ -237,6 +251,7 @@
       try {
         entry.ch.unbind(EVENT_ORDER_CHANGED, entry.handler);
         if (entry.reqHandler) entry.ch.unbind(EVENT_PILOT_REQUEST, entry.reqHandler);
+        if (entry.urgeHandler) entry.ch.unbind(EVENT_ORDER_URGED, entry.urgeHandler);
         if (_pusher) _pusher.unsubscribe(CHANNEL_PREFIX + id);
       } catch (_) {}
     },
@@ -246,7 +261,7 @@
      * اللي اتشال. بتتنده كل ما قايمة الفروع تتحدّث؛ الفروع اللي مشتركين
      * فيها أصلًا مابتتلمسش (مفيش إعادة تفويض من غير داعي).
      */
-    syncBranches: function (ids, cb, cbRequests) {
+    syncBranches: function (ids, cb, cbRequests, cbUrge) {
       var want = {};
       (ids || []).forEach(function (b) {
         var id = String(b == null ? "" : b);
@@ -256,7 +271,7 @@
         if (!want[id]) RT.unsubscribeBranch(id);
       });
       Object.keys(want).forEach(function (id) {
-        if (!_channels[id]) RT.subscribeBranch(id, cb, cbRequests);
+        if (!_channels[id]) RT.subscribeBranch(id, cb, cbRequests, cbUrge);
       });
       return Object.keys(_channels).length;
     },

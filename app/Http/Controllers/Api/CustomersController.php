@@ -131,8 +131,9 @@ class CustomersController
      * المش مبعوت بيتمسح (`null`). ده سلوك الأصل بالحرف — اللوحة بتبعت
      * الفورم كامل. (متسجّل في notes)
      *
-     * التحقق من الموبايل `^0?1[0-9]{9}$` بعد شيل المسافات والشرط — بيقبل
-     * `01012345678` و`1012345678`. الرقم الفاضي مسموح (مسح الرقم).
+     * التحقق: موبايل `^0?1[0-9]{9}$` (بيقبل `01012345678` و`1012345678`)
+     * أو أرضي مصري `^0[2-9][0-9]{7,8}$` — فيه عملاء مالهمش غير تلفون
+     * أرضي (نفس قاعدة تطبيق العملاء). الرقم الفاضي مسموح (مسح الرقم).
      *
      * ⚠️ فحص الوجود بيتم **بعد** الـUPDATE مش قبله، وبس لو مفيش صف اتغيّر:
      * تعديل بنفس القيم بيرجّع 0 صف من غير ما يكون العميل ناقص، فلازم نفرّق.
@@ -149,7 +150,8 @@ class CustomersController
             throw new ApiException('اكتب اسم العميل');
         }
         $phone1 = trim((string) ($b['phone1'] ?? ''));
-        if ($phone1 !== '' && ! preg_match('/^0?1[0-9]{9}$/', str_replace([' ', '-'], '', $phone1))) {
+        $p1d    = str_replace([' ', '-'], '', $phone1);
+        if ($phone1 !== '' && ! preg_match('/^0?1[0-9]{9}$/', $p1d) && ! preg_match('/^0[2-9][0-9]{7,8}$/', $p1d)) {
             throw new ApiException('رقم الهاتف غير صحيح');
         }
 
@@ -205,6 +207,24 @@ class CustomersController
                 $cid,
             ]
         );
+
+        return ApiResponse::ok(['customer' => $this->fetchWire($cid)]);
+    }
+
+    /**
+     * POST /api/customers/{id}/price-edit — {enabled: true/false} · 🔒 `role:admin`
+     *
+     * (طلب صاحب النظام 2026-09-02): فتح خاصية تعديل سعر التوصيل للعميل
+     * — زي المحلات، يرفع السعر ولا ينزل عن سعر المنطقة. البوابة الفعلية
+     * في CustomerAppController::customerDeliveryPrice؛ هنا مفتاح المنح بس.
+     */
+    public function priceEdit(Request $request, string $id): JsonResponse
+    {
+        $request->actorOrFail();
+        $cid = $this->intId($id);
+        $on  = ! empty($this->body($request)['enabled']);
+
+        DB::update('UPDATE customers SET can_edit_price = ? WHERE id = ?', [$on ? 1 : 0, $cid]);
 
         return ApiResponse::ok(['customer' => $this->fetchWire($cid)]);
     }
@@ -331,7 +351,7 @@ class CustomersController
     {
         $row = DB::select(
             'SELECT u.shop_name, u.shop_phone, u.shop_phone2, u.shop_address,
-                    u.shop_zone_id, u.shop_lat, u.shop_lng,
+                    u.shop_zone_id, u.shop_lat, u.shop_lng, u.can_edit_price,
                     z.area_name AS _zone_name, z.price AS _zone_price, z.delivery_branch_id
                FROM users u LEFT JOIN zones z ON z.id = u.shop_zone_id
               WHERE u.id = ? LIMIT 1',
@@ -357,11 +377,13 @@ class CustomersController
             'branchId'    => $r['delivery_branch_id'] !== null ? (int) $r['delivery_branch_id'] : null,
             'lat'         => $r['shop_lat'] !== null ? (float) $r['shop_lat'] : null,
             'lng'         => $r['shop_lng'] !== null ? (float) $r['shop_lng'] : null,
+            /* 🏪 خانة سعر التوصيل في البوابة بتتفتح بيه (طلب 2026-09-03) */
+            'canEditPrice' => (int) ($r['can_edit_price'] ?? 0) === 1,
         ];
     }
 
     /**
-     * PUT /api/store/pickup-profile — {phone?, phone2?, address?, zoneId?, lat?, lng?}
+     * PUT /api/store/pickup-profile — {shopName?, phone?, phone2?, address?, zoneId?, lat?, lng?}
      * 🔒 `role:store` — المحل بيعدّل ملف نفسه بس. مفيش باراميتر يحدد محل
      * تاني أصلًا (`WHERE u.id = <حساب الجلسة>`).
      *
@@ -376,6 +398,16 @@ class CustomersController
      *    نص دبوس مالوش معنى. وأي واحد فيهم فاضي/null = مسح الاتنين.
      *  • العنوان بيتقص على 190 حرف (طول العمود) والفاضي بيبقى NULL.
      *
+     * 🆕 `shopName` (2026-08-31): الشركة بتفتح الحساب والمحل بيكمّل بياناته
+     * بنفسه — والاسم ده بالذات **بيتبعت كاسم المُرسِل في كل شحنة**
+     * (`store.html` بتقراه من الملف وتحطه في `senderName`). كان الحقل
+     * الوحيد في هوية المُرسِل اللي الإدارة بس بتقدر تكتبه، فالمحل اللي
+     * الإدارة سجّلت اسمه ناقص أو غلط مكانش يقدر يصلّحه.
+     *
+     * عكس الباقي **مايتمسحش**: فاضي = 400 مش NULL. الأوردر بيرفض من غير
+     * `senderName` (`OrdersController::store`)، فمسحه كان هيقفل الشحنات
+     * على المحل برسالة مالهاش علاقة («يرجى اختيار أو إدخال العميل استلام»).
+     *
      * جملة كتابة واحدة (بعد فحص الزون) — فمفيش معاملة، زي الأصل.
      * الرد هو **نفس رد الـGET** بالظبط (الأصل بينده الدالة التانية).
      */
@@ -386,6 +418,32 @@ class CustomersController
 
         $sets = [];
         $args = [];
+
+        if (array_key_exists('shopName', $b)) {
+            /* `trim()` بيشيل مسافات ASCII بس. اسم كله NBSP (`\u{00A0}`) أو
+               مسافات عربية/يونيكود كان بيعدّي التحقق ويتحفظ «فاضي بصريًا»،
+               وبعدين يتقفل ومفيش طريق لتصحيحه من التطبيق. */
+            $name = preg_replace('/^[\s\x{00A0}\x{200B}-\x{200D}\x{FEFF}]+|[\s\x{00A0}\x{200B}-\x{200D}\x{FEFF}]+$/u',
+                                 '', (string) ($b['shopName'] ?? ''));
+            if (mb_strlen($name) < 2) {
+                throw new ApiException('اكتب اسم المحل — بيظهر للطيار وللعميل كاسم المُرسِل');
+            }
+
+            /* 🔒 القفل على السيرفر كمان، مش في الواجهة بس.
+               الواجهة بتقفل الحقل بعد ما الاسم يتسجّل (`applyShopNameLock`)
+               لأنه مبصوم كـ`senderName` على كل شحنة قديمة. بس إخفاء الحقل
+               مش قفل — أي حد يفتح الـconsole ويكتب `fetch` كان بيعدّي.
+               نفس قاعدة الكول سنتر: الواجهة والسيرفر مع بعض.
+               التعديل بعد التسجيل من الإدارة (`EntitiesController`). */
+            $cur = (string) (DB::select('SELECT shop_name FROM users WHERE id = ? LIMIT 1',
+                                        [(int) $actor->userId])[0]->shop_name ?? '');
+            if ($cur !== '' && $cur !== $name) {
+                throw ApiException::forbidden('اسم المحل مسجّل — التعديل بيتم من الإدارة');
+            }
+
+            $sets[] = 'shop_name = ?';
+            $args[] = mb_substr($name, 0, 190);
+        }
 
         if (array_key_exists('phone', $b)) {
             $p1 = (string) preg_replace('/[^\d]/', '', (string) $b['phone']);
@@ -486,5 +544,183 @@ class CustomersController
         }
 
         return CustomerWire::customer($row);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       دفتر عناوين بوابة المحلات — «عناويني» (طلب صاحب النظام 2026-09-02:
+       «في تطبيق المحلات اعمل عناويني زي تطبيق العملاء»).
+
+       مرآة عناوين تطبيق العميل بالحرف (CustomerAppController::addresses*)
+       بس المفتاح هنا صف المحل في `users` (actor->userId) — نفس مفتاح ملف
+       الاستلام فوق. الحراسة على المسارات role:store، والـWHERE على
+       user_id هو حارس الملكية: محل مايشوفش/مايمسحش عناوين محل تاني.
+    ═══════════════════════════════════════════════════════════ */
+
+    /** قايمة عناوين المحل بصيغة السلك — الافتراضي الأول */
+    private static function storeAddressesFetch(int $userId): array
+    {
+        $rows = DB::select(
+            'SELECT a.*, z.area_name AS _zone_name, b.name AS _branch_name
+               FROM store_addresses a
+               LEFT JOIN zones z ON z.id = a.zone_id
+               LEFT JOIN branches b ON b.id = a.branch_id
+              WHERE a.user_id = ?
+              ORDER BY a.is_default DESC, a.id',
+            [$userId]
+        );
+
+        return array_map(fn ($r) => [
+            'id'          => (string) $r->id,
+            'label'       => (string) ($r->label ?? ''),
+            'fullAddress' => (string) ($r->full_address ?? ''),
+            'lat'         => $r->lat !== null ? (float) $r->lat : null,
+            'lng'         => $r->lng !== null ? (float) $r->lng : null,
+            'zoneId'      => $r->zone_id !== null ? (string) $r->zone_id : null,
+            'branchId'    => $r->branch_id !== null ? (string) $r->branch_id : null,
+            'zoneName'    => (string) ($r->_zone_name ?? ''),
+            'branchName'  => (string) ($r->_branch_name ?? ''),
+            'isDefault'   => (int) $r->is_default === 1,
+        ], $rows);
+    }
+
+    /** [zoneId, branchId] بعد التحقق — نفس customer addrZone */
+    private static function storeAddrZone(array $b): array
+    {
+        $zoneId = isset($b['zoneId']) && $b['zoneId'] !== '' && $b['zoneId'] !== null ? (int) $b['zoneId'] : null;
+        if ($zoneId === null) {
+            return [null, null];
+        }
+        $z = DB::select('SELECT delivery_branch_id FROM zones WHERE id = ? LIMIT 1', [$zoneId])[0] ?? null;
+        if (! $z) {
+            throw new ApiException('المنطقة المختارة غير موجودة');
+        }
+
+        return [$zoneId, (int) $z->delivery_branch_id];
+    }
+
+    /** GET /api/store/addresses — نفس شذوذ عقد قايمة العميل: {ok, changed, items} */
+    public function storeAddressesList(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+
+        return ApiResponse::out([
+            'ok'      => true,
+            'changed' => true,
+            'items'   => self::storeAddressesFetch((int) $actor->userId),
+        ]);
+    }
+
+    /** POST /api/store/addresses */
+    public function storeAddressesCreate(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $b     = $this->body($request);
+
+        $full = trim((string) ($b['fullAddress'] ?? ''));
+        if ($full === '') {
+            throw new ApiException('اكتب العنوان');
+        }
+        [$zoneId, $branchId] = self::storeAddrZone($b);
+        if ($zoneId === null) {
+            throw new ApiException('اختر المنطقة');
+        }
+        $isDefault = ! empty($b['isDefault']) ? 1 : 0;
+
+        DB::transaction(function () use ($actor, $b, $full, $zoneId, $branchId, $isDefault): void {
+            // عنوان افتراضي واحد بس لكل محل — التصفير قبل الإدخال
+            if ($isDefault) {
+                DB::update('UPDATE store_addresses SET is_default = 0 WHERE user_id = ?', [(int) $actor->userId]);
+            }
+            DB::insert(
+                'INSERT INTO store_addresses
+                   (user_id, label, full_address, lat, lng, zone_id, branch_id, is_default, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [
+                    (int) $actor->userId,
+                    trim((string) ($b['label'] ?? '')) ?: 'عنوان',
+                    $full,
+                    isset($b['lat']) && $b['lat'] !== '' && $b['lat'] !== null ? (float) $b['lat'] : null,
+                    isset($b['lng']) && $b['lng'] !== '' && $b['lng'] !== null ? (float) $b['lng'] : null,
+                    $zoneId, $branchId, $isDefault, WireTime::nowDb(),
+                ]
+            );
+        });
+
+        return ApiResponse::ok(['items' => self::storeAddressesFetch((int) $actor->userId)]);
+    }
+
+    /** PUT /api/store/addresses/{id} — تعديل جزئي بنفس قاعدة array_key_exists */
+    public function storeAddressesUpdate(Request $request, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $b     = $this->body($request);
+
+        $row = DB::select(
+            'SELECT * FROM store_addresses WHERE id = ? AND user_id = ?',
+            [(int) $id, (int) $actor->userId]
+        )[0] ?? null;
+        if (! $row) {
+            throw new ApiException('العنوان غير موجود', 404);
+        }
+        $a = (array) $row;
+
+        $full = trim((string) ($b['fullAddress'] ?? $a['full_address']));
+        if ($full === '') {
+            throw new ApiException('اكتب العنوان');
+        }
+        if (array_key_exists('zoneId', $b)) {
+            [$zoneId, $branchId] = self::storeAddrZone($b);
+        } else {
+            $zoneId   = $a['zone_id'] !== null ? (int) $a['zone_id'] : null;
+            $branchId = $a['branch_id'] !== null ? (int) $a['branch_id'] : null;
+        }
+        if ($zoneId === null) {
+            throw new ApiException('اختر المنطقة');
+        }
+        $isDefault = array_key_exists('isDefault', $b) ? (int) ! empty($b['isDefault']) : (int) $a['is_default'];
+
+        DB::transaction(function () use ($actor, $b, $a, $id, $full, $zoneId, $branchId, $isDefault): void {
+            // `id <> ?` — التصفير مابيلمسش الصف اللي بنعدّله هو نفسه
+            if ($isDefault) {
+                DB::update(
+                    'UPDATE store_addresses SET is_default = 0 WHERE user_id = ? AND id <> ?',
+                    [(int) $actor->userId, (int) $id]
+                );
+            }
+            DB::update(
+                'UPDATE store_addresses
+                    SET label = ?, full_address = ?, lat = ?, lng = ?, zone_id = ?, branch_id = ?, is_default = ?
+                  WHERE id = ? AND user_id = ?',
+                [
+                    trim((string) ($b['label'] ?? $a['label'])) ?: 'عنوان',
+                    $full,
+                    array_key_exists('lat', $b)
+                        ? ($b['lat'] !== '' && $b['lat'] !== null ? (float) $b['lat'] : null)
+                        : ($a['lat'] !== null ? (float) $a['lat'] : null),
+                    array_key_exists('lng', $b)
+                        ? ($b['lng'] !== '' && $b['lng'] !== null ? (float) $b['lng'] : null)
+                        : ($a['lng'] !== null ? (float) $a['lng'] : null),
+                    $zoneId, $branchId, $isDefault, (int) $id, (int) $actor->userId,
+                ]
+            );
+        });
+
+        return ApiResponse::ok(['items' => self::storeAddressesFetch((int) $actor->userId)]);
+    }
+
+    /** DELETE /api/store/addresses/{id} — «مش بتاعك» = نفس «مش موجود» */
+    public function storeAddressesDelete(Request $request, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+
+        $n = DB::delete(
+            'DELETE FROM store_addresses WHERE id = ? AND user_id = ?',
+            [(int) $id, (int) $actor->userId]
+        );
+        if ($n === 0) {
+            throw new ApiException('العنوان غير موجود', 404);
+        }
+
+        return ApiResponse::ok(['items' => self::storeAddressesFetch((int) $actor->userId)]);
     }
 }

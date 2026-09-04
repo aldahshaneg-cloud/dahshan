@@ -1,0 +1,27 @@
+--- قبل
++++ بعد
+@@ -7431,9 +7431,21 @@
+     }
+     .smart-clear:hover { color: var(--text); border-color: var(--sky); }
+     .smart.has-val .smart-clear { display: flex; }
+-    /* مسافة للزرار جوه الحقل عشان ميركبش على النص، والنص الطويل
+-       بيتقص بـ«…» في سطر واحد بدل ما يتقطّع نصين. */
+-    .smart input { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
++    /* النص الطويل بيتقص بـ«…» في سطر واحد بدل ما يتقطّع نصين.
++
++       🔴 من غير `flex: none` و`min-height` الحقل بينهار:
++       `.fg` عليها `display:flex; flex-direction:column`، والحقل جواها
++       عنصر flex بـ`flex-shrink: 1` — يعني قابل للانضغاط رأسيًا. وأي
++       `overflow` غير مرئي على عنصر flex **بيلغي أقل ارتفاع تلقائي له**
++       (قاعدة `min-height: auto` في مواصفة flexbox)، فالحقل يقدر يتضغط
++       لحد ما يختفي — والنص اللي جواه يختفي معاه.
++
++       عشان كده اتشال `overflow: hidden` (الـinput بيقص لوحده أصلًا
++       و`text-overflow` شغّالة عليه من غيره)، واتحطّت أرضية صلبة. */
++    .smart input {
++      text-overflow: ellipsis; white-space: nowrap;
++      flex: none; min-height: 46px;
++    }
+     .smart.has-clear input { padding-inline-start: 40px; }
+     .smart-item mark { background: rgba(232,25,44,.3); color: var(--text); border-radius: 3px; padding: 0 2px; }
+     .smart-new { padding: 10px 13px; cursor: pointer; font-size: .83rem; color: var(--green); font-weight: 700; background: rgba(34,197,94,.07); border-top: 1px solid var(--border); }

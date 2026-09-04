@@ -36,23 +36,51 @@ final class LoginThrottle
         );
     }
 
-    /** هل المفتاح (ip+username) مقفول دلوقتي؟ */
+    /**
+     * هل المفتاح مقفول دلوقتي؟
+     *
+     * 🔒 بيفحص **مفتاحين**: (ip + username) و(ip + '').
+     *
+     * المفتاح الأول لوحده مابيوقفش **رش الباسوردات**: مهاجم بيجرّب باسورد
+     * واحد شائع على ٥٠ اسم مستخدم = فشل واحد لكل مفتاح، فمحصلش قفل خالص.
+     * المفتاح التاني عدّاد لكل IP لوحده بحد أوسع (٤ أضعاف)، فبيمسك الرش
+     * من غير ما يقفل موظف بينسى باسورده على مكتب فيه IP مشترك.
+     */
     public function isLocked(string $ip, string $username, DateTimeImmutable $now): bool
     {
-        $row = DB::table('login_attempts')
+        $rows = DB::table('login_attempts')
             ->where('ip', $ip)
-            ->where('username', $username)
-            ->first(['locked_until']);
+            ->whereIn('username', [$username, ''])
+            ->get(['locked_until']);
 
-        if (! $row || $row->locked_until === null) {
-            return false;
+        foreach ($rows as $row) {
+            if ($row->locked_until !== null
+                && new DateTimeImmutable($row->locked_until, new DateTimeZone('UTC')) > $now) {
+                return true;
+            }
         }
 
-        return new DateTimeImmutable($row->locked_until, new DateTimeZone('UTC')) > $now;
+        return false;
     }
 
-    /** بيسجّل فشل ويقفل لو عدّى الحد — نفس منطق auth_register_login_fail() */
+    /**
+     * بيسجّل فشل ويقفل لو عدّى الحد — نفس منطق auth_register_login_fail().
+     *
+     * 🔒 بيسجّل على **مفتاحين**: (ip + username) بالحد العادي، و(ip + '')
+     * بحد أوسع (٤ أضعاف) — التاني هو اللي بيمسك رش الباسوردات، شوف
+     * `isLocked`.
+     */
     public function registerFailure(string $ip, string $username, DateTimeImmutable $now): void
+    {
+        $this->bump($ip, $username, $now, $this->maxFails);
+        // العدّاد الشامل للـIP — اسم مستخدم فاضي مفتاح مستقل في نفس الجدول
+        if ($username !== '') {
+            $this->bump($ip, '', $now, $this->maxFails * 4);
+        }
+    }
+
+    /** خطوة عدّ واحدة على مفتاح (ip, username) بحد أقصى محدّد */
+    private function bump(string $ip, string $username, DateTimeImmutable $now, int $max): void
     {
         $nowS        = $now->format('Y-m-d H:i:s');
         $windowStart = $now->modify('-' . $this->windowMin . ' minutes');
@@ -68,7 +96,7 @@ final class LoginThrottle
             ? (int) $row->fail_count + 1
             : 1;
 
-        $lockedUntil = $count >= $this->maxFails
+        $lockedUntil = $count >= $max
             ? $now->modify('+' . $this->lockMin . ' minutes')->format('Y-m-d H:i:s')
             : null;
 

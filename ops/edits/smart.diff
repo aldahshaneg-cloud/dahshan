@@ -1,0 +1,266 @@
+--- callcenter.html (قبل)
++++ callcenter.html (بعد)
+@@ -7372,13 +7372,69 @@
+     .req { color: var(--red); }
+ 
+     .smart { position: relative; }
+-    .smart-results { position: absolute; top: 100%; right: 0; left: 0; z-index: 60; background: var(--panel); border: 1px solid var(--sky); border-top: none; border-radius: 0 0 10px 10px; max-height: 260px; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,.5); display: none; }
++
++    /* ═══ القائمة المنسدلة ═══
++       `position: fixed` بدل `absolute`:
++         • مش بتتقص من أي `overflow` على أب — و`.od-box` عليها
++           `overflow-y:auto` فلو الكمبوننت اتنقل جوه المودال يوم
++           بيفضل شغّال زي ما هو.
++         • مش بتتحرك مع سكرول الصفحة — الإحداثيات بتتحسب من
++           `getBoundingClientRect()` وبتتحدّث مع كل سكرول/تغيير حجم.
++         • بتقدر تقلب فوق الحقل لو المساحة تحت مش كفاية.
++       اتأكدت إن مفيش أب عليه `transform` أو `backdrop-filter` فوق
++       الحقول دي — دول بيحبسوا `fixed` جوّاهم ويرجّعوا نفس المشكلة.
++
++       z-index 9500 فوق `.od-overlay` (9000) وفوق أي شريط لاصق. */
++    .smart-results {
++      position: fixed; top: 0; right: 0; z-index: 9500;
++      background: var(--panel); border: 1px solid var(--sky);
++      border-radius: 10px; max-height: 260px;
++      overflow-y: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
++      overscroll-behavior: contain;
++      box-shadow: 0 12px 34px rgba(0,0,0,.5); display: none;
++      direction: rtl; text-align: start;
++    }
+     .smart-results.open { display: block; }
+     .smart-item { padding: 10px 13px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: .85rem; }
+     .smart-item:last-child { border-bottom: none; }
+     .smart-item:hover, .smart-item.sel { background: rgba(232,25,44,.1); }
++    /* المحدَّد بالكيبورد له شريط جانبي كمان — الخلفية لوحدها مش بتبان
++       وسط صفوف الماوس، والموظف بيتنقل بالأسهم وهو بيسمع من العميل. */
++    /* الإزاحة سالبة عشان الشريط يطلع على الحافة اليمين — الواجهة RTL
++       و`box-shadow` مالهاش نسخة منطقية تتقلب لوحدها. */
++    .smart-item.sel { box-shadow: inset -3px 0 0 var(--sky); }
+     .smart-item .si-main { font-weight: 700; }
++    /* الصف اللي فيه سعر: الاسم يمين والسعر شمال.
++       الكلاس على الصفوف اللي فيها بادچ بس — `.si-main` العادية فيها
++       اسم متقطّع بـ`<mark>` من التظليل، ولو عملناها flex كانت هتتفكّ
++       لأجزاء بينها فراغات. */
++    .smart-item .si-main.si-row {
++      display: flex; align-items: center; justify-content: space-between;
++      gap: 10px; direction: rtl;
++    }
++    .smart-item .si-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++    .smart-item .si-main.si-row > .badge-cc,
++    .smart-item .si-main.si-row > span:last-child { flex: none; }
+     .smart-item .si-sub { font-size: .75rem; color: var(--muted); margin-top: 2px; }
++
++    /* ═══ زرار المسح جوه الحقل ═══
++       بيتحقن من الجافاسكربت لكل `.smart` — مكانش موجود أصلًا. */
++    .smart-clear {
++      position: absolute; inset-inline-start: 10px; top: 50%;
++      transform: translateY(-50%);
++      width: 24px; height: 24px; border-radius: 50%;
++      background: var(--soft, rgba(255,255,255,.06));
++      border: 1px solid var(--border); color: var(--muted);
++      font-size: 13px; line-height: 1; cursor: pointer;
++      display: none; align-items: center; justify-content: center;
++      font-family: inherit; padding: 0; z-index: 2;
++    }
++    .smart-clear:hover { color: var(--text); border-color: var(--sky); }
++    .smart.has-val .smart-clear { display: flex; }
++    /* مسافة للزرار جوه الحقل عشان ميركبش على النص، والنص الطويل
++       بيتقص بـ«…» في سطر واحد بدل ما يتقطّع نصين. */
++    .smart input { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
++    .smart.has-clear input { padding-inline-start: 40px; }
+     .smart-item mark { background: rgba(232,25,44,.3); color: var(--text); border-radius: 3px; padding: 0 2px; }
+     .smart-new { padding: 10px 13px; cursor: pointer; font-size: .83rem; color: var(--green); font-weight: 700; background: rgba(34,197,94,.07); border-top: 1px solid var(--border); }
+     .smart-new:hover { background: rgba(34,197,94,.16); }
+@@ -11539,6 +11595,135 @@
+   }
+ 
+ 
++  /* ══════════════════════════════════════════════════════════════
++     القائمة المنسدلة الذكية — الموضع وزرار المسح
++     ──────────────────────────────────────────────────────────────
++     القايمة بقت `position: fixed`، يعني إحداثياتها لازم تتحسب بالإيد
++     من `getBoundingClientRect()` بتاع الحقل وتتحدّث مع أي سكرول أو
++     تغيير في حجم الشاشة.
++
++     المكسب: مابتتقصش من أي `overflow` على أب (و`.od-box` عليها
++     `overflow-y:auto`)، ومابتتحركش مع سكرول الصفحة، وبتقدر تقلب فوق
++     الحقل لو المساحة تحت مش كفاية.
++
++     بتشتغل على **كل** نسخة من `.smart` في الصفحة — مفيش أي id متكتوب
++     بالإيد هنا.
++  ══════════════════════════════════════════════════════════════ */
++  const SMART_GAP = 4;      // فراغ بين الحقل والقايمة
++  const SMART_MIN = 120;    // أقل ارتفاع مقبول تحت الحقل قبل ما تقلب فوق
++
++  /** بيحط القايمة تحت حقلها (أو فوقه لو المساحة ضيقة) بنفس عرضه */
++  function positionSmart(box) {
++    const wrap = box.closest(".smart");
++    const inp  = wrap && wrap.querySelector("input");
++    if (!inp) return;
++
++    const r = inp.getBoundingClientRect();
++    const below = window.innerHeight - r.bottom - SMART_GAP;
++    const above = r.top - SMART_GAP;
++
++    /* الارتفاع الطبيعي للمحتوى — بنقيسه من غير سقف عشان نعرف هيحتاج قد إيه */
++    box.style.maxHeight = "none";
++    const need = Math.min(box.scrollHeight, 260);
++    box.style.maxHeight = "";
++
++    // بتقلب فوق بس لو تحت مش كفاية **وفوق أوسع** — غير كده تحت أولى
++    const flip = below < Math.min(need, SMART_MIN) && above > below;
++    const space = Math.max(80, Math.floor(flip ? above : below));
++
++    box.style.width  = r.width + "px";
++    box.style.right  = (window.innerWidth - r.right) + "px";
++    box.style.left   = "auto";
++    box.style.maxHeight = Math.min(260, space) + "px";
++    box.style.top    = flip ? "auto" : (r.bottom + SMART_GAP) + "px";
++    box.style.bottom = flip ? (window.innerHeight - r.top + SMART_GAP) + "px" : "auto";
++    box.classList.toggle("flip", flip);
++  }
++  window.positionSmart = positionSmart;
++
++  /** بيعيد حساب موضع أي قايمة مفتوحة — مع السكرول وتغيير الحجم */
++  function repositionOpenSmart() {
++    document.querySelectorAll(".smart-results.open").forEach(positionSmart);
++  }
++  /* `capture: true` عشان نمسك سكرول أي حاوية جوّانية كمان مش الصفحة بس
++     (`.od-box` مثلًا لو الكمبوننت اتنقل جوّاها). */
++  window.addEventListener("scroll", repositionOpenSmart, { passive: true, capture: true });
++  window.addEventListener("resize", repositionOpenSmart, { passive: true });
++
++  /* الكود القديم بيفتح القايمة بـ`classList.add("open")` في ٦ أماكن.
++     بدل ما نعدّلهم واحد واحد (ونسيب الجاي بعدهم بلا موضع)، بنراقب
++     تغيّر الكلاس ونحسب الموضع لوحدنا. */
++  const smartObserver = new MutationObserver(muts => {
++    muts.forEach(m => {
++      const el = m.target;
++      if (el.classList && el.classList.contains("smart-results") && el.classList.contains("open")) {
++        positionSmart(el);
++      }
++    });
++  });
++  document.addEventListener("DOMContentLoaded", () => {
++    document.querySelectorAll(".smart-results").forEach(b =>
++      smartObserver.observe(b, { attributes: true, attributeFilter: ["class"] }));
++  });
++
++  /**
++   * بيحقن زرار مسح جوه كل `.smart` مالوش واحد.
++   *
++   * الزرار مكانش موجود خالص في الكمبوننت. بيتحقن من هنا بدل ما يتكتب
++   * في أربع قوالب — فأي `.smart` جديدة بتاخده لوحدها.
++   */
++  function initSmartFields() {
++    document.querySelectorAll(".smart").forEach(wrap => {
++      const inp = wrap.querySelector("input");
++      if (!inp) return;
++
++      if (!wrap.querySelector(".smart-clear")) {
++        const btn = document.createElement("button");
++        btn.type = "button";
++        btn.className = "smart-clear";
++        btn.textContent = "✕";
++        btn.setAttribute("aria-label", "مسح");
++        btn.tabIndex = -1;                    // مايقطعش تسلسل Tab بين الحقول
++        btn.addEventListener("mousedown", e => e.preventDefault());  // الحقل مايفقدش التركيز
++        btn.addEventListener("click", () => {
++          inp.value = "";
++          syncSmartVal(wrap);
++          /* نفس `oninput` المكتوب على الحقل — التنضيف لازم يعدّي على
++             نفس منطق البحث عشان الحالة المرتبطة (الفرع/السعر) تتصفّر. */
++          inp.dispatchEvent(new Event("input", { bubbles: true }));
++          inp.focus();
++        });
++        wrap.appendChild(btn);
++        wrap.classList.add("has-clear");
++        smartObserver.observe(
++          wrap.querySelector(".smart-results") || wrap,
++          { attributes: true, attributeFilter: ["class"] });
++      }
++
++      if (!inp._smartBound) {
++        inp._smartBound = true;
++        inp.addEventListener("input", () => syncSmartVal(wrap));
++      }
++      syncSmartVal(wrap);
++    });
++  }
++  window.initSmartFields = initSmartFields;
++
++  /** الزرار يبان لما يكون فيه نص بس */
++  function syncSmartVal(wrap) {
++    const inp = wrap.querySelector("input");
++    wrap.classList.toggle("has-val", !!(inp && inp.value.trim()));
++  }
++
++  /* الطرود بتتبني من جديد مع كل `renderParcels`، فالحقول الجديدة
++     محتاجة تتربط تاني. المراقب ده أرخص من نداء بعد كل رسمة. */
++  const smartFieldObserver = new MutationObserver(() => initSmartFields());
++  document.addEventListener("DOMContentLoaded", () => {
++    initSmartFields();
++    const host = document.getElementById("parcels");
++    if (host) smartFieldObserver.observe(host, { childList: true, subtree: true });
++  });
++
+   window.onSmartKey = function(ev, kind, n) {
+     const box = kind==="sender" ? $("senderResults")
+               : kind==="senderArea" ? $("senderAreaResults")
+@@ -11550,10 +11735,13 @@
+     if (ev.key === "ArrowDown") { ev.preventDefault(); idx = Math.min(items.length-1, idx+1); }
+     else if (ev.key === "ArrowUp") { ev.preventDefault(); idx = Math.max(0, idx-1); }
+     else if (ev.key === "Enter") { ev.preventDefault(); items[idx<0?0:idx]?.click(); return; }
+-    else if (ev.key === "Escape") { box.classList.remove("open"); return; }
++    else if (ev.key === "Escape") { ev.preventDefault(); box.classList.remove("open"); return; }
+     else return;
+     items.forEach(x => x.classList.remove("sel"));
+-    items[idx]?.classList.add("sel"); items[idx]?.scrollIntoView({block:"nearest"});
++    items[idx]?.classList.add("sel");
++    /* التمرير جوه القايمة بس — من غير `inline:"nearest"` المتصفح كان
++       بيزحلق الصفحة كلها أفقيًا وراه في RTL. */
++    items[idx]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+   };
+ 
+   function renderBranchLock() {
+@@ -11674,7 +11862,7 @@
+     const hits = searchZones(q, F.lockBranch);
+     let html = hits.map((h,i) => `
+       <div class="smart-item${i===0?" sel":""}" onclick="pickZone(${n},'${escJs(h.zone.id)}')">
+-        <div class="si-main">${hl(h.name,q)} <span class="badge-cc" style="background:rgba(20,184,166,.15);color:#14b8a6;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700">${fmt(h.price)} ج.م</span></div>
++        <div class="si-main si-row"><span class="si-nm">${hl(h.name,q)}</span> <span class="badge-cc" style="background:rgba(20,184,166,.15);color:#14b8a6;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700">${fmt(h.price)} ج.م</span></div>
+         <div class="si-sub">🏢 ${esc(branchName(h.branchId))}</div>
+       </div>`).join("");
+ 
+@@ -11686,7 +11874,7 @@
+       const other = searchZones(q).filter(h => h.branchId !== F.lockBranch);
+       html += other.slice(0,4).map(h => `
+         <div class="smart-item" style="opacity:.55;cursor:not-allowed" title="منطقة تابعة لفرع آخر — الأوردر مربوط بفرع واحد">
+-          <div class="si-main">${hl(h.name,q)} <span style="background:rgba(136,136,136,.15);color:var(--muted);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">فرع آخر</span></div>
++          <div class="si-main si-row"><span class="si-nm">${hl(h.name,q)}</span> <span style="background:rgba(136,136,136,.15);color:var(--muted);padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700">فرع آخر</span></div>
+           <div class="si-sub">🏢 ${esc(branchName(h.branchId))} — غيّر منطقة الاستلام أو اعمل أوردر منفصل</div>
+         </div>`).join("");
+     }
+@@ -11921,10 +12109,21 @@
+   }
+ 
+   document.addEventListener("click", ev => {
+-    if (!ev.target.closest(".smart"))
++    /* `.smart-results` مضافة للفحص: القايمة بقت `fixed` وبتطلع فوق
++       حدود حقلها، فدوسة على شريط التمرير بتاعها أو على صف معطّل كانت
++       بتتحسب «بره» وتقفلها في وش الموظف. */
++    if (!ev.target.closest(".smart") && !ev.target.closest(".smart-results"))
+       document.querySelectorAll(".smart-results.open").forEach(x => x.classList.remove("open"));
+   });
+ 
++  /* Esc بيقفل أي قايمة مفتوحة حتى لو التركيز مش على الحقل — `onSmartKey`
++     بتشتغل على الحقل بس، والقايمة ممكن تكون مفتوحة والموظف داس بره. */
++  document.addEventListener("keydown", ev => {
++    if (ev.key !== "Escape") return;
++    const open = document.querySelectorAll(".smart-results.open");
++    if (open.length) { open.forEach(x => x.classList.remove("open")); }
++  });
++
+   /* ══════════════════════════════════════════════════════════════
+      بحث سريع
+   ══════════════════════════════════════════════════════════════ */
