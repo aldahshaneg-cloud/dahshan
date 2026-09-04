@@ -53,6 +53,10 @@ class PilotAccountingController
             'shiftHours'   => (float) ($v['shiftHours'] ?? W::DEFAULT_SHIFT_HOURS) ?: W::DEFAULT_SHIFT_HOURS,
             // سعر ساعة موحّد للكل — وسعر الطيار الشخصي بيغلبه لو > 0
             'hourRate'     => max(0, (float) ($v['hourRate'] ?? 0)),
+            /* بلوك التقفيل (زي روح دمشق): رسوم التطوير على كل أوردر — بتاعة الشركة،
+               والفرع اللي بيتحمّلها كلها (0 = كل فرع بأوردراته) */
+            'orderRate'      => max(0, round((float) ($v['orderRate'] ?? 2), 2)),
+            'devFeeBranchId' => max(0, (int) ($v['devFeeBranchId'] ?? 0)),
         ];
     }
 
@@ -78,7 +82,14 @@ class PilotAccountingController
                 ? (max(0.5, min(24, (float) $in['shiftHours'])) ?: W::DEFAULT_SHIFT_HOURS) : $cur['shiftHours'],
             'hourRate' => array_key_exists('hourRate', $in)
                 ? max(0, round((float) $in['hourRate'], 2)) : $cur['hourRate'],
+            'orderRate' => array_key_exists('orderRate', $in)
+                ? max(0, round((float) $in['orderRate'], 2)) : $cur['orderRate'],
+            'devFeeBranchId' => array_key_exists('devFeeBranchId', $in)
+                ? max(0, (int) $in['devFeeBranchId']) : $cur['devFeeBranchId'],
         ];
+        if ($val['devFeeBranchId'] > 0 && ! DB::select('SELECT id FROM branches WHERE id = ?', [$val['devFeeBranchId']])) {
+            throw new ApiException('الفرع المتحمّل لرسوم التطوير غير موجود');
+        }
 
         $now = WireTime::nowDb();
         DB::statement(
@@ -162,7 +173,9 @@ class PilotAccountingController
             return ApiResponse::out([
                 'ok' => true, 'month' => $ym, 'settings' => $set, 'locked' => $this->monthLocked($ym, $branchId),
                 'daysInMonth' => W::daysInMonth($ym), 'countedDays' => W::countedDays($ym, $ds),
-                'pilots' => [], 'deferred' => [],
+                'pilots' => [], 'deferred' => [], 'closeout' => null,
+                'acl' => ['keys' => (object) $acl['keys'], 'branches' => $acl['branches'],
+                          'full' => $acl['full'], 'isAdmin' => $actor->role === 'admin'],
             ]);
         }
         $ids = array_map(fn ($p) => (int) $p['id'], $pilots);
@@ -178,6 +191,8 @@ class PilotAccountingController
 
         $counted = W::countedDays($ym, $ds);
         $out = [];
+        $rawDays = [];
+        $pilotMeta = [];
         foreach ($pilots as $p) {
             $pid  = (int) $p['id'];
             $days = [];
@@ -195,6 +210,13 @@ class PilotAccountingController
                 'deferredDue'  => $df['due'],
                 'deferredLeft' => $df['remaining'],
             ]);
+
+            /* صفوف اليوم قبل القصّ — بلوك تقفيلة الفرع بيتحسب منها على السيرفر */
+            $rawDays[$pid]  = $days;
+            $pilotMeta[$pid] = [
+                'branchId' => $p['assigned_branch_id'] !== null ? (int) $p['assigned_branch_id'] : 0,
+                'hourRate' => W::hourRateOf($p, $set),
+            ];
 
             /* 🔐 القصّ. `$acl['full']` معناها إن مافيش صف صلاحيات
                فمافيش داعي نلف على كل يوم في الشهر لكل طيار. */
@@ -215,6 +237,9 @@ class PilotAccountingController
             ];
         }
 
+        /* 💰 بلوك تقفيلة الفرع اليومي (زي روح دمشق) — الفروع في نطاق المستخدم */
+        $closeout = $this->closeoutBlock($ym, $nd, $ds, $rawDays, $pilotMeta, $set, $acl, $branchId, $ids, $winFrom, $winTo);
+
         return ApiResponse::out([
             'ok'          => true,
             'serverNow'   => WireTime::toWire(WireTime::nowDb()),
@@ -225,6 +250,7 @@ class PilotAccountingController
             'daysInMonth' => $nd,
             'countedDays' => $counted,
             'pilots'      => $out,
+            'closeout'    => $closeout,
             /* 🔐 السلف المؤجلة شاشة لوحدها — لو مقفولة مابتخرجش أصلًا */
             'deferred'    => $this->can($acl, 'page.deferred') ? $this->deferredWire($deferred, $ym) : [],
             /* الواجهة بتبني شاشتها من دي — مصدر واحد للمفاتيح */
@@ -783,6 +809,179 @@ class PilotAccountingController
             return;
         }
         DB::delete('DELETE FROM pilot_day_entries WHERE id = ?', [(int) $r['id']]);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       💰 بلوك تقفيلة الفرع اليومي — نفس بلوك «تقفيل روح دمشق» بدون النسبة
+    ═══════════════════════════════════════════════════════════ */
+
+    /** اللي المشرف كتبه في البلوك: [branchId][day] => ['ext','exp','recv'] */
+    private function summariesOf(string $ym): array
+    {
+        $out = [];
+        foreach (DB::select('SELECT branch_id, day, ext, exp, recv FROM pilot_acct_day_summaries WHERE month = ?', [$ym]) as $r) {
+            $s = [];
+            if ($r->ext  !== null) { $s['ext']  = (float) $r->ext; }
+            if ($r->exp  !== null) { $s['exp']  = (float) $r->exp; }
+            if ($r->recv !== null) { $s['recv'] = (float) $r->recv; }
+            $out[(int) $r->branch_id][(int) $r->day] = $s;
+        }
+
+        return $out;
+    }
+
+    /**
+     * تقفيلة كل فرع في نطاق المستخدم لكل يوم في الشهر + مجموع الشهر.
+     *
+     * رسوم التطوير لو فيه فرع متحمّلها بتتحسب على **أوردرات الشركة كلها**
+     * في اليوم — مش على اللي المستخدم شايفه. لو النطاق أضيق من الشركة
+     * (فرع واحد أو صلاحية محدودة) بنحسب أوردرات كل الطيارين تاني هنا.
+     */
+    private function closeoutBlock(string $ym, int $nd, int $ds, array $rawDays, array $pilotMeta, array $set,
+                                   array $acl, ?int $branchId, array $ids, string $winFrom, string $winTo): array
+    {
+        $names = [];
+        foreach (DB::select('SELECT id, name FROM branches ORDER BY name') as $b) {
+            $names[(int) $b->id] = $b->name;
+        }
+        if ($branchId !== null) {
+            $branchIds = [$branchId];
+        } elseif ($acl['branches']) {
+            $branchIds = array_values(array_filter($acl['branches'], fn ($b) => isset($names[$b])));
+        } else {
+            $branchIds = array_keys($names);
+        }
+
+        /* أوردرات الشركة كلها في كل يوم — للفرع المتحمّل رسوم التطوير */
+        $allOrders = array_fill(1, $nd, 0.0);
+        $dfb = (int) ($set['devFeeBranchId'] ?? 0);
+        if ($dfb > 0) {
+            $allPilots = array_map(fn ($r) => (array) $r, DB::select(
+                'SELECT id, commission_type, commission_value, hour_rate FROM pilots WHERE archived_at IS NULL'
+            ));
+            $allIds = array_map(fn ($p) => (int) $p['id'], $allPilots);
+            $missing = array_diff($allIds, $ids);
+            foreach ($rawDays as $days) {
+                foreach ($days as $d) {
+                    $allOrders[(int) $d['day']] += (float) $d['orders'];
+                }
+            }
+            if ($missing) {
+                $missing = array_values($missing);
+                $mp = array_values(array_filter($allPilots, fn ($p) => in_array((int) $p['id'], $missing, true)));
+                $auto = $this->autoMatrix($missing, $mp, $winFrom, $winTo, $ds);
+                $entries = $this->entriesOf($ym, $missing);
+                foreach ($missing as $pid) {
+                    for ($d = 1; $d <= $nd; $d++) {
+                        $e = $entries[$pid][$d] ?? [];
+                        $ov = ($e['orders_override'] ?? null) !== null && $e['orders_override'] !== '';
+                        $allOrders[$d] += $ov ? (int) $e['orders_override'] : (int) ($auto[$pid][$d]['orders'] ?? 0);
+                    }
+                }
+            }
+        }
+
+        $sums = $this->summariesOf($ym);
+        $branches = [];
+        $all = ['hours' => 0.0, 'orders' => 0.0, 'hourPay' => 0.0, 'devFeeOrders' => 0.0, 'devFee' => 0.0, 'ext' => 0.0,
+                'exp' => 0.0, 'outTotal' => 0.0, 'cash' => 0.0, 'adv' => 0.0, 'received' => 0.0, 'expected' => 0.0, 'net' => 0.0];
+        $keysM = array_keys($all);
+        foreach ($branchIds as $bid) {
+            $days = [];
+            $m = array_fill_keys($keysM, 0.0);
+            for ($d = 1; $d <= $nd; $d++) {
+                $rows = [];
+                foreach ($rawDays as $pid => $pd) {
+                    if (($pilotMeta[$pid]['branchId'] ?? 0) !== $bid) {
+                        continue;
+                    }
+                    $rows[] = ['row' => $pd[$d - 1], 'hourRate' => $pilotMeta[$pid]['hourRate']];
+                }
+                $c = W::branchDayCloseout($rows, $sums[$bid][$d] ?? [], $set, $bid, (float) $allOrders[$d]);
+                foreach ($keysM as $k) {
+                    $m[$k] += (float) ($c[$k] ?? 0);
+                    $all[$k] += (float) ($c[$k] ?? 0);
+                }
+                $c['day'] = $d;
+                $days[] = $acl['full'] ? $c : W::filterCloseout($c, $acl['keys']);
+            }
+            foreach ($m as $k => $v) {
+                $m[$k] = round($v, 2);
+            }
+            $branches[] = [
+                'branchId' => $bid,
+                'name'     => $names[$bid] ?? '—',
+                'days'     => $days,
+                'month'    => $acl['full'] ? $m : W::filterCloseout($m, $acl['keys']),
+            ];
+        }
+        foreach ($all as $k => $v) {
+            $all[$k] = round($v, 2);
+        }
+
+        return [
+            'orderRate'      => (float) ($set['orderRate'] ?? 0),
+            'devFeeBranchId' => $dfb,
+            'branches'       => $branches,
+            'all'            => $acl['full'] ? $all : W::filterCloseout($all, $acl['keys']),
+        ];
+    }
+
+    /**
+     * POST /api/pilot-accounting/day-summary — {month, branchId, day, field, value}
+     * الحقول: ext (الخارجي) · exp (مصاريف) · recv (المستلم فعلًا من المشرف).
+     * فاضي = مسح الخانة. كل حقل وراه صلاحيته في البلوك (blk.*) + act.edit.
+     */
+    public function daySummarySave(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $b     = $request->json()->all();
+        $ym    = $this->monthArg((string) ($b['month'] ?? ''));
+        $bid   = (int) ($b['branchId'] ?? 0);
+        $day   = (int) ($b['day'] ?? 0);
+        $field = (string) ($b['field'] ?? '');
+
+        $PERM = ['ext' => 'blk.ext', 'exp' => 'blk.exp', 'recv' => 'blk.recon'];
+        if (! isset($PERM[$field])) {
+            throw new ApiException('خانة مش معروفة');
+        }
+        if ($day < 1 || $day > W::daysInMonth($ym)) {
+            throw new ApiException('اليوم مش في الشهر ده');
+        }
+        if ($bid <= 0 || ! DB::select('SELECT id FROM branches WHERE id = ?', [$bid])) {
+            throw ApiException::notFound('الفرع غير موجود');
+        }
+
+        $acl = $this->aclOf($actor);
+        $this->need($acl, 'act.edit', 'تعديل الخانات');
+        $this->need($acl, $PERM[$field], 'الكتابة في البند ده');
+        if ($actor->role === 'branch' && (int) ($actor->branchId ?? 0) !== $bid) {
+            throw ApiException::forbidden('الفرع ده مش فرعك');
+        }
+        if ($acl['branches'] && ! in_array($bid, $acl['branches'], true)) {
+            throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+        }
+        $this->assertUnlocked($ym, $bid);
+
+        $raw = $b['value'] ?? null;
+        $val = ($raw === null || $raw === '') ? null : round((float) $raw, 2);
+        $now = WireTime::nowDb();
+        DB::statement(
+            "INSERT INTO pilot_acct_day_summaries (month, branch_id, day, `{$field}`, updated_by, updated_at, created_at)
+             VALUES (?,?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE `{$field}` = VALUES(`{$field}`), updated_by = VALUES(updated_by), updated_at = VALUES(updated_at)",
+            [$ym, $bid, $day, $val, $actor->username, $now, $now]
+        );
+        if ($val === null) {
+            // الصف اللي بقى فاضي خالص بيتمسح — زي entryCleanup
+            DB::delete(
+                'DELETE FROM pilot_acct_day_summaries WHERE month = ? AND branch_id = ? AND day = ?
+                    AND ext IS NULL AND exp IS NULL AND recv IS NULL',
+                [$ym, $bid, $day]
+            );
+        }
+
+        return ApiResponse::out(['ok' => true, 'cleared' => $val === null]);
     }
 
     /**

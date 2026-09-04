@@ -1210,6 +1210,25 @@ CREATE TABLE `party_ratings` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_acct_day_summaries` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `branch_id` bigint(20) unsigned NOT NULL,
+  `day` tinyint(4) NOT NULL COMMENT 'يوم الشهر 1..31 (اليوم التجاري)',
+  `ext` decimal(12,2) DEFAULT NULL COMMENT 'الخارجي — بيكتبه المشرف',
+  `exp` decimal(12,2) DEFAULT NULL COMMENT 'مصاريف اليوم — بيكتبها المشرف',
+  `recv` decimal(12,2) DEFAULT NULL COMMENT 'المستلم فعلًا من المشرف — NULL = لسه ماتكتبش',
+  `updated_by` varchar(190) DEFAULT NULL COMMENT 'آخر من عدّل الصف',
+  `updated_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pilot_acct_day_summaries_month_branch_day` (`month`,`branch_id`,`day`),
+  KEY `fk_pilot_acct_day_summaries_branch_id` (`branch_id`),
+  CONSTRAINT `fk_pilot_acct_day_summaries_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='بلوك تقفيلة الفرع اليومي في تقفيل الطيارين: الخارجي والمصاريف والمستلم من المشرف (زي روح دمشق)';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `pilot_acct_perms` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL COMMENT 'صاحب الصلاحية',

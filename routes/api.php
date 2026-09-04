@@ -348,6 +348,9 @@ Route::get('pilot-accounting/settings', [PilotAccountingController::class, 'sett
    فبيفضلوا للإدارة — قرارات مالية زي ما التعليق فوق بيقول. */
 Route::post('pilot-accounting/entry', [PilotAccountingController::class, 'entrySave'])
     ->middleware('role:admin,branch,accountant');
+/* بلوك تقفيلة الفرع اليومي (الخارجي · مصاريف · المستلم من المشرف) — زي روح دمشق (2026-09-04) */
+Route::post('pilot-accounting/day-summary', [PilotAccountingController::class, 'daySummarySave'])
+    ->middleware('role:admin,branch,accountant');
 Route::post('pilot-accounting/perms', [PilotAccountingController::class, 'permsSave'])
     ->middleware('role:admin,branch,accountant');
 

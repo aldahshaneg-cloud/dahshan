@@ -553,6 +553,20 @@ final class PilotAccountingWire
                 ['mon.deferred',   'قسط السلفة المؤجلة'],
                 ['mon.net',        'صافي الراتب'],
             ]],
+            /* بلوك التقفيل تحت شيت اليوم — نفس بلوك «تقفيل روح دمشق» بعد ما
+               صاحب النظام طلبه هنا (2026-09-04) من غير «نسبة روح دمشق». */
+            ['title' => 'بلوك التقفيل تحت الجدول', 'items' => [
+                ['blk.hourPay',  'أجر الساعات'],
+                ['blk.devFee',   'رسوم التطوير'],
+                ['blk.ext',      'الخارجي'],
+                ['blk.exp',      'مصاريف'],
+                ['blk.out',      'إجمالي الخارج'],
+                ['blk.cash',     'إجمالي نقدي'],
+                ['blk.net',      'صافي الفرع'],
+                ['blk.adv',      'سلف مع الطيارين'],
+                ['blk.recon',    'مطابقة توريد المشرف'],
+                ['blk.branches', 'صافي كل الفروع'],
+            ]],
             ['title' => 'الأفعال', 'items' => [
                 ['act.edit',     'تعديل الخانات (من غيرها بيتفرّج بس)'],
                 ['act.dateNav',  'التنقل بين الأيام والشهور'],
@@ -626,6 +640,9 @@ final class PilotAccountingWire
                 'keys'  => ['page.daily', 'page.pilot',
                     'col.in', 'col.bout', 'col.bin', 'col.out', 'col.hours',
                     'col.orders', 'col.adv', 'col.ded', 'col.bonus', 'col.note',
+                    /* اللي المشرف بيكتبه ويسلّمه: الخارجي والمصاريف والمستلم — من غير
+                       أجر الساعات ولا صافي الفرع (زي مشرفي دمشق على Firebase) */
+                    'blk.ext', 'blk.exp', 'blk.cash', 'blk.adv', 'blk.recon',
                     'act.edit', 'act.dateNav'],
             ],
             'accountant' => [
@@ -639,6 +656,102 @@ final class PilotAccountingWire
                     'mon.hours', 'mon.orders', 'act.dateNav'],
             ],
         ];
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       💰🔴 تقفيلة الفرع في اليوم — نفس branchDayCloseout في «تقفيل روح دمشق»
+       من غير «نسبة روح دمشق» (قرار صاحب النظام 2026-09-04: «شيل النسبة بس
+       لأن رسوم التطوير معانا»).
+
+         أجر الساعات    = Σ ساعات كل طيار × سعر ساعته (كل طيار بسعره)
+         رسوم التطوير   = أوردرات × orderRate — لو فيه فرع متحمّل، هو بياخد
+                          أوردرات كل الفروع وباقي الفروع صفر
+         إجمالي الخارج  = أجر الساعات + رسوم التطوير + الخارجي + المصاريف
+                          (السلف مش مصروف — فلوس الشركة مع الطيار)
+         إجمالي نقدي    = Σ عمود «صافي الخدمة»
+         المفروض يورّده = النقدي − الخارجي − المصاريف − السلف − رسوم التطوير
+         الفرق          = المستلم − المفروض (لو المستلم مكتوب)
+         صافي الفرع     = النقدي − إجمالي الخارج + الفرق
+       والهوية اللي لازم تتحقق لما المستلم مكتوب: net === received + adv − hourPay.
+    ═══════════════════════════════════════════════════════════ */
+
+    /**
+     * @param array $rows     صفوف اليوم لطياري الفرع: [['row' => dayRow, 'hourRate' => float], ...]
+     * @param array $summary  اللي المشرف كتبه: ['ext' => ?, 'exp' => ?, 'recv' => ?]
+     * @param array $settings إعدادات القسم (orderRate, devFeeBranchId)
+     * @param float $allOrders أوردرات الشركة كلها في اليوم — للفرع المتحمّل رسوم التطوير
+     */
+    public static function branchDayCloseout(array $rows, array $summary, array $settings, int $branchId, float $allOrders): array
+    {
+        $t = ['h' => 0.0, 'o' => 0.0, 'net' => 0.0, 'adv' => 0.0, 'hourPay' => 0.0, 'count' => 0];
+        foreach ($rows as $r) {
+            $d = $r['row'];
+            $h = (float) ($d['hours'] ?? 0);
+            $t['h']       += $h;
+            $t['o']       += (float) ($d['orders'] ?? 0);
+            $t['net']     += (float) ($d['net'] ?? 0);
+            $t['adv']     += (float) ($d['adv'] ?? 0);
+            $t['hourPay'] += $h * (float) ($r['hourRate'] ?? 0);
+            if ($h || (float) ($d['orders'] ?? 0) || (float) ($d['net'] ?? 0) || (float) ($d['adv'] ?? 0) || (float) ($d['svc'] ?? 0)) {
+                $t['count']++;
+            }
+        }
+        foreach (['h', 'o', 'net', 'adv', 'hourPay'] as $k) {
+            $t[$k] = round($t[$k], 2);
+        }
+
+        $devRate = max(0.0, (float) ($settings['orderRate'] ?? 0));
+        $dfb     = (int) ($settings['devFeeBranchId'] ?? 0);
+        $devFeeOrders = $dfb > 0 ? ($branchId === $dfb ? $allOrders : 0.0) : $t['o'];
+        $devFee  = round($devFeeOrders * $devRate, 2);
+
+        $ext = round((float) ($summary['ext'] ?? 0), 2);
+        $exp = round((float) ($summary['exp'] ?? 0), 2);
+        $outTotal = round($t['hourPay'] + $devFee + $ext + $exp, 2);
+        $cash     = $t['net'];
+        $expected = round($cash - $ext - $exp - $t['adv'] - $devFee, 2);
+        $hasRecv  = array_key_exists('recv', $summary) && $summary['recv'] !== null && $summary['recv'] !== '';
+        $received = $hasRecv ? round((float) $summary['recv'], 2) : 0.0;
+        $diff     = $hasRecv ? round($received - $expected, 2) : 0.0;
+
+        return [
+            'branchId'     => $branchId,
+            'hours'        => $t['h'],
+            'orders'       => $t['o'],
+            'count'        => $t['count'],
+            'hourPay'      => $t['hourPay'],
+            'devFeeOrders' => round($devFeeOrders, 2),
+            'devFee'       => $devFee,
+            'ext'          => $ext,
+            'exp'          => $exp,
+            'outTotal'     => $outTotal,
+            'cash'         => $cash,
+            'adv'          => $t['adv'],
+            'expected'     => $expected,
+            'received'     => $received,
+            'hasRecv'      => $hasRecv,
+            'diff'         => $diff,
+            'net'          => round($cash - $outTotal + $diff, 2),
+        ];
+    }
+
+    /** أنهي بنود البلوك مسموحة — العمود الممنوع بيتشال من الـJSON خالص (نفس قاعدة القصّ) */
+    public static function filterCloseout(array $c, array $keys): array
+    {
+        $map = [
+            'hourPay' => 'blk.hourPay', 'hours' => 'blk.hourPay',
+            'devFee' => 'blk.devFee', 'devFeeOrders' => 'blk.devFee',
+            'ext' => 'blk.ext', 'exp' => 'blk.exp', 'outTotal' => 'blk.out',
+            'cash' => 'blk.cash', 'net' => 'blk.net', 'adv' => 'blk.adv',
+            'expected' => 'blk.recon', 'received' => 'blk.recon', 'hasRecv' => 'blk.recon', 'diff' => 'blk.recon',
+        ];
+        foreach ($map as $field => $perm) {
+            if (($keys[$perm] ?? null) !== true) {
+                unset($c[$field]);
+            }
+        }
+
+        return $c;
     }
 
     /* ═══ القصّ ═══

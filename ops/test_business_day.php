@@ -127,7 +127,11 @@ if ($sup && $zone) {
 
 echo "\n══ 4) جلسة موظف عابرة لنص الليل = يوم واحد بساعاتها ══\n";
 $admin = DB::select("SELECT id, username, role FROM users WHERE role='admin' LIMIT 1")[0] ?? null;
-$anyStaff = DB::select("SELECT id, username FROM users WHERE role IN ('branch','callcenter','accountant') AND blocked=0 LIMIT 1")[0] ?? null;
+/* موظف دهشاني — مش حساب «روح دمشق بس» (دول قطاع لوحده ومش بيظهروا في تقفيلة
+   الموظفين بعد 2026-09-04)، وإلا LIMIT 1 ممكن يقع على واحد منهم والفحص يقع من غير باج */
+$rdOnly = App\Http\Controllers\Api\AuthController::damascusOnlyUserIds();
+$anyStaff = DB::select("SELECT id, username FROM users WHERE role IN ('branch','callcenter','accountant') AND blocked=0"
+    . ($rdOnly ? ' AND id NOT IN (' . implode(',', array_map('intval', $rdOnly)) . ')' : '') . ' ORDER BY id LIMIT 1')[0] ?? null;
 if ($admin && $anyStaff) {
     DB::beginTransaction();
     try {

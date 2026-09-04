@@ -190,6 +190,10 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
 .sum-row.calc { background: rgba(59,130,246,.05); }
 .sum-row.grand { background: rgba(232,25,44,.08); }
 .sum-row.grand .sl, .sum-row.grand .sv { color: var(--sky); font-size: 1.05rem; }
+.branch-nets { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding: 14px 16px; }
+.bn-card { background: var(--night); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; text-align: center; }
+.bn-name { font-size: .74rem; color: var(--muted); font-weight: 700; }
+.bn-val { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 3px; }
 
 /* التبويبات الفرعية (الموظفين) */
 .sub-tabs { display: flex; gap: 6px; margin-bottom: 22px; border-bottom: 2px solid var(--border); padding-bottom: 0; }
@@ -462,6 +466,7 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <tfoot id="paMonthFoot"></tfoot>
     </table></div>
     <div id="paSettledNote" style="font-size:.8rem;color:var(--muted);margin-top:10px"></div>
+    <div id="paMonthClose"></div>
   </div>
 
   <!-- ── السلف المؤجلة ── -->
@@ -1290,22 +1295,89 @@ async function bootAccounts() {
         <td class="pa-tot">${ paMoney(t("adv")) }</td><td class="pa-tot">${ paMoney(t("ded")) }</td>
         <td class="pa-tot">${ paMoney(t("bonus")) }</td><td></td></tr>`;
 
-    /* بلوك ملخص اليوم — نفس روح البلوك اللي تحت شيت «تقفيل يومي»:
-       أجر الساعات (كل طيار بسعره) والعمولة والسلف والخصومات والحوافز.
-       أرقام عرض من صفوف السيرفر — مافيش معادلة جديدة هنا. */
-    const hourPay = ps.reduce((s, p) => s + (Number((p.days || [])[day - 1]?.hours) || 0) * (Number(p.hourRate) || 0), 0);
-    const rows = [];
-    if (paCan('col.hours'))  rows.push(["أجر الساعات", `${ paMoney(t("hours")) } ساعة · كل طيار بسعره — رواتب مستحقة النهارده`, paMoney(hourPay), "var(--orange)", "calc"]);
-    if (paCan('col.psvc'))   rows.push(["خدمة الطيارين (العمولة)", "اللي الطيارين خدوه من الأوردرات", paMoney(t("psvc")), "var(--orange)", ""]);
-    if (paCan('col.net'))    rows.push(["إجمالي نقدي", "مجموع عمود «صافي الخدمة» — الداخل للشركة", paMoney(t("net")), "var(--green)", "grand"]);
-    if (paCan('col.adv'))    rows.push(["سلف مع الطيارين", "فلوس الشركة — بترجع بالخصم من رواتبهم آخر الشهر", paMoney(t("adv")), "var(--blue)", ""]);
-    if (paCan('col.ded'))    rows.push(["خصومات", "", paMoney(t("ded")), "var(--orange)", ""]);
-    if (paCan('col.bonus'))  rows.push(["حوافز", "", paMoney(t("bonus")), "var(--green)", ""]);
-    document.getElementById("paDailySum").innerHTML = rows.length ? `
+    document.getElementById("paDailySum").innerHTML = renderCloseoutBlock(d, day, bName);
+  };
+
+  /* ═══════════ بلوك تقفيلة الفرع اليومي — نفس بلوك «تقفيل روح دمشق» من غير النسبة ═══════════
+     الأرقام كلها من `closeout` في رد السيرفر (branchDayCloseout على السيرفر) — هنا عرض
+     وخانات الإدخال التلاتة اللي المشرف بيكتبها: الخارجي · مصاريف · المستلم فعلًا. */
+  const hasK = (c, k) => c && c[k] !== undefined && c[k] !== null;
+  function closeoutOf(d, branchId, day) {
+    const b = (d.closeout?.branches || []).find(x => String(x.branchId) === String(branchId));
+    return b ? (b.days || [])[day - 1] : null;
+  }
+  function renderCloseoutBlock(d, day, bName) {
+    const co = d.closeout;
+    if (!co || !(co.branches || []).length) return "";
+    const branchId = $("paBranch").value;
+    const locked = !!d.locked || !paCan('act.edit');
+    const dfb = Number(co.devFeeBranchId) || 0;
+    const rate = Number(co.orderRate) || 0;
+    const title = `تقفيل يومي · ${day} ${ esc(paWeekday(d.month, day)) } · ${ esc(monthLabel(d.month)) }`;
+    const money = (c, k) => paMoney(c[k]);
+    const inp = (c, bid, field, ph = "") => `<input class="sv" type="text" inputmode="decimal" value="${ esc(c[field] ? Number(c[field]).toFixed(2) : "") }" placeholder="${ esc(ph) }" ${ locked ? "readonly" : "" }
+        onchange="paSaveSummary('${ escJs(bid) }',${day},'${field}',this.value)" />`;
+
+    /* بلوك فرع واحد كامل (بخانات الإدخال) */
+    const one = (b, c) => `
       <div class="sum-block">
-        <div class="sum-head">ملخص يوم ${day} ${ esc(paWeekday(d.month, day)) } · ${ esc(monthLabel(d.month)) } · ${ esc(bName) }</div>
-        ${ rows.map(([l, h, v, c, cls]) => `<div class="sum-row ${cls}"><div class="sl">${ esc(l) }${ h ? `<div class="sh">${ esc(h) }</div>` : "" }</div><div class="sv" style="color:${c}">${v}</div></div>`).join("") }
-      </div>` : "";
+        <div class="sum-head">${ title } · ${ esc(b.name) }</div>
+        ${ hasK(c, "hourPay") ? `<div class="sum-row calc"><div class="sl">أجر الساعات<div class="sh">${ money(c, "hours") } ساعة · كل طيار بسعره · رواتب مستحقة النهارده — <b>خارج</b></div></div><div class="sv" style="color:var(--orange)">${ money(c, "hourPay") }</div></div>` : "" }
+        ${ hasK(c, "devFee") && (!dfb || dfb === Number(b.branchId)) ? `<div class="sum-row calc"><div class="sl">رسوم التطوير × ${ paMoney(rate) }<div class="sh">${ money(c, "devFeeOrders") } أوردر${ dfb ? " · <b>إجمالي أوردرات كل الفروع</b>" : "" } — <b>خارج</b></div></div><div class="sv" style="color:var(--orange)">${ money(c, "devFee") }</div></div>` : "" }
+        ${ hasK(c, "ext") ? `<div class="sum-row"><div class="sl">الخارجي<div class="sh">خارج</div></div>${ inp(c, b.branchId, "ext") }</div>` : "" }
+        ${ hasK(c, "exp") ? `<div class="sum-row"><div class="sl">مصاريف<div class="sh">خارج</div></div>${ inp(c, b.branchId, "exp") }</div>` : "" }
+        ${ hasK(c, "outTotal") ? `<div class="sum-row" style="background:rgba(249,115,22,.07)"><div class="sl">إجمالي الخارج<div class="sh">ساعات + رسوم تطوير + خارجي + مصاريف</div></div><div class="sv" style="color:var(--orange)">${ money(c, "outTotal") }</div></div>` : "" }
+        ${ hasK(c, "cash") ? `<div class="sum-row" style="background:rgba(34,197,94,.07)"><div class="sl">إجمالي نقدي<div class="sh">مجموع عمود «صافي الخدمة» فوق — الداخل للشركة</div></div><div class="sv" style="color:var(--green)">${ money(c, "cash") }</div></div>` : "" }
+        ${ hasK(c, "net") ? `<div class="sum-row grand"><div class="sl">صافي ${ esc(b.name) }<div class="sh">النقدي − إجمالي الخارج ± فرق التوريد</div></div><div class="sv" style="color:${ Number(c.net) < 0 ? "var(--red)" : "var(--green)" }">${ money(c, "net") }</div></div>` : "" }
+        ${ hasK(c, "adv") ? `<div class="sum-row" style="background:rgba(59,130,246,.07)"><div class="sl">سلف مع الطيارين<div class="sh">فلوس الشركة — بترجع بالخصم من رواتبهم آخر الشهر، فمش مصروف ومش داخلة في الخارج</div></div><div class="sv" style="color:var(--blue)">${ money(c, "adv") }</div></div>` : "" }
+        ${ hasK(c, "expected") ? `
+        <div style="border-top:1px solid var(--border)">
+          <div class="sum-head" style="border-bottom:none;background:transparent;font-size:.84rem">مطابقة توريد المشرف
+            <div style="font-size:.72rem;font-weight:600;color:var(--muted)">المشرف بيحصّل عمود «صافي» ويدفع منه، واللي يفضل بيورّده</div></div>
+          <div class="sum-row calc"><div class="sl">مجموع عمود «صافي»<div class="sh">اللي المشرف حصّله</div></div><div class="sv">${ money(c, "cash") }</div></div>
+          <div class="sum-row calc"><div class="sl">− الخارجي + مصاريف</div><div class="sv" style="color:var(--orange)">− ${ paMoney((Number(c.ext) || 0) + (Number(c.exp) || 0)) }</div></div>
+          <div class="sum-row calc"><div class="sl">− السلف اللي إداها للطيارين</div><div class="sv" style="color:var(--orange)">− ${ money(c, "adv") }</div></div>
+          ${ Number(c.devFee) ? `<div class="sum-row calc"><div class="sl">− رسوم التطوير اللي طلّعها<div class="sh">${ money(c, "devFeeOrders") } أوردر × ${ paMoney(rate) }${ dfb ? " — أوردرات الفروع كلها" : "" }</div></div><div class="sv" style="color:var(--orange)">− ${ money(c, "devFee") }</div></div>` : "" }
+          <div class="sum-row calc"><div class="sl">المفروض يورّده المشرف</div><div class="sv" style="color:var(--blue)">${ money(c, "expected") }</div></div>
+          <div class="sum-row"><div class="sl">المستلم فعلًا من المشرف<div class="sh">اكتب المبلغ اللي وصلك بالظبط</div></div>${ inp({ recv: c.hasRecv ? c.received : "" }, b.branchId, "recv", Number(c.expected).toFixed(2)) }</div>
+          <div class="sum-row" style="background:${ !c.hasRecv ? "transparent" : Number(c.diff) === 0 ? "rgba(34,197,94,.08)" : "rgba(232,25,44,.08)" }">
+            <div class="sl">الفرق<div class="sh">${ !c.hasRecv ? "اكتب المستلم عشان تظهر المطابقة" : Number(c.diff) === 0 ? "التوريد مظبوط ✓" : Number(c.diff) < 0 ? "عجز — المشرف ورّد أقل من المفروض (بيتخصم من الصافي)" : "زيادة — المشرف ورّد أكتر من المفروض (بتتضاف للصافي)" }</div></div>
+            <div class="sv" style="color:${ !c.hasRecv ? "var(--muted)" : Number(c.diff) === 0 ? "var(--green)" : "var(--red)" }">${ !c.hasRecv ? "—" : money(c, "diff") }</div></div>
+        </div>` : "" }
+      </div>`;
+
+    /* صافي كل الفروع في اليوم */
+    const cards = () => {
+      if (!paCan('blk.branches') || !(co.branches || []).some(b => hasK((b.days || [])[day - 1], "net"))) return "";
+      const per = co.branches.map(b => ({ name: b.name, c: (b.days || [])[day - 1] || {} }));
+      const tot = per.reduce((s, x) => s + (Number(x.c.net) || 0), 0);
+      const allO = per.reduce((s, x) => s + (Number(x.c.orders) || 0), 0);
+      const allFee = per.reduce((s, x) => s + (Number(x.c.devFee) || 0), 0);
+      return `<div class="sum-block"><div class="sum-head">صافي الفروع في يوم ${day}
+          <div style="font-size:.72rem;font-weight:600;color:var(--muted)">إجمالي أوردرات الفروع ${ per.map(x => paMoney(x.c.orders)).join(" + ") } = <b>${ paMoney(allO) }</b> أوردر × ${ paMoney(rate) } = <b>${ paMoney(allFee) }</b>${ dfb ? ` · بتتحصّل كلها من <b>${ esc(co.branches.find(b => Number(b.branchId) === dfb)?.name || "—") }</b>` : "" }</div></div>
+        <div class="branch-nets">
+          ${ per.map(x => `<div class="bn-card"><div class="bn-name">صافي ${ esc(x.name) }</div><div class="bn-val" style="color:${ Number(x.c.net) < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(x.c.net) }</div></div>`).join("") }
+          <div class="bn-card" style="border-color:${ tot < 0 ? "var(--red)" : "var(--green)" }"><div class="bn-name" style="color:${ tot < 0 ? "var(--red)" : "var(--green)" }">إجمالي صافي</div><div class="bn-val" style="color:${ tot < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(tot) }</div></div>
+        </div></div>`;
+    };
+
+    if (branchId) {
+      const b = co.branches.find(x => String(x.branchId) === String(branchId));
+      const c = b ? (b.days || [])[day - 1] : null;
+      return (b && c ? one(b, c) : "") + cards();
+    }
+    /* «كل الفروع»: بلوك لكل فرع تحت بعض + كروت الصافي */
+    return co.branches.map(b => { const c = (b.days || [])[day - 1]; return c ? one(b, c) : ""; }).join("") + cards();
+  }
+
+  window.paSaveSummary = async function(branchId, day, field, value) {
+    const dot = $("dailyDot");
+    dot?.classList.add("on");
+    try {
+      await PA_API.post("/api/pilot-accounting/day-summary", { month: window._paData.month, branchId, day, field, value });
+      await keepFocus(loadPilotAcct);
+    } catch (e) { showToast("تعذّر الحفظ: " + (e.message || ""), "error"); }
+    finally { dot?.classList.remove("on"); }
   };
 
   /* ═══════════ 2) كشف الطيار ═══════════ */
@@ -1416,6 +1488,32 @@ async function bootAccounts() {
     document.getElementById("paSettledNote").innerHTML =
       (sd > 0.005 ? `<div class="info-box">ℹ️ فيه <b>${ paMoney(sd) } ج.م</b> عمولة اتصفّت مع الطيارين <b>كاش يوم بيوم</b> عند قفل الورديات، فمش داخلة في المستحق فوق — عشان مايتدفعش مرتين.</div>` : "")
       + (owed > 0.005 ? `<div class="warn-box">⚠️ فيه <b>${ paMoney(owed) } ج.م</b> مسحوبة زيادة على طيارين (سلفهم أكبر من مستحقهم) — دي مش داخلة في إجمالي صافي الرواتب.</div>` : "");
+
+    /* تقفيل الشهر — مجموع بلوك الفرع اليومي (الفرع المختار أو كل الفروع)، زي القديم */
+    const co = d.closeout;
+    const box = document.getElementById("paMonthClose");
+    if (!co || !(co.branches || []).length) { box.innerHTML = ""; return; }
+    const sel = $("paBranch").value;
+    const M = sel ? (co.branches.find(b => String(b.branchId) === String(sel))?.month || {}) : (co.all || {});
+    const dfb = Number(co.devFeeBranchId) || 0, rate = Number(co.orderRate) || 0;
+    const row = (l, h, v, c, cls = "") => `<div class="sum-row ${cls}"><div class="sl">${ l }${ h ? `<div class="sh">${ h }</div>` : "" }</div><div class="sv" style="color:${ c }">${ v }</div></div>`;
+    const lines = [];
+    if (hasK(M, "hourPay")) lines.push(row("أجر ساعات الطيارين", `${ paMoney(M.hours) } ساعة · كل طيار بسعره — خارج`, paMoney(M.hourPay), "var(--orange)"));
+    if (hasK(M, "devFee") && (!dfb || !sel || dfb === Number(sel))) lines.push(row("رسوم التطوير", `${ paMoney(M.devFeeOrders) } أوردر × ${ paMoney(rate) }${ dfb ? " · <b>كل الفروع</b>" : "" } — خارج`, paMoney(M.devFee), "var(--orange)"));
+    if (hasK(M, "ext")) lines.push(row("الخارجي", "خارج", paMoney(M.ext), "var(--orange)"));
+    if (hasK(M, "exp")) lines.push(row("مصاريف", "خارج", paMoney(M.exp), "var(--orange)"));
+    if (hasK(M, "outTotal")) lines.push(`<div class="sum-row" style="background:rgba(249,115,22,.07)"><div class="sl">إجمالي الخارج<div class="sh">ساعات + رسوم تطوير + خارجي + مصاريف</div></div><div class="sv" style="color:var(--orange)">${ paMoney(M.outTotal) }</div></div>`);
+    if (hasK(M, "cash")) lines.push(`<div class="sum-row" style="background:rgba(34,197,94,.07)"><div class="sl">إجمالي النقدي<div class="sh">مجموع عمود «صافي الخدمة» — داخل</div></div><div class="sv" style="color:var(--green)">${ paMoney(M.cash) }</div></div>`);
+    if (hasK(M, "expected")) lines.push(row("المفروض يورّده المشرفون", "مجموع «المفروض يورّده» على أيام الشهر", paMoney(M.expected), "var(--blue)", "calc") + row("المستلم فعلًا", "مجموع اللي اتكتب في «المستلم فعلًا»", paMoney(M.received), "var(--blue)", "calc"));
+    if (hasK(M, "net")) lines.push(`<div class="sum-row grand"><div class="sl">الصافي<div class="sh">النقدي − إجمالي الخارج ± فرق التوريد</div></div><div class="sv" style="color:${ Number(M.net) < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(M.net) }</div></div>`);
+    if (hasK(M, "adv")) lines.push(`<div class="sum-row" style="background:rgba(59,130,246,.07)"><div class="sl">سلف مع الطيارين<div class="sh">فلوس الشركة — بترجع بالخصم من رواتبهم، مش مصروف</div></div><div class="sv" style="color:var(--blue)">${ paMoney(M.adv) }</div></div>`);
+    const cards = paCan('blk.branches') ? `<div style="border-top:1px solid var(--border)"><div class="branch-nets">
+        ${ co.branches.map(b => `<div class="bn-card"><div class="bn-name">صافي ${ esc(b.name) }</div><div class="bn-val" style="color:${ Number(b.month?.net) < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(b.month?.net) }</div></div>`).join("") }
+        <div class="bn-card" style="border-color:${ Number(co.all?.net) < 0 ? "var(--red)" : "var(--green)" }"><div class="bn-name">إجمالي صافي</div><div class="bn-val" style="color:${ Number(co.all?.net) < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(co.all?.net) }</div></div>
+      </div></div>` : "";
+    box.innerHTML = lines.length ? `
+      <div class="sec-title" style="margin:26px 0 12px;font-size:.98rem">💰 تقفيل ${ esc(monthLabel(d.month)) } <span class="badge bg-muted">${ esc(sel ? ($("paBranch").selectedOptions[0]?.textContent || "") : "كل الفروع") }</span></div>
+      <div class="sum-block" style="margin-top:0">${ lines.join("") }${ cards }</div>` : "";
   };
 
   window.openPilotSheet = function(pid) {
@@ -2334,15 +2432,24 @@ async function bootAccounts() {
           <input class="sv" id="setShiftHours" type="text" inputmode="decimal" value="${ esc(s.shiftHours ?? 10) }" ${ canSet ? "" : "readonly" } /></div>
         <div class="sum-row"><div class="sl">اليوم يبدأ الساعة<div class="sh">بالنظام 24 ساعة — الوردية اللي بتقفل بعد نص الليل بتتسجّل على اليوم اللي فات</div></div>
           <input class="sv" id="setDayStart" type="text" inputmode="numeric" value="${ esc(s.dayStartHour ?? 9) }" ${ canSet ? "" : "readonly" } /></div>
+        <div class="sum-row"><div class="sl">رسوم التطوير للأوردر<div class="sh">بتاعة الشركة — بتتحسب <b>خارج</b> في بلوك تقفيل اليوم</div></div>
+          <input class="sv" id="setOrderRate" type="text" inputmode="decimal" value="${ esc(s.orderRate ?? 2) }" ${ canSet ? "" : "readonly" } /></div>
+        <div class="sum-row"><div class="sl">فرع تحصيل رسوم التطوير<div class="sh">الفرع ده بياخد <b>رسوم أوردرات كل الفروع</b>، وباقي الفروع مايظهرش عندها سطر رسوم. «كل فرع لوحده» = كل فرع بيتحاسب على أوردراته هو.</div></div>
+          <select class="sv" id="setDevBranch" style="min-width:180px;text-align:right;direction:rtl" ${ canSet ? "" : "disabled" }>
+            <option value="0">كل فرع لوحده</option>
+            ${ (window._branchesData || []).map(b => `<option value="${ esc(b.id) }"${ Number(s.devFeeBranchId) === Number(b.id) ? " selected" : "" }>${ esc(b.name) }</option>`).join("") }
+          </select></div>
         ${ canSet ? `<div style="padding:14px 16px;display:flex;gap:9px"><button class="add-btn" onclick="savePaSettings()">حفظ الإعدادات</button></div>` : "" }
       </div>`;
   };
   window.savePaSettings = async function() {
     const hourRate = Number($("setHourRate").value), shiftHours = Number($("setShiftHours").value), dayStartHour = Number($("setDayStart").value);
+    const orderRate = Number($("setOrderRate").value) || 0, devFeeBranchId = Number($("setDevBranch").value) || 0;
     if (!(shiftHours > 0)) { showToast("ساعات الوردية لازم تكون أكبر من صفر", "error"); return; }
     if (!(dayStartHour >= 0 && dayStartHour <= 23)) { showToast("ساعة بداية اليوم لازم تكون من 0 لـ 23", "error"); return; }
+    if (orderRate < 0) { showToast("رسوم التطوير مايصحّش تكون بالسالب", "error"); return; }
     try {
-      await PA_API.put("/api/pilot-accounting/settings", { hourRate, shiftHours, dayStartHour });
+      await PA_API.put("/api/pilot-accounting/settings", { hourRate, shiftHours, dayStartHour, orderRate, devFeeBranchId });
       showToast("تم حفظ الإعدادات", "success");
       loadPilotAcct();
     } catch (e) { showToast("تعذّر الحفظ: " + (e.message || ""), "error"); }
@@ -2365,6 +2472,21 @@ async function bootAccounts() {
     const t = { hours: 0, orders: 0, svc: 0, psvc: 0, net: 0, adv: 0, ded: 0, bonus: 0 };
     (d.pilots || []).forEach(p => { const r = (p.days || [])[day - 1] || {}; aoa.push([p.name, ...rowX(r)]); Object.keys(t).forEach(k => { t[k] += Number(r[k]) || 0; }); });
     aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
+    /* بلوك التقفيل لكل فرع في اليوم — نفس سطور الشاشة */
+    (d.closeout?.branches || []).forEach(b => {
+      const c = (b.days || [])[day - 1]; if (!c) return;
+      aoa.push([]); aoa.push([`تقفيل يومي ${day} — ${b.name}`]);
+      if (hasK(c, "hourPay")) aoa.push(["أجر الساعات", fmt2(c.hours), fmt2(c.hourPay), "خارج"]);
+      if (hasK(c, "devFee")) aoa.push([`رسوم التطوير × ${ fmt2(d.closeout.orderRate) }`, fmt2(c.devFeeOrders), fmt2(c.devFee), "خارج"]);
+      if (hasK(c, "ext")) aoa.push(["الخارجي", "", fmt2(c.ext), "خارج"]);
+      if (hasK(c, "exp")) aoa.push(["مصاريف", "", fmt2(c.exp), "خارج"]);
+      if (hasK(c, "outTotal")) aoa.push(["إجمالي الخارج", "", fmt2(c.outTotal)]);
+      if (hasK(c, "cash")) aoa.push(["إجمالي نقدي (مجموع عمود صافي)", "", fmt2(c.cash), "داخل"]);
+      if (hasK(c, "diff")) aoa.push(["فرق التوريد (أوفر/عجز)", "", c.hasRecv ? fmt2(c.diff) : ""]);
+      if (hasK(c, "net")) aoa.push([`صافي ${b.name}`, "", fmt2(c.net)]);
+      if (hasK(c, "adv")) aoa.push(["سلف مع الطيارين (فلوس الشركة — مش مصروف)", "", fmt2(c.adv)]);
+      if (hasK(c, "expected")) { aoa.push(["المفروض يورّده", "", fmt2(c.expected)]); aoa.push(["المستلم فعلًا", "", c.hasRecv ? fmt2(c.received) : ""]); }
+    });
     download(aoa, `تقفيل ${day}`, `تقفيل الطيارين ${d.month}-${String(day).padStart(2, "0")}.xlsx`);
   };
   window.exportPilot = function() {
@@ -2460,7 +2582,7 @@ async function bootAccounts() {
   /* ═══════════ المساعدة (F1) ═══════════ */
   const HELP = {
     daily: { title: "🗓️ التقفيل اليومي", what: "كل الطيارين في يوم واحد. الحضور والانصراف والأوردرات وخدمة الطيار جايين من الورديات والأوردرات الحقيقية، وأي رقم تكتبه فوقهم بيتلوّن ويفضل هو المعتمد.",
-      body: `<div class="help-sec">إزاي تشتغل عليها؟</div><ol class="help-steps"><li>اختار <b>الفرع</b> و<b>الشهر</b> و<b>اليوم</b> من فوق.</li><li>اكتب في الخانة واضغط Enter أو انقل لخانة تانية — بيتحفظ لوحده والشيت بيتحدّث.</li><li>خانة الحضور والانصراف بتفتح منتقي وقت عربي بالنقر، و«مسح» بيرجّع وقت الوردية.</li><li>خانة الاستئذان بتفتح فورم فترات (خروج ← رجوع) وكل فترة بتتشال من الساعات.</li></ol><div class="help-warn">⚠️ الخانة الملوّنة برتقالي فيها رقم مكتوب بالإيد — التلميحة بتوريك رقم النظام. سيبها فاضية عشان ترجع لرقم النظام.</div><div class="help-sec">التنقل بالكيبورد</div><ul><li><b>Enter</b> أو <b>↑ ↓</b> — نفس العمود، السطر اللي فوق أو تحت.</li><li><b>→ ←</b> — نفس السطر، العمود اللي جنبه.</li></ul>` },
+      body: `<div class="help-sec">إزاي تشتغل عليها؟</div><ol class="help-steps"><li>اختار <b>الفرع</b> و<b>الشهر</b> و<b>اليوم</b> من فوق.</li><li>اكتب في الخانة واضغط Enter أو انقل لخانة تانية — بيتحفظ لوحده والشيت بيتحدّث.</li><li>خانة الحضور والانصراف بتفتح منتقي وقت عربي بالنقر، و«مسح» بيرجّع وقت الوردية.</li><li>خانة الاستئذان بتفتح فورم فترات (خروج ← رجوع) وكل فترة بتتشال من الساعات.</li></ol><div class="help-warn">⚠️ الخانة الملوّنة برتقالي فيها رقم مكتوب بالإيد — التلميحة بتوريك رقم النظام. سيبها فاضية عشان ترجع لرقم النظام.</div><div class="help-sec">بلوك التقفيل تحت الجدول</div><p>تقفيل <b>الفرع المختار</b> في اليوم ده — نفس بلوك روح دمشق من غير نسبة المطعم.</p><ul><li><b>فلوس خارجة:</b> أجر الساعات (كل طيار بسعره) + رسوم التطوير (أوردرات × السعر من الإعدادات) + الخارجي + المصاريف.</li><li><b>فلوس داخلة:</b> إجمالي النقدي = مجموع عمود «صافي الخدمة».</li><li><b>صافي الفرع</b> = النقدي − إجمالي الخارج ± فرق التوريد.</li><li><b>مطابقة توريد المشرف:</b> المفروض يورّده = النقدي − الخارجي − المصاريف − السلف − رسوم التطوير. اكتب المستلم فعلًا وهيظهر الفرق (عجز أو زيادة).</li></ul><div class="help-tip">💡 اللي بتكتبه بإيدك في البلوك: الخارجي، المصاريف، المستلم من المشرف — الباقي محسوب على السيرفر.</div><div class="help-sec">التنقل بالكيبورد</div><ul><li><b>Enter</b> أو <b>↑ ↓</b> — نفس العمود، السطر اللي فوق أو تحت.</li><li><b>→ ←</b> — نفس السطر، العمود اللي جنبه.</li></ul>` },
     pilot: { title: "🧾 كشف الطيار", what: "شيت الطيار على الشهر كله، وتحته حساب الراتب.",
       body: `<div class="help-sec">حساب الراتب</div><ul><li><b>أجر الساعات</b> = ساعاته × سعر ساعته (الخاص أو الافتراضي).</li><li><b>+ العمولة</b> المستحقة — اللي اتصفّى كاش يوم بيوم عند قفل الوردية مش بيتحسب تاني.</li><li><b>+ نصيب الراتب</b> = الراتب الشهري ÷ الأيام المحسوبة × أيام الشغل.</li><li><b>+ إجازة مدفوعة</b> = أيام الإجازة × ساعات الوردية × سعر الساعة.</li><li><b>صافي الراتب</b> = الإجمالي − السلف − الخصومات − قسط السلفة المؤجلة.</li></ul><div class="help-tip">💡 لو الناتج بالسالب بيتكتب «عليه» بالأحمر — الطيار سحب أكتر من مستحقه.</div>` },
     month: { title: "📊 تقفيل الشهر", what: "كل طيارين الشهر في جدول واحد — سطر لكل طيار وزرار «كشف» بيوديك على شيته.",
