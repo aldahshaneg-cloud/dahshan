@@ -844,12 +844,21 @@ class PilotAccountingController
         foreach (DB::select('SELECT id, name FROM branches ORDER BY name') as $b) {
             $names[(int) $b->id] = $b->name;
         }
+        $sums = $this->summariesOf($ym);
         if ($branchId !== null) {
             $branchIds = [$branchId];
-        } elseif ($acl['branches']) {
-            $branchIds = array_values(array_filter($acl['branches'], fn ($b) => isset($names[$b])));
         } else {
-            $branchIds = array_keys($names);
+            /* الفروع اللي فيها طيارين (أو اتكتب لها بند في الشهر) بس — فرع إداري
+               أو تجريبي من غير طيارين كان بيطلع بلوك فاضي ويبان إن البلوك متكرر */
+            $active = [];
+            foreach ($pilotMeta as $m) {
+                $active[(int) $m['branchId']] = true;
+            }
+            foreach (array_keys($sums) as $sb) {
+                $active[(int) $sb] = true;
+            }
+            $pool = $acl['branches'] ? $acl['branches'] : array_keys($names);
+            $branchIds = array_values(array_filter($pool, fn ($b) => isset($names[$b]) && isset($active[(int) $b])));
         }
 
         /* أوردرات الشركة كلها في كل يوم — للفرع المتحمّل رسوم التطوير */
@@ -881,7 +890,6 @@ class PilotAccountingController
             }
         }
 
-        $sums = $this->summariesOf($ym);
         $branches = [];
         $all = ['hours' => 0.0, 'orders' => 0.0, 'hourPay' => 0.0, 'devFeeOrders' => 0.0, 'devFee' => 0.0, 'ext' => 0.0,
                 'exp' => 0.0, 'outTotal' => 0.0, 'cash' => 0.0, 'adv' => 0.0, 'received' => 0.0, 'expected' => 0.0, 'net' => 0.0];

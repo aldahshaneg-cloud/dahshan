@@ -1366,8 +1366,32 @@ async function bootAccounts() {
       const c = b ? (b.days || [])[day - 1] : null;
       return (b && c ? one(b, c) : "") + cards();
     }
-    /* «كل الفروع»: بلوك لكل فرع تحت بعض + كروت الصافي */
-    return co.branches.map(b => { const c = (b.days || [])[day - 1]; return c ? one(b, c) : ""; }).join("") + cards();
+    /* «كل الفروع»: بلوك واحد مجمّع للشركة (قراءة — الكتابة بتبقى لما تختار فرع)
+       + كروت الصافي. بلوك لكل فرع تحت بعض كان بيبان إنه متكرر. */
+    const sumKeys = ["hours", "orders", "hourPay", "devFeeOrders", "devFee", "ext", "exp", "outTotal", "cash", "adv", "expected", "received", "diff", "net"];
+    const agg = { hasRecv: false };
+    let any = false;
+    co.branches.forEach(b => {
+      const c = (b.days || [])[day - 1]; if (!c) return; any = true;
+      sumKeys.forEach(k => { if (hasK(c, k)) agg[k] = (agg[k] || 0) + (Number(c[k]) || 0); });
+      if (c.hasRecv) agg.hasRecv = true;
+    });
+    if (!any) return cards();
+    const ro = (label, val, color = "", sub = "") => `<div class="sum-row"><div class="sl">${ label }${ sub ? `<div class="sh">${ sub }</div>` : "" }</div><div class="sv" style="color:${ color }">${ val }</div></div>`;
+    return `
+      <div class="sum-block">
+        <div class="sum-head">${ title } · كل الفروع</div>
+        <div class="info-box" style="margin:12px 16px 0;border-radius:9px">ده مجموع الفروع اللي عندها طيارين. عشان تكتب <b>الخارجي</b> و<b>المصاريف</b> و<b>المستلم من المشرف</b> اختار فرع من فوق.</div>
+        ${ hasK(agg, "hourPay") ? `<div class="sum-row calc"><div class="sl">أجر الساعات<div class="sh">${ paMoney(agg.hours) } ساعة · كل طيار بسعره — <b>خارج</b></div></div><div class="sv" style="color:var(--orange)">${ paMoney(agg.hourPay) }</div></div>` : "" }
+        ${ hasK(agg, "devFee") ? `<div class="sum-row calc"><div class="sl">رسوم التطوير × ${ paMoney(rate) }<div class="sh">${ paMoney(agg.devFeeOrders) } أوردر — <b>خارج</b></div></div><div class="sv" style="color:var(--orange)">${ paMoney(agg.devFee) }</div></div>` : "" }
+        ${ hasK(agg, "ext") ? ro("الخارجي", paMoney(agg.ext), "var(--orange)", "خارج") : "" }
+        ${ hasK(agg, "exp") ? ro("مصاريف", paMoney(agg.exp), "var(--orange)", "خارج") : "" }
+        ${ hasK(agg, "outTotal") ? `<div class="sum-row" style="background:rgba(249,115,22,.07)"><div class="sl">إجمالي الخارج<div class="sh">ساعات + رسوم تطوير + خارجي + مصاريف</div></div><div class="sv" style="color:var(--orange)">${ paMoney(agg.outTotal) }</div></div>` : "" }
+        ${ hasK(agg, "cash") ? `<div class="sum-row" style="background:rgba(34,197,94,.07)"><div class="sl">إجمالي نقدي<div class="sh">مجموع عمود «صافي الخدمة» — الداخل للشركة</div></div><div class="sv" style="color:var(--green)">${ paMoney(agg.cash) }</div></div>` : "" }
+        ${ hasK(agg, "expected") ? ro("المفروض يورّده المشرفون", paMoney(agg.expected), "var(--blue)") + ro("المستلم فعلًا", agg.hasRecv ? paMoney(agg.received) : "—", "var(--blue)") + ro("الفرق", agg.hasRecv ? paMoney(agg.diff) : "—", Number(agg.diff) < 0 ? "var(--red)" : "var(--green)") : "" }
+        ${ hasK(agg, "net") ? `<div class="sum-row grand"><div class="sl">صافي كل الفروع<div class="sh">النقدي − إجمالي الخارج ± فرق التوريد</div></div><div class="sv" style="color:${ Number(agg.net) < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(agg.net) }</div></div>` : "" }
+        ${ hasK(agg, "adv") ? `<div class="sum-row" style="background:rgba(59,130,246,.07)"><div class="sl">سلف مع الطيارين<div class="sh">فلوس الشركة — مش مصروف</div></div><div class="sv" style="color:var(--blue)">${ paMoney(agg.adv) }</div></div>` : "" }
+      </div>` + cards();
   }
 
   window.paSaveSummary = async function(branchId, day, field, value) {
