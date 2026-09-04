@@ -7,174 +7,303 @@
 <link rel="icon" href="assets/logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
    تقفيل الطيارين — برنامج مستقل.
 
-   اتفصل من لوحة الإدارة 2026-08-31 بطلب صاحب النظام. الستايل هنا
-   **منسوخ** من tiar.html مش منقول: القواعد المشتركة (.sub-tabs ·
-   .table-wrap · .stats …) لسه بتخدم شاشات تانية هناك.
+   الشكل والتقسيم منقولين من «تقفيل روح دمشق» (البرنامج القديم على
+   GitHub — طلب صاحب النظام 2026-09-04: «زيه بالظبط»): قايمة جانبية
+   بشاشاتها، شيت شبه الإكسل بعنوان مثبّت ورأس مثبّت، بلوك حساب الراتب
+   تحت الكشف، منتقي وقت عربي، طباعة وإكسل، ودليل F1.
+   الفرق الوحيد: الأرقام هنا بتيجي من الورديات والأوردرات الحقيقية
+   (`/api/pilot-accounting/month`) — مافيش معادلة فلوس في المتصفح.
+
+   أسماء الكلاسات pa-* والمعرّفات (paMonth · paBranch · paDaySelect …)
+   جزء من عقد الحرّاس (test_accounts_app · test_pilotacct_acl ·
+   test_staff_closeout) — ماتتغيّرش.
 ══════════════════════════════════════════════════════════════ */
-:root{
-  --bg:#0b0d12; --panel:#12151c; --card:#171a22; --border:#242832;
-  --text:#e8eaf0; --muted:#8b93a7; --sky:#0ea5e9; --green:#22c55e;
-  --orange:#f97316; --red:#e8192c; --purple:#8b5cf6;
-  --radius:12px; --font:'Cairo',system-ui,sans-serif;
+:root {
+  --sky: #e8192c; --sky-d: #b91c1c; --night: #0a0a0a; --panel: #111111;
+  --card: #1a1a1a; --border: #2a2a2a; --text: #f0f0f0; --muted: #888888;
+  --green: #22c55e; --red: #e8192c; --purple: #a855f7; --orange: #f97316;
+  --blue: #3b82f6; --teal: #14b8a6;
+  --bg: var(--night);
+  --sidebar-w: 236px; --radius: 12px; --font: 'Cairo', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: dark;
 }
-html.light{
-  --bg:#f4f5f8; --panel:#fff; --card:#fafbfc; --border:#e2e5ec;
-  --text:#111318; --muted:#5c6373;
+html.light {
+  --sky: #d1172a; --sky-d: #a30f20; --night: #eff2f5; --panel: #ffffff;
+  --card: #ffffff; --border: #dfe3e7; --text: #111b21; --muted: #667781;
+  --green: #15803d; --red: #d1172a; --purple: #7c3aed; --orange: #c2410c;
+  --blue: #1d4ed8; --teal: #0f766e;
+  color-scheme: light;
 }
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
-     -webkit-text-size-adjust:100%}
-button,input,select{font-family:inherit}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--night); color: var(--text); transition: background-color .25s, color .2s; -webkit-text-size-adjust: 100%; }
+input, textarea, select, button { font-family: var(--font); }
 
-/* الشريط العلوي */
-.top{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--panel);
-     border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
-.top .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:1rem}
-.top .brand img{height:30px}
-.top .sp{flex:1}
-.top button{background:var(--card);color:var(--text);border:1px solid var(--border);
-            border-radius:9px;padding:7px 12px;cursor:pointer;font-size:.82rem;font-weight:700}
-.wrap{padding:20px 18px 60px;max-width:1500px;margin:0 auto}
+/* ── LOGIN ── */
+#gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--night); position: fixed; inset: 0; z-index: 1000;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232,25,44,.07) 0%, transparent 60%); }
+#gate .box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 44px 38px; width: 100%; max-width: 420px; }
+#gate img { height: 56px; display: block; margin: 0 auto 10px; }
+#gate h1 { text-align: center; font-size: 1.45rem; font-weight: 800; color: var(--sky); margin-bottom: 6px; }
+#gate p { text-align: center; color: var(--muted); font-size: .84rem; margin-bottom: 26px; }
+#gate label { display: block; font-size: .8rem; color: var(--muted); font-weight: 600; margin-bottom: 7px; }
+#gate input { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 12px 16px; outline: none; font-size: .92rem; margin-bottom: 16px; }
+#gate input:focus { border-color: var(--sky); }
+#gate .go { width: 100%; background: var(--sky); color: #fff; border: none; padding: 13px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: .95rem; }
+#gate .go:hover { background: var(--sky-d); }
+#gateErr { font-size: .82rem; color: var(--red); margin-top: 12px; text-align: center; min-height: 18px; }
+.login-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: .76rem; color: var(--muted); line-height: 1.8; text-align: center; }
 
-/* بوابة الدخول */
-#gate{min-height:100vh;display:grid;place-items:center;padding:20px}
-#gate .box{background:var(--panel);border:1px solid var(--border);border-radius:18px;
-           padding:28px;width:100%;max-width:380px;text-align:center}
-#gate img{height:56px;margin-bottom:14px}
-#gate h1{font-size:1.15rem;margin:0 0 4px}
-#gate p{font-size:.8rem;color:var(--muted);margin:0 0 20px}
-#gate input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);
-            border-radius:10px;padding:12px;margin-bottom:10px;font-size:.9rem}
-#gate .go{width:100%;background:var(--red);color:#fff;border:none;border-radius:10px;
-          padding:12px;font-weight:800;cursor:pointer;font-size:.92rem}
-#gateErr{color:var(--red);font-size:.8rem;min-height:18px;margin-top:10px;font-weight:700}
-#app{display:none}
-#app.on{display:block}
+/* ── LAYOUT ── */
+#app { display: none; min-height: 100vh; }
+#app.on { display: flex; }
+#sidebar { width: var(--sidebar-w); min-height: 100vh; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+.sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 20px 18px 16px; font-size: 1.1rem; font-weight: 800; color: var(--sky); border-bottom: 1px solid var(--border); }
+.sidebar-brand img { height: 30px; }
+.sidebar-nav { padding: 12px 9px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sidebar-section-label { font-size: .66rem; color: var(--muted); letter-spacing: .1em; padding: 12px 12px 5px; opacity: .6; font-weight: 700; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border-radius: 9px; cursor: pointer; font-size: .87rem; color: var(--muted); border: none; background: none; width: 100%; text-align: right; }
+.nav-item:hover { background: var(--card); color: var(--text); }
+.nav-item.active { background: rgba(232,25,44,.12); color: var(--sky); font-weight: 700; }
+.sidebar-footer { padding: 12px 9px; border-top: 1px solid var(--border); }
+.theme-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 13px; border-radius: 8px; border: 1px solid var(--border); background: none; font-size: .82rem; color: var(--muted); cursor: pointer; width: 100%; margin-bottom: 8px; }
+.theme-toggle:hover { background: var(--card); color: var(--text); }
+.toggle-pill { width: 34px; height: 18px; background: var(--border); border-radius: 9px; position: relative; flex-shrink: 0; }
+.toggle-pill::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .25s; }
+html.light .toggle-pill { background: var(--sky); }
+html.light .toggle-pill::after { transform: translateX(-16px); background: #fff; }
+.sidebar-user { display: flex; align-items: center; gap: 10px; padding: 9px 11px; margin-bottom: 8px; }
+.user-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(232,25,44,.18); color: var(--sky); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+#sidebar-username { font-size: .85rem; font-weight: 700; color: var(--text); }
+#sidebar-role { font-size: .72rem; color: var(--muted); }
+.sidebar-logout { width: 100%; background: rgba(232,25,44,.08); color: var(--red); border: 1px solid rgba(232,25,44,.2); padding: 9px 13px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 600; }
+.sidebar-logout:hover { background: rgba(232,25,44,.18); }
+.sidebar-home { width: 100%; background: none; color: var(--muted); border: 1px solid var(--border); padding: 8px 13px; border-radius: 8px; cursor: pointer; font-size: .8rem; margin-bottom: 8px; }
+.sidebar-home:hover { color: var(--text); background: var(--card); }
+#main { flex: 1; min-width: 0; }
+.wrap { padding: 0; }
+/* كل شاشة (pa-*) صفحة — البادئة بدل الكلاس عشان ماركب الصلاحيات المقفول بالحارس */
+.page, #page-pilotacct > [id^="pa-"] { display: none; padding: 26px 30px 60px; width: 100%; }
 
-/* ── منقول من tiar.html: قواعد الصفحة والجداول ── */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
-.stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.stat-label { font-size: .74rem; color: var(--muted); margin-bottom: 5px; }
-.stat-value { font-size: 1.35rem; font-weight: 800; }
-.sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
-.sec-title { font-size: 1.05rem; font-weight: 800; }
-.add-btn { background: var(--sky); color: #fff; border: none; border-radius: 9px; padding: 8px 14px; font-size: .82rem; font-weight: 700; cursor: pointer; }
-.add-btn:hover { opacity: .9; }
-.table-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-thead { background: var(--card); }
-th { text-align: right; padding: 11px 10px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
-td { padding: 10px; border-bottom: 1px solid var(--border); }
-.empty-row { text-align: center; color: var(--muted); padding: 26px 10px; }
-.view-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; font-size: .75rem; font-weight: 700; cursor: pointer; }
-.view-btn:hover { border-color: var(--sky); color: var(--sky); }
+/* ── SHARED UI ── */
+.sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+.sec-title { font-size: 1.08rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.sec-sub, .pa-sec-sub { font-size: .78rem; color: var(--muted); font-weight: 500; margin-top: 3px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.field { padding: 8px 11px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: .83rem; outline: none; }
+.field:focus { border-color: var(--sky); }
+.add-btn { background: var(--sky); color: #fff; border: none; padding: 9px 18px; border-radius: 8px; font-size: .85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.add-btn:hover { background: var(--sky-d); }
+.add-btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn-ghost, .view-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 600; cursor: pointer; }
+.btn-ghost:hover, .view-btn:hover { border-color: var(--sky); color: var(--sky); }
+.view-btn { padding: 6px 12px; font-size: .78rem; }
+.btn-green { background: rgba(34,197,94,.14); color: var(--green); border: 1px solid rgba(34,197,94,.3); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 700; cursor: pointer; }
+.btn-green:hover { background: var(--green); color: #fff; }
+.btn-red { background: rgba(232,25,44,.12); color: var(--red); border: 1px solid rgba(232,25,44,.28); padding: 8px 15px; border-radius: 8px; font-size: .83rem; font-weight: 700; cursor: pointer; }
+.btn-red:hover { background: var(--red); color: #fff; }
+.btn-xs { padding: 4px 9px; font-size: .74rem; border-radius: 6px; }
 
-/* 🔴 منسوخة مش منقولة — في tiar.html بتخدم ٦ حاويات تبويبات تانية */
-    .sub-tabs { display: flex; gap: 6px; margin-bottom: 22px; border-bottom: 2px solid var(--border); padding-bottom: 0; }
-    .sub-tab { background: none; border: none; border-bottom: 3px solid transparent; color: var(--muted); font-family: var(--font); font-size: .92rem; font-weight: 600; padding: 10px 20px; cursor: pointer; transition: color .2s, border-color .2s; margin-bottom: -2px; border-radius: 6px 6px 0 0; }
-    .sub-tab:hover { color: var(--text); background: var(--card); }
-    .sub-tab.active { color: var(--sky); border-bottom-color: var(--sky); background: rgba(14,165,233,.06); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; }
+.stat-label { font-size: .74rem; color: var(--muted); display: block; margin-bottom: 6px; font-weight: 600; }
+.stat-value { font-size: 1.35rem; font-weight: 800; color: var(--sky); line-height: 1.15; display: block; font-variant-numeric: tabular-nums; }
 
-    /* ══ شبكة تقفيل الطيارين ══ */
-    .pa-grid th { white-space: nowrap; font-size: .74rem; padding: 8px 6px; vertical-align: top; }
-    .pa-grid td { padding: 3px 4px; }
-    .pa-sub { font-weight: 600; font-size: .66rem; color: var(--muted); margin-top: 2px; }
-    .pa-in { width: 100%; min-width: 66px; background: transparent; border: 1px solid transparent;
-             border-radius: 6px; color: var(--text); font-family: inherit; font-size: .8rem;
-             padding: 5px 6px; text-align: center; }
-    .pa-in:hover { border-color: var(--border); }
-    .pa-in:focus { outline: none; border-color: var(--sky); background: var(--bg); }
-    .pa-in[readonly] { cursor: default; }
-    .pa-pick { cursor: pointer; }
-    /* الخانة اللي فيها تدخّل بشري — بتتلوّن عشان تفرق عن رقم النظام */
-    .pa-edited { background: rgba(249,115,22,.10); box-shadow: inset 2px 0 0 var(--orange); }
-    .pa-tot { font-weight: 800; font-size: .82rem; }
+.table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+thead { background: var(--panel); position: sticky; top: 0; z-index: 2; }
+th { padding: 11px 13px; text-align: right; font-weight: 700; font-size: .74rem; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 10px 13px; border-bottom: 1px solid var(--border); color: var(--text); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(232,25,44,.035); }
+.num { font-variant-numeric: tabular-nums; text-align: left; direction: ltr; white-space: nowrap; }
+.empty-row { text-align: center; color: var(--muted); padding: 38px; }
+.idx { color: var(--muted); font-size: .77rem; }
+tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-top: 2px solid var(--border); }
+.pa-tot { font-weight: 800; font-size: .82rem; font-variant-numeric: tabular-nums; }
 
-/* ══════════ شاشة الصلاحيات — منقولة من damascus.html:198 ══════════
-   الماركب كان بيستعمل الكلاسات دي **من غير تعريف** فالشاشة رندرت
-   خانات خام متكومة. القيم نفس دمشق، والألوان بتوكنز الملف ده. */
-.pa-perm-group { background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
-.pa-perm-head { display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; padding: 11px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
-/* شبكة أعمدة — مش خانات تحت بعضها. 230px نفس عرض دمشق. */
-.pa-perm-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 4px; padding: 12px 16px; }
-.pa-chk { display: flex; align-items: center; gap: 9px; cursor: pointer;
-  font-size: .86rem; font-weight: 600; padding: 6px 8px; border-radius: 8px; user-select: none; }
-.pa-chk:hover { background: rgba(14,165,233,.07); }
-.pa-chk input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--sky);
-  cursor: pointer; flex-shrink: 0; }
-.pa-perm-head .pa-chk { font-weight: 800; font-size: .92rem; padding: 0; }
-.pa-perm-head .pa-chk:hover { background: none; }
-
-.pa-badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem;
-  white-space: nowrap; background: rgba(139,147,167,.14); color: var(--muted); }
+.badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; background: rgba(136,136,136,.13); color: var(--muted); }
+.pa-badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; white-space: nowrap; background: rgba(139,147,167,.14); color: var(--muted); }
+.bg-green { background: rgba(34,197,94,.15); color: var(--green); }
+.bg-red { background: rgba(232,25,44,.15); color: var(--red); }
+.bg-orange { background: rgba(249,115,22,.15); color: var(--orange); }
+.bg-blue { background: rgba(59,130,246,.15); color: var(--blue); }
+.bg-purple { background: rgba(168,85,247,.15); color: #a855f7; }
+.bg-muted { background: rgba(136,136,136,.13); color: var(--muted); }
 .pa-b-green  { background: rgba(34,197,94,.15);  color: var(--green); }
 .pa-b-orange { background: rgba(249,115,22,.15); color: var(--orange); }
-.pa-b-blue   { background: rgba(14,165,233,.15); color: var(--sky); }
-.pa-b-muted  { background: rgba(139,147,167,.14); color: var(--muted); }
+.pa-b-blue   { background: rgba(59,130,246,.15); color: var(--blue); }
+.pa-b-muted  { background: rgba(136,136,136,.14); color: var(--muted); }
+.status-badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; }
+.status-done { background: rgba(34,197,94,.15); color: var(--green); }
+.status-pending { background: rgba(249,115,22,.15); color: var(--orange); }
 
+.info-box { background: rgba(59,130,246,.07); border: 1px solid rgba(59,130,246,.22); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
+.warn-box { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.25); border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted); line-height: 1.85; margin-bottom: 18px; }
+
+/* ══════════ الشيت الشبيه بالإكسل ══════════ */
+.sheet-title { background: var(--panel); border: 1px solid var(--border); border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0; padding: 12px 16px; text-align: center;
+  font-weight: 800; font-size: 1rem; color: var(--sky); letter-spacing: .3px; }
+.sheet-wrap { border-radius: 0 0 var(--radius) var(--radius); }
+/* تثبيت شريط الأدوات + عنوان الشيت + رأس الجدول (الإزاحات بيحسبها JS) */
+.page > .sec-header.sticky-bar { position: sticky; top: 0; z-index: 60; background: var(--night);
+  margin: -26px -30px 16px; padding: 18px 30px 12px; border-bottom: 1px solid var(--border); }
+.sheet-title.sticky-title { position: sticky; top: var(--stick1, 0px); z-index: 55; }
+.sheet-wrap { overflow: visible; }
+.sheet-wrap thead { top: var(--stick2, 0px); box-shadow: 0 1px 0 var(--border); }
+.pa-grid th { white-space: nowrap; font-size: .74rem; padding: 8px 6px; vertical-align: top; }
+.pa-grid td { padding: 0; }
+.pa-grid td.lbl { padding: 7px 12px; }
+.pa-grid td + td { border-inline-start: 1px solid var(--border); }
+.pa-grid th + th { border-inline-start: 1px solid var(--border); }
+.pa-grid tbody tr.today-row { background: rgba(59,130,246,.07); }
+.pa-sub { font-weight: 600; font-size: .66rem; color: var(--muted); margin-top: 2px; }
+.pa-in { width: 100%; min-width: 66px; background: transparent; border: none; outline: none; color: var(--text);
+  padding: 8px 8px; font-size: .86rem; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+.pa-in:hover { background: rgba(232,25,44,.05); }
+.pa-in:focus { background: rgba(232,25,44,.12); box-shadow: inset 0 0 0 2px var(--sky); border-radius: 4px; }
+.pa-in[readonly] { cursor: default; }
+.pa-in.txt { text-align: right; font-weight: 500; font-size: .82rem; }
+.pa-pick { cursor: pointer; caret-color: transparent; }
+/* الخانة اللي فيها تدخّل بشري — بتتلوّن عشان تفرق عن رقم النظام */
+.pa-edited { background: rgba(249,115,22,.10); box-shadow: inset 2px 0 0 var(--orange); }
+.saving-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--orange);
+  margin-inline-start: 6px; vertical-align: middle; opacity: 0; transition: opacity .2s; }
+.saving-dot.on { opacity: 1; }
+
+/* بلوك الملخص (حساب الراتب / ملخص اليوم) */
+.sum-block { margin-top: 18px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.sum-head { background: var(--panel); padding: 11px 16px; font-weight: 800; font-size: .92rem; color: var(--sky); border-bottom: 1px solid var(--border); text-align: center; }
+.sum-row { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+.sum-row:last-child { border-bottom: none; }
+.sum-row .sl { flex: 1; font-size: .86rem; font-weight: 600; }
+.sum-row .sh { font-size: .73rem; color: var(--muted); font-weight: 500; }
+.sum-row .sv { font-size: .98rem; font-weight: 800; font-variant-numeric: tabular-nums; direction: ltr; min-width: 130px; text-align: left; }
+.sum-row input.sv { background: var(--night); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; color: var(--text); outline: none; }
+.sum-row input.sv:focus { border-color: var(--sky); background: rgba(232,25,44,.06); }
+.sum-row.calc { background: rgba(59,130,246,.05); }
+.sum-row.grand { background: rgba(232,25,44,.08); }
+.sum-row.grand .sl, .sum-row.grand .sv { color: var(--sky); font-size: 1.05rem; }
+
+/* التبويبات الفرعية (الموظفين) */
+.sub-tabs { display: flex; gap: 6px; margin-bottom: 22px; border-bottom: 2px solid var(--border); padding-bottom: 0; }
+.sub-tab { background: none; border: none; border-bottom: 3px solid transparent; color: var(--muted); font-family: var(--font); font-size: .92rem; font-weight: 600; padding: 10px 20px; cursor: pointer; transition: color .2s, border-color .2s; margin-bottom: -2px; border-radius: 6px 6px 0 0; }
+.sub-tab:hover { color: var(--text); background: var(--card); }
+.sub-tab.active { color: var(--sky); border-bottom-color: var(--sky); background: rgba(232,25,44,.06); }
+
+/* ══════════ شاشة الصلاحيات ══════════ */
+/* كل كلاس بقاعدته لوحده — الحارس بيتأكد إن كل كلاس مستعمل في شاشة الصلاحيات معرّف باسمه */
+.pa-perm-group { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
+.pa-perm-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.pa-perm-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px; padding: 12px 16px; }
+.pa-chk { display: flex; align-items: center; gap: 9px; cursor: pointer; font-size: .86rem; font-weight: 600; padding: 6px 8px; border-radius: 8px; user-select: none; }
+.pa-chk:hover { background: rgba(232,25,44,.05); }
+.pa-chk input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--sky); cursor: pointer; flex-shrink: 0; }
+.pa-perm-head .pa-chk { font-weight: 800; font-size: .92rem; padding: 0; }
+.pa-perm-head .pa-chk:hover { background: none; }
 .pa-user { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.pa-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(14,165,233,.16);
-  color: var(--sky); display: flex; align-items: center; justify-content: center;
-  font-weight: 800; flex-shrink: 0; }
+.pa-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(232,25,44,.16); color: var(--sky); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
 .pa-user-sub { font-size: .74rem; color: var(--muted); }
 .pa-note { padding: 10px 16px 12px; font-size: .78rem; color: var(--muted); line-height: 1.8; }
-.pa-sec-sub { font-size: .76rem; color: var(--muted); margin-top: 3px; }
+.pa-savebar { position: sticky; bottom: 0; background: var(--night); padding: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--border); }
 
-/* شريط الحفظ اللاصق — بيفضل باين مهما الشاشة طالت */
-.pa-savebar { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0;
-  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-  border-top: 1px solid var(--border); }
+/* ── MODAL ── */
+.modal, .emp-modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(5px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 18px; }
+.modal.open, .emp-modal.open { display: flex; }
+.modal-box, .emp-box { background: var(--night); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+.modal-head, .emp-head { display: flex; justify-content: space-between; align-items: center; padding: 17px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--night); z-index: 3; border-radius: 16px 16px 0 0; font-weight: 800; }
+.modal-title { font-size: 1rem; font-weight: 800; }
+.modal-close { background: var(--card); border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem; }
+.modal-close:hover { color: var(--red); border-color: var(--red); }
+.modal-body { padding: 18px 20px; }
+.emp-body { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-foot, .emp-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 9px; justify-content: flex-start; position: sticky; bottom: 0; background: var(--night); align-items: center; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-bottom: 13px; }
+.form-group, .emp-field { display: flex; flex-direction: column; gap: 6px; }
+.form-group.full, .emp-field.full { grid-column: 1 / -1; }
+.form-group label, .emp-field label { font-size: .79rem; color: var(--muted); font-weight: 700; }
+.form-group input, .form-group select, .form-group textarea, .emp-field input, .emp-field select { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 13px; outline: none; font-size: .88rem; width: 100%; }
+.form-group input:focus, .form-group select:focus, .emp-field input:focus, .emp-field select:focus { border-color: var(--sky); }
 
-/* صناديق الرسائل — كانوا مستعملين في ٥ أماكن بلا تعريف (زي دمشق:126) */
-.info-box { background: rgba(14,165,233,.07); border: 1px solid rgba(14,165,233,.22);
-  border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted);
-  line-height: 1.85; margin-bottom: 18px; }
-.warn-box { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.25);
-  border-radius: 10px; padding: 13px 16px; font-size: .82rem; color: var(--muted);
-  line-height: 1.85; margin-bottom: 18px; }
+/* ══════════ منتقي الوقت العربي ══════════ */
+.tp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.tp-col { display: flex; flex-direction: column; gap: 6px; }
+.tp-col label { font-size: .79rem; color: var(--muted); font-weight: 700; text-align: center; }
+.tp-col select { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 12px; outline: none; font-size: 1.15rem; font-weight: 700; text-align: center; text-align-last: center; font-variant-numeric: tabular-nums; cursor: pointer; }
+.tp-mer { display: flex; gap: 8px; margin-bottom: 14px; }
+.tp-mer button { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-weight: 700; font-size: .95rem; cursor: pointer; }
+.tp-mer button.on { background: rgba(232,25,44,.12); border-color: var(--sky); color: var(--sky); }
+.tp-preview { text-align: center; font-size: 1.4rem; font-weight: 800; color: var(--sky); font-variant-numeric: tabular-nums; min-height: 32px; }
 
-/* ══ مودال إدارة الموظفين — مقتبس من لوحة الإدارة ══ */
-.emp-modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 900;
-  display: none; align-items: center; justify-content: center; padding: 18px; }
-.emp-modal.open { display: flex; }
-.emp-box { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-  width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
-.emp-head { display: flex; justify-content: space-between; align-items: center;
-  padding: 15px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0;
-  background: var(--panel); z-index: 3; font-weight: 800; }
-.emp-body { padding: 16px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.emp-field { display: flex; flex-direction: column; gap: 5px; }
-.emp-field.full { grid-column: 1 / -1; }
-.emp-field label { font-size: .78rem; color: var(--muted); font-weight: 700; }
-.emp-field input, .emp-field select { background: var(--card); border: 1px solid var(--border);
-  border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: .86rem;
-  font-family: inherit; outline: none; width: 100%; }
-.emp-field input:focus, .emp-field select:focus { border-color: var(--sky); }
-.emp-foot { padding: 13px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px;
-  position: sticky; bottom: 0; background: var(--panel); }
+/* ══════════ فورم فترات الاستئذان ══════════ */
+.perm-empty { text-align: center; color: var(--muted); font-size: .85rem; padding: 18px 8px; }
+.perm-row { display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
+.perm-row-idx { width: 24px; height: 24px; border-radius: 50%; background: rgba(232,25,44,.14); color: var(--sky); font-size: .78rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.perm-row-times { flex: 1; display: flex; align-items: center; gap: 8px; }
+.tp-btn { flex: 1; display: flex; flex-direction: column; gap: 2px; align-items: center; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--night); color: var(--text); cursor: pointer; }
+.tp-btn:hover { border-color: var(--sky); }
+.tp-btn.empty .tp-btn-val { color: var(--muted); }
+.tp-btn-lbl { font-size: .68rem; color: var(--muted); font-weight: 700; }
+.tp-btn-val { font-size: .9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.perm-arrow { color: var(--muted); font-weight: 800; }
+.perm-del { background: rgba(232,25,44,.1); border: 1px solid rgba(232,25,44,.25); color: var(--red); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; flex-shrink: 0; font-size: .9rem; }
+.perm-del:hover { background: var(--red); color: #fff; }
+.perm-dur { font-size: .74rem; color: var(--muted); margin: -3px 4px 10px; padding-inline-start: 34px; }
 
-/* التوست */
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
-       background:var(--panel);border:1px solid var(--border);border-radius:11px;
-       padding:12px 20px;font-size:.85rem;font-weight:700;display:none;
-       box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:90vw;text-align:center}
-#toast.show{display:block}
-#toast.success{border-color:rgba(34,197,94,.5);color:var(--green)}
-#toast.error{border-color:rgba(232,25,44,.5);color:var(--red)}
+/* ══════════ زر المساعدة ولوحة الشرح ══════════ */
+#helpBtn { position: fixed; top: 18px; left: 20px; z-index: 8000; width: 38px; height: 38px; border-radius: 50%; cursor: pointer; background: var(--sky); color: #fff; border: none; font-size: 1.15rem; font-weight: 800; font-family: Georgia, serif; font-style: italic; box-shadow: 0 4px 16px rgba(232,25,44,.4); display: none; align-items: center; justify-content: center; }
+#app.on ~ #helpBtn { display: flex; }
+#helpBtn:hover { background: var(--sky-d); transform: scale(1.08); }
+#helpOverlay { position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(5px); z-index: 9500; display: none; align-items: center; justify-content: center; padding: 20px; }
+#helpOverlay.open { display: flex; }
+#helpPanel { background: var(--night); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+#helpHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+#helpTitle { font-size: 1.18rem; font-weight: 800; color: var(--sky); }
+#helpSub { font-size: .78rem; color: var(--muted); margin-top: 3px; }
+#helpBody { padding: 20px 24px; overflow-y: auto; line-height: 1.95; font-size: .89rem; }
+#helpFoot { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.help-what { background: rgba(59,130,246,.08); border-inline-start: 3px solid var(--blue); border-radius: 8px; padding: 13px 16px; margin-bottom: 18px; font-size: .9rem; }
+.help-sec { font-size: .82rem; font-weight: 800; color: var(--sky); margin: 20px 0 9px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.help-sec:first-of-type { margin-top: 0; }
+#helpBody ul { margin: 0; padding-inline-start: 22px; }
+#helpBody li { margin-bottom: 7px; }
+#helpBody b { color: var(--text); }
+.help-tip { background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.25); border-radius: 9px; padding: 11px 14px; margin-top: 14px; font-size: .85rem; }
+.help-warn { background: rgba(249,115,22,.07); border: 1px solid rgba(249,115,22,.28); border-radius: 9px; padding: 11px 14px; margin-top: 14px; font-size: .85rem; }
+.help-steps { counter-reset: hs; list-style: none; padding: 0; margin: 0; }
+.help-steps li { counter-increment: hs; position: relative; padding-inline-start: 34px; margin-bottom: 11px; }
+.help-steps li::before { content: counter(hs); position: absolute; inset-inline-start: 0; top: 1px; width: 23px; height: 23px; border-radius: 50%; background: var(--sky); color: #fff; font-size: .75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 
-@media (max-width: 760px){
-  .wrap{padding:14px 12px 50px}
-  /* الجداول ١٥ عمود — من غير السطرين دول الموبايل بيتكسر */
-  .table-wrap{overflow-x:auto}
-  table{min-width:900px}
+/* ── TOAST ── */
+#toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(120px); background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 13px 26px; border-radius: 10px; font-weight: 700; font-size: .88rem; z-index: 99999; transition: transform .3s; box-shadow: 0 8px 30px rgba(0,0,0,.45); max-width: 90vw; text-align: center; }
+#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.success { border-color: var(--green); color: var(--green); }
+#toast.error { border-color: var(--red); color: var(--red); }
+
+/* ── PRINT ── */
+@media print {
+  #sidebar, #helpBtn, #helpOverlay, #toast, .toolbar, .no-print, .stats, .sub-tabs { display: none !important; }
+  body { background: #fff; color: #000; }
+  .page { padding: 0; }
+  .table-wrap, .sum-block, .sheet-title { border-color: #999; background: #fff; }
+  th, td { color: #000 !important; border-color: #bbb !important; }
+  .pa-in { color: #000 !important; }
+}
+@media (max-width: 900px) {
+  #helpBtn { top: 12px; left: 12px; width: 34px; height: 34px; font-size: 1rem; }
+  #app.on { flex-direction: column; }
+  #sidebar { width: 100%; height: auto; min-height: 0; position: static; border-left: none; border-bottom: 1px solid var(--border); }
+  .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
+  .page { padding: 18px 12px 50px; }
+  .page > .sec-header.sticky-bar { margin: -18px -12px 14px; padding: 12px 12px 10px; }
+  .table-wrap { overflow-x: auto; }
+  table { min-width: 900px; }
 }
 </style>
 </head>
@@ -185,67 +314,84 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
   <div class="box">
     <img src="assets/logo.png" alt="الدهشان" />
     <h1>🧾 تقفيل الطيارين</h1>
-    <p>سجّل دخولك بحساب الإدارة أو المحاسب</p>
-    <input id="gUser" placeholder="اسم المستخدم" autocomplete="username" />
-    <input id="gPass" type="password" placeholder="كلمة المرور" autocomplete="current-password"
-           onkeydown="if(event.key==='Enter')doLogin()" />
+    <p>الدهشان — تقفيل يومي وشهري للطيارين والموظفين</p>
+    <label>اسم المستخدم</label>
+    <input id="gUser" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" />
+    <label>كلمة المرور</label>
+    <input id="gPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
     <button class="go" onclick="doLogin()">دخول</button>
     <div id="gateErr"></div>
+    <div class="login-note">الدخول متاح <b>للإدارة</b> و<b>للمحاسب</b> و<b>لمشرف الفرع</b> اللي الإدارة فتحت له البرنامج.</div>
   </div>
 </div>
 
 <!-- ══════════ التطبيق ══════════ -->
 <div id="app">
-  <div class="top">
-    <span class="brand"><img src="assets/logo.png" alt="" /> تقفيل الطيارين</span>
-    <span class="sp"></span>
-    <button id="themeBtn" onclick="toggleTheme()">🌙</button>
-    <button onclick="location.href='home.html'">⌂ المجموعة</button>
-    <button onclick="doLogout()">خروج</button>
-  </div>
+  <aside id="sidebar">
+    <div class="sidebar-brand"><img src="assets/logo.png" alt="" /> <span>تقفيل الطيارين</span></div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">التقفيل</div>
+      <button class="nav-item active" id="patab-daily" onclick="switchPaTab('daily')">🗓️ التقفيل اليومي</button>
+      <button class="nav-item" id="patab-pilot" onclick="switchPaTab('pilot')">🧾 كشف الطيار</button>
+      <button class="nav-item" id="patab-month" onclick="switchPaTab('month')">📊 تقفيل الشهر</button>
+      <button class="nav-item" id="patab-deferred" onclick="switchPaTab('deferred')">🧮 السلف المؤجلة</button>
+      <div class="sidebar-section-label" id="navSectionStaff">الموظفين</div>
+      <button class="nav-item" id="patab-staff" onclick="switchPaTab('staff')">👥 تقفيل الموظفين</button>
+      <div class="sidebar-section-label" id="navSectionSetup">الإعداد</div>
+      <!-- 🔐 للأدمن بس — `applyPaAcl` بتخفيهم لغيره -->
+      <button class="nav-item" id="patab-emps" style="display:none" onclick="switchPaTab('emps')">⚙️ الطيارين والموظفين</button>
+      <button class="nav-item" id="patab-settings" style="display:none" onclick="switchPaTab('settings')">🛠️ الإعدادات</button>
+      <button class="nav-item" id="patab-perms" style="display:none" onclick="switchPaTab('perms')">🔐 الصلاحيات</button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <span style="display:flex;align-items:center;gap:8px"><span id="themeIcon">☀️</span><span id="themeLabel">الوضع النهاري</span></span>
+        <span class="toggle-pill"></span>
+      </button>
+      <button class="sidebar-home" onclick="location.href='home.html'">⌂ المجموعة</button>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">؟</div>
+        <div style="min-width:0">
+          <div id="sidebar-username">—</div>
+          <div id="sidebar-role">—</div>
+        </div>
+      </div>
+      <button class="sidebar-logout" onclick="doLogout()">🚪 تسجيل خروج</button>
+    </div>
+  </aside>
 
+  <main id="main">
   <div class="wrap">
 <div id="page-pilotacct">
-  <div class="sec-header">
-    <span class="sec-title">🧾 تقفيل الطيارين</span>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <select id="paBranch" onchange="loadPilotAcct()" style="padding:8px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem">
-        <option value="">كل الفروع</option>
-      </select>
-      <input type="month" id="paMonth" onchange="loadPilotAcct()" style="padding:8px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem" />
-      <button class="add-btn" onclick="loadPilotAcct()">🔄 تحديث</button>
-    </div>
-  </div>
 
-  <div id="paLockBar"></div>
-
-  <div class="stats" id="paStats"></div>
-
-  <div class="sub-tabs">
-    <button class="sub-tab active" id="patab-daily" onclick="switchPaTab('daily')">📋 تقفيل يومي</button>
-    <button class="sub-tab" id="patab-pilot" onclick="switchPaTab('pilot')">✈ كشف الطيار</button>
-    <button class="sub-tab" id="patab-month" onclick="switchPaTab('month')">📆 تقفيلة الشهر</button>
-    <button class="sub-tab" id="patab-deferred" onclick="switchPaTab('deferred')">💳 السلف المؤجلة</button>
-    <button class="sub-tab" id="patab-staff" onclick="switchPaTab('staff')">👥 الموظفين</button>
-    <!-- 🔐 للأدمن بس — `applyPaAcl` بتخفيه لغيره -->
-    <button class="sub-tab" id="patab-perms" style="display:none" onclick="switchPaTab('perms')">🔐 الصلاحيات</button>
-    <button class="sub-tab" id="patab-emps" style="display:none" onclick="switchPaTab('emps')">⚙️ إدارة الموظفين</button>
-  </div>
-
+  <!-- شريط الفلاتر المشترك: الشهر والفرع بيتقروا منه في كل الشاشات -->
   <div id="paAclNote"></div>
-  <div id="paNoAccess" style="display:none">
+  <div id="paNoAccess" style="display:none;padding:26px 30px">
     <div class="warn-box">لسه مالكش صلاحية على أي شاشة في البرنامج ده — كلّم الإدارة.</div>
   </div>
 
   <!-- ── تقفيل يومي: كل الطيارين في يوم واحد ── -->
-  <div id="pa-daily">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-      <button class="view-btn" onclick="paDay(-1)">◀ اليوم السابق</button>
-      <select id="paDaySelect" onchange="renderPaDaily()" style="padding:7px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem"></select>
-      <button class="view-btn" onclick="paDay(1)">اليوم التالي ▶</button>
-      <span id="paDayLabel" style="font-size:.82rem;color:var(--muted)"></span>
+  <div class="page" id="pa-daily">
+    <div class="sec-header no-print sticky-bar">
+      <div>
+        <div class="sec-title">🗓️ التقفيل اليومي <span class="saving-dot" id="dailyDot"></span></div>
+        <div class="sec-sub">كل الطيارين في يوم — الحضور والأوردرات من الورديات، والمكتوب بالإيد بيتلوّن</div>
+      </div>
+      <div class="toolbar">
+        <select class="field" id="paBranch" onchange="loadPilotAcct()"><option value="">كل الفروع</option></select>
+        <input type="month" class="field" id="paMonth" onchange="loadPilotAcct()" />
+        <button class="btn-ghost" onclick="paDay(-1)" title="اليوم السابق">▶</button>
+        <select class="field" id="paDaySelect" onchange="renderPaDaily()"></select>
+        <button class="btn-ghost" onclick="paDay(1)" title="اليوم التالي">◀</button>
+        <button class="btn-ghost" onclick="loadPilotAcct()" title="تحديث">🔄</button>
+        <button class="btn-ghost" data-act="print" onclick="window.print()">🖨️ طباعة</button>
+        <button class="btn-green" data-act="export" onclick="exportDaily()">📥 إكسل</button>
+      </div>
     </div>
-    <div class="table-wrap"><table class="pa-grid">
+    <div id="paLockBar"></div>
+    <div class="stats" id="paStats"></div>
+    <div class="sheet-title sticky-title" id="paDayLabel"></div>
+    <div class="table-wrap sheet-wrap"><table class="pa-grid">
       <thead><tr>
         <th style="width:34px">#</th><th style="min-width:130px">الطيار</th>
         <th>ساعة الحضور</th><th>خروج مؤقت<div class="pa-sub">استئذان</div></th>
@@ -259,15 +405,24 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
       <tbody id="paDailyBody"><tr><td colspan="15" class="empty-row">جاري التحميل…</td></tr></tbody>
       <tfoot id="paDailyFoot"></tfoot>
     </table></div>
+    <div id="paDailySum"></div>
   </div>
 
   <!-- ── كشف الطيار: طيار واحد على الشهر كله ── -->
-  <div id="pa-pilot" style="display:none">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-      <select id="paPilotSelect" onchange="renderPaPilot()" style="padding:7px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem;min-width:200px"></select>
-      <span id="paPilotSummary" style="font-size:.82rem;color:var(--muted)"></span>
+  <div class="page" id="pa-pilot">
+    <div class="sec-header no-print sticky-bar">
+      <div>
+        <div class="sec-title">🧾 كشف الطيار <span class="saving-dot" id="pilotDot"></span></div>
+        <div class="sec-sub">نفس شيت الطيار — أيام الشهر والإجمالي وصافي الراتب</div>
+      </div>
+      <div class="toolbar">
+        <select class="field" id="paPilotSelect" onchange="renderPaPilot()" style="min-width:200px"></select>
+        <button class="btn-ghost" data-act="print" onclick="window.print()">🖨️ طباعة</button>
+        <button class="btn-green" data-act="export" onclick="exportPilot()">📥 إكسل</button>
+      </div>
     </div>
-    <div class="table-wrap"><table class="pa-grid">
+    <div class="sheet-title sticky-title" id="paPilotTitle"></div>
+    <div class="table-wrap sheet-wrap"><table class="pa-grid">
       <thead><tr>
         <th style="width:52px">اليوم</th><th style="width:70px"></th>
         <th>ساعة الحضور</th><th>خروج مؤقت</th><th>رجوع</th><th>ساعة الانصراف</th>
@@ -278,11 +433,23 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
       <tbody id="paPilotBody"><tr><td colspan="15" class="empty-row">اختر طيارًا</td></tr></tbody>
       <tfoot id="paPilotFoot"></tfoot>
     </table></div>
+    <div id="paPilotSummary"></div>
   </div>
 
   <!-- ── تقفيلة الشهر ── -->
-  <div id="pa-month" style="display:none">
-    <div class="table-wrap"><table>
+  <div class="page" id="pa-month">
+    <div class="sec-header no-print sticky-bar">
+      <div>
+        <div class="sec-title">📊 تقفيل الشهر</div>
+        <div class="sec-sub">كل الطيارين في شهر واحد — الأجر والعمولة والسلف وصافي الراتب</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-ghost" data-act="print" onclick="window.print()">🖨️ طباعة</button>
+        <button class="btn-green" data-act="export" onclick="exportMonth()">📥 إكسل</button>
+      </div>
+    </div>
+    <div class="sheet-title sticky-title" id="paMonthTitle"></div>
+    <div class="table-wrap sheet-wrap"><table>
       <thead><tr>
         <th style="width:34px">#</th><th>الطيار</th><th>الفرع</th>
         <th class="num">الساعات</th><th class="num">أيام الشغل</th><th class="num">الأوردرات</th>
@@ -298,11 +465,42 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
   </div>
 
   <!-- ── السلف المؤجلة ── -->
+  <div class="page" id="pa-deferred">
+    <div class="sec-header">
+      <div>
+        <div class="sec-title">🧮 السلف المؤجلة</div>
+        <div class="sec-sub">سلف كبيرة بتتقسّط على الشهور بدل ما تتخصم مرة واحدة</div>
+      </div>
+      <div class="toolbar">
+        <button class="add-btn" data-perm="act.deferred" onclick="openPaAdvance()">➕ سلفة مؤجلة</button>
+      </div>
+    </div>
+    <div class="info-box">
+      لو طيار خد سلفة كبيرة، متكتبهاش في عمود <b>سلف</b> في التقفيل اليومي. سجّلها هنا وحدّد قسط شهري،
+      والبرنامج هيخصمه من راتبه كل شهر لحد ما تتسدّد.
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th style="width:34px">#</th><th>الطيار</th><th>تاريخ السلفة</th>
+        <th class="num">المبلغ</th><th class="num">القسط الشهري</th><th>يبدأ من</th>
+        <th class="num" id="paDefMonthHead">قسط الشهر</th><th class="num">المسدَّد</th>
+        <th class="num">المتبقي</th><th>الحالة</th><th>ملاحظة</th><th>إجراء</th>
+      </tr></thead>
+      <tbody id="paDeferredBody"><tr><td colspan="12" class="empty-row">جاري التحميل…</td></tr></tbody>
+    </table></div>
+  </div>
+
   <!-- ══ 👥 تقفيلة الموظفين ══
        الحضور تلقائي من جلسات المتصفح (attendance_sessions) —
        الفجوة بين جلستين بتظهر استئذانًا. اليوم هنا ميلادي بتوقيت
        القاهرة زي شاشة الحضور في الإدارة، مش يوم الطيارين التجاري. -->
-  <div id="pa-staff" style="display:none">
+  <div class="page" id="pa-staff">
+    <div class="sec-header">
+      <div>
+        <div class="sec-title">👥 تقفيل الموظفين</div>
+        <div class="sec-sub">الحضور من فتح المتصفح — نفس معادلات الراتب</div>
+      </div>
+    </div>
     <div class="sub-tabs" style="margin-top:0">
       <button class="sub-tab active" id="sttab-daily" onclick="switchStTab('daily')">📋 يومي</button>
       <button class="sub-tab" id="sttab-person" onclick="switchStTab('person')">🧑 كشف الموظف</button>
@@ -312,10 +510,10 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
     <div id="st-daily">
       <div class="sec-header">
         <span class="sec-title">📋 حضور الموظفين — يوم واحد</span>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="view-btn" onclick="stDay(-1)">◀ اليوم السابق</button>
-          <select id="stDaySelect" onchange="renderStDaily()" style="padding:7px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem"></select>
-          <button class="view-btn" onclick="stDay(1)">اليوم التالي ▶</button>
+        <div class="toolbar">
+          <button class="btn-ghost" onclick="stDay(-1)">▶</button>
+          <select class="field" id="stDaySelect" onchange="renderStDaily()"></select>
+          <button class="btn-ghost" onclick="stDay(1)">◀</button>
           <span id="stDayLabel" style="font-size:.82rem;color:var(--muted)"></span>
         </div>
       </div>
@@ -338,8 +536,8 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
     <div id="st-person" style="display:none">
       <div class="sec-header">
         <span class="sec-title">🧑 كشف الموظف — الشهر كله</span>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select id="stPersonSelect" onchange="renderStPerson()" style="padding:7px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem;min-width:200px"></select>
+        <div class="toolbar">
+          <select class="field" id="stPersonSelect" onchange="renderStPerson()" style="min-width:200px"></select>
           <span id="stPersonSummary" style="font-size:.82rem;color:var(--muted)"></span>
         </div>
       </div>
@@ -372,7 +570,7 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
       <div style="font-size:.78rem;color:var(--muted);margin-top:10px">
         نفس معادلات تقفيلة روح دمشق: أجر الساعات = الساعات × سعر ساعة الموظف ·
         نصيب الراتب = الراتب الشهري ÷ الأيام المحسوبة × أيام الشغل ·
-        الغياب بياكل من رصيد الإجازة المدفوعة الأول. الأسعار بتتظبط من «إدارة الموظفين».
+        الغياب بياكل من رصيد الإجازة المدفوعة الأول. الأسعار بتتظبط من «الطيارين والموظفين».
       </div>
     </div>
   </div>
@@ -383,22 +581,36 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
   <div id="pa-perms" style="display:none">
     <div class="sec-header">
       <div>
-        <span class="sec-title">🔐 صلاحيات البرنامج</span>
+        <span class="sec-title">🔐 الصلاحيات</span>
         <div class="pa-sec-sub">افتح للي تحبه واقفل اللي مش عايزه يشوفه — من غير أي تعديل في البرنامج</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="paPermUser" onchange="renderPaPermsBody()"
-                style="padding:8px 10px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:.82rem;min-width:220px"></select>
+      <div class="toolbar">
+        <select class="field" id="paPermUser" onchange="renderPaPermsBody()" style="min-width:220px"></select>
       </div>
     </div>
     <div id="paPermsBody"><div class="empty-row">جاري التحميل…</div></div>
   </div>
 
-  <!-- ══ ⚙️ إدارة الموظفين — للأدمن بس ══
+  <!-- ══ ⚙️ الطيارين والموظفين — للأدمن بس ══
        نفس نقط نهاية لوحة الإدارة (/api/users و/api/pilots) — الشاشة
        نقل لشغل الإعدادات مش نسخة تانية من المنطق. -->
-  <div id="pa-emps" style="display:none">
+  <div class="page" id="pa-emps">
     <div class="sec-header">
+      <div>
+        <span class="sec-title">🛵 أسعار الطيارين</span>
+        <div class="pa-sec-sub">العمولة وسعر الساعة والراتب — التقفيلة بتحسب من الأرقام دي، والصفر معناه مستحقات صفر</div>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th style="width:34px">#</th><th>الطيار</th><th>الفرع</th>
+        <th>نوع العمولة</th><th class="num">قيمة العمولة</th>
+        <th class="num">سعر الساعة</th><th class="num">راتب شهري</th><th class="num">إجازة مدفوعة</th>
+      </tr></thead>
+      <tbody id="empPilotsBody"><tr><td colspan="8" class="empty-row">جاري التحميل…</td></tr></tbody>
+    </table></div>
+
+    <div class="sec-header" style="margin-top:26px">
       <div>
         <span class="sec-title">⚙️ حسابات الموظفين</span>
         <div class="pa-sec-sub">نفس حسابات لوحة الإدارة — التعديل من هنا بيبان هناك والعكس</div>
@@ -413,28 +625,24 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
       </tr></thead>
       <tbody id="empUsersBody"><tr><td colspan="10" class="empty-row">جاري التحميل…</td></tr></tbody>
     </table></div>
+  </div>
 
-    <div class="sec-header" style="margin-top:26px">
+  <!-- ══ 🛠️ الإعدادات — للأدمن بس ══ -->
+  <div class="page" id="pa-settings">
+    <div class="sec-header">
       <div>
-        <span class="sec-title">🛵 أسعار الطيارين</span>
-        <div class="pa-sec-sub">العمولة وسعر الساعة والراتب — التقفيلة بتحسب من الأرقام دي، والصفر معناه مستحقات صفر</div>
+        <span class="sec-title">🛠️ الإعدادات</span>
+        <div class="pa-sec-sub">أرقام الحساب المستخدمة في كل الشاشات</div>
       </div>
     </div>
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th style="width:34px">#</th><th>الطيار</th><th>الفرع</th>
-        <th>نوع العمولة</th><th class="num">قيمة العمولة</th>
-        <th class="num">سعر الساعة</th><th class="num">راتب شهري</th><th class="num">إجازة مدفوعة</th>
-      </tr></thead>
-      <tbody id="empPilotsBody"><tr><td colspan="8" class="empty-row">جاري التحميل…</td></tr></tbody>
-    </table></div>
+    <div id="paSettingsBody"><div class="empty-row">جاري التحميل…</div></div>
   </div>
 
   <!-- مودال الموظف -->
   <div class="emp-modal" id="empModal" onclick="if(event.target===this) closeEmpModal()">
     <div class="emp-box">
       <div class="emp-head"><span id="empModalTitle">👤 إضافة موظف</span>
-        <button class="view-btn" onclick="closeEmpModal()">✕</button></div>
+        <button class="modal-close" onclick="closeEmpModal()">✕</button></div>
       <div class="emp-body">
         <div class="emp-field"><label>اسم المستخدم *</label><input id="empUsername" dir="ltr" /></div>
         <div class="emp-field"><label id="empPassLabel">كلمة المرور *</label><input id="empPassword" type="password" dir="ltr" autocomplete="new-password" /></div>
@@ -470,27 +678,106 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
       <div class="emp-foot">
         <button class="add-btn" id="empSaveBtn" onclick="saveEmp()">💾 حفظ</button>
         <button class="view-btn" onclick="closeEmpModal()">إلغاء</button>
-        <span id="empErr" style="font-size:.8rem;color:var(--red);font-weight:700;align-self:center"></span>
+        <span id="empErr" style="font-size:.8rem;color:var(--red);font-weight:700"></span>
       </div>
     </div>
   </div>
 
-  <div id="pa-deferred" style="display:none">
-    <div class="sec-header">
-      <span class="sec-title">💳 السلف المؤجلة</span>
-      <button class="add-btn" onclick="openPaAdvance()">➕ سلفة جديدة</button>
+  <!-- مودال السلفة المؤجلة — نفس فورم البرنامج القديم -->
+  <div class="modal" id="modal-def">
+    <div class="modal-box" style="max-width:520px">
+      <div class="modal-head">
+        <div class="modal-title" id="defModalTitle">سلفة مؤجلة</div>
+        <button class="modal-close" onclick="closeModal('def')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="info-box" style="margin-bottom:15px">
+          السلفة المؤجلة <b>مش بتدخل</b> في تقفيلة اليوم — بتتخصم من راتب الطيار على أقساط شهرية لحد ما تتسدّد.
+        </div>
+        <div class="form-grid">
+          <div class="form-group full"><label>الطيار</label><select id="dfPilot"></select></div>
+          <div class="form-group"><label>تاريخ السلفة</label><input type="date" id="dfDate" /></div>
+          <div class="form-group"><label>المبلغ الكامل</label><input type="text" inputmode="decimal" id="dfAmount" placeholder="مثال: 5000" /></div>
+          <div class="form-group"><label>القسط الشهري</label><input type="text" inputmode="decimal" id="dfMonthly" placeholder="مثال: 500" oninput="previewDefPlan()" /></div>
+          <div class="form-group"><label>يبدأ الخصم من شهر</label><input type="month" id="dfStart" onchange="previewDefPlan()" /></div>
+          <div class="form-group full"><label>ملاحظة (اختياري)</label><input type="text" id="dfNote" placeholder="سبب السلفة" /></div>
+        </div>
+        <div id="dfPlan" style="font-size:.82rem;color:var(--muted);line-height:1.9;min-height:22px"></div>
+        <div id="dfError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" onclick="saveDeferred()">حفظ</button>
+        <button class="btn-ghost" onclick="closeModal('def')">إلغاء</button>
+      </div>
     </div>
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th style="width:34px">#</th><th>الطيار</th><th>تاريخ السلفة</th>
-        <th class="num">المبلغ</th><th class="num">القسط الشهري</th><th>يبدأ من</th>
-        <th class="num" id="paDefMonthHead">قسط الشهر</th><th class="num">المسدَّد</th>
-        <th class="num">المتبقي</th><th>الحالة</th><th>ملاحظة</th><th>إجراء</th>
-      </tr></thead>
-      <tbody id="paDeferredBody"><tr><td colspan="12" class="empty-row">جاري التحميل…</td></tr></tbody>
-    </table></div>
   </div>
+
+  <!-- فترات الاستئذان — طيار/موظف واحد ويوم واحد، أكتر من فترة -->
+  <div class="modal" id="modal-perm">
+    <div class="modal-box" style="max-width:460px">
+      <div class="modal-head">
+        <div class="modal-title" id="dayPermTitle">فترات الاستئذان</div>
+        <button class="modal-close" onclick="closeModal('perm')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="info-box" id="dayPermInfo" style="margin-bottom:14px"></div>
+        <div id="dayPermRows"></div>
+        <button class="btn-ghost" style="margin-top:6px;width:100%" onclick="dayPermAdd()">＋ إضافة استئذان جديد</button>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" onclick="saveDayPerms()">حفظ</button>
+        <button class="btn-ghost" onclick="closeModal('perm')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- منتقي الوقت العربي -->
+  <div class="modal" id="modal-timepicker">
+    <div class="modal-box" style="max-width:340px">
+      <div class="modal-head">
+        <div class="modal-title" id="tpTitle">اختيار الوقت</div>
+        <button class="modal-close" onclick="closeTimePicker()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="tp-grid">
+          <div class="tp-col"><label>الساعة</label><select id="tpHour"></select></div>
+          <div class="tp-col"><label>الدقيقة</label><select id="tpMin"></select></div>
+        </div>
+        <div class="tp-mer">
+          <button type="button" id="tpAM" onclick="tpSetMer('am')">صباحًا</button>
+          <button type="button" id="tpPM" onclick="tpSetMer('pm')">مساءً</button>
+        </div>
+        <div id="tpPreview" class="tp-preview"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" onclick="tpConfirm()">تأكيد</button>
+        <button class="btn-ghost" id="tpClearBtn" onclick="tpClear()">مسح</button>
+        <button class="btn-ghost" onclick="closeTimePicker()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
 </div>
+  </div>
+  </main>
+</div>
+
+<!-- زر المساعدة ولوحة الشرح -->
+<button id="helpBtn" onclick="openHelp()" title="إيه الصفحة دي؟ (F1)">i</button>
+<div id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div id="helpPanel">
+    <div id="helpHead">
+      <div>
+        <div id="helpTitle">—</div>
+        <div id="helpSub">دليل استخدام الشاشة</div>
+      </div>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div id="helpBody"></div>
+    <div id="helpFoot">
+      <button class="btn-ghost" onclick="closeHelp()">تمام، فهمت</button>
+      <span style="font-size:.74rem;color:var(--muted);margin-inline-start:auto">اضغط <b>F1</b> في أي وقت</span>
+    </div>
   </div>
 </div>
 
@@ -519,6 +806,16 @@ function bizMonth() {
   const g = k => p.find(x => x.type === k).value;
   return g("year") + "-" + g("month");
 }
+/** «النهارده» التجاري (YYYY-MM-DD) — بداية اليوم من إعدادات السيرفر لو وصلت، وإلا 9 */
+function bizToday() {
+  const ds = Number(window._paData?.settings?.dayStartHour ?? 9);
+  const now = new Date();
+  const hour = +new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", hour12: false }).format(now);
+  const d = hour < ds ? new Date(now.getTime() - 864e5) : now;
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+  const g = k => p.find(x => x.type === k).value;
+  return g("year") + "-" + g("month") + "-" + g("day");
+}
 window.esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 /* للنصوص اللي بتتحط جوه onclick — التهريب مختلف عن HTML */
@@ -537,8 +834,9 @@ window.showToast = function (msg, type) {
 /* الثيم — مفتاح خاص بالبرنامج ده عشان مايتصادمش مع باقي التطبيقات */
 if (localStorage.getItem("accounts-theme") === "light") document.documentElement.classList.add("light");
 function syncTheme() {
-  const b = $("themeBtn");
-  if (b) b.textContent = document.documentElement.classList.contains("light") ? "🌙" : "☀️";
+  const light = document.documentElement.classList.contains("light");
+  if ($("themeIcon"))  $("themeIcon").textContent  = light ? "🌙" : "☀️";
+  if ($("themeLabel")) $("themeLabel").textContent = light ? "الوضع الليلي" : "الوضع النهاري";
 }
 window.toggleTheme = function () {
   const lt = document.documentElement.classList.toggle("light");
@@ -554,9 +852,15 @@ window._onSessionExpired = () => location.reload();
    مفتاح «accounts« — والسيرفر هو الحكم النهائي على كل مسار. */
 const ALLOWED = ["admin", "accountant", "branch"];
 
+const ROLE_AR = { admin: "مدير", accountant: "محاسب", branch: "مشرف فرع", callcenter: "كول سنتر",
+                  hr: "موارد بشرية", pilot_supervisor: "مشرف الطيارين" };
+
 function applySession(u) {
   $("gate").style.display = "none";
   $("app").classList.add("on");
+  $("sidebar-username").textContent = u.name || u.username || "—";
+  $("sidebar-role").textContent = ROLE_AR[u.role] || u.role || "";
+  $("userAvatar").textContent = (u.name || u.username || "؟").trim().charAt(0);
 
   /* 🕘 حضور تلقائي — زي صفحات الفرع والكول سنتر والإدارة بالظبط.
      من غيره المحاسب اللي شغله كله في البرنامج ده كان بيبان **غايب**
@@ -622,25 +926,18 @@ async function bootAccounts() {
     m.value = bizMonth();
   }
   loadPilotAcct();
+  watchDayRollover();
 }
 </script>
 
 <script>
-/* ══════════════════════════════════════════════════════════════
-   ⬇️ منقول بالحرف من tiar.html (كان سطور 10724-11088).
-   التعديل الوحيد: `window._paDay` اتشال — كان متعرّف ومابيتقراش
-   في المشروع كله.
-══════════════════════════════════════════════════════════════ */
   /* ══════════════════════════════════════════════════════════════
      🧾 تقفيل الطيارين — الواجهة.
-     نداء واحد `/api/pilot-accounting/month` بيرجّع الشهر كامل، والتبويبات
-     الأربعة كلها عروض على **نفس** البيانات. ده مقصود: لو كل تبويب حسب
-     لوحده كانوا هيختلفوا مع أول تعديل.
+     نداء واحد `/api/pilot-accounting/month` بيرجّع الشهر كامل، والشاشات
+     كلها عروض على **نفس** البيانات. ده مقصود: لو كل شاشة حسبت لوحدها
+     كانوا هيختلفوا مع أول تعديل.
      ⚠️ مفيش أي معادلة فلوس هنا — كل الأرقام محسوبة على السيرفر.
   ══════════════════════════════════════════════════════════════ */
-  /* 🔴 البلوك ده مالوش `api` المحلي (متعرّف في بلوك السكريبت التاني)،
-     فبنمسك المرجع العالمي بنفسنا. غيابه كان بيرمي
-     «api is not defined» وقت تحميل الصفحة. */
   const PA_API = window.API;
 
   window._paData = null;
@@ -648,16 +945,22 @@ async function bootAccounts() {
 
   const paMoney = n => (Number(n) || 0).toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const paNum   = n => (Number(n) || 0).toLocaleString("ar-EG");
+  /* للإكسل: رقم لاتيني بخانتين */
+  const fmt2    = n => Math.round((Number(n) || 0) * 100) / 100;
   const PA_WEEK = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
   function paWeekday(ym, d) {
     const [y, m] = ym.split("-").map(Number);
     return PA_WEEK[new Date(y, m - 1, d).getDay()];
   }
+  function monthLabel(ym) {
+    const [y, m] = String(ym || "").split("-").map(Number);
+    return m ? `شهر ${m} / ${y}` : "";
+  }
 
   /* ═══════════ 🔐 الصلاحيات ═══════════
 
      الرد بتاع `month` بيجيب `acl` — مفاتيح المستخدم ده. الشاشة
-     بتتظبّط منها: تبويبات، أعمدة، وقفل التعديل.
+     بتتظبّط منها: شاشات، أعمدة، وقفل التعديل.
 
      ⚠️ ده **مش** الأمان. السيرفر مابيبعتش العمود الممنوع أصلًا،
      واللي هنا عشان الشاشة ماتبانش فيها خانة فاضية بلا سبب. */
@@ -716,7 +1019,7 @@ async function bootAccounts() {
     if (!st) { st = document.createElement('style'); st.id = 'paAclCss'; document.head.appendChild(st); }
     st.textContent = rules.join('\n');
 
-    /* ── التبويبات ── */
+    /* ── الشاشات (القايمة الجانبية) ── */
     ['daily', 'pilot', 'month', 'deferred', 'staff'].forEach(t => {
       const b = document.getElementById('patab-' + t);
       if (b) b.style.display = paCan('page.' + t) ? '' : 'none';
@@ -725,12 +1028,23 @@ async function bootAccounts() {
     if (permTab) permTab.style.display = acl.isAdmin ? '' : 'none';
     const empsTab = document.getElementById('patab-emps');
     if (empsTab) empsTab.style.display = acl.isAdmin ? '' : 'none';
+    const setTab = document.getElementById('patab-settings');
+    if (setTab) setTab.style.display = (acl.isAdmin || paCan('act.settings')) ? '' : 'none';
+    /* عناوين الأقسام تختفي لو مافيش حاجة تحتها */
+    const lblStaff = document.getElementById('navSectionStaff');
+    if (lblStaff) lblStaff.style.display = paCan('page.staff') ? '' : 'none';
+    const lblSetup = document.getElementById('navSectionSetup');
+    if (lblSetup) lblSetup.style.display = (acl.isAdmin || paCan('act.settings')) ? '' : 'none';
+    /* الأزرار اللي بتحمل صلاحيتها في data-perm (السلف المؤجلة…) */
+    document.querySelectorAll('[data-perm]').forEach(b => {
+      b.style.display = paCan(b.dataset.perm) ? '' : 'none';
+    });
 
-    /* لو التبويب المفتوح دلوقتي مقفول عليه، ننقله لأول تبويب مسموح.
+    /* لو الشاشة المفتوحة دلوقتي مقفولة عليه، ننقله لأول شاشة مسموحة.
        من غير ده بيفضل قاعد على شاشة فاضية ومش فاهم ليه. */
     const open = ['daily', 'pilot', 'month', 'deferred', 'staff']
       .filter(t => paCan('page.' + t));
-    if (window._paTab !== 'perms' && window._paTab !== 'emps' && !paCan('page.' + window._paTab)) {
+    if (window._paTab !== 'perms' && window._paTab !== 'emps' && window._paTab !== 'settings' && !paCan('page.' + window._paTab)) {
       if (open.length) switchPaTab(open[0]);
     }
 
@@ -740,12 +1054,14 @@ async function bootAccounts() {
       const el = document.getElementById(id);
       if (el) el.disabled = nav;
     });
+    document.querySelectorAll("[onclick^='paDay(']").forEach(b => { b.style.display = nav ? 'none' : ''; });
+    if (nav) lockToToday();
 
     /* ── لافتة بتقول للمستخدم إنه بيتفرّج بس ── */
     const bar = document.getElementById('paAclNote');
     if (bar) {
       bar.innerHTML = paCan('act.edit') ? ''
-        : '<div class="warn-box" style="margin-bottom:12px">👁 عندك عرض بس — التعديل مقفول من الإدارة.</div>';
+        : '<div class="warn-box" style="margin:18px 30px 0">👁 عندك عرض بس — التعديل مقفول من الإدارة.</div>';
     }
 
     /* ── مافيش ولا شاشة ── */
@@ -753,13 +1069,25 @@ async function bootAccounts() {
     if (none) none.style.display = (open.length || acl.isAdmin) ? 'none' : 'block';
   };
 
+  /** من غير act.dateNav: الشهر واليوم بيتقفلوا على النهارده التجاري */
+  function lockToToday() {
+    const today = bizToday();
+    const m = $("paMonth");
+    if (m && m.value !== today.slice(0, 7)) { m.value = today.slice(0, 7); loadPilotAcct(); return; }
+    const ds = $("paDaySelect");
+    if (ds && ds.options.length && ds.value !== String(Number(today.slice(8, 10)))) {
+      ds.value = String(Number(today.slice(8, 10)));
+    }
+  }
+
   window.switchPaTab = function(tab) {
     window._paTab = tab;
-    ["daily","pilot","month","deferred","staff","perms","emps"].forEach(t => {
+    ["daily","pilot","month","deferred","staff","perms","emps","settings"].forEach(t => {
       document.getElementById("patab-" + t)?.classList.toggle("active", t === tab);
       const el = document.getElementById("pa-" + t);
       if (el) el.style.display = t === tab ? "block" : "none";
     });
+    window.scrollTo(0, 0);
     if (tab === "daily")    renderPaDaily();
     if (tab === "pilot")    renderPaPilot();
     if (tab === "month")    renderPaMonth();
@@ -767,16 +1095,19 @@ async function bootAccounts() {
     if (tab === "staff")    loadStaff();
     if (tab === "perms")    renderPaPerms();
     if (tab === "emps")     renderEmps();
+    if (tab === "settings") renderPaSettings();
+    updateStickyOffsets();
   };
 
   window.paDay = function(step) {
+    if (!paCan('act.dateNav')) { showToast("مالكش صلاحية تشتغل على يوم تاني", "error"); return; }
     const sel = document.getElementById("paDaySelect");
     const n = Math.max(1, Math.min((window._paData?.daysInMonth || 31), (Number(sel.value) || 1) + step));
     sel.value = String(n);
     renderPaDaily();
   };
 
-  /** بيجيب الشهر كله ويعبّي التبويبات */
+  /** بيجيب الشهر كله ويعبّي الشاشات */
   window.loadPilotAcct = async function() {
     const monthEl = document.getElementById("paMonth");
     if (!monthEl.value) monthEl.value = bizMonth();
@@ -806,14 +1137,14 @@ async function bootAccounts() {
     const ds = document.getElementById("paDaySelect");
     const keep = Number(ds.value) || 0;
     ds.innerHTML = Array.from({ length: nd }, (_, i) =>
-      `<option value="${i + 1}">يوم ${i + 1}</option>`).join("");
+      `<option value="${i + 1}">يوم ${i + 1} — ${ esc(paWeekday(window._paData.month, i + 1)) }</option>`).join("");
     ds.value = String(Math.min(nd, keep || window._paData.countedDays || 1));
 
     // قايمة الطيارين لكشف الطيار
     const ps = document.getElementById("paPilotSelect");
     const keepP = ps.value;
     ps.innerHTML = (window._paData.pilots || [])
-      .map(p => `<option value="${ esc(p.pilotId) }">${ esc(p.name) }</option>`).join("")
+      .map(p => `<option value="${ esc(p.pilotId) }">${ esc(p.name) }${ p.branchName ? " — " + esc(p.branchName) : "" }</option>`).join("")
       || `<option value="">— مفيش طيارين —</option>`;
     if (keepP) ps.value = keepP;
 
@@ -851,8 +1182,27 @@ async function bootAccounts() {
       <div class="stat-card"><span class="stat-label">إجمالي الساعات</span><span class="stat-value">${ paMoney(sum("hours")) }</span></div>
       <div class="stat-card"><span class="stat-label">إجمالي الأوردرات</span><span class="stat-value">${ paNum(sum("orders")) }</span></div>
       <div class="stat-card"><span class="stat-label">إجمالي الخدمة</span><span class="stat-value" style="color:var(--green)">${ paMoney(sum("svc")) } ج.م</span></div>
-      <div class="stat-card"><span class="stat-label">مستحقات الطيارين</span><span class="stat-value" style="color:var(--sky)">${ paMoney(sum("gross")) } ج.م</span></div>
+      <div class="stat-card"><span class="stat-label">مستحقات الطيارين</span><span class="stat-value">${ paMoney(sum("gross")) } ج.م</span></div>
       <div class="stat-card"><span class="stat-label">صافي المدفوع</span><span class="stat-value" style="color:var(--orange)">${ paMoney(sum("netDue")) } ج.م</span></div>`;
+  }
+
+  /* وقت بالعربي (صباحًا/مساءً) بدل AM/PM الإنجليزي */
+  function parseHm(t) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? "").trim());
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return +m[1] * 60 + +m[2];
+  }
+  function to12h(hhmm) {
+    const mins = parseHm(hhmm);
+    if (mins === null) return null;
+    const h24 = Math.floor(mins / 60), mm = mins % 60;
+    let h12 = h24 % 12; if (h12 === 0) h12 = 12;
+    return { h12, mm, h24, mer: h24 < 12 ? "am" : "pm" };
+  }
+  function fmtTimeAr(hhmm) {
+    const t = to12h(hhmm);
+    if (!t) return "";
+    return `${t.h12}:${String(t.mm).padStart(2, "0")} ${t.mer === "am" ? "صباحًا" : "مساءً"}`;
   }
 
   /* خانة واحدة — المتعدّلة بالإيد بتتلوّن ورقم النظام بيبان في التلميحة */
@@ -870,18 +1220,26 @@ async function bootAccounts() {
     const tip = edited && auto !== undefined && auto !== null
       ? `رقم النظام: ${ opts.money ? Number(auto).toFixed(2) : auto }`
       : "";
+    /* خانة الوقت = عرض بالعربي (صباحًا/مساءً) بيفتح منتقي الوقت بالنقر —
+       بدل input[type=time] اللي بيعرض AM/PM إنجليزي من المتصفح */
+    if (field === "in" || field === "out") {
+      return `<td class="${edited ? "pa-edited" : ""}"${tip ? ` title="${ esc(tip) }"` : ""}>
+        <input class="pa-in pa-pick" readonly data-col="${field}" value="${ esc(fmtTimeAr(val)) }" placeholder="—"
+               ${locked ? "" : `onclick="pickTimeCell('${ escJs(pid) }',${day},'${field}')"`} onkeydown="cellKey(event)" /></td>`;
+    }
     return `<td class="${edited ? "pa-edited" : ""}"${tip ? ` title="${ esc(tip) }"` : ""}>
-      <input class="pa-in" value="${ esc(val) }" ${locked ? "readonly" : ""}
-             onchange="paSave('${ escJs(pid) }',${day},'${field}',this.value)" /></td>`;
+      <input class="pa-in${ field === "note" ? " txt" : "" }" data-col="${field}" value="${ esc(val) }" ${locked ? "readonly" : ""}
+             ${ field === "note" ? "" : 'inputmode="decimal"' }
+             onchange="paSave('${ escJs(pid) }',${day},'${field}',this.value)" onkeydown="cellKey(event)" /></td>`;
   }
 
   function paPermCell(pid, day, row, side) {
     const list = row.perms || [];
-    const disp = list.length === 1 ? (list[0][side] || "") : (list.length > 1 ? list.length + " استئذان" : "");
-    const tip  = list.map((p, i) => `${i + 1}) ${p.out || "—"} → ${p.in || "—"}`).join("\n");
+    const disp = list.length === 1 ? fmtTimeAr(list[0][side] || "") : (list.length > 1 ? list.length + " استئذان" : "");
+    const tip  = list.map((p, i) => `${i + 1}) ${fmtTimeAr(p.out) || "—"} → ${fmtTimeAr(p.in) || "—"}`).join("\n");
     const locked = !!window._paData?.locked || !paCan('act.edit');
-    return `<td><input class="pa-in pa-pick" readonly value="${ esc(disp) }"${tip ? ` title="${ esc(tip) }"` : ""}
-      ${locked ? "" : `onclick="openPaPerms('${ escJs(pid) }',${day})"`} /></td>`;
+    return `<td><input class="pa-in pa-pick" readonly data-col="${side === "out" ? "bout" : "bin"}" value="${ esc(disp) }"${tip ? ` title="${ esc(tip) }"` : ""}
+      ${locked ? "" : `onclick="openPaPerms('${ escJs(pid) }',${day})"`} onkeydown="cellKey(event)" /></td>`;
   }
 
   function paRowCells(pid, row) {
@@ -900,76 +1258,128 @@ async function bootAccounts() {
       + paCell(pid, row.day, "note", row);
   }
 
+  /* ═══════════ 1) التقفيل اليومي ═══════════ */
   window.renderPaDaily = function() {
     const d = window._paData;
     const body = document.getElementById("paDailyBody");
     if (!d) return;
+    if (!paCan('act.dateNav')) lockToToday();
     const day = Number(document.getElementById("paDaySelect").value) || 1;
+    const bName = $("paBranch").selectedOptions[0]?.textContent || "كل الفروع";
     document.getElementById("paDayLabel").textContent =
-      `${day} ${paWeekday(d.month, day)} · ${d.month}`;
+      `تقفيل يومي · ${day} ${paWeekday(d.month, day)} · ${monthLabel(d.month)} · ${bName}`;
 
     const ps = d.pilots || [];
-    if (!ps.length) { body.innerHTML = `<tr><td colspan="15" class="empty-row">مفيش طيارين</td></tr>`; return; }
+    if (!ps.length) { body.innerHTML = `<tr><td colspan="15" class="empty-row">مفيش طيارين</td></tr>`; $("paDailyFoot").innerHTML = ""; $("paDailySum").innerHTML = ""; return; }
 
     body.innerHTML = ps.map((p, i) => {
       const row = (p.days || [])[day - 1] || { day };
-      return `<tr><td class="idx">${i + 1}</td>
-        <td style="font-weight:600">${ esc(p.name) }</td>
+      return `<tr${ row.openShift ? ' title="وردية لسه مفتوحة — الساعات ناقصة"' : "" }><td class="lbl idx">${i + 1}</td>
+        <td class="lbl" style="font-weight:600;min-width:140px">${ esc(p.name) }${ row.openShift ? ' <span class="badge bg-blue">مفتوحة</span>' : "" }</td>
         ${ paRowCells(p.pilotId, row) }</tr>`;
     }).join("");
 
     // سطر الإجمالي لليوم
     const t = k => ps.reduce((s, p) => s + (Number((p.days || [])[day - 1]?.[k]) || 0), 0);
+    const worked = ps.filter(p => Number((p.days || [])[day - 1]?.hours) > 0).length;
     document.getElementById("paDailyFoot").innerHTML =
-      `<tr><td></td><td style="font-weight:800">الإجمالي</td><td></td><td></td><td></td><td></td>
+      `<tr><td></td><td class="lbl" style="font-weight:800">الإجمالي <span style="color:var(--muted);font-weight:600;font-size:.78rem">(${ paNum(worked) } طيار شغّال)</span></td><td></td><td></td><td></td><td></td>
         <td class="pa-tot">${ paMoney(t("hours")) }</td><td class="pa-tot">${ paNum(t("orders")) }</td>
         <td class="pa-tot">${ paMoney(t("svc")) }</td><td class="pa-tot">${ paMoney(t("psvc")) }</td>
         <td class="pa-tot" style="color:var(--green)">${ paMoney(t("net")) }</td>
         <td class="pa-tot">${ paMoney(t("adv")) }</td><td class="pa-tot">${ paMoney(t("ded")) }</td>
         <td class="pa-tot">${ paMoney(t("bonus")) }</td><td></td></tr>`;
+
+    /* بلوك ملخص اليوم — نفس روح البلوك اللي تحت شيت «تقفيل يومي»:
+       أجر الساعات (كل طيار بسعره) والعمولة والسلف والخصومات والحوافز.
+       أرقام عرض من صفوف السيرفر — مافيش معادلة جديدة هنا. */
+    const hourPay = ps.reduce((s, p) => s + (Number((p.days || [])[day - 1]?.hours) || 0) * (Number(p.hourRate) || 0), 0);
+    const rows = [];
+    if (paCan('col.hours'))  rows.push(["أجر الساعات", `${ paMoney(t("hours")) } ساعة · كل طيار بسعره — رواتب مستحقة النهارده`, paMoney(hourPay), "var(--orange)", "calc"]);
+    if (paCan('col.psvc'))   rows.push(["خدمة الطيارين (العمولة)", "اللي الطيارين خدوه من الأوردرات", paMoney(t("psvc")), "var(--orange)", ""]);
+    if (paCan('col.net'))    rows.push(["إجمالي نقدي", "مجموع عمود «صافي الخدمة» — الداخل للشركة", paMoney(t("net")), "var(--green)", "grand"]);
+    if (paCan('col.adv'))    rows.push(["سلف مع الطيارين", "فلوس الشركة — بترجع بالخصم من رواتبهم آخر الشهر", paMoney(t("adv")), "var(--blue)", ""]);
+    if (paCan('col.ded'))    rows.push(["خصومات", "", paMoney(t("ded")), "var(--orange)", ""]);
+    if (paCan('col.bonus'))  rows.push(["حوافز", "", paMoney(t("bonus")), "var(--green)", ""]);
+    document.getElementById("paDailySum").innerHTML = rows.length ? `
+      <div class="sum-block">
+        <div class="sum-head">ملخص يوم ${day} ${ esc(paWeekday(d.month, day)) } · ${ esc(monthLabel(d.month)) } · ${ esc(bName) }</div>
+        ${ rows.map(([l, h, v, c, cls]) => `<div class="sum-row ${cls}"><div class="sl">${ esc(l) }${ h ? `<div class="sh">${ esc(h) }</div>` : "" }</div><div class="sv" style="color:${c}">${v}</div></div>`).join("") }
+      </div>` : "";
   };
 
+  /* ═══════════ 2) كشف الطيار ═══════════ */
   window.renderPaPilot = function() {
     const d = window._paData;
     const body = document.getElementById("paPilotBody");
     if (!d) return;
     const pid = document.getElementById("paPilotSelect").value;
     const p = (d.pilots || []).find(x => String(x.pilotId) === String(pid));
-    if (!p) { body.innerHTML = `<tr><td colspan="15" class="empty-row">اختر طيارًا</td></tr>`; return; }
+    if (!p) { body.innerHTML = `<tr><td colspan="15" class="empty-row">اختر طيارًا</td></tr>`; $("paPilotFoot").innerHTML = ""; $("paPilotSummary").innerHTML = ""; $("paPilotTitle").textContent = ""; return; }
 
     const t = p.totals || {};
-    document.getElementById("paPilotSummary").innerHTML =
-      `سعر الساعة <b>${ paMoney(t.hourRate) }</b> · أيام شغل <b>${ paNum(t.worked) }</b> من <b>${ paNum(t.countedDays) }</b>
-       · إجازة مدفوعة <b>${ paNum(t.leaveDays) }</b> (باقي ${ paNum(t.leaveLeft) })
-       · <b style="color:var(--green)">صافي ${ paMoney(t.netDue) } ج.م</b>`;
+    document.getElementById("paPilotTitle").textContent =
+      `${p.name} · ${p.branchName || "—"} · ${monthLabel(d.month)}`;
+    const today = bizToday();
 
-    body.innerHTML = (p.days || []).map(row => `<tr>
-        <td style="font-weight:700">${ row.day }</td>
-        <td class="idx">${ esc(paWeekday(d.month, row.day)) }</td>
+    body.innerHTML = (p.days || []).map(row => `<tr class="${ `${d.month}-${String(row.day).padStart(2, "0")}` === today ? "today-row" : "" }">
+        <td class="lbl" style="font-weight:700">${ row.day }</td>
+        <td class="lbl idx">${ esc(paWeekday(d.month, row.day)) }</td>
         ${ paRowCells(p.pilotId, row) }</tr>`).join("");
 
     document.getElementById("paPilotFoot").innerHTML =
       /* بلا colspan — قفل الأعمدة بيمشي بـnth-child، وأي دمج بيزحلق العمود */
-      `<tr><td style="font-weight:800">الإجمالي</td><td></td><td></td><td></td><td></td><td></td>
+      `<tr><td class="lbl" style="font-weight:800">الإجمالي</td><td class="lbl idx">${ paNum(t.worked) } يوم شغل</td><td></td><td></td><td></td><td></td>
         <td class="pa-tot">${ paMoney(t.hours) }</td><td class="pa-tot">${ paNum(t.orders) }</td>
         <td class="pa-tot">${ paMoney(t.svc) }</td><td class="pa-tot">${ paMoney(t.psvc) }</td>
         <td class="pa-tot" style="color:var(--green)">${ paMoney(t.net) }</td>
         <td class="pa-tot">${ paMoney(t.adv) }</td><td class="pa-tot">${ paMoney(t.ded) }</td>
         <td class="pa-tot">${ paMoney(t.bonus) }</td><td></td></tr>`;
+
+    /* بلوك حساب الراتب — نفس شكل البرنامج القديم، والأرقام من totals السيرفر.
+       العمود الممنوع مش بيوصل أصلًا (undefined) فسطره مابيظهرش. */
+    const has = k => t[k] !== undefined && t[k] !== null;
+    const owes = Number(t.netDue) < 0;
+    const lines = [];
+    if (has("hourPay")) lines.push(`<div class="sum-row calc"><div class="sl">عدد ساعات العمل × ${ paMoney(t.hourRate) }<div class="sh">${ paMoney(t.hours) } ساعة${ Number(p.ownHourRate) > 0 ? " · سعر خاص بالطيار ده" : "" }</div></div><div class="sv" style="color:var(--green)">${ paMoney(t.hourPay) }</div></div>`);
+    if (has("commission")) lines.push(`<div class="sum-row calc"><div class="sl">العمولة المستحقة<div class="sh">خدمة الطيار من الأوردرات — المرحّلة للشهر بس${ Number(t.settledDaily?.psvc) > 0.005 ? ` · اتصفّى كاش يوم بيوم ${ paMoney(t.settledDaily.psvc) }` : "" }</div></div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.commission) }</div></div>`);
+    if (has("salaryShare") && Number(t.monthlySalary) > 0) lines.push(`<div class="sum-row calc"><div class="sl">نصيب الراتب الشهري<div class="sh">${ paMoney(t.monthlySalary) } ÷ ${ paNum(t.countedDays) } يوم × ${ paNum(t.worked) } يوم شغل</div></div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.salaryShare) }</div></div>`);
+    if (has("leavePay") && Number(t.leaveCap) > 0) lines.push(`<div class="sum-row calc"><div class="sl">إجازة مدفوعة<div class="sh">${ paNum(t.leaveDays) } يوم × ${ paMoney(t.shiftHours) } ساعة × ${ paMoney(t.hourRate) } · غاب ${ paNum(t.absent) } يوم من ${ paNum(t.countedDays) }، ورصيده ${ paNum(t.leaveCap) } يوم${ Number(t.absent) > Number(t.leaveCap) ? " (الزيادة بدون أجر)" : "" }${ Number(t.leaveLeft) > 0 ? ` · باقي ${ paNum(t.leaveLeft) } يوم` : "" }</div></div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.leavePay) }</div></div>`);
+    if (has("bonusDue") && Number(t.bonusDue) > 0) lines.push(`<div class="sum-row calc"><div class="sl">حوافز</div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.bonusDue) }</div></div>`);
+    if (has("gross")) lines.push(`<div class="sum-row calc"><div class="sl">إجمالي المستحق</div><div class="sv" style="color:var(--green)">${ paMoney(t.gross) }</div></div>`);
+    if (has("advanceDue")) lines.push(`<div class="sum-row"><div class="sl">إجمالي سلف</div><div class="sv" style="color:var(--orange)">− ${ paMoney(t.advanceDue) }</div></div>`);
+    if (has("deductionDue")) lines.push(`<div class="sum-row"><div class="sl">إجمالي خصومات</div><div class="sv" style="color:var(--orange)">− ${ paMoney(t.deductionDue) }</div></div>`);
+    if (has("deferredDue") && (Number(t.deferredDue) > 0 || Number(t.deferredLeft) > 0)) {
+      const items = (d.deferred || []).filter(a => String(a.pilotId) === String(p.pilotId));
+      if (items.length && paCan('act.deferred') && !d.locked) {
+        items.forEach(a => lines.push(`<div class="sum-row"><div class="sl">قسط سلفة مؤجلة<div class="sh">سلفة ${ paMoney(a.amount) } بتاريخ ${ esc(a.advanceDate || "—") }${ a.note ? " · " + esc(a.note) : "" } · الباقي بعد الشهر ده <b>${ paMoney(a.remaining) }</b></div></div><input class="sv" type="text" inputmode="decimal" value="${ esc(a.monthDue) }" style="color:var(--orange)" onchange="paSetInstalment('${ escJs(a.id) }',this.value)" /></div>`));
+      } else {
+        lines.push(`<div class="sum-row"><div class="sl">قسط سلفة مؤجلة${ Number(t.deferredLeft) > 0 ? `<div class="sh">الباقي بعد الشهر ده ${ paMoney(t.deferredLeft) }</div>` : "" }</div><div class="sv" style="color:var(--orange)">− ${ paMoney(t.deferredDue) }</div></div>`);
+      }
+    }
+    if (has("netDue")) lines.push(`<div class="sum-row grand"><div class="sl">${ owes ? "عليه (مسحوب زيادة)" : "صافي الراتب" }</div><div class="sv" style="color:${ owes ? "var(--red)" : "var(--green)" }">${ paMoney(Math.abs(Number(t.netDue) || 0)) }</div></div>`);
+    document.getElementById("paPilotSummary").innerHTML = lines.length
+      ? `<div class="sum-block"><div class="sum-head">حساب الراتب</div>${ lines.join("") }</div>
+         ${ paCan('act.deferred') ? `<div style="margin-top:14px" class="no-print"><button class="btn-ghost" onclick="openPaAdvance('${ escJs(p.pilotId) }')">➕ تسجيل سلفة مؤجلة لـ${ esc(p.name) }</button> <button class="btn-ghost" onclick="switchPaTab('deferred')">📋 كل السلف المؤجلة</button></div>` : "" }`
+      : "";
   };
 
+  /* ═══════════ 3) تقفيل الشهر ═══════════ */
   window.renderPaMonth = function() {
     const d = window._paData;
     const body = document.getElementById("paMonthBody");
     if (!d) return;
     const ps = d.pilots || [];
-    if (!ps.length) { body.innerHTML = `<tr><td colspan="15" class="empty-row">مفيش طيارين</td></tr>`; return; }
+    const bName = $("paBranch").selectedOptions[0]?.textContent || "كل الفروع";
+    document.getElementById("paMonthTitle").textContent = `تقفيل ${monthLabel(d.month)} · ${bName}`;
+    if (!ps.length) { body.innerHTML = `<tr><td colspan="15" class="empty-row">مفيش طيارين</td></tr>`; $("paMonthFoot").innerHTML = ""; return; }
 
     body.innerHTML = ps.map((p, i) => {
       const t = p.totals || {};
+      const owes = Number(t.netDue) < 0;
       return `<tr>
         <td class="idx">${i + 1}</td>
-        <td><b>${ esc(p.name) }</b></td>
+        <td><b>${ esc(p.name) }</b> ${ paCan('page.pilot') ? `<button class="btn-ghost btn-xs no-print" onclick="openPilotSheet('${ escJs(p.pilotId) }')">كشف</button>` : "" }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(p.branchName || "—") }</td>
         <td class="num">${ paMoney(t.hours) }</td>
         <td class="num">${ paNum(t.worked) }</td>
@@ -982,41 +1392,49 @@ async function bootAccounts() {
         <td class="num" style="color:var(--orange)">${ paMoney(t.advanceDue) }</td>
         <td class="num" style="color:var(--orange)">${ paMoney(t.deductionDue) }</td>
         <td class="num" style="color:var(--orange)">${ paMoney(t.deferredDue) }<div class="pa-sub">باقي ${ paMoney(t.deferredLeft) }</div></td>
-        <td class="num" style="color:var(--green);font-weight:800">${ paMoney(t.netDue) }</td>
+        <td class="num" style="color:${ owes ? "var(--red)" : "var(--green)" };font-weight:800">${ owes ? "عليه " : "" }${ paMoney(Math.abs(Number(t.netDue) || 0)) }</td>
       </tr>`;
     }).join("");
 
     const s = k => ps.reduce((a, p) => a + (Number(p.totals?.[k]) || 0), 0);
+    const owed = ps.reduce((a, p) => a + (Number(p.totals?.netDue) < 0 ? -Number(p.totals.netDue) : 0), 0);
+    const paid = ps.reduce((a, p) => a + (Number(p.totals?.netDue) > 0 ? Number(p.totals.netDue) : 0), 0);
     document.getElementById("paMonthFoot").innerHTML =
       /* بلا colspan — زي فوق بالظبط */
-      `<tr><td style="font-weight:800">الإجمالي</td><td></td><td></td>
+      `<tr><td style="font-weight:800">الإجمالي</td><td>${ paNum(ps.length) } طيار</td><td></td>
         <td class="num pa-tot">${ paMoney(s("hours")) }</td><td class="num pa-tot">${ paNum(s("worked")) }</td>
         <td class="num pa-tot">${ paNum(s("orders")) }</td><td class="num pa-tot">${ paMoney(s("hourPay")) }</td>
         <td class="num pa-tot">${ paMoney(s("commission")) }</td><td class="num pa-tot">${ paMoney(s("salaryShare")) }</td>
         <td class="num pa-tot">${ paMoney(s("leavePay")) }</td><td class="num pa-tot">${ paMoney(s("bonusDue")) }</td>
         <td class="num pa-tot">${ paMoney(s("advanceDue")) }</td><td class="num pa-tot">${ paMoney(s("deductionDue")) }</td>
         <td class="num pa-tot">${ paMoney(s("deferredDue")) }</td>
-        <td class="num pa-tot" style="color:var(--green)">${ paMoney(s("netDue")) }</td></tr>`;
+        <td class="num pa-tot" style="color:var(--green)">${ paMoney(paid) }</td></tr>`;
 
     /* اللي اتصفّى كاش يوم بيوم — لازم يبان عشان محدش يسأل «فين العمولة».
        الورديات اللي تسويتها daily بتتحاسب مع الطيار عند القفل. */
     const sd = ps.reduce((a, p) => a + (Number(p.totals?.settledDaily?.psvc) || 0), 0);
-    document.getElementById("paSettledNote").innerHTML = sd > 0.005
-      ? `ℹ️ فيه <b>${ paMoney(sd) } ج.م</b> عمولة اتصفّت مع الطيارين <b>كاش يوم بيوم</b> عند قفل الورديات، فمش داخلة في المستحق فوق — عشان مايتدفعش مرتين.`
-      : "";
+    document.getElementById("paSettledNote").innerHTML =
+      (sd > 0.005 ? `<div class="info-box">ℹ️ فيه <b>${ paMoney(sd) } ج.م</b> عمولة اتصفّت مع الطيارين <b>كاش يوم بيوم</b> عند قفل الورديات، فمش داخلة في المستحق فوق — عشان مايتدفعش مرتين.</div>` : "")
+      + (owed > 0.005 ? `<div class="warn-box">⚠️ فيه <b>${ paMoney(owed) } ج.م</b> مسحوبة زيادة على طيارين (سلفهم أكبر من مستحقهم) — دي مش داخلة في إجمالي صافي الرواتب.</div>` : "");
   };
 
+  window.openPilotSheet = function(pid) {
+    $("paPilotSelect").value = String(pid);
+    switchPaTab("pilot");
+  };
+
+  /* ═══════════ 4) السلف المؤجلة ═══════════ */
   window.renderPaDeferred = function() {
     const d = window._paData;
     const body = document.getElementById("paDeferredBody");
     if (!d) return;
-    document.getElementById("paDefMonthHead").textContent = "قسط " + d.month;
+    document.getElementById("paDefMonthHead").textContent = "قسط " + monthLabel(d.month);
     const names = {};
     (d.pilots || []).forEach(p => { names[String(p.pilotId)] = p.name; });
 
     const items = d.deferred || [];
     if (!items.length) { body.innerHTML = `<tr><td colspan="12" class="empty-row">مفيش سلف مؤجلة</td></tr>`; return; }
-    const locked = !!d.locked;
+    const locked = !!d.locked || !paCan('act.deferred');
 
     body.innerHTML = items.map((a, i) => `<tr>
       <td class="idx">${i + 1}</td>
@@ -1029,15 +1447,13 @@ async function bootAccounts() {
             onchange="paSetInstalment('${ escJs(a.id) }',this.value)" /></td>
       <td class="num">${ paMoney(a.paidBefore) }</td>
       <td class="num" style="color:var(--orange);font-weight:700">${ paMoney(a.remaining) }</td>
-      <td>${ a.done ? `<span class="status-badge status-done">✅ خلصت</span>`
-                    : `<span class="status-badge status-pending">⏳ جارية</span>` }</td>
+      <td>${ a.done ? `<span class="status-badge status-done">✅ اتسدّدت</span>`
+                    : `<span class="status-badge status-pending">⏳ بتتقسّط</span>` }</td>
       <td style="font-size:.8rem;color:var(--muted)">${ esc(a.note || "—") }</td>
-      <td>${ locked ? "" : `<button class="view-btn" style="background:rgba(239,68,68,.12);color:var(--red)"
-              onclick="paDeleteAdvance('${ escJs(a.id) }')">🗑 حذف</button>` }</td>
+      <td>${ locked ? "" : `<button class="btn-red btn-xs" onclick="paDeleteAdvance('${ escJs(a.id) }')">🗑 حذف</button>` }</td>
     </tr>`).join("");
   };
 
-  /* ── الكتابة ── */
   /* ═══════════ 👥 تقفيلة الموظفين ═══════════
 
      نفس عقد شاشات الطيارين: `_stData` مرآة `_paData`، والتحديث من
@@ -1111,18 +1527,23 @@ async function bootAccounts() {
     const tip = edited && auto !== undefined && auto !== null
       ? `رقم المتصفح: ${ opts.money ? Number(auto).toFixed(2) : auto }`
       : "";
+    if (field === "in" || field === "out") {
+      return `<td class="${edited ? "pa-edited" : ""}"${tip ? ` title="${ esc(tip) }"` : ""}>
+        <input class="pa-in pa-pick" readonly data-col="${field}" value="${ esc(fmtTimeAr(val)) }" placeholder="—"
+               ${locked ? "" : `onclick="pickStTimeCell(${ Number(uid) },${day},'${field}')"`} onkeydown="cellKey(event)" /></td>`;
+    }
     return `<td class="${edited ? "pa-edited" : ""}"${tip ? ` title="${ esc(tip) }"` : ""}>
-      <input class="pa-in" value="${ esc(val) }" ${locked ? "readonly" : ""}
-             onchange="stSave(${ Number(uid) },${day},'${field}',this.value)" /></td>`;
+      <input class="pa-in${ field === "note" ? " txt" : "" }" data-col="${field}" value="${ esc(val) }" ${locked ? "readonly" : ""}
+             onchange="stSave(${ Number(uid) },${day},'${field}',this.value)" onkeydown="cellKey(event)" /></td>`;
   }
 
   function stPermCell(uid, day, row, side) {
     const list = row.perms || [];
-    const disp = list.length === 1 ? (list[0][side] || "") : (list.length > 1 ? list.length + " استئذان" : "");
-    const tip  = list.map((p, i) => `${i + 1}) ${p.out || "—"} → ${p.in || "—"}`).join("\n");
+    const disp = list.length === 1 ? fmtTimeAr(list[0][side] || "") : (list.length > 1 ? list.length + " استئذان" : "");
+    const tip  = list.map((p, i) => `${i + 1}) ${fmtTimeAr(p.out) || "—"} → ${fmtTimeAr(p.in) || "—"}`).join("\n");
     const locked = !!window._stData?.locked || !paCan('act.edit');
-    return `<td><input class="pa-in pa-pick" readonly value="${ esc(disp) }"${tip ? ` title="${ esc(tip) }"` : ""}
-      ${locked ? "" : `onclick="openStPerms(${ Number(uid) },${day})"`} /></td>`;
+    return `<td><input class="pa-in pa-pick" readonly data-col="${side === "out" ? "bout" : "bin"}" value="${ esc(disp) }"${tip ? ` title="${ esc(tip) }"` : ""}
+      ${locked ? "" : `onclick="openStPerms(${ Number(uid) },${day})"`} onkeydown="cellKey(event)" /></td>`;
   }
 
   function stRowCells(uid, row) {
@@ -1150,15 +1571,15 @@ async function bootAccounts() {
 
     body.innerHTML = us.map((u, i) => {
       const row = (u.days || [])[day - 1] || { day };
-      return `<tr><td class="idx">${i + 1}</td>
-        <td style="font-weight:600">${ esc(u.name || u.username) }</td>
-        <td style="font-size:.76rem;color:var(--muted)">${ esc(paRole(u.role)) }${ u.branchName ? "<br>" + esc(u.branchName) : "" }</td>
+      return `<tr><td class="lbl idx">${i + 1}</td>
+        <td class="lbl" style="font-weight:600">${ esc(u.name || u.username) }</td>
+        <td class="lbl" style="font-size:.76rem;color:var(--muted)">${ esc(paRole(u.role)) }${ u.branchName ? "<br>" + esc(u.branchName) : "" }</td>
         ${ stRowCells(u.userId, row) }</tr>`;
     }).join("");
 
     const t = k => us.reduce((s, u) => s + (Number((u.days || [])[day - 1]?.[k]) || 0), 0);
     document.getElementById("stDailyFoot").innerHTML =
-      `<tr><td></td><td style="font-weight:800">الإجمالي</td><td></td><td></td><td></td><td></td><td></td>
+      `<tr><td></td><td class="lbl" style="font-weight:800">الإجمالي</td><td></td><td></td><td></td><td></td><td></td>
         <td class="pa-tot">${ paMoney(t("hours")) }</td>
         <td class="pa-tot">${ paMoney(t("adv")) }</td><td class="pa-tot">${ paMoney(t("ded")) }</td>
         <td class="pa-tot">${ paMoney(t("bonus")) }</td><td></td></tr>`;
@@ -1180,12 +1601,12 @@ async function bootAccounts() {
        · <b style="color:var(--green)">صافي ${ paMoney(t.netDue) } ج.م</b>`;
 
     body.innerHTML = (u.days || []).map(row => `<tr>
-        <td style="font-weight:700">${ row.day }</td>
-        <td class="idx">${ esc(paWeekday(d.month, row.day)) }</td>
+        <td class="lbl" style="font-weight:700">${ row.day }</td>
+        <td class="lbl idx">${ esc(paWeekday(d.month, row.day)) }</td>
         ${ stRowCells(u.userId, row) }</tr>`).join("");
 
     document.getElementById("stPersonFoot").innerHTML =
-      `<tr><td style="font-weight:800">الإجمالي</td><td></td><td></td><td></td><td></td><td></td>
+      `<tr><td class="lbl" style="font-weight:800">الإجمالي</td><td></td><td></td><td></td><td></td><td></td>
         <td class="pa-tot">${ paMoney(t.hours) }</td>
         <td class="pa-tot">${ paMoney(t.adv) }</td><td class="pa-tot">${ paMoney(t.ded) }</td>
         <td class="pa-tot">${ paMoney(t.bonus) }</td><td></td></tr>`;
@@ -1238,22 +1659,24 @@ async function bootAccounts() {
     loadStaff();
   };
 
+  /** خانة وقت الموظف — نفس منتقي الطيارين */
+  window.pickStTimeCell = function(userId, day, field) {
+    const u = (window._stData?.staff || []).find(x => String(x.userId) === String(userId));
+    const cur = u?.days?.[day - 1]?.[field] || "";
+    openTimePicker(cur, field === "in" ? "ساعة الحضور" : "ساعة الانصراف", v => stSave(userId, day, field, v));
+  };
+
+  /** فترات استئذان الموظف — نفس فورم الطيارين، والحفظ على staff-perms */
   window.openStPerms = function(userId, day) {
     const u = (window._stData?.staff || []).find(x => String(x.userId) === String(userId));
     const row = u?.days?.[day - 1];
-    const cur = (row?.perms || []).map(x => `${x.out || ""}-${x.in || ""}`).join("، ");
-    const txt = prompt(
-      "فترات الاستئذان لليوم " + day + "\nاكتبها بالشكل: 12:00-13:30\nوأكتر من فترة بينهم فاصلة.\nسيبها فاضية عشان ترجع فجوات المتصفح التلقائية.",
-      cur
-    );
-    if (txt === null) return;
-    const periods = txt.split(/[،,]/).map(x => x.trim()).filter(Boolean).map(x => {
-      const [o, i] = x.split("-").map(v => (v || "").trim());
-      return { out: o || "", in: i || "" };
+    openPermModal({
+      title: "استئذانات " + (u?.name || u?.username || ""),
+      month: window._stData.month, day, list: row?.perms || [],
+      hint: "سيبها فاضية عشان ترجع فجوات المتصفح التلقائية.",
+      save: periods => PA_API.post("/api/pilot-accounting/staff-perms", { month: window._stData.month, userId, day, periods })
+        .then(() => { window._stData = null; loadStaff(); })
     });
-    PA_API.post("/api/pilot-accounting/staff-perms", { month: window._stData.month, userId, day, periods })
-      .then(() => { window._stData = null; loadStaff(); })
-      .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
   };
 
   /* ═══════════ 🔐 شاشة الصلاحيات ═══════════ */
@@ -1299,7 +1722,7 @@ async function bootAccounts() {
 
     const uid = document.getElementById('paPermUser').value;
     if (!uid) {
-      box.innerHTML = `<div class="warn-box">مفيش حسابات موظفين في النظام. الحسابات بتتعمل من لوحة الإدارة، وبعدين بتظبّط صلاحياتها من هنا.</div>`;
+      box.innerHTML = `<div class="warn-box">مفيش حسابات موظفين في النظام. الحسابات بتتعمل من «الطيارين والموظفين»، وبعدين بتظبّط صلاحياتها من هنا.</div>`;
       return;
     }
 
@@ -1325,7 +1748,7 @@ async function bootAccounts() {
     }).join("");
 
     const presets = Object.keys(P.presets || {}).map(k =>
-      `<button class="view-btn" onclick="paPermPreset(\'${ escJs(k) }\')">📋 ${ esc(P.presets[k].label) }</button>`).join("");
+      `<button class="btn-ghost" onclick="paPermPreset(\'${ escJs(k) }\')">📋 ${ esc(P.presets[k].label) }</button>`).join("");
 
     box.innerHTML = `
       <div class="pa-perm-group">
@@ -1365,9 +1788,9 @@ async function bootAccounts() {
       <div class="pa-savebar">
         <button class="add-btn" onclick="paPermSave()">💾 حفظ الصلاحيات</button>
         ${ presets }
-        <button class="view-btn" onclick="paPermAll(true)">✅ افتح الكل</button>
-        <button class="view-btn" onclick="paPermAll(false)">🚫 اقفل الكل</button>
-        ${ row ? `<button class="view-btn" onclick="paPermReset()">↩ رجّع للافتراضي</button>` : "" }
+        <button class="btn-ghost" onclick="paPermAll(true)">✅ افتح الكل</button>
+        <button class="btn-ghost" onclick="paPermAll(false)">🚫 اقفل الكل</button>
+        ${ row ? `<button class="btn-ghost" onclick="paPermReset()">↩ رجّع للافتراضي</button>` : "" }
         <span id="paPermDirtyNote" style="font-size:.8rem;color:var(--orange);font-weight:700"></span>
       </div>`;
 
@@ -1444,7 +1867,7 @@ async function bootAccounts() {
     renderPaPermsBody();
   };
 
-  /* ═══════════ ⚙️ إدارة الموظفين ═══════════
+  /* ═══════════ ⚙️ الطيارين والموظفين ═══════════
 
      نفس نقط نهاية لوحة الإدارة. قايمة APP_PERMS والافتراضيات حسب
      الدور منسوخين منها (tiar.html ~7411) — لو اتغيّروا هناك لازم
@@ -1513,10 +1936,10 @@ async function bootAccounts() {
       <td class="num">${ paMoney(u.hourRate) }</td>
       <td class="num">${ paMoney(u.monthlySalary) }</td>
       <td class="num">${ paNum(u.paidLeaveDays) }</td>
-      <td>${ u.blocked ? '<span style="color:var(--red);font-weight:700">موقوف</span>' : '<span style="color:var(--green);font-weight:700">نشط</span>' }</td>
+      <td>${ u.blocked ? '<span class="badge bg-red">موقوف</span>' : '<span class="badge bg-green">نشط</span>' }</td>
       <td>${ u.protected ? '<span style="color:var(--muted);font-size:.78rem">محمي</span>'
-        : `<button class="view-btn" onclick="openEmpModal(${ Number(u.id) })">✏️ تعديل</button>
-           <button class="view-btn" onclick="empToggleBlock(${ Number(u.id) }, ${ u.blocked ? 0 : 1 })">${ u.blocked ? "▶ تفعيل" : "⏸ إيقاف" }</button>` }</td>
+        : `<button class="btn-ghost btn-xs" onclick="openEmpModal(${ Number(u.id) })">✏️ تعديل</button>
+           <button class="btn-ghost btn-xs" onclick="empToggleBlock(${ Number(u.id) }, ${ u.blocked ? 0 : 1 })">${ u.blocked ? "▶ تفعيل" : "⏸ إيقاف" }</button>` }</td>
     </tr>`).join("");
   };
 
@@ -1671,61 +2094,208 @@ async function bootAccounts() {
     } finally { btn.disabled = false; }
   };
 
+  /* ═══════════ الكتابة ═══════════
+     الحفظ بيرجّع الشهر كله من السيرفر (الأرقام كلها مترابطة) —
+     وبنرجّع الفوكس لنفس الخانة عشان المشرف يكمّل كتابة زي الإكسل. */
+  function keepFocus(fn) {
+    const el = document.activeElement;
+    const sig = el?.classList?.contains("pa-in")
+      ? { idx: [...document.querySelectorAll("input.pa-in")].indexOf(el) } : null;
+    return Promise.resolve(fn()).then(() => {
+      if (sig && sig.idx >= 0) {
+        const again = [...document.querySelectorAll("input.pa-in")][sig.idx];
+        if (again) { again.focus(); try { again.select(); } catch {} }
+      }
+    });
+  }
+
   window.paSave = async function(pilotId, day, field, value) {
+    const dot = $(window._paTab === "pilot" ? "pilotDot" : "dailyDot");
+    dot?.classList.add("on");
     try {
       await PA_API.post("/api/pilot-accounting/entry", {
         month: window._paData.month, pilotId, day, field, value,
       });
-      await loadPilotAcct();
+      await keepFocus(loadPilotAcct);
     } catch (e) { showToast("تعذّر الحفظ: " + (e.message || ""), "error"); }
+    finally { dot?.classList.remove("on"); }
   };
 
+  /* ═══════════ منتقي الوقت العربي (صباحًا / مساءً) ═══════════
+     بديل عن input[type=time] بتاع المتصفح (اللي بيعرض AM/PM إنجليزي).
+     openTimePicker(current, title, cb) بيرجّع "HH:MM" أو "" لو دوس «مسح». */
+  let _tp = { cb: null, mer: "am" };
+  function anyModalOpen() { return !!document.querySelector(".modal.open, .emp-modal.open"); }
+  window.openModal  = t => { $("modal-" + t)?.classList.add("open"); document.body.style.overflow = "hidden"; };
+  window.closeModal = t => { $("modal-" + t)?.classList.remove("open"); if (!anyModalOpen()) document.body.style.overflow = ""; };
+
+  window.openTimePicker = function(current, title, cb) {
+    _tp.cb = cb;
+    $("tpTitle").textContent = title || "اختيار الوقت";
+    const hSel = $("tpHour"), mSel = $("tpMin");
+    if (!hSel.dataset.built) {
+      for (let h = 1; h <= 12; h++) hSel.add(new Option(String(h), String(h)));
+      for (let m = 0; m < 60; m++) mSel.add(new Option(String(m).padStart(2, "0"), String(m)));
+      hSel.dataset.built = "1";
+      hSel.onchange = mSel.onchange = tpPreview;
+    }
+    const t = to12h(current) || { h12: 12, mm: 0, mer: "pm" };
+    hSel.value = String(t.h12);
+    mSel.value = String(t.mm);
+    tpSetMer(t.mer, true);
+    tpPreview();
+    openModal("timepicker");
+  };
+  window.closeTimePicker = function() { closeModal("timepicker"); };
+  window.tpSetMer = function(mer, silent) {
+    _tp.mer = mer;
+    $("tpAM").classList.toggle("on", mer === "am");
+    $("tpPM").classList.toggle("on", mer === "pm");
+    if (!silent) tpPreview();
+  };
+  function tpValue() {
+    const h12 = +$("tpHour").value, mm = +$("tpMin").value;
+    let h24 = h12 % 12; if (_tp.mer === "pm") h24 += 12;
+    return String(h24).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  }
+  function tpPreview() { $("tpPreview").textContent = fmtTimeAr(tpValue()); }
+  window.tpConfirm = function() { const v = tpValue(), cb = _tp.cb; closeTimePicker(); cb && cb(v); };
+  window.tpClear   = function() { const cb = _tp.cb; closeTimePicker(); cb && cb(""); };
+
+  /** خانة حضور/انصراف الطيار — فاضية = رجوع لوقت الوردية المسجّل */
+  window.pickTimeCell = function(pilotId, day, field) {
+    const p = (window._paData?.pilots || []).find(x => String(x.pilotId) === String(pilotId));
+    const cur = p?.days?.[day - 1]?.[field] || "";
+    openTimePicker(cur, field === "in" ? "ساعة الحضور" : "ساعة الانصراف", v => paSave(pilotId, day, field, v));
+  };
+
+  /* ═══════════ فورم فترات الاستئذان — أكتر من فترة، بمنتقي الوقت ═══════════ */
+  let _dayPermCtx = { list: [], save: null };
+  function dayPermDurLabel(pr) {
+    const a = parseHm(pr.out), b = parseHm(pr.in);
+    if (a === null || b === null) return "";
+    let d = b - a; if (d < 0) d += 24 * 60;
+    const h = Math.floor(d / 60), m = d % 60;
+    return "مدّة: " + (h ? h + " س " : "") + (m || !h ? m + " د" : "");
+  }
+  function renderDayPermRows() {
+    const box = $("dayPermRows");
+    if (!_dayPermCtx.list.length) {
+      box.innerHTML = `<div class="perm-empty">مفيش استئذانات مسجّلة — دوس «＋ إضافة استئذان جديد».</div>`;
+      return;
+    }
+    box.innerHTML = _dayPermCtx.list.map((pr, i) => `
+      <div class="perm-row">
+        <div class="perm-row-idx">${i + 1}</div>
+        <div class="perm-row-times">
+          <button type="button" class="tp-btn${ pr.out ? "" : " empty" }" onclick="dayPermPick(${i},'out')">
+            <span class="tp-btn-lbl">خروج</span><span class="tp-btn-val">${ pr.out ? esc(fmtTimeAr(pr.out)) : "—" }</span></button>
+          <span class="perm-arrow">←</span>
+          <button type="button" class="tp-btn${ pr.in ? "" : " empty" }" onclick="dayPermPick(${i},'in')">
+            <span class="tp-btn-lbl">رجوع</span><span class="tp-btn-val">${ pr.in ? esc(fmtTimeAr(pr.in)) : "—" }</span></button>
+        </div>
+        <button type="button" class="perm-del" onclick="dayPermDel(${i})" title="حذف الفترة">🗑️</button>
+      </div>
+      ${ pr.out && pr.in ? `<div class="perm-dur">${ esc(dayPermDurLabel(pr)) }</div>` : "" }`).join("");
+  }
+  window.openPermModal = function(ctx) {
+    _dayPermCtx = { list: (ctx.list || []).map(p => ({ out: p.out || "", in: p.in || "" })), save: ctx.save };
+    $("dayPermTitle").textContent = ctx.title || "فترات الاستئذان";
+    $("dayPermInfo").innerHTML = `فترات الخروج المؤقت ليوم <b>${ ctx.day } ${ esc(paWeekday(ctx.month, ctx.day)) }</b> — كل فترة (خروج ← رجوع) بتتشال من ساعات الشغل.${ ctx.hint ? "<br>" + esc(ctx.hint) : "" }`;
+    renderDayPermRows();
+    openModal("perm");
+  };
+  window.dayPermAdd = function() { _dayPermCtx.list.push({ out: "", in: "" }); renderDayPermRows(); };
+  window.dayPermDel = function(i) { _dayPermCtx.list.splice(i, 1); renderDayPermRows(); };
+  window.dayPermPick = function(i, which) {
+    const cur = _dayPermCtx.list[i]?.[which] || "";
+    openTimePicker(cur, which === "out" ? "وقت الخروج" : "وقت الرجوع", v => {
+      if (_dayPermCtx.list[i]) { _dayPermCtx.list[i][which] = v; renderDayPermRows(); }
+    });
+  };
+  window.saveDayPerms = function() {
+    const periods = _dayPermCtx.list.filter(p => p.out || p.in).map(p => ({ out: p.out || "", in: p.in || "" }));
+    const save = _dayPermCtx.save;
+    closeModal("perm");
+    if (!save) return;
+    Promise.resolve(save(periods))
+      .then(() => showToast(periods.length ? "اتحفظ الاستئذان" : "اتمسحت الاستئذانات", "success"))
+      .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
+  };
+
+  /** استئذانات الطيار — نفس الفورم، والحفظ على perms */
   window.openPaPerms = function(pilotId, day) {
     const p = (window._paData?.pilots || []).find(x => String(x.pilotId) === String(pilotId));
     const row = p?.days?.[day - 1];
-    const cur = (row?.perms || []).map(x => `${x.out || ""}-${x.in || ""}`).join("، ");
-    const txt = prompt(
-      "فترات الاستئذان لليوم " + day + "\nاكتبها بالشكل: 12:00-13:30\nوأكتر من فترة بينهم فاصلة.\nسيبها فاضية عشان تمسحها كلها.",
-      cur
-    );
-    if (txt === null) return;
-    const periods = txt.split(/[،,]/).map(s => s.trim()).filter(Boolean).map(s => {
-      const [o, i] = s.split("-").map(x => (x || "").trim());
-      return { out: o || "", in: i || "" };
+    openPermModal({
+      title: "استئذانات " + (p?.name || ""),
+      month: window._paData.month, day, list: row?.perms || [],
+      save: periods => PA_API.post("/api/pilot-accounting/perms", { month: window._paData.month, pilotId, day, periods })
+        .then(loadPilotAcct)
     });
-    PA_API.post("/api/pilot-accounting/perms", { month: window._paData.month, pilotId, day, periods })
-      .then(loadPilotAcct)
-      .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
   };
 
-  window.openPaAdvance = function() {
+  /* ═══════════ السلف المؤجلة — فورم بدل prompt ═══════════ */
+  function nextMonth(ym) {
+    const [y, m] = String(ym).split("-").map(Number);
+    const d = new Date(y, m, 1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+  window.openPaAdvance = function(presetPilot) {
+    if (!paCan('act.deferred')) { showToast("مالكش صلاحية تسجيل السلف المؤجلة — كلّم الإدارة", "error"); return; }
     const ps = window._paData?.pilots || [];
     if (!ps.length) { showToast("مفيش طيارين", "error"); return; }
-    const names = ps.map((p, i) => `${i + 1}) ${p.name}`).join("\n");
-    const pick = prompt("رقم الطيار:\n" + names);
-    if (pick === null) return;
-    const p = ps[Number(pick) - 1];
-    if (!p) { showToast("رقم مش صحيح", "error"); return; }
-    const amount = prompt(`سلفة ${p.name}\nالمبلغ الإجمالي:`);
-    if (amount === null) return;
-    const monthly = prompt("القسط الشهري (سيبها فاضية = تتخصم مرة واحدة):", "");
-    if (monthly === null) return;
-    const note = prompt("ملاحظة (اختياري):", "") ?? "";
-    PA_API.post("/api/pilot-accounting/deferred", {
-      pilotId: p.pilotId, amount, monthly: monthly || 0,
-      startMonth: window._paData.month, note,
-    }).then(() => { showToast("اتسجّلت ✓", "success"); loadPilotAcct(); })
-      .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
+    $("dfPilot").innerHTML = ps.map(p => `<option value="${ esc(p.pilotId) }">${ esc(p.name) }${ p.branchName ? " — " + esc(p.branchName) : "" }</option>`).join("");
+    $("dfPilot").value   = presetPilot ? String(presetPilot) : String(ps[0].pilotId);
+    $("dfDate").value    = bizToday();
+    $("dfAmount").value  = "";
+    $("dfMonthly").value = "";
+    $("dfStart").value   = window._paData.month;
+    $("dfNote").value    = "";
+    $("dfError").textContent = "";
+    previewDefPlan();
+    openModal("def");
+    setTimeout(() => $("dfAmount").focus(), 80);
   };
-
+  /** يوريه هيتخصم كام شهر قبل ما يحفظ */
+  window.previewDefPlan = function() {
+    const amount = Number($("dfAmount").value) || 0, monthly = Number($("dfMonthly").value) || 0;
+    const start = $("dfStart").value;
+    const box = $("dfPlan");
+    if (amount <= 0 || monthly <= 0 || !start) { box.textContent = ""; return; }
+    const n = Math.ceil(amount / monthly);
+    let last = start;
+    for (let i = 1; i < n; i++) last = nextMonth(last);
+    const rem = fmt2(amount - monthly * (n - 1));
+    box.innerHTML = `📅 هتتخصم على <b>${n}</b> شهر — من <b>${ esc(start) }</b> لـ <b>${ esc(last) }</b>`
+      + (rem !== monthly ? `<br>آخر قسط هيكون <b>${ paMoney(rem) }</b> بدل ${ paMoney(monthly) }` : "");
+  };
+  window.saveDeferred = async function() {
+    const err = $("dfError");
+    const pilotId = $("dfPilot").value;
+    const amount  = Number($("dfAmount").value) || 0;
+    const monthly = Number($("dfMonthly").value) || 0;
+    const startMonth = $("dfStart").value;
+    if (!pilotId) { err.textContent = "اختار الطيار"; return; }
+    if (amount <= 0) { err.textContent = "اكتب مبلغ السلفة"; return; }
+    if (monthly > amount) { err.textContent = "القسط أكبر من السلفة نفسها"; return; }
+    if (!startMonth) { err.textContent = "حدّد الشهر اللي يبدأ منه الخصم"; return; }
+    try {
+      await PA_API.post("/api/pilot-accounting/deferred", {
+        pilotId, amount, monthly, startMonth, advanceDate: $("dfDate").value, note: $("dfNote").value.trim(),
+      });
+      closeModal("def");
+      showToast("تم حفظ السلفة المؤجلة", "success");
+      loadPilotAcct();
+    } catch (e) { err.textContent = "تعذّر الحفظ: " + (e.message || ""); }
+  };
   window.paSetInstalment = function(id, value) {
     PA_API.post(`/api/pilot-accounting/deferred/${id}/payment`, { month: window._paData.month, amount: value })
       .then(loadPilotAcct)
       .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
   };
-
   window.paDeleteAdvance = function(id) {
-    if (!confirm("تحذف السلفة دي بأقساطها كلها؟")) return;
+    if (!confirm("تحذف السلفة دي بأقساطها كلها؟ الأقساط اللي اتخصمت من الشهور اللي فاتت هترجع تظهر في الرواتب.")) return;
     PA_API.del(`/api/pilot-accounting/deferred/${id}`)
       .then(() => { showToast("اتشالت", "success"); loadPilotAcct(); })
       .catch(e => showToast("تعذّر الحذف: " + (e.message || ""), "error"));
@@ -1737,13 +2307,184 @@ async function bootAccounts() {
       .then(() => { showToast("الشهر اتقفل 🔒", "success"); loadPilotAcct(); })
       .catch(e => showToast("تعذّر القفل: " + (e.message || ""), "error"));
   };
-
   window.paUnlock = function() {
     if (!confirm("تفتح شهر " + window._paData.month + " للتعديل تاني؟")) return;
     PA_API.del("/api/pilot-accounting/lock?month=" + encodeURIComponent(window._paData.month))
       .then(() => { showToast("الشهر اتفتح 🔓", "success"); loadPilotAcct(); })
       .catch(e => showToast("تعذّر الفتح: " + (e.message || ""), "error"));
   };
+
+  /* ═══════════ 🛠️ الإعدادات — GET/PUT /pilot-accounting/settings ═══════════ */
+  window.renderPaSettings = async function() {
+    const box = $("paSettingsBody");
+    let s;
+    try { s = (await PA_API.get("/api/pilot-accounting/settings")).settings || {}; }
+    catch (e) { box.innerHTML = `<div class="warn-box">${ esc(e.message || "تعذّر التحميل") }</div>`; return; }
+    const canSet = paCan('act.settings');
+    box.innerHTML = `
+      <div class="info-box">
+        الأرقام دي بتتطبّق على <b>كل الطيارين والموظفين</b> وعلى <b>كل الشهور</b> — لو غيّرتها، حسابات الشهور القديمة هتتغيّر معاها.
+        سعر ساعة الطيار الخاص بيتظبط من «الطيارين والموظفين» وبيغلب الافتراضي ده.
+      </div>
+      <div class="sum-block" style="max-width:560px;margin-top:0">
+        <div class="sum-head">أرقام الحساب</div>
+        <div class="sum-row"><div class="sl">سعر الساعة الافتراضي<div class="sh">بالجنيه — للطيار اللي مالوش سعر خاص</div></div>
+          <input class="sv" id="setHourRate" type="text" inputmode="decimal" value="${ esc(s.hourRate ?? 0) }" ${ canSet ? "" : "readonly" } /></div>
+        <div class="sum-row"><div class="sl">ساعات الوردية<div class="sh">قيمة يوم الإجازة المدفوعة = الساعات دي × سعر الساعة</div></div>
+          <input class="sv" id="setShiftHours" type="text" inputmode="decimal" value="${ esc(s.shiftHours ?? 10) }" ${ canSet ? "" : "readonly" } /></div>
+        <div class="sum-row"><div class="sl">اليوم يبدأ الساعة<div class="sh">بالنظام 24 ساعة — الوردية اللي بتقفل بعد نص الليل بتتسجّل على اليوم اللي فات</div></div>
+          <input class="sv" id="setDayStart" type="text" inputmode="numeric" value="${ esc(s.dayStartHour ?? 9) }" ${ canSet ? "" : "readonly" } /></div>
+        ${ canSet ? `<div style="padding:14px 16px;display:flex;gap:9px"><button class="add-btn" onclick="savePaSettings()">حفظ الإعدادات</button></div>` : "" }
+      </div>`;
+  };
+  window.savePaSettings = async function() {
+    const hourRate = Number($("setHourRate").value), shiftHours = Number($("setShiftHours").value), dayStartHour = Number($("setDayStart").value);
+    if (!(shiftHours > 0)) { showToast("ساعات الوردية لازم تكون أكبر من صفر", "error"); return; }
+    if (!(dayStartHour >= 0 && dayStartHour <= 23)) { showToast("ساعة بداية اليوم لازم تكون من 0 لـ 23", "error"); return; }
+    try {
+      await PA_API.put("/api/pilot-accounting/settings", { hourRate, shiftHours, dayStartHour });
+      showToast("تم حفظ الإعدادات", "success");
+      loadPilotAcct();
+    } catch (e) { showToast("تعذّر الحفظ: " + (e.message || ""), "error"); }
+  };
+
+  /* ═══════════ التصدير لإكسل ═══════════ */
+  function download(aoa, sheetName, fileName) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 30));
+    XLSX.writeFile(wb, fileName);
+  }
+  const HEAD = ["ساعة الحضور", "خروج مؤقت", "رجوع", "ساعة الانصراف", "عدد ساعات العمل", "عدد الأوردرات", "إجمالي الخدمة", "خدمة الطيار", "صافي الخدمة", "سلف", "خصومات", "حوافز", "ملاحظات"];
+  const permX = (row, side) => (row.perms || []).map(p => p[side]).filter(Boolean).join(" ، ");
+  const rowX  = r => [r.in ?? "", permX(r, "out"), permX(r, "in"), r.out ?? "", fmt2(r.hours), r.orders ?? 0, fmt2(r.svc), fmt2(r.psvc), fmt2(r.net), fmt2(r.adv), fmt2(r.ded), fmt2(r.bonus), r.note ?? ""];
+  window.exportDaily = function() {
+    const d = window._paData; if (!d) return;
+    const day = Number($("paDaySelect").value) || 1;
+    const aoa = [[`تقفيل يومي — ${day} ${paWeekday(d.month, day)} — ${monthLabel(d.month)}`], ["الاسم", ...HEAD]];
+    const t = { hours: 0, orders: 0, svc: 0, psvc: 0, net: 0, adv: 0, ded: 0, bonus: 0 };
+    (d.pilots || []).forEach(p => { const r = (p.days || [])[day - 1] || {}; aoa.push([p.name, ...rowX(r)]); Object.keys(t).forEach(k => { t[k] += Number(r[k]) || 0; }); });
+    aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
+    download(aoa, `تقفيل ${day}`, `تقفيل الطيارين ${d.month}-${String(day).padStart(2, "0")}.xlsx`);
+  };
+  window.exportPilot = function() {
+    const d = window._paData; if (!d) return;
+    const p = (d.pilots || []).find(x => String(x.pilotId) === String($("paPilotSelect").value));
+    if (!p) return;
+    const t = p.totals || {};
+    const aoa = [[`${p.name} — ${p.branchName || ""} — ${monthLabel(d.month)}`], ["اليوم", ...HEAD]];
+    (p.days || []).forEach(r => aoa.push([r.day, ...rowX(r)]));
+    aoa.push(["الإجمالي", "", "", "", "", fmt2(t.hours), t.orders ?? 0, fmt2(t.svc), fmt2(t.psvc), fmt2(t.net), fmt2(t.adv), fmt2(t.ded), fmt2(t.bonus), ""]);
+    aoa.push([]);
+    aoa.push([`عدد ساعات العمل × ${fmt2(t.hourRate)}`, fmt2(t.hourPay)]);
+    aoa.push(["العمولة المستحقة", fmt2(t.commission)]);
+    if (Number(t.monthlySalary) > 0) aoa.push(["نصيب الراتب الشهري", fmt2(t.salaryShare)]);
+    if (Number(t.leaveCap) > 0) aoa.push([`إجازة مدفوعة (${t.leaveDays} يوم × ${fmt2(t.shiftHours)} ساعة)`, fmt2(t.leavePay)]);
+    if (Number(t.bonusDue) > 0) aoa.push(["حوافز", fmt2(t.bonusDue)]);
+    aoa.push(["إجمالي المستحق", fmt2(t.gross)]);
+    aoa.push(["إجمالي سلف", fmt2(t.advanceDue)]);
+    aoa.push(["إجمالي خصومات", fmt2(t.deductionDue)]);
+    if (Number(t.deferredDue) > 0) aoa.push(["قسط سلفة مؤجلة", fmt2(t.deferredDue)]);
+    if (Number(t.deferredLeft) > 0) aoa.push(["باقي السلف المؤجلة", fmt2(t.deferredLeft)]);
+    aoa.push([Number(t.netDue) < 0 ? "عليه" : "صافي الراتب", Math.abs(fmt2(t.netDue))]);
+    download(aoa, p.name, `${p.name} ${d.month}.xlsx`);
+  };
+  window.exportMonth = function() {
+    const d = window._paData; if (!d) return;
+    const bName = $("paBranch").selectedOptions[0]?.textContent || "كل الفروع";
+    const aoa = [[`تقفيل ${monthLabel(d.month)} — ${bName}`],
+      ["الطيار", "الفرع", "الساعات", "أيام الشغل", "الأوردرات", "أجر الساعات", "العمولة", "نصيب الراتب", "إجازة مدفوعة", "حوافز", "سلف", "خصومات", "قسط سلفة مؤجلة", "باقي السلف المؤجلة", "صافي الراتب"]];
+    const G = {};
+    const keys = ["hours", "worked", "orders", "hourPay", "commission", "salaryShare", "leavePay", "bonusDue", "advanceDue", "deductionDue", "deferredDue", "deferredLeft", "netDue"];
+    (d.pilots || []).forEach(p => { const t = p.totals || {}; aoa.push([p.name, p.branchName || "", ...keys.map(k => fmt2(t[k]))]); keys.forEach(k => { G[k] = (G[k] || 0) + (Number(t[k]) || 0); }); });
+    aoa.push(["الإجمالي", "", ...keys.map(k => fmt2(G[k]))]);
+    download(aoa, `تقفيل ${d.month}`, `تقفيل الطيارين ${bName} ${d.month}.xlsx`);
+  };
+
+  /* ═══════════ التنقل بالكيبورد بين الخانات — زي الإكسل ═══════════
+     فوق/تحت + Enter → نفس العمود السطر اللي فوق/تحت · يمين/شمال → نفس السطر العمود اللي جنبه */
+  function moveCell(next) { if (!next) return; next.focus(); try { next.select(); } catch {} }
+  window.cellKey = function(ev) {
+    const key = ev.key, cur = ev.target;
+    if (cur.classList.contains("pa-pick")) {
+      if (key === "Enter" || key === " ") { ev.preventDefault(); cur.click(); return; }
+    }
+    if (["Enter", "ArrowDown", "ArrowUp"].includes(key)) {
+      ev.preventDefault();
+      const col = cur.dataset.col;
+      const tbl = cur.closest("table");
+      const all = [...(tbl || document).querySelectorAll(`.pa-in[data-col="${col}"]`)];
+      moveCell(all[all.indexOf(cur) + (key === "ArrowUp" ? -1 : 1)]);
+      return;
+    }
+    if (key !== "ArrowRight" && key !== "ArrowLeft") return;
+    const len = cur.value.length;
+    const allSelected = cur.selectionStart === 0 && cur.selectionEnd === len && len > 0;
+    const atStart = cur.selectionStart === 0 && cur.selectionEnd === 0;
+    const atEnd   = cur.selectionStart === len && cur.selectionEnd === len;
+    const back = key === "ArrowRight";                  // في RTL: اليمين = رجوع
+    const edge = allSelected || len === 0 || (back ? atStart : atEnd) || cur.readOnly;
+    if (!edge) return;
+    ev.preventDefault();
+    const row = cur.closest("tr");
+    if (!row) return;
+    const cells = [...row.querySelectorAll(".pa-in")].filter(c => c.offsetParent !== null);
+    moveCell(cells[cells.indexOf(cur) + (back ? -1 : 1)]);
+  };
+
+  /* ═══════════ تثبيت رأس الشيت + انقلاب اليوم ═══════════ */
+  function updateStickyOffsets() {
+    const page = [...document.querySelectorAll(".page")].find(p => p.style.display === "block");
+    if (!page) return;
+    const bar   = page.querySelector(".sec-header.sticky-bar");
+    const title = page.querySelector(".sheet-title.sticky-title");
+    const h1 = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+    const h2 = title ? Math.round(title.getBoundingClientRect().height) : 0;
+    page.style.setProperty("--stick1", h1 + "px");
+    page.style.setProperty("--stick2", (h1 + h2) + "px");
+  }
+  window.addEventListener("resize", updateStickyOffsets);
+  /* لو البرنامج فاضل مفتوح طول الليل يقلب لليوم الجديد لوحده */
+  let _lastBizDay = null;
+  function watchDayRollover() {
+    _lastBizDay = bizToday();
+    setInterval(() => {
+      const now = bizToday();
+      if (now === _lastBizDay) return;
+      _lastBizDay = now;
+      if (!paCan('act.dateNav')) lockToToday();
+      showToast(`بدأ يوم جديد — التاريخ اتغيّر لـ ${now}`, "success");
+    }, 30000);
+  }
+
+  /* ═══════════ المساعدة (F1) ═══════════ */
+  const HELP = {
+    daily: { title: "🗓️ التقفيل اليومي", what: "كل الطيارين في يوم واحد. الحضور والانصراف والأوردرات وخدمة الطيار جايين من الورديات والأوردرات الحقيقية، وأي رقم تكتبه فوقهم بيتلوّن ويفضل هو المعتمد.",
+      body: `<div class="help-sec">إزاي تشتغل عليها؟</div><ol class="help-steps"><li>اختار <b>الفرع</b> و<b>الشهر</b> و<b>اليوم</b> من فوق.</li><li>اكتب في الخانة واضغط Enter أو انقل لخانة تانية — بيتحفظ لوحده والشيت بيتحدّث.</li><li>خانة الحضور والانصراف بتفتح منتقي وقت عربي بالنقر، و«مسح» بيرجّع وقت الوردية.</li><li>خانة الاستئذان بتفتح فورم فترات (خروج ← رجوع) وكل فترة بتتشال من الساعات.</li></ol><div class="help-warn">⚠️ الخانة الملوّنة برتقالي فيها رقم مكتوب بالإيد — التلميحة بتوريك رقم النظام. سيبها فاضية عشان ترجع لرقم النظام.</div><div class="help-sec">التنقل بالكيبورد</div><ul><li><b>Enter</b> أو <b>↑ ↓</b> — نفس العمود، السطر اللي فوق أو تحت.</li><li><b>→ ←</b> — نفس السطر، العمود اللي جنبه.</li></ul>` },
+    pilot: { title: "🧾 كشف الطيار", what: "شيت الطيار على الشهر كله، وتحته حساب الراتب.",
+      body: `<div class="help-sec">حساب الراتب</div><ul><li><b>أجر الساعات</b> = ساعاته × سعر ساعته (الخاص أو الافتراضي).</li><li><b>+ العمولة</b> المستحقة — اللي اتصفّى كاش يوم بيوم عند قفل الوردية مش بيتحسب تاني.</li><li><b>+ نصيب الراتب</b> = الراتب الشهري ÷ الأيام المحسوبة × أيام الشغل.</li><li><b>+ إجازة مدفوعة</b> = أيام الإجازة × ساعات الوردية × سعر الساعة.</li><li><b>صافي الراتب</b> = الإجمالي − السلف − الخصومات − قسط السلفة المؤجلة.</li></ul><div class="help-tip">💡 لو الناتج بالسالب بيتكتب «عليه» بالأحمر — الطيار سحب أكتر من مستحقه.</div>` },
+    month: { title: "📊 تقفيل الشهر", what: "كل طيارين الشهر في جدول واحد — سطر لكل طيار وزرار «كشف» بيوديك على شيته.",
+      body: `<div class="help-sec">إيه اللي في الجدول؟</div><ul><li>الساعات وأيام الشغل والأوردرات وكل بنود الراتب.</li><li>سطر <b>الإجمالي</b> بيجمع الفرع المختار أو الفروع كلها.</li><li>اللافتة تحت بتقول كام عمولة اتصفّت كاش يوم بيوم عشان محدش يسأل «فين العمولة».</li></ul><div class="help-tip">💡 زرار <b>إكسل</b> بينزّلك الجدول ملف xlsx تقدر تبعته أو تطبعه.</div>` },
+    deferred: { title: "🧮 السلف المؤجلة", what: "السلفة الكبيرة اللي مش هتتخصم مرة واحدة — بتتقسّط على شهور والبرنامج بيخصم القسط تلقائيًا من كل راتب.",
+      body: `<ol class="help-steps"><li>اضغط <b>سلفة مؤجلة</b> واختار الطيار.</li><li>اكتب <b>المبلغ الكامل</b> و<b>القسط الشهري</b>.</li><li>حدّد <b>الشهر اللي يبدأ منه الخصم</b> — البرنامج هيوريك هتتخصم على كام شهر.</li></ol><div class="help-tip">💡 تقدر تغيّر قسط شهر معيّن من الجدول أو من كشف الطيار — والشهور اللي بعده بتتظبط لوحدها.</div><div class="help-warn">⚠️ لو حذفت سلفة، الأقساط اللي اتخصمت من الشهور اللي فاتت هترجع تظهر في الرواتب.</div>` },
+    staff: { title: "👥 تقفيل الموظفين", what: "حضور الموظفين تلقائي من فتح المتصفح، والفجوة بين جلستين بتظهر استئذان — ونفس معادلات الراتب.",
+      body: `<ul><li><b>يومي</b>: كل الموظفين في يوم.</li><li><b>كشف الموظف</b>: الشهر كله لموظف واحد.</li><li><b>المرتبات</b>: تقفيلة الشهر — أجر الساعات + نصيب الراتب + الإجازة + الحوافز − السلف − الخصومات.</li></ul><div class="help-tip">💡 الأسعار والرواتب بتتظبط من «الطيارين والموظفين».</div>` },
+    perms: { title: "🔐 الصلاحيات", what: "افتح للي تحبه واقفل اللي مش عايزه يشوفه — شاشات وأعمدة وأفعال، والسيرفر بيطبّق نفس القيود.",
+      body: `<ul><li>اختار المستخدم، علّم ✅ على اللي عايزه يشوفه، واضغط <b>حفظ</b>.</li><li>القوالب الجاهزة بتبدأ منها وتعدّل.</li><li>الفروع المسموحة — متعلّمش على حاجة يبقى يشوف كل الفروع.</li></ul><div class="help-warn">⚠️ اللي مالوش صف صلاحيات شغّال بالافتراضي: كل حاجة ماعدا السلف وقفل الشهر والإعدادات.</div>` },
+    emps: { title: "⚙️ الطيارين والموظفين", what: "أسعار الطيارين (العمولة وسعر الساعة والراتب والإجازة) وحسابات الموظفين — نفس حسابات لوحة الإدارة.", body: `<div class="help-tip">💡 أي تعديل هنا بيغيّر أرقام التقفيلة فورًا.</div>` },
+    settings: { title: "🛠️ الإعدادات", what: "سعر الساعة الافتراضي وساعات الوردية وساعة بداية اليوم.", body: `<div class="help-warn">⚠️ الأرقام دي بتتطبّق على كل الشهور — غيّرها بس لو اتغيّرت فعلًا.</div>` },
+  };
+  window.openHelp = function() {
+    const h = HELP[window._paTab] || { title: "دليل الاستخدام", what: "مفيش شرح متاح للشاشة دي.", body: "" };
+    $("helpTitle").textContent = h.title;
+    $("helpBody").innerHTML = `<div class="help-what">${ esc(h.what) }</div>` + (h.body || "");
+    $("helpOverlay").classList.add("open");
+  };
+  window.closeHelp = function() { $("helpOverlay").classList.remove("open"); };
+  document.addEventListener("keydown", e => {
+    if (e.key === "F1") { e.preventDefault(); openHelp(); }
+    if (e.key === "Escape") closeHelp();
+  });
 </script>
 </body>
 </html>

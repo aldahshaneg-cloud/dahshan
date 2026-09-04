@@ -120,6 +120,9 @@
   .bg-green { background: rgba(34,197,94,.15); color: var(--green); }
   .bg-red { background: rgba(232,25,44,.15); color: var(--red); }
   .bg-orange { background: rgba(249,115,22,.15); color: var(--orange); }
+  /* شارة المشرف كانت بتستخدم bg-purple وهي مش معرّفة، فكانت بتطلع بلا لون
+     (نفس الملاحظة في النسخة القديمة). المالك بـbg-orange. */
+  .bg-purple { background: rgba(168,85,247,.15); color: #a855f7; }
   .bg-blue { background: rgba(59,130,246,.15); color: var(--blue); }
   .bg-muted { background: rgba(136,136,136,.13); color: var(--muted); }
 
@@ -554,7 +557,21 @@
           <select id="pmJob">
             <option value="طيار">طيار</option>
             <option value="مشرف">مشرف</option>
+            <!-- «مالك» بيتشال من القائمة لأي حد غير المدير العام (شوف
+                 openPilotModal) — عشان مشرف مايقدرش يخفي حساب ولا يظهّره -->
+            <option value="مالك">مالك</option>
           </select>
+        </div>
+        <!-- شرح وظيفة «مالك» — بيظهر للمدير العام بس -->
+        <div class="form-group full" id="pmOwnerWrap" style="display:none">
+          <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.28);
+                      border-radius:9px;padding:11px 13px;font-size:.79rem;
+                      color:var(--muted);line-height:1.9">
+            💡 لما تختار الوظيفة <b style="color:var(--orange)">مالك</b>: الحساب هيتخفي من
+            <b>كشف الطيار</b> و<b>كشف الشهر</b> عن أي حد غير المدير العام، إلا اللي تديله صلاحية
+            «رؤية حسابات المُلّاك». وهيفضل ظاهر في <b>التقفيل اليومي</b> عشان إجمالي الفرع
+            يفضل مطابق للنقدية اللي المشرف بيسلّمها.
+          </div>
         </div>
         <div class="form-group">
           <label>سعر الساعة</label>
@@ -1401,8 +1418,9 @@ function saveCell(ym, pilotId, day, field, raw, dotId) {
     _pending.delete(key);
     _inflight.add(key);
     try {
+      // `via` بتقول للسيرفر الكتابة جاية من أنهي شاشة — كشف الطيار محتاج act.editPilot
       const d = await api.put("/api/rd/entries",
-        { month: ym, pilotId: pilotId, day: day, field: field, value: raw });
+        { month: ym, pilotId: pilotId, day: day, field: field, value: raw, via: currentPage() });
       setEntry(ym, pilotId, day, d.deleted ? {} : (d.entry || {}));
       patchCloseout(d.closeout);
       // الملاحظات مش داخلة في أي حسبة — إعادة رسم الجدول وانت بتكتب فيها
@@ -1585,19 +1603,29 @@ function can(key) {
   if (isAdmin()) return true;
   return S.perms?.keys?.[pkey(key)] === true;
 }
-/** التعديل ممنوع كمان لو الشهر مقفول (rd_month_locks) */
-function canEdit() { return can("act.edit") && !S.locked; }
+/* التعديل ممنوع كمان لو الشهر مقفول (rd_month_locks).
+   وكشف الطيار له صلاحية منفصلة (act.editPilot) غير التقفيل اليومي، لأن
+   الكشف بيحسب مرتّب الطيار — فمينفعش مشرف عنده صلاحية تسجيل اليوم العادي
+   يعدّل فيه كمان. السيرفر بيطبّق نفس القاعدة على `via: pilot`. */
+function canEdit() {
+  if (!can("act.edit") || S.locked) return false;
+  if (currentPage() === "pilot") return isAdmin() || can("act.editPilot");
+  return true;
+}
 /** الفروع المسموحة — السيرفر أصلًا مابيرجّعش غيرها */
 function allowedBranches() { return S.branches; }
 function canSeeBranch(id) { return allowedBranches().some(b => sameId(b.id, id)); }
 
-/* أسماء كشوفها مخفية عن أي حد غير الأدمن — بتظهر عادي في التقفيل اليومي
-   (عشان الإجماليات ماتبوظش) لكن كشف الطيار وكشف الشهر بتوعهم للأدمن بس */
-const HIDDEN_SHEET_NAMES = ["عبدالرحمن", "علام", "سمكه", "سمكة"];
+/* ── حسابات المُلّاك ──────────────────────────────────────────────
+   الطيار نفسه عليه وظيفة «مالك» (الأدمن هو اللي بيحطها من كارت الطيار)،
+   ومين يشوف كشفه بيتحدّد بصلاحية view.owner — الأدمن بيشوفه دايمًا.
+   بيظهروا عادي في التقفيل اليومي عشان إجمالي الفرع يفضل مطابق للنقدية
+   اللي المشرف بيسلّمها — الإخفاء في كشف الطيار وكشف الشهر بس.
+   (القايمة القديمة بالأسماء اتحوّلت لوظيفة وقت نقل بيانات Firebase.) */
+function isOwnerPilot(p) { return String(p?.job || "").trim() === "مالك"; }
 function pilotSheetHidden(p) {
-  if (isAdmin()) return false;
-  const n = String(p?.name || "");
-  return HIDDEN_SHEET_NAMES.some(x => n.includes(x));
+  if (!isOwnerPilot(p)) return false;
+  return !(isAdmin() || can("view.owner"));
 }
 
 /* حارس صلاحية: حتى لو الزرار ظهر بالغلط أو اتنده من مكان تاني،
@@ -2064,7 +2092,7 @@ window.saveDayPerms = async function() {
   dot?.classList.add("on");
   try {
     const d = await api.put("/api/rd/entry-perms",
-      { month: ym, pilotId: pilotId, day: day, perms: clean });
+      { month: ym, pilotId: pilotId, day: day, perms: clean, via: currentPage() });
     setEntry(ym, pilotId, day, d.entry || {});
     patchCloseout(d.closeout);
     closeModal("perm");
@@ -2486,7 +2514,7 @@ window.renderSetup = function() {
       return `<tr>
       <td class="idx" style="width:38px">${i + 1}</td>
       <td style="font-weight:600">${esc(p.name)}</td>
-      <td><span class="badge ${p.job === "مشرف" ? "bg-purple" : "bg-blue"}">${esc(p.job || "طيار")}</span></td>
+      <td><span class="badge ${p.job === "مالك" ? "bg-orange" : p.job === "مشرف" ? "bg-purple" : "bg-blue"}">${esc(p.job || "طيار")}</span></td>
       <td class="num" style="font-size:.8rem">${fmt(R.h)} / ${fmt(R.o)}
         ${custom ? `<span class="badge bg-orange" style="font-size:.65rem">خاص</span>` : ""}</td>
       <td class="num" style="font-size:.8rem">${p.leaveDays ? fmt(p.leaveDays) + " يوم" : "—"}</td>
@@ -2570,7 +2598,15 @@ window.openPilotModal = function(id) {
   $("pilotModalTitle").textContent = id ? "تعديل الطيار" : "إضافة طيار";
   $("pmName").value      = p?.name || "";
   $("pmBranch").value    = p?.branchId || S.branches[0]?.id || "";
-  $("pmJob").value       = p?.job || "طيار";
+  /* وظيفة «مالك» للمدير العام بس. لو اللي فاتح مشرف بنشيل الخيار من
+     القائمة خالص — فمايقدرش يعمل حساب مالك جديد ولا يحوّل مالك موجود
+     لطيار عادي (وده كان هيظهّر حساب مخفي). السيرفر بيحرس نفس القاعدة. */
+  const jobSel = $("pmJob");
+  const ownerOpt = [...jobSel.options].find(o => o.value === "مالك");
+  if (ownerOpt) ownerOpt.hidden = !isAdmin();
+  jobSel.disabled = !isAdmin() && isOwnerPilot(p);
+  jobSel.value           = p?.job || "طيار";
+  $("pmOwnerWrap").style.display = isAdmin() ? "" : "none";
   $("pmHourRate").value  = p && num(p.hourRate)  > 0 ? p.hourRate  : "";
   $("pmOrderRate").value = p && num(p.orderRate) > 0 ? p.orderRate : "";
   $("pmLeaveDays").value = p && num(p.leaveDays) > 0 ? p.leaveDays : "";
@@ -2588,7 +2624,12 @@ window.savePilot = async function() {
   const name = $("pmName").value.trim();
   const branchId = $("pmBranch").value;
   const active = $("pmActive").value === "1";
-  const job = $("pmJob").value;
+  let job = $("pmJob").value;
+  /* وظيفة «مالك» بيغيّرها المدير العام بس. لو اللي بيحفظ مش أدمن والحساب
+     مالك، بنرجّع وظيفته زي ما هي (القائمة عنده متعطّلة أصلًا، وده حارس
+     تاني على الحفظ — والسيرفر فيه تالت). */
+  const _prev = window._editPilot ? S.pilots.find(x => sameId(x.id, window._editPilot)) : null;
+  if (!isAdmin() && (isOwnerPilot(_prev) || job === "مالك")) job = _prev?.job || "طيار";
   // الفاضي معناه «خد السعر العام» — بيتخزّن صفر في القاعدة
   const hourRate  = $("pmHourRate").value.trim()  === "" ? null : num($("pmHourRate").value);
   const orderRate = $("pmOrderRate").value.trim() === "" ? null : num($("pmOrderRate").value);

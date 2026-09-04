@@ -154,11 +154,13 @@ ok('وبتتطبّق قبل الرسم — عشان العمود المقفول 
 /* القايمة اتوسّعت 2026-09-01 بـstaff (تقفيلة الموظفين) وemps (إدارة
    الموظفين) — الفحص بيثبّت القايمة الكاملة عشان تبويب جديد ينضاف هنا
    ولا ينضاف في التبديل يقع فورًا. */
+/* واتوسّعت تاني 2026-09-04 بـsettings (إعدادات البرنامج — شكل روح دمشق). */
 ok('وكل التبويبات داخلة التبديل',
-  /\["daily","pilot","month","deferred","staff","perms","emps"\]\.forEach/.test(UI)
+  /\["daily","pilot","month","deferred","staff","perms","emps","settings"\]\.forEach/.test(UI)
   && /if \(tab === "perms"\)    renderPaPerms\(\);/.test(UI)
   && /if \(tab === "staff"\)    loadStaff\(\);/.test(UI)
-  && /if \(tab === "emps"\)     renderEmps\(\);/.test(UI));
+  && /if \(tab === "emps"\)     renderEmps\(\);/.test(UI)
+  && /if \(tab === "settings"\) renderPaSettings\(\);/.test(UI));
 
 /* ══ 6) شاشة الصلاحيات ══ */
 console.log('\n══ 6) الشاشة ══');

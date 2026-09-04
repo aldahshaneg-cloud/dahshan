@@ -45,6 +45,14 @@ class DamascusController
     public function bootstrap(Request $request): JsonResponse
     {
         $user = $this->user($request);
+        /* نفس فحص الدخول في البرنامج القديم: غير المدير لازم يكون له صف
+           صلاحيات فيه مفتاح واحد على الأقل، وإلا «لسه مالكش صلاحيات».
+           المسارات بقت مفتوحة لدور branch كمان (مشرفي دمشق بيتعملوا من
+           الشاشة بدور «مشرف فرع») — فالحارس ده هو اللي بيمنع مشرف فرع
+           دهشان عادي إنه يقرا أسعار وأسماء روح دمشق. */
+        if (empty($user['isAdmin']) && ! $this->permsRow((string) $user['username'])['keys']) {
+            throw ApiException::forbidden('لسه مالكش صلاحيات على البرنامج ده — كلّم المدير');
+        }
         $ctx  = $this->ctx(substr(DamascusWire::today(), 0, 7));
         $allowed = $this->allowedBranchIds($user, $ctx);
 
@@ -177,6 +185,7 @@ class DamascusController
         $this->requirePerm($user, $perm, 'العمود ده');
         $this->requireBranch($user, $ctx, $pilot['branchId']);
         $this->requireUnlocked($ym, $pilot['branchId']);
+        $this->requireWriteWindow($user, $ctx, $ym, $day, $b);
 
         $raw = $b['value'] ?? '';
         // نفس saveCell: الوقت بيتظبط، الملاحظة نص، والباقي رقم — والفاضي/الصفر بيتمسح
@@ -241,6 +250,7 @@ class DamascusController
         $this->requireAny($user, ['col.bout', 'col.bin'], 'الاستئذان');
         $this->requireBranch($user, $ctx, $pilot['branchId']);
         $this->requireUnlocked($ym, $pilot['branchId']);
+        $this->requireWriteWindow($user, $ctx, $ym, $day, $b);
 
         $list = [];
         foreach ((array) ($b['perms'] ?? []) as $p) {
@@ -347,6 +357,7 @@ class DamascusController
         $this->requirePerm($user, $fields[$field], 'البند ده');
         $this->requireBranch($user, $ctx, $bid);
         $this->requireUnlocked($ym, $bid);
+        $this->requireWriteWindow($user, $ctx, $ym, $day, $b);
 
         $raw = $b['value'] ?? '';
         $store = ($raw === '' || $raw === null)
@@ -759,15 +770,21 @@ class DamascusController
         $branchId = $this->intId($b['branchId'] ?? 0);
         $ctx = $this->ctx(substr(DamascusWire::today(), 0, 7));
         $this->requireBranch($user, $ctx, $branchId);
+        /* وظيفة «مالك» بيديها المدير العام بس — المشرف مايقدرش يعمل حساب
+           مخفي (ولا يظهّر واحد موجود، شوف pilotsUpdate). */
+        $job = trim((string) ($b['job'] ?? '')) ?: null;
+        if ($job === DamascusWire::OWNER_JOB && empty($user['isAdmin'])) {
+            throw ApiException::forbidden('وظيفة «مالك» للإدارة فقط');
+        }
 
-        $pilot = DB::transaction(function () use ($b, $branchId, $name): array {
+        $pilot = DB::transaction(function () use ($b, $branchId, $name, $job): array {
             DB::insert(
                 'INSERT INTO rd_pilots (branch_id, name, active, job, hour_rate, order_rate, leave_days)
                  VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [
                     $branchId, $name,
                     isset($b['active']) ? (int) (bool) $b['active'] : 1,
-                    trim((string) ($b['job'] ?? '')) ?: null,
+                    $job,
                     DamascusWire::num($b['hourRate'] ?? 0), DamascusWire::num($b['orderRate'] ?? 0),
                     (int) DamascusWire::num($b['leaveDays'] ?? 0),
                 ]
@@ -811,13 +828,22 @@ class DamascusController
                 throw new ApiException('اكتب اسم الطيار');
             }
 
+            /* وظيفة «مالك» بيغيّرها المدير العام بس — لو اللي بيحفظ مش أدمن
+               الوظيفة بتفضل زي ما هي (زي القديم: مايقدرش يخفي حساب ولا
+               يظهّر حساب مخفي بالغلط). */
+            $job = array_key_exists('job', $b) ? (trim((string) $b['job']) ?: null) : $row->job;
+            if (empty($user['isAdmin'])
+                && ($job === DamascusWire::OWNER_JOB || (string) $row->job === DamascusWire::OWNER_JOB)) {
+                $job = $row->job;
+            }
+
             DB::update(
                 'UPDATE rd_pilots SET branch_id = ?, name = ?, active = ?, job = ?,
                         hour_rate = ?, order_rate = ?, leave_days = ? WHERE id = ?',
                 [
                     $branchId, $name,
                     isset($b['active']) ? (int) (bool) $b['active'] : (int) $row->active,
-                    array_key_exists('job', $b) ? (trim((string) $b['job']) ?: null) : $row->job,
+                    $job,
                     array_key_exists('hourRate', $b) ? DamascusWire::num($b['hourRate']) : (float) $row->hour_rate,
                     array_key_exists('orderRate', $b) ? DamascusWire::num($b['orderRate']) : (float) $row->order_rate,
                     array_key_exists('leaveDays', $b) ? (int) DamascusWire::num($b['leaveDays']) : (int) $row->leave_days,
@@ -1574,20 +1600,41 @@ class DamascusController
         }
     }
 
-    /** كشف الطيار/الشهر مخفي عن غير الأدمن لأسماء بعينها */
+    /**
+     * كشف الطيار/الشهر مخفي لحسابات «المُلّاك» عن أي حد غير الأدمن — إلا
+     * اللي معاه صلاحية `view.owner`. بيظهروا عادي في التقفيل اليومي عشان
+     * إجمالي الفرع يفضل مطابق للنقدية اللي المشرف بيسلّمها (زي القديم).
+     */
     private function sheetHidden(array $user, array $pilot): bool
     {
-        if (! empty($user['isAdmin'])) {
+        if (! DamascusWire::isOwnerPilot($pilot)) {
             return false;
         }
-        $n = (string) ($pilot['name'] ?? '');
-        foreach (DamascusWire::hiddenSheetNames() as $x) {
-            if ($x !== '' && mb_strpos($n, $x) !== false) {
-                return true;
+
+        return ! $this->can($user, 'view.owner');
+    }
+
+    /**
+     * حارسان على الكتابة بيطابقوا النسخة القديمة (كانوا في الواجهة بس):
+     *   • من غير `act.dateNav` المستخدم بيشتغل على **النهارده** بس — أي يوم
+     *     تاني بيترفض حتى لو الطلب جه من الكونسول.
+     *   • الكتابة من كشف الطيار (`via: pilot`) محتاجة `act.editPilot` —
+     *     الكشف بيحسب المرتّب، فمشرف بيسجّل اليوم مايعدّلش فيه.
+     */
+    private function requireWriteWindow(array $user, array $ctx, string $ym, int $day, array $body): void
+    {
+        if (! empty($user['isAdmin'])) {
+            return;
+        }
+        if (! $this->can($user, 'act.dateNav')) {
+            $today = DamascusWire::bizToday($ctx['settings']);
+            if (sprintf('%s-%02d', $ym, $day) !== $today) {
+                throw ApiException::forbidden('مالكش صلاحية تشتغل على يوم تاني — النهارده بس');
             }
         }
-
-        return false;
+        if ((string) ($body['via'] ?? '') === 'pilot' && ! $this->can($user, 'act.editPilot')) {
+            throw ApiException::forbidden('مالكش صلاحية تعديل كشف الطيار');
+        }
     }
 
     /* ── قفل الشهر ───────────────────────────────────────────── */

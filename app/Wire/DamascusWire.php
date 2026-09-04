@@ -101,6 +101,14 @@ final class DamascusWire
                 ['sal.leave', 'الإجازة المدفوعة'],
                 ['sal.def', 'قسط السلف المؤجلة'],
             ]],
+            /* 🔑 نفس مجموعة «صلاحيات خاصة» في النسخة القديمة (GitHub 2026-08-13):
+               حسابات المُلّاك بتتخفي بوظيفة «مالك» مش بقايمة أسماء، ومين
+               يشوفها بيتحدّد من هنا. وتعديل كشف الطيار صلاحية منفصلة لأن
+               الكشف بيحسب المرتّب — مشرف بيسجّل اليوم مايعدّلش فيه. */
+            ['title' => 'صلاحيات خاصة (الإدارة بس)', 'items' => [
+                ['view.owner',    'رؤية حسابات المُلّاك (المخفية عن الباقي)'],
+                ['act.editPilot', 'تعديل كشف الطيار (منفصلة عن تعديل التقفيل اليومي)'],
+            ]],
             ['title' => 'صلاحيات عامة', 'items' => [
                 ['act.edit', 'تعديل وكتابة البيانات (من غيرها بيتفرّج بس)'],
                 ['act.dateNav', 'التنقل بين التواريخ والشهور'],
@@ -113,8 +121,23 @@ final class DamascusWire
         ];
     }
 
-    /** أسماء كشوفها مخفية عن أي حد غير الأدمن (كشف الطيار وكشف الشهر بس) */
-    public static function hiddenSheetNames(): array
+    /** وظيفة «مالك» — الحساب اللي كشفه مخفي عن غير الإدارة (وعن اللي مالوش view.owner) */
+    public const OWNER_JOB = 'مالك';
+
+    /**
+     * هل الحساب ده مالك؟ الوظيفة هي المصدر الوحيد — زي النسخة القديمة بعد
+     * ما حوّلت قايمة الأسماء المكتوبة في الكود لوظيفة على كارت الطيار.
+     * القايمة القديمة (عبدالرحمن · علام · سمكة) اتحوّلت لوظيفة «مالك» مرة
+     * واحدة وقت نقل بيانات Firebase (ops/import_rd_firebase.php) — مافيش
+     * فلترة بالاسم هنا خالص.
+     */
+    public static function isOwnerPilot(array $pilot): bool
+    {
+        return trim((string) ($pilot['job'] ?? '')) === self::OWNER_JOB;
+    }
+
+    /** الأسماء اللي كانت مخفية بالكود قبل وظيفة «مالك» — للترحيل مرة واحدة بس */
+    public static function legacyOwnerNames(): array
     {
         return ['عبدالرحمن', 'علام', 'سمكه', 'سمكة'];
     }
@@ -209,6 +232,27 @@ final class DamascusWire
     public static function nowMs(): int
     {
         return (int) round(microtime(true) * 1000);
+    }
+
+    /**
+     * «النهارده» في البرنامج — نفس todayStr القديمة: بتوقيت القاهرة، ولو
+     * الساعة لسه قبل `dayStart` (الافتراضي 8 صباحًا) فإحنا لسه على ورقة
+     * إمبارح. الوردية بتبدأ 9ص وتخلص 6ص تاني يوم، فالمشرف الساعة 2 بعد
+     * نص الليل لسه بيكمّل يوم إمبارح.
+     */
+    public static function bizToday(array $settings): string
+    {
+        $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Cairo'));
+        $raw = $settings['dayStart'] ?? 8;
+        $h = ($raw === null || $raw === '') ? 8 : (int) self::num($raw);
+        if ($h < 0 || $h > 23) {
+            $h = 8;
+        }
+        if ((int) $now->format('G') < $h) {
+            $now = $now->modify('-1 day');
+        }
+
+        return $now->format('Y-m-d');
     }
 
     /** "HH:MM" → دقايق من نص الليل، أو null لو مش وقت صالح */

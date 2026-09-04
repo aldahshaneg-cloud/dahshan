@@ -490,26 +490,26 @@ Route::post('public/join-request', [PublicSiteController::class, 'joinRequest'])
    منظومة rd_perms جوّه الكنترولر بتفضل شغّالة فوق القيد ده.
    ⚠️ المسارات متداخلة مع غيرها في الملف فمينفعش تتلفّ في group — القيد
    على كل واحد لوحده، والحارس بيعدّهم. */
-Route::get('rd/bootstrap', [DamascusController::class, 'bootstrap'])->middleware('role:admin,accountant');   // 💰
-Route::get('rd/branches', [DamascusController::class, 'branchesList'])->middleware('role:admin,accountant');
-Route::post('rd/branches', [DamascusController::class, 'branchesCreate'])->middleware('role:admin,accountant');
-Route::get('rd/deferred', [DamascusController::class, 'deferredList'])->middleware('role:admin,accountant');   // 💰
-Route::post('rd/deferred', [DamascusController::class, 'deferredCreate'])->middleware('role:admin,accountant');   // 💰
-Route::get('rd/entries', [DamascusController::class, 'entriesList'])->middleware('role:admin,accountant');   // 💰
-Route::put('rd/entries', [DamascusController::class, 'entriesSave'])->middleware('role:admin,accountant');   // 💰
-Route::put('rd/entry-perms', [DamascusController::class, 'entryPermsSave'])->middleware('role:admin,accountant');   // 💰
-Route::post('rd/month-lock', [DamascusController::class, 'monthLockCreate'])->middleware('role:admin,accountant');
-Route::delete('rd/month-lock', [DamascusController::class, 'monthLockDelete'])->middleware('role:admin,accountant');
-Route::get('rd/month-locks', [DamascusController::class, 'monthLocksList'])->middleware('role:admin,accountant');
-Route::get('rd/perms', [DamascusController::class, 'permsList'])->middleware('role:admin,accountant');
-Route::put('rd/perms', [DamascusController::class, 'permsSave'])->middleware('role:admin,accountant');
-Route::get('rd/pilot-sheet', [DamascusController::class, 'pilotSheet'])->middleware('role:admin,accountant');   // 💰
-Route::get('rd/pilots', [DamascusController::class, 'pilotsList'])->middleware('role:admin,accountant');   // 💰
-Route::post('rd/pilots', [DamascusController::class, 'pilotsCreate'])->middleware('role:admin,accountant');   // 💰
-Route::get('rd/settings', [DamascusController::class, 'settingsGet'])->middleware('role:admin,accountant');   // 💰
-Route::put('rd/settings', [DamascusController::class, 'settingsPut'])->middleware('role:admin,accountant');   // 💰
-Route::get('rd/summaries', [DamascusController::class, 'summariesList'])->middleware('role:admin,accountant');   // 💰
-Route::put('rd/summaries', [DamascusController::class, 'summariesSave'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/bootstrap', [DamascusController::class, 'bootstrap'])->middleware('role:admin,accountant,branch');   // 💰
+Route::get('rd/branches', [DamascusController::class, 'branchesList'])->middleware('role:admin,accountant,branch');
+Route::post('rd/branches', [DamascusController::class, 'branchesCreate'])->middleware('role:admin,accountant,branch');
+Route::get('rd/deferred', [DamascusController::class, 'deferredList'])->middleware('role:admin,accountant,branch');   // 💰
+Route::post('rd/deferred', [DamascusController::class, 'deferredCreate'])->middleware('role:admin,accountant,branch');   // 💰
+Route::get('rd/entries', [DamascusController::class, 'entriesList'])->middleware('role:admin,accountant,branch');   // 💰
+Route::put('rd/entries', [DamascusController::class, 'entriesSave'])->middleware('role:admin,accountant,branch');   // 💰
+Route::put('rd/entry-perms', [DamascusController::class, 'entryPermsSave'])->middleware('role:admin,accountant,branch');   // 💰
+Route::post('rd/month-lock', [DamascusController::class, 'monthLockCreate'])->middleware('role:admin,accountant,branch');
+Route::delete('rd/month-lock', [DamascusController::class, 'monthLockDelete'])->middleware('role:admin,accountant,branch');
+Route::get('rd/month-locks', [DamascusController::class, 'monthLocksList'])->middleware('role:admin,accountant,branch');
+Route::get('rd/perms', [DamascusController::class, 'permsList'])->middleware('role:admin,accountant,branch');
+Route::put('rd/perms', [DamascusController::class, 'permsSave'])->middleware('role:admin,accountant,branch');
+Route::get('rd/pilot-sheet', [DamascusController::class, 'pilotSheet'])->middleware('role:admin,accountant,branch');   // 💰
+Route::get('rd/pilots', [DamascusController::class, 'pilotsList'])->middleware('role:admin,accountant,branch');   // 💰
+Route::post('rd/pilots', [DamascusController::class, 'pilotsCreate'])->middleware('role:admin,accountant,branch');   // 💰
+Route::get('rd/settings', [DamascusController::class, 'settingsGet'])->middleware('role:admin,accountant,branch');   // 💰
+Route::put('rd/settings', [DamascusController::class, 'settingsPut'])->middleware('role:admin,accountant,branch');   // 💰
+Route::get('rd/summaries', [DamascusController::class, 'summariesList'])->middleware('role:admin,accountant,branch');   // 💰
+Route::put('rd/summaries', [DamascusController::class, 'summariesSave'])->middleware('role:admin,accountant,branch');   // 💰
 Route::put('store/pickup-profile', [CustomersController::class, 'pickupProfileSave'])
     ->middleware('role:store');
 Route::post('trust/rate', [TrustController::class, 'rateDirect'])
@@ -524,8 +524,8 @@ Route::post('pilot/leave-requests/end', [PilotAppController::class, 'leaveEnd'])
     ->middleware('role:pilot');
 Route::post('pilot/shift/end', [PilotAppController::class, 'shiftEnd'])
     ->middleware('role:pilot');
-Route::get('rd/closeout/day', [DamascusController::class, 'closeoutDay'])->middleware('role:admin,accountant');   // 💰
-Route::get('rd/closeout/month', [DamascusController::class, 'closeoutMonth'])->middleware('role:admin,accountant');   // 💰
+Route::get('rd/closeout/day', [DamascusController::class, 'closeoutDay'])->middleware('role:admin,accountant,branch');   // 💰
+Route::get('rd/closeout/month', [DamascusController::class, 'closeoutMonth'])->middleware('role:admin,accountant,branch');   // 💰
 Route::put('cash-stores/{id}', [FinanceController::class, 'cashStoresUpdate'])
     ->middleware('role:admin,accountant');   // 💰
 Route::delete('cash-stores/{id}', [FinanceController::class, 'cashStoresDelete'])
@@ -597,12 +597,12 @@ Route::post('pilot-transfers/{id}/end', [BoardController::class, 'transferEnd'])
     ->middleware('role:admin,branch,pilot_supervisor');
 Route::post('pilot-transfers/{id}/reject', [BoardController::class, 'transferReject'])
     ->middleware('role:admin,pilot_supervisor');
-Route::put('rd/branches/{id}', [DamascusController::class, 'branchesUpdate'])->middleware('role:admin,accountant');
-Route::delete('rd/branches/{id}', [DamascusController::class, 'branchesDelete'])->middleware('role:admin,accountant');
-Route::put('rd/deferred/{id}', [DamascusController::class, 'deferredUpdate'])->middleware('role:admin,accountant');   // 💰
-Route::delete('rd/deferred/{id}', [DamascusController::class, 'deferredDelete'])->middleware('role:admin,accountant');   // 💰
-Route::put('rd/pilots/{id}', [DamascusController::class, 'pilotsUpdate'])->middleware('role:admin,accountant');   // 💰
-Route::delete('rd/pilots/{id}', [DamascusController::class, 'pilotsDelete'])->middleware('role:admin,accountant');
+Route::put('rd/branches/{id}', [DamascusController::class, 'branchesUpdate'])->middleware('role:admin,accountant,branch');
+Route::delete('rd/branches/{id}', [DamascusController::class, 'branchesDelete'])->middleware('role:admin,accountant,branch');
+Route::put('rd/deferred/{id}', [DamascusController::class, 'deferredUpdate'])->middleware('role:admin,accountant,branch');   // 💰
+Route::delete('rd/deferred/{id}', [DamascusController::class, 'deferredDelete'])->middleware('role:admin,accountant,branch');   // 💰
+Route::put('rd/pilots/{id}', [DamascusController::class, 'pilotsUpdate'])->middleware('role:admin,accountant,branch');   // 💰
+Route::delete('rd/pilots/{id}', [DamascusController::class, 'pilotsDelete'])->middleware('role:admin,accountant,branch');
 Route::post('return-requests/{id}/approve', [BoardController::class, 'returnRequestApprove'])
     ->middleware('role:admin,branch');   // 💰
 Route::post('return-requests/{id}/reject', [BoardController::class, 'returnRequestReject'])
@@ -630,7 +630,7 @@ Route::post('pilot/orders/{id}/deliver', [OrdersController::class, 'deliver'])
     ->middleware('role:pilot');   // 💰
 Route::post('pilot/orders/{id}/undeliver', [OrdersController::class, 'undeliver'])
     ->middleware('role:pilot');
-Route::put('rd/deferred/{id}/payment', [DamascusController::class, 'deferredPayment'])->middleware('role:admin,accountant');   // 💰
+Route::put('rd/deferred/{id}/payment', [DamascusController::class, 'deferredPayment'])->middleware('role:admin,accountant,branch');   // 💰
 Route::post('wallets/{ownerType}/{ownerId}/credit', [FinanceController::class, 'walletCredit'])
     ->middleware('role:admin,branch,accountant');   // 💰
 Route::post('wallets/{ownerType}/{ownerId}/debit', [FinanceController::class, 'walletDebit'])
