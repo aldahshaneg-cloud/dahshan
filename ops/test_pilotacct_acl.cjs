@@ -156,7 +156,8 @@ ok('وبتتطبّق قبل الرسم — عشان العمود المقفول 
    ولا ينضاف في التبديل يقع فورًا. */
 /* واتوسّعت تاني 2026-09-04 بـsettings (إعدادات البرنامج — شكل روح دمشق). */
 ok('وكل التبويبات داخلة التبديل',
-  /\["daily","pilot","month","deferred","staff","perms","emps","settings"\]\.forEach/.test(UI)
+  /\["daily","pilot","month","deferred","staff","treasury","perms","emps","settings"\]\.forEach/.test(UI)
+  && /if \(tab === "treasury"\) loadTreasury\(\);/.test(UI)
   && /if \(tab === "perms"\)    renderPaPerms\(\);/.test(UI)
   && /if \(tab === "staff"\)    loadStaff\(\);/.test(UI)
   && /if \(tab === "emps"\)     renderEmps\(\);/.test(UI)

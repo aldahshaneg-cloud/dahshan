@@ -349,6 +349,8 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <button class="nav-item" id="patab-deferred" onclick="switchPaTab('deferred')">🧮 السلف المؤجلة</button>
       <div class="sidebar-section-label" id="navSectionStaff">الموظفين</div>
       <button class="nav-item" id="patab-staff" onclick="switchPaTab('staff')">👥 تقفيل الموظفين</button>
+      <div class="sidebar-section-label" id="navSectionTreasury">الفلوس</div>
+      <button class="nav-item" id="patab-treasury" onclick="switchPaTab('treasury')">💰 الخزنة</button>
       <div class="sidebar-section-label" id="navSectionSetup">الإعداد</div>
       <!-- 🔐 للأدمن بس — `applyPaAcl` بتخفيهم لغيره -->
       <button class="nav-item" id="patab-emps" style="display:none" onclick="switchPaTab('emps')">⚙️ الطيارين والموظفين</button>
@@ -588,6 +590,55 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
     </div>
   </div>
 
+  <!-- ══ 💰 الخزنة ══
+       نفس خزن لوحة الإدارة ونفس مساراتها (/api/cash-stores …) — مش خزنة
+       تانية. اللي بيتعمل هنا بيبان هناك والعكس. طلب صاحب النظام 2026-09-04:
+       «صفحة عامة للخزنة معاك عشان أعمل حسابه في اللي جاي». -->
+  <div class="page" id="pa-treasury">
+    <div class="sec-header">
+      <div>
+        <span class="sec-title">💰 الخزنة</span>
+        <div class="pa-sec-sub">الخزن وأرصدتها وكل حركة فلوس — نفس خزن لوحة الإدارة</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-ghost" onclick="loadTreasury(true)">🔄 تحديث</button>
+        <button class="btn-ghost" id="trTransferBtn" onclick="openTransferModal()">🔄 تحويل بين خزنتين</button>
+        <button class="add-btn" id="trNewStoreBtn" style="display:none" onclick="openStoreModal(null)">➕ خزنة جديدة</button>
+      </div>
+    </div>
+    <div class="stats" id="trStats"></div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th style="width:34px">#</th><th>الخزنة</th><th>الفرع</th><th class="num">الرصيد</th><th>آخر حركة</th><th style="width:220px">إجراء</th>
+      </tr></thead>
+      <tbody id="trStoresBody"><tr><td colspan="6" class="empty-row">جاري التحميل…</td></tr></tbody>
+      <tfoot id="trStoresFoot"></tfoot>
+    </table></div>
+
+    <div class="sec-header" style="margin-top:26px">
+      <div>
+        <span class="sec-title">📋 حركات الخزن <span id="trTxnCount" style="font-size:.78rem;color:var(--muted);font-weight:600"></span></span>
+        <div class="pa-sec-sub">وارد ومنصرف ومعلّق — كل حركة بسببها ومين عملها</div>
+      </div>
+      <div class="toolbar">
+        <select class="field" id="trStoreFilter" onchange="renderTreasuryTxns()"><option value="">كل الخزن</option></select>
+        <select class="field" id="trTypeFilter" onchange="renderTreasuryTxns()">
+          <option value="">كل الأنواع</option><option value="in">وارد</option><option value="out">منصرف</option><option value="pending">معلّق</option>
+        </select>
+        <input type="date" class="field" id="trFrom" onchange="loadTreasury(true)" />
+        <input type="date" class="field" id="trTo" onchange="loadTreasury(true)" />
+        <input type="text" class="field" id="trSearch" placeholder="بحث في السبب" oninput="renderTreasuryTxns()" style="min-width:160px" />
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>الوقت</th><th>الخزنة</th><th>الفرع</th><th>النوع</th><th class="num">المبلغ</th><th>السبب</th><th>بواسطة</th><th></th>
+      </tr></thead>
+      <tbody id="trTxnsBody"><tr><td colspan="8" class="empty-row">جاري التحميل…</td></tr></tbody>
+    </table></div>
+    <div style="margin-top:10px"><button class="btn-ghost" id="trMoreBtn" style="display:none" onclick="window._trLimit += 100; renderTreasuryTxns()">عرض المزيد</button></div>
+  </div>
+
   <!-- ══ 🔐 الصلاحيات — للأدمن بس ══
        الشاشة بتتبني من `permGroups` الجاية من السيرفر، مش من قايمة
        هنا — عشان مفتاح جديد في الـWire يظهر لوحده. -->
@@ -755,6 +806,80 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <div class="modal-foot">
         <button class="btn-ghost" onclick="closeModal('orders')">إغلاق</button>
         <span id="ordFootNote" style="font-size:.78rem;color:var(--muted)"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- حركة خزنة: عهدة/وارد أو منصرف -->
+  <div class="modal" id="modal-trtxn">
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-head">
+        <div class="modal-title" id="trTxnTitle">حركة خزنة</div>
+        <button class="modal-close" onclick="closeModal('trtxn')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group full"><label>الخزنة</label><select id="trTxnStore"></select></div>
+          <div class="form-group"><label>النوع</label>
+            <select id="trTxnType" onchange="trTxnTypeChanged()">
+              <option value="in">وارد — فلوس داخلة (عهدة مسبقة / تحصيل)</option>
+              <option value="out">منصرف — فلوس خارجة (مصاريف / صرف)</option>
+              <option value="pending">معلّق — وارد لسه ما اتعدش</option>
+            </select></div>
+          <div class="form-group"><label>المبلغ</label><input type="text" inputmode="decimal" id="trTxnAmount" placeholder="مثال: 5000" /></div>
+          <div class="form-group full"><label>السبب</label><input type="text" id="trTxnReason" placeholder="مثال: عهدة مسبقة / مصاريف صيانة" /></div>
+          <div class="form-group full"><label>ملاحظات (اختياري)</label><input type="text" id="trTxnNotes" /></div>
+        </div>
+        <div id="trTxnError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" id="trTxnSave" onclick="saveTreasuryTxn()">حفظ الحركة</button>
+        <button class="btn-ghost" onclick="closeModal('trtxn')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- تحويل بين خزنتين -->
+  <div class="modal" id="modal-trtransfer">
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-head">
+        <div class="modal-title">🔄 تحويل بين خزنتين</div>
+        <button class="modal-close" onclick="closeModal('trtransfer')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group"><label>من خزنة</label><select id="trFrom_"></select></div>
+          <div class="form-group"><label>إلى خزنة</label><select id="trTo_"></select></div>
+          <div class="form-group"><label>المبلغ</label><input type="text" inputmode="decimal" id="trTrAmount" /></div>
+          <div class="form-group"><label>السبب (اختياري)</label><input type="text" id="trTrReason" /></div>
+        </div>
+        <div class="info-box">بتتسجّل حركتين في نفس اللحظة: منصرف من الأولى ووارد للتانية، وكل واحدة فيها اسم التانية.</div>
+        <div id="trTrError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" id="trTrSave" onclick="saveTransfer()">تحويل</button>
+        <button class="btn-ghost" onclick="closeModal('trtransfer')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- خزنة جديدة / تعديل الاسم -->
+  <div class="modal" id="modal-trstore">
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-head">
+        <div class="modal-title" id="trStoreTitle">خزنة جديدة</div>
+        <button class="modal-close" onclick="closeModal('trstore')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group full"><label>اسم الخزنة</label><input type="text" id="trStoreName" placeholder="مثال: خزنة المنصورة" /></div>
+          <div class="form-group full" id="trStoreBranchWrap"><label>الفرع (فاضي = خزنة الإدارة)</label><select id="trStoreBranch"><option value="">🏛️ الإدارة</option></select></div>
+        </div>
+        <div id="trStoreError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="add-btn" onclick="saveStore()">حفظ</button>
+        <button class="btn-ghost" onclick="closeModal('trstore')">إلغاء</button>
       </div>
     </div>
   </div>
@@ -1048,10 +1173,12 @@ async function bootAccounts() {
     st.textContent = rules.join('\n');
 
     /* ── الشاشات (القايمة الجانبية) ── */
-    ['daily', 'pilot', 'month', 'deferred', 'staff'].forEach(t => {
+    ['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury'].forEach(t => {
       const b = document.getElementById('patab-' + t);
       if (b) b.style.display = paCan('page.' + t) ? '' : 'none';
     });
+    const lblTr = document.getElementById('navSectionTreasury');
+    if (lblTr) lblTr.style.display = paCan('page.treasury') ? '' : 'none';
     const permTab = document.getElementById('patab-perms');
     if (permTab) permTab.style.display = acl.isAdmin ? '' : 'none';
     const empsTab = document.getElementById('patab-emps');
@@ -1070,7 +1197,7 @@ async function bootAccounts() {
 
     /* لو الشاشة المفتوحة دلوقتي مقفولة عليه، ننقله لأول شاشة مسموحة.
        من غير ده بيفضل قاعد على شاشة فاضية ومش فاهم ليه. */
-    const open = ['daily', 'pilot', 'month', 'deferred', 'staff']
+    const open = ['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury']
       .filter(t => paCan('page.' + t));
     if (window._paTab !== 'perms' && window._paTab !== 'emps' && window._paTab !== 'settings' && !paCan('page.' + window._paTab)) {
       if (open.length) switchPaTab(open[0]);
@@ -1110,12 +1237,13 @@ async function bootAccounts() {
 
   window.switchPaTab = function(tab) {
     window._paTab = tab;
-    ["daily","pilot","month","deferred","staff","perms","emps","settings"].forEach(t => {
+    ["daily","pilot","month","deferred","staff","treasury","perms","emps","settings"].forEach(t => {
       document.getElementById("patab-" + t)?.classList.toggle("active", t === tab);
       const el = document.getElementById("pa-" + t);
       if (el) el.style.display = t === tab ? "block" : "none";
     });
     window.scrollTo(0, 0);
+    if (tab === "treasury") loadTreasury();
     if (tab === "daily")    renderPaDaily();
     if (tab === "pilot")    renderPaPilot();
     if (tab === "month")    renderPaMonth();
@@ -1196,8 +1324,9 @@ async function bootAccounts() {
     /* زرار القفل بيبان لمن عنده `act.lock` بس. لو مش عنده، الشريط
        بيفضل بيقول إن الشهر مقفول — الخبر ده مالوش علاقة بالصلاحية. */
     const canLock = paCan('act.lock');
+    const snap = d.snapshot ? ` الأرقام المعروضة هي <b>اللقطة المعتمدة</b> وقت القفل${ d.snapshot.lockedAt ? " (" + new Date(d.snapshot.lockedAt).toLocaleString("ar-EG") : "" }${ d.snapshot.lockedBy ? " · " + esc(d.snapshot.lockedBy) + ")" : (d.snapshot.lockedAt ? ")" : "") } — أي تغيير في الأسعار أو الإعدادات بعد كده مش بيأثر عليها.` : "";
     box.innerHTML = d.locked
-      ? `<div class="warn-box" style="margin-bottom:12px">🔒 الشهر ده <b>مقفول</b> — العرض بس، مفيش تعديل.${ canLock ? `<button class="view-btn" style="margin-right:10px" onclick="paUnlock()">🔓 فتح الشهر</button>` : "" }</div>`
+      ? `<div class="warn-box" style="margin-bottom:12px">🔒 الشهر ده <b>مقفول</b> — العرض بس، مفيش تعديل.${ snap }${ canLock ? `<button class="view-btn" style="margin-right:10px" onclick="paUnlock()">🔓 فتح الشهر</button>` : "" }</div>`
       : `<div style="margin-bottom:12px;font-size:.8rem;color:var(--muted)">
            بداية اليوم <b>${ esc(d.settings?.dayStartHour ?? 9) }:00 ص</b> — الوردية اللي بتقفل بعد نص الليل بتتسجّل على اليوم اللي فات.${ canLock ? `<button class="view-btn" style="margin-right:10px" onclick="paLock()">🔒 اقفل الشهر</button>` : "" }</div>`;
   }
@@ -2488,6 +2617,188 @@ async function bootAccounts() {
     } catch (e) { showToast("تعذّر: " + (e.message || ""), "error"); }
   };
 
+  /* ═══════════ 💰 الخزنة — نفس خزن لوحة الإدارة ونفس مساراتها ═══════════
+     GET /api/cash-stores · GET /api/cash-stores/{id}/transactions · POST …/transactions
+     POST /api/cash-stores/transfer · POST/PUT /api/cash-stores. مفيش أي حساب هنا —
+     الأرصدة من السيرفر، والحركات بتتسجّل بنفس الطريقة اللي الإدارة بتسجّل بيها. */
+  window._trStores = [];
+  window._trTxns = [];
+  window._trLimit = 100;
+  const TR_TYPE = {
+    in:      { t: "وارد",   c: "var(--green)",  bg: "rgba(34,197,94,.14)" },
+    out:     { t: "منصرف",  c: "var(--red)",    bg: "rgba(232,25,44,.14)" },
+    pending: { t: "معلّق",   c: "var(--orange)", bg: "rgba(249,115,22,.14)" },
+  };
+  window.loadTreasury = async function(force) {
+    if (!force && window._trStores.length) { renderTreasury(); return; }
+    try {
+      const s = await PA_API.get("/api/cash-stores");
+      window._trStores = s.items || [];
+      const q = new URLSearchParams();
+      if ($("trFrom").value) q.set("from", $("trFrom").value);
+      if ($("trTo").value)   q.set("to", $("trTo").value);
+      const qs = q.toString() ? "?" + q.toString() : "";
+      /* حركات كل خزنة بنداء لكل واحدة (المسار لكل خزنة) — الخزن قليلة */
+      const lists = await Promise.all(window._trStores.map(st => PA_API.get(`/api/cash-stores/${ encodeURIComponent(st.id) }/transactions${ qs }`).then(r => r.items || []).catch(() => [])));
+      window._trTxns = lists.flat();
+    } catch (e) {
+      $("trStoresBody").innerHTML = `<tr><td colspan="6" class="empty-row">${ esc(e.message || "تعذّر التحميل") }</td></tr>`;
+      return;
+    }
+    renderTreasury();
+  };
+  function trStoreName(id) { const s = window._trStores.find(x => String(x.id) === String(id)); return s ? s.name : "—"; }
+  function trBranchLabel(s) {
+    return s && !s.branchId ? `<span class="badge bg-purple">🏛️ الإدارة</span>` : esc((s && s.branchName) || "—");
+  }
+  window.renderTreasury = function() {
+    const stores = window._trStores, txns = window._trTxns;
+    const isAdmin = !!window._paAcl?.isAdmin;
+    $("trNewStoreBtn").style.display = isAdmin ? "" : "none";
+    const total = stores.reduce((a, s) => a + (Number(s.balance) || 0), 0);
+    const month = window._paData?.month || bizMonth();
+    const inM = txns.filter(t => t.type === "in" && String(t.createdAt || "").startsWith(month)).reduce((a, t) => a + (Number(t.amount) || 0), 0);
+    const outM = txns.filter(t => t.type === "out" && String(t.createdAt || "").startsWith(month)).reduce((a, t) => a + (Number(t.amount) || 0), 0);
+    const pend = txns.filter(t => t.type === "pending").reduce((a, t) => a + (Number(t.amount) || 0), 0);
+    $("trStats").innerHTML = `
+      <div class="stat-card"><span class="stat-label">إجمالي الأرصدة</span><span class="stat-value" style="color:${ total < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(total) } ج.م</span></div>
+      <div class="stat-card"><span class="stat-label">عدد الخزن</span><span class="stat-value">${ paNum(stores.length) }</span></div>
+      <div class="stat-card"><span class="stat-label">وارد ${ esc(month) }</span><span class="stat-value" style="color:var(--green)">${ paMoney(inM) }</span></div>
+      <div class="stat-card"><span class="stat-label">منصرف ${ esc(month) }</span><span class="stat-value" style="color:var(--red)">${ paMoney(outM) }</span></div>
+      <div class="stat-card"><span class="stat-label">معلّق لسه ما اتعدش</span><span class="stat-value" style="color:var(--orange)">${ paMoney(pend) }</span></div>`;
+
+    if (!stores.length) { $("trStoresBody").innerHTML = `<tr><td colspan="6" class="empty-row">مافيش خزن${ isAdmin ? " — دوس «خزنة جديدة»" : "" }</td></tr>`; $("trStoresFoot").innerHTML = ""; }
+    else {
+      $("trStoresBody").innerHTML = stores.map((s, i) => {
+        const bal = Number(s.balance) || 0;
+        const last = txns.filter(t => String(t.storeId) === String(s.id)).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+        return `<tr>
+          <td class="idx">${ i + 1 }</td>
+          <td style="font-weight:700">${ esc(s.name) }</td>
+          <td>${ trBranchLabel(s) }</td>
+          <td class="num" style="font-weight:800;color:${ bal < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(bal) } ج.م</td>
+          <td style="font-size:.78rem;color:var(--muted)">${ last ? esc(new Date(last.createdAt).toLocaleString("ar-EG")) : "—" }</td>
+          <td style="white-space:nowrap">
+            <button class="btn-green btn-xs" onclick="openTreasuryTxn('${ escJs(s.id) }','in')">💰 وارد / عهدة</button>
+            <button class="btn-red btn-xs" onclick="openTreasuryTxn('${ escJs(s.id) }','out')">منصرف</button>
+            ${ isAdmin ? `<button class="btn-ghost btn-xs" onclick="openStoreModal('${ escJs(s.id) }')">✏️</button>` : "" }
+          </td></tr>`;
+      }).join("");
+      $("trStoresFoot").innerHTML = `<tr><td></td><td style="font-weight:800">الإجمالي</td><td></td><td class="num pa-tot" style="color:${ total < 0 ? "var(--red)" : "var(--green)" }">${ paMoney(total) } ج.م</td><td></td><td></td></tr>`;
+    }
+    const sel = $("trStoreFilter");
+    const keep = sel.value;
+    sel.innerHTML = `<option value="">كل الخزن</option>` + stores.map(s => `<option value="${ esc(s.id) }">${ esc(s.name) }</option>`).join("");
+    sel.value = keep;
+    renderTreasuryTxns();
+  };
+  window.renderTreasuryTxns = function() {
+    const fStore = $("trStoreFilter").value, fType = $("trTypeFilter").value, q = ($("trSearch").value || "").trim();
+    const rows = window._trTxns
+      .filter(t => !fStore || String(t.storeId) === String(fStore))
+      .filter(t => !fType || t.type === fType)
+      .filter(t => !q || String(t.reason || "").includes(q) || String(t.notes || "").includes(q))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    $("trTxnCount").textContent = rows.length ? `(${ paNum(rows.length) } حركة)` : "";
+    const body = $("trTxnsBody");
+    if (!rows.length) { body.innerHTML = `<tr><td colspan="8" class="empty-row">مافيش حركات${ fStore || fType || q ? " بالفلتر ده" : "" }</td></tr>`; $("trMoreBtn").style.display = "none"; return; }
+    const shown = rows.slice(0, window._trLimit);
+    body.innerHTML = shown.map(t => {
+      const st = window._trStores.find(x => String(x.id) === String(t.storeId));
+      const ty = TR_TYPE[t.type] || { t: t.type, c: "var(--muted)", bg: "transparent" };
+      return `<tr>
+        <td style="font-size:.78rem;color:var(--muted);white-space:nowrap">${ esc(t.createdAt ? new Date(t.createdAt).toLocaleString("ar-EG") : "—") }</td>
+        <td>${ esc((st && st.name) || "—") }</td>
+        <td>${ trBranchLabel(st) }</td>
+        <td><span style="background:${ ty.bg };color:${ ty.c };padding:3px 9px;border-radius:6px;font-size:.74rem;font-weight:700">${ esc(ty.t) }</span></td>
+        <td class="num" style="font-weight:800;color:${ ty.c }">${ paMoney(t.amount) } ج.م</td>
+        <td style="font-size:.82rem">${ esc(t.reason || "—") }${ t.notes ? `<div class="pa-sub">${ esc(t.notes) }</div>` : "" }</td>
+        <td style="font-size:.78rem;color:var(--muted)">${ esc(t.createdBy || "—") }</td>
+        <td>${ t.type === "pending" ? `<button class="btn-green btn-xs" onclick="approveTreasuryTxn(${ Number(t.id) })">✓ اعتماد</button>` : "" }</td>
+      </tr>`;
+    }).join("");
+    const left = rows.length - shown.length;
+    $("trMoreBtn").style.display = left > 0 ? "" : "none";
+    $("trMoreBtn").textContent = `عرض المزيد (${ paNum(left) } فاضلين)`;
+  };
+  window.openTreasuryTxn = function(storeId, type) {
+    $("trTxnStore").innerHTML = window._trStores.map(s => `<option value="${ esc(s.id) }">${ esc(s.name) }${ s.branchName ? " — " + esc(s.branchName) : " — الإدارة" }</option>`).join("");
+    $("trTxnStore").value = String(storeId || window._trStores[0]?.id || "");
+    $("trTxnType").value = type || "in";
+    $("trTxnAmount").value = ""; $("trTxnNotes").value = ""; $("trTxnError").textContent = "";
+    trTxnTypeChanged();
+    openModal("trtxn");
+    setTimeout(() => $("trTxnAmount").focus(), 80);
+  };
+  window.trTxnTypeChanged = function() {
+    const t = $("trTxnType").value;
+    $("trTxnTitle").textContent = t === "out" ? "💸 منصرف من الخزنة" : t === "pending" ? "⏳ وارد معلّق" : "💰 وارد للخزنة";
+    if (!$("trTxnReason").value) $("trTxnReason").value = t === "in" ? "عهدة مسبقة" : "";
+  };
+  window.saveTreasuryTxn = async function() {
+    const err = $("trTxnError"); err.textContent = "";
+    const storeId = $("trTxnStore").value, type = $("trTxnType").value;
+    const amount = Number($("trTxnAmount").value), reason = $("trTxnReason").value.trim(), notes = $("trTxnNotes").value.trim();
+    if (!storeId) { err.textContent = "اختار الخزنة"; return; }
+    if (!(amount > 0)) { err.textContent = "اكتب مبلغ أكبر من صفر"; return; }
+    if (!reason) { err.textContent = "اكتب السبب — كل حركة فلوس لازم يبقى لها سبب"; return; }
+    const btn = $("trTxnSave"); btn.disabled = true;
+    try {
+      await PA_API.post(`/api/cash-stores/${ encodeURIComponent(storeId) }/transactions`, { type, amount, reason, notes });
+      closeModal("trtxn"); showToast("اتسجّلت الحركة", "success");
+      await loadTreasury(true);
+    } catch (e) { err.textContent = e.message || "تعذّر الحفظ"; }
+    finally { btn.disabled = false; }
+  };
+  window.approveTreasuryTxn = async function(id) {
+    if (!confirm("تعتمد الحركة المعلّقة دي؟ المبلغ هيدخل رصيد الخزنة.")) return;
+    try { await PA_API.post(`/api/cash-transactions/${ id }/approve`, {}); showToast("اتعتمدت", "success"); await loadTreasury(true); }
+    catch (e) { showToast("تعذّر: " + (e.message || ""), "error"); }
+  };
+  window.openTransferModal = function() {
+    const opts = window._trStores.map(s => `<option value="${ esc(s.id) }">${ esc(s.name) }${ s.branchName ? " — " + esc(s.branchName) : " — الإدارة" } (${ paMoney(s.balance) })</option>`).join("");
+    $("trFrom_").innerHTML = opts; $("trTo_").innerHTML = opts;
+    if (window._trStores.length > 1) $("trTo_").selectedIndex = 1;
+    $("trTrAmount").value = ""; $("trTrReason").value = ""; $("trTrError").textContent = "";
+    openModal("trtransfer");
+  };
+  window.saveTransfer = async function() {
+    const err = $("trTrError"); err.textContent = "";
+    const fromId = $("trFrom_").value, toId = $("trTo_").value, amount = Number($("trTrAmount").value);
+    if (fromId === toId) { err.textContent = "اختر خزنتين مختلفتين"; return; }
+    if (!(amount > 0)) { err.textContent = "اكتب مبلغ أكبر من صفر"; return; }
+    const btn = $("trTrSave"); btn.disabled = true;
+    try {
+      const r = await PA_API.post("/api/cash-stores/transfer", { fromId, toId, amount, reason: $("trTrReason").value.trim() });
+      closeModal("trtransfer"); showToast(r.message || "اتحوّل", "success");
+      await loadTreasury(true);
+    } catch (e) { err.textContent = e.message || "تعذّر التحويل"; }
+    finally { btn.disabled = false; }
+  };
+  window._trEditStore = null;
+  window.openStoreModal = function(id) {
+    window._trEditStore = id;
+    const s = id ? window._trStores.find(x => String(x.id) === String(id)) : null;
+    $("trStoreTitle").textContent = s ? "✏️ تعديل الخزنة" : "➕ خزنة جديدة";
+    $("trStoreName").value = s ? s.name : "";
+    $("trStoreBranch").innerHTML = `<option value="">🏛️ الإدارة</option>` + (window._branchesData || []).map(b => `<option value="${ esc(b.id) }">${ esc(b.name) }</option>`).join("");
+    $("trStoreBranch").value = s && s.branchId ? String(s.branchId) : "";
+    $("trStoreBranchWrap").style.display = s ? "none" : "";
+    $("trStoreError").textContent = "";
+    openModal("trstore");
+  };
+  window.saveStore = async function() {
+    const err = $("trStoreError"); err.textContent = "";
+    const name = $("trStoreName").value.trim();
+    if (!name) { err.textContent = "اكتب اسم الخزنة"; return; }
+    try {
+      if (window._trEditStore) await PA_API.put(`/api/cash-stores/${ encodeURIComponent(window._trEditStore) }`, { name });
+      else await PA_API.post("/api/cash-stores", { name, branchId: $("trStoreBranch").value || null });
+      closeModal("trstore"); showToast("اتحفظت", "success");
+      await loadTreasury(true);
+    } catch (e) { err.textContent = e.message || "تعذّر الحفظ"; }
+  };
+
   /* ═══════════ السلف المؤجلة — فورم بدل prompt ═══════════ */
   function nextMonth(ym) {
     const [y, m] = String(ym).split("-").map(Number);
@@ -2746,6 +3057,8 @@ async function bootAccounts() {
       body: `<ol class="help-steps"><li>اضغط <b>سلفة مؤجلة</b> واختار الطيار.</li><li>اكتب <b>المبلغ الكامل</b> و<b>القسط الشهري</b>.</li><li>حدّد <b>الشهر اللي يبدأ منه الخصم</b> — البرنامج هيوريك هتتخصم على كام شهر.</li></ol><div class="help-tip">💡 تقدر تغيّر قسط شهر معيّن من الجدول أو من كشف الطيار — والشهور اللي بعده بتتظبط لوحدها.</div><div class="help-warn">⚠️ لو حذفت سلفة، الأقساط اللي اتخصمت من الشهور اللي فاتت هترجع تظهر في الرواتب.</div>` },
     staff: { title: "👥 تقفيل الموظفين", what: "حضور الموظفين تلقائي من فتح المتصفح، والفجوة بين جلستين بتظهر استئذان — ونفس معادلات الراتب.",
       body: `<ul><li><b>يومي</b>: كل الموظفين في يوم.</li><li><b>كشف الموظف</b>: الشهر كله لموظف واحد.</li><li><b>المرتبات</b>: تقفيلة الشهر — أجر الساعات + نصيب الراتب + الإجازة + الحوافز − السلف − الخصومات.</li></ul><div class="help-tip">💡 الأسعار والرواتب بتتظبط من «الطيارين والموظفين».</div>` },
+    treasury: { title: "💰 الخزنة", what: "نفس خزن لوحة الإدارة بالظبط — الأرصدة والحركات هنا هي اللي هناك، ومش خزنة تانية.",
+      body: `<ul><li><b>وارد / عهدة</b>: فلوس داخلة للخزنة (عهدة مسبقة، تحصيل).</li><li><b>منصرف</b>: فلوس خارجة (مصاريف، صرف) — بيتفحص الرصيد قبل الخروج.</li><li><b>معلّق</b>: وارد لسه ما اتعدش، بيدخل الرصيد بعد «اعتماد».</li><li><b>تحويل</b>: من خزنة لخزنة بحركتين مرتبطتين.</li></ul><div class="help-tip">💡 عمولات الأوردرات اللي بتتصرف كاش وتسويات الورديات بتظهر هنا لوحدها لأنها بتتسجّل على نفس الخزن.</div>` },
     perms: { title: "🔐 الصلاحيات", what: "افتح للي تحبه واقفل اللي مش عايزه يشوفه — شاشات وأعمدة وأفعال، والسيرفر بيطبّق نفس القيود.",
       body: `<ul><li>اختار المستخدم، علّم ✅ على اللي عايزه يشوفه، واضغط <b>حفظ</b>.</li><li>القوالب الجاهزة بتبدأ منها وتعدّل.</li><li>الفروع المسموحة — متعلّمش على حاجة يبقى يشوف كل الفروع.</li></ul><div class="help-warn">⚠️ اللي مالوش صف صلاحيات شغّال بالافتراضي: كل حاجة ماعدا السلف وقفل الشهر والإعدادات.</div>` },
     emps: { title: "⚙️ الطيارين والموظفين", what: "أسعار الطيارين (العمولة وسعر الساعة والراتب والإجازة) وحسابات الموظفين — نفس حسابات لوحة الإدارة.", body: `<div class="help-tip">💡 أي تعديل هنا بيغيّر أرقام التقفيلة فورًا.</div>` },

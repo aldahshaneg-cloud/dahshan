@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Middleware\ResolveApiActor;
 use App\Support\Actor;
 use App\Support\ApiResponse;
 use App\Support\BizDay;
@@ -144,6 +145,11 @@ class PilotAccountingController
 
         $pilotFilter = $request->query('pilotId');
         $pilotFilter = $pilotFilter !== null && $pilotFilter !== '' ? (int) $pilotFilter : null;
+
+        /* 📸 الشهر المقفول بيتعرض من لقطته — مش من الحساب الحي */
+        if ($this->monthLocked($ym, $branchId) && ($snap = $this->snapshotFor($ym, $branchId)) !== null) {
+            return $this->monthFromSnapshot($snap, $actor, $acl, $branchId, $pilotFilter);
+        }
 
         // ── الطيارين ──
         $sql = 'SELECT p.id, p.name, p.assigned_branch_id, b.name AS branch_name,
@@ -1197,12 +1203,21 @@ class PilotAccountingController
         $ym = $this->monthArg((string) ($b['month'] ?? ''));
         $bid = isset($b['branchId']) && $b['branchId'] !== '' ? (int) $b['branchId'] : null;
 
+        $now = WireTime::nowDb();
         DB::statement(
             'INSERT INTO pilot_month_locks (month, branch_id, locked_at, locked_by)
              VALUES (?,?,?,?)
              ON DUPLICATE KEY UPDATE locked_at = VALUES(locked_at), locked_by = VALUES(locked_by)',
-            [$ym, $bid, WireTime::nowDb(), $actor->username]
+            [$ym, $bid, $now, $actor->username]
         );
+
+        /* 🔒📸 اللقطة: القفل لوحده كان بيمنع الكتابة في الشيت بس، وأي تغيير
+           بعده في سعر الساعة أو رسوم التطوير أو عمولة طيار كان بيعيد حساب
+           الشهر المقفول (بلاغ صاحب النظام 2026-09-04: «الشهر المقفول أرقامه
+           بتتغيّر بعد القفل»). بنحفظ رد month وstaff-month كاملين لحظة القفل
+           وبنعرضهم بعد كده بدل الحساب الحي. بيتحسب **بعد** صف القفل وقبل ما
+           صف اللقطة يتكتب، فالمسارين بيمشوا على الحساب الحي مرة أخيرة. */
+        $this->writeSnapshot($request, $actor, $ym, $bid, $now);
 
         return ApiResponse::ok();
     }
@@ -1221,8 +1236,197 @@ class PilotAccountingController
                 : 'DELETE FROM pilot_month_locks WHERE month = ? AND branch_id = ?',
             $bid === null ? [$ym] : [$ym, $bid]
         );
+        /* فتح الشهر = رجوع للحساب الحي: اللقطة وصفوف التقفيلة الشهرية اللي
+           اتكتبت عند القفل بيتشالوا — القفل التاني بيكتبهم من جديد. */
+        DB::delete('DELETE FROM pilot_acct_snapshots WHERE month = ? AND branch_id = ?', [$ym, $bid ?? 0]);
+        if ($bid === null) {
+            DB::delete("DELETE FROM pilot_monthly_closeouts WHERE month = ? AND closed_by LIKE 'pilotacct:%'", [$ym]);
+        } else {
+            DB::delete(
+                "DELETE FROM pilot_monthly_closeouts WHERE month = ? AND closed_by LIKE 'pilotacct:%'
+                    AND pilot_id IN (SELECT id FROM pilots WHERE assigned_branch_id = ?)",
+                [$ym, $bid]
+            );
+        }
 
         return ApiResponse::ok();
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       📸 لقطة الشهر المقفول
+    ═══════════════════════════════════════════════════════════ */
+
+    /** نداء داخلي على مسار في نفس الكنترولر بنفس الفاعل — عشان اللقطة تبقى نفس الرد حرفيًا */
+    private function internalGet(Request $orig, string $path, array $query): array
+    {
+        $req = Request::create($path, 'GET', $query);
+        $req->attributes->set(ResolveApiActor::ATTRIBUTE, $orig->attributes->get(ResolveApiActor::ATTRIBUTE));
+        $method = str_contains($path, 'staff-month') ? 'staffMonth' : 'month';
+
+        return json_decode($this->{$method}($req)->getContent(), true) ?: [];
+    }
+
+    private function writeSnapshot(Request $request, Actor $actor, string $ym, ?int $bid, string $now): void
+    {
+        $q = ['month' => $ym];
+        if ($bid !== null) {
+            $q['branchId'] = (string) $bid;
+        }
+        $month = $this->internalGet($request, '/api/pilot-accounting/month', $q);
+        $staff = $this->internalGet($request, '/api/pilot-accounting/staff-month', $q);
+        unset($month['snapshot'], $staff['snapshot']);
+        $payload = json_encode(['month' => $month, 'staff' => $staff], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        DB::statement(
+            'INSERT INTO pilot_acct_snapshots (month, branch_id, payload, locked_by, locked_at)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE payload = VALUES(payload), locked_by = VALUES(locked_by), locked_at = VALUES(locked_at)',
+            [$ym, $bid ?? 0, $payload, $actor->username, $now]
+        );
+
+        /* 📱 تطبيق الطيار بيقرا تقفيلته من pilot_monthly_closeouts (عقد
+           مجمّد) — الجدول كان فاضي من يوم الإطلاق فالطيار ماكانش بيشوف
+           حاجة. القفل بيملاه بأرقام اللقطة نفسها. `closed_by` ببادئة
+           pilotacct: عشان فتح الشهر يشيل صفوفنا بس. */
+        $set = $month['settings'] ?? [];
+        foreach ($month['pilots'] ?? [] as $p) {
+            $t = $p['totals'] ?? [];
+            DB::statement(
+                'INSERT INTO pilot_monthly_closeouts
+                   (pilot_id, month, work_days, hours, delivered_count, commission, bonus, deductions, advances,
+                    salary, required_daily_hours, paid_leave_days, unpaid_leave_days, daily_rate, net_due, closed_at, closed_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE work_days = VALUES(work_days), hours = VALUES(hours), delivered_count = VALUES(delivered_count),
+                    commission = VALUES(commission), bonus = VALUES(bonus), deductions = VALUES(deductions), advances = VALUES(advances),
+                    salary = VALUES(salary), required_daily_hours = VALUES(required_daily_hours), paid_leave_days = VALUES(paid_leave_days),
+                    unpaid_leave_days = VALUES(unpaid_leave_days), daily_rate = VALUES(daily_rate), net_due = VALUES(net_due),
+                    closed_at = VALUES(closed_at), closed_by = VALUES(closed_by)',
+                [
+                    (int) $p['pilotId'], $ym,
+                    (int) ($t['worked'] ?? 0), round((float) ($t['hours'] ?? 0), 2), (int) ($t['orders'] ?? 0),
+                    round((float) ($t['commission'] ?? 0), 2), round((float) ($t['bonusDue'] ?? 0), 2),
+                    round((float) ($t['deductionDue'] ?? 0), 2),
+                    // السلف = سلف الشهر + قسط السلفة المؤجلة — الاتنين اتخصموا من الصافي
+                    round((float) ($t['advanceDue'] ?? 0) + (float) ($t['deferredDue'] ?? 0), 2),
+                    // «salary» في العقد القديم = إجمالي المستحق قبل الخصومات
+                    round((float) ($t['gross'] ?? 0), 2),
+                    round((float) ($set['shiftHours'] ?? 0), 2),
+                    (int) ($t['leaveDays'] ?? 0), max(0, (int) ($t['absent'] ?? 0) - (int) ($t['leaveDays'] ?? 0)),
+                    round((float) ($t['hourRate'] ?? 0), 2), round((float) ($t['netDue'] ?? 0), 2),
+                    $now, 'pilotacct:' . $actor->username, $now,
+                ]
+            );
+        }
+    }
+
+    /** اللقطة المناسبة للطلب: لقطة الفرع نفسه لو موجودة، وإلا لقطة الشركة (0) */
+    private function snapshotFor(string $ym, ?int $branchId): ?array
+    {
+        $rows = DB::select(
+            'SELECT branch_id, payload, locked_by, locked_at FROM pilot_acct_snapshots
+              WHERE month = ? AND branch_id IN (?, 0) ORDER BY branch_id DESC LIMIT 1',
+            [$ym, $branchId ?? 0]
+        );
+        if (! $rows) {
+            return null;
+        }
+        $r = (array) $rows[0];
+        $p = json_decode((string) $r['payload'], true);
+        if (! is_array($p) || ! isset($p['month'])) {
+            return null;
+        }
+
+        return ['scope' => (int) $r['branch_id'], 'payload' => $p,
+                'meta' => ['lockedBy' => $r['locked_by'], 'lockedAt' => WireTime::toWire((string) $r['locked_at'])]];
+    }
+
+    /** رد month من اللقطة — مقصوص على نطاق الطالب وصلاحياته */
+    private function monthFromSnapshot(array $snap, Actor $actor, array $acl, ?int $branchId, ?int $pilotFilter): JsonResponse
+    {
+        $d = $snap['payload']['month'];
+        $inScope = function (?int $b) use ($branchId, $acl): bool {
+            if ($branchId !== null && $b !== $branchId) { return false; }
+            if ($acl['branches'] && ! in_array((int) $b, $acl['branches'], true)) { return false; }
+
+            return true;
+        };
+        $pilots = [];
+        foreach ($d['pilots'] ?? [] as $p) {
+            if (! $inScope($p['branchId'] !== null ? (int) $p['branchId'] : null)) { continue; }
+            if ($pilotFilter !== null && (int) $p['pilotId'] !== $pilotFilter) { continue; }
+            if (! $acl['full']) {
+                $p['days']   = array_map(fn (array $r): array => W::filterDay($r, $acl['keys']), $p['days'] ?? []);
+                $p['totals'] = W::filterTotals($p['totals'] ?? [], $acl['keys']);
+            }
+            $pilots[] = $p;
+        }
+        $keep = array_flip(array_map(fn ($p) => (int) $p['pilotId'], $pilots));
+        $deferred = array_values(array_filter($d['deferred'] ?? [], fn ($a) => isset($keep[(int) $a['pilotId']])));
+
+        $closeout = $d['closeout'] ?? null;
+        if (is_array($closeout)) {
+            $branches = array_values(array_filter($closeout['branches'] ?? [], fn ($b) => $inScope((int) $b['branchId'])));
+            $all = [];
+            foreach ($branches as $i => $b) {
+                foreach ($b['month'] ?? [] as $k => $v) { $all[$k] = ($all[$k] ?? 0) + (float) $v; }
+                if (! $acl['full']) {
+                    $branches[$i]['days']  = array_map(fn ($c) => W::filterCloseout($c, $acl['keys']), $b['days'] ?? []);
+                    $branches[$i]['month'] = W::filterCloseout($b['month'] ?? [], $acl['keys']);
+                }
+            }
+            foreach ($all as $k => $v) { $all[$k] = round($v, 2); }
+            $closeout['branches'] = $branches;
+            $closeout['all'] = $acl['full'] ? $all : W::filterCloseout($all, $acl['keys']);
+        }
+
+        return ApiResponse::out([
+            'ok'          => true,
+            'serverNow'   => WireTime::toWire(WireTime::nowDb()),
+            'month'       => $d['month'],
+            'branchId'    => $branchId,
+            'settings'    => $d['settings'] ?? [],
+            'locked'      => true,
+            'snapshot'    => $snap['meta'],
+            'daysInMonth' => $d['daysInMonth'] ?? W::daysInMonth($d['month']),
+            'countedDays' => $d['countedDays'] ?? 0,
+            'pilots'      => $pilots,
+            'closeout'    => $closeout,
+            'deferred'    => ($acl['keys']['page.deferred'] ?? null) === true ? $deferred : [],
+            'acl'         => ['keys' => (object) $acl['keys'], 'branches' => $acl['branches'],
+                              'full' => $acl['full'], 'isAdmin' => $actor->role === 'admin'],
+        ]);
+    }
+
+    /** رد staff-month من اللقطة */
+    private function staffFromSnapshot(array $snap, Actor $actor, array $acl, ?int $branchId): JsonResponse
+    {
+        $d = $snap['payload']['staff'] ?? [];
+        $staff = [];
+        foreach ($d['staff'] ?? [] as $u) {
+            $b = $u['branchId'] !== null ? (int) $u['branchId'] : null;
+            if ($branchId !== null && $b !== $branchId) { continue; }
+            if ($acl['branches'] && ! in_array((int) $b, $acl['branches'], true)) { continue; }
+            if (! $acl['full']) {
+                $u['days']   = array_map(fn (array $r): array => W::filterDay($r, $acl['keys']), $u['days'] ?? []);
+                $u['totals'] = W::filterTotals($u['totals'] ?? [], $acl['keys']);
+            }
+            $staff[] = $u;
+        }
+
+        return ApiResponse::out([
+            'ok'          => true,
+            'serverNow'   => WireTime::toWire(WireTime::nowDb()),
+            'month'       => $d['month'] ?? $snap['payload']['month']['month'],
+            'branchId'    => $branchId,
+            'settings'    => $d['settings'] ?? [],
+            'locked'      => true,
+            'snapshot'    => $snap['meta'],
+            'daysInMonth' => $d['daysInMonth'] ?? 0,
+            'countedDays' => $d['countedDays'] ?? 0,
+            'staff'       => $staff,
+            'acl'         => ['keys' => (object) $acl['keys'], 'branches' => $acl['branches'],
+                              'full' => $acl['full'], 'isAdmin' => $actor->role === 'admin'],
+        ]);
     }
 
     /** الشهر مقفول لو فيه قفل عام أو قفل على الفرع ده */
@@ -1533,6 +1737,11 @@ class PilotAccountingController
         }
         if ($acl['branches'] && $branchId !== null && ! in_array($branchId, $acl['branches'], true)) {
             throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+        }
+
+        /* 📸 الشهر المقفول بيتعرض من لقطته */
+        if ($this->monthLocked($ym, $branchId) && ($snap = $this->snapshotFor($ym, $branchId)) !== null) {
+            return $this->staffFromSnapshot($snap, $actor, $acl, $branchId);
         }
 
         $ph  = implode(',', array_fill(0, count(self::STAFF_ROLES), '?'));

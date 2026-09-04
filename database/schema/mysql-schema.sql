@@ -1242,6 +1242,20 @@ CREATE TABLE `pilot_acct_perms` (
   CONSTRAINT `fk_pilot_acct_perms_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='صلاحيات برنامج تقفيل الطيارين لكل مستخدم: شاشات وأعمدة وأفعال وفروع';
 /*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_acct_snapshots` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `branch_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT 'نطاق القفل — 0 = الشركة كلها',
+  `payload` longtext NOT NULL COMMENT 'JSON: رد month وstaff-month وقت القفل بالكامل — الأرقام المعتمدة',
+  `locked_by` varchar(190) DEFAULT NULL,
+  `locked_at` datetime NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pilot_acct_snapshots_month_branch` (`month`,`branch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='لقطة تقفيل الطيارين والموظفين وقت قفل الشهر — بتتعرض بدل الحساب الحي عشان الأرقام المقفولة ماتتغيّرش';
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

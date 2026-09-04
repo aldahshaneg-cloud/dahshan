@@ -97,8 +97,9 @@ ok('والخطأ بيتعرض في الجدول مش بيتبلع',
 
 /* ══ 4) الصلاحيات ══ */
 console.log('\n══ 4) الصلاحيات ══');
+/* القايمة اتوسّعت 2026-09-04 بـtreasury (الخزنة جوه البرنامج) */
 ok('تبويب الموظفين ورا page.staff',
-  /\['daily', 'pilot', 'month', 'deferred', 'staff'\]\.forEach/.test(UI));
+  /\['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury'\]\.forEach/.test(UI));
 ok('🔴 وإدارة الموظفين للأدمن بس',
   /const empsTab = document\.getElementById\('patab-emps'\);\n    if \(empsTab\) empsTab\.style\.display = acl\.isAdmin \? '' : 'none';/.test(UI),
   'أي حد هيشوف شاشة الحسابات');
