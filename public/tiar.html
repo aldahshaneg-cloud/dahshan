@@ -3518,6 +3518,88 @@
     };
 
     window._deliveryCount = 0;
+    /* ═══ الطرود زي بوابة المحلات (طلب صاحب النظام 2026-09-05) ═══
+       تبويبات مرقّمة ١، ٢، ٣ — طرد واحد ظاهر في كل مرة، الترقيم بيتعاد بعد الحذف
+       (مش رقم العدّاد)، نقطة حمرا على الطرد الناقص بعد أول محاولة حفظ، وصور لكل
+       طرد بترفع على /api/upload وبتتبعت مع الطرد (السيرفر بيكتبها في order_images).
+       الحفظ زي ما هو: السيرفر بيفرّق كل طرد أوردر بذاته. */
+    window.PARCEL = { container: "deliveriesContainer", rowPrefix: "drow-", tabs: "parcelTabs", add: () => window.addDeliveryRow() };
+    window._rowImages = {};
+    window._activeParcel = null;
+    window._parcelChecked = false;
+    function parcelRows() { return Array.from(document.querySelectorAll("#" + PARCEL.container + " .delivery-row")); }
+    function parcelNoOf(row) { return row.id.replace(PARCEL.rowPrefix, ""); }
+    window.parcelDisplayNo = function(n) { const i = parcelRows().findIndex(r => parcelNoOf(r) === String(n)); return i < 0 ? n : i + 1; };
+    window.parcelIsIncomplete = function(n) {
+      const v = id => (document.getElementById(id)?.value || "").trim();
+      return !v("dRecv-" + n) || !v("dZone-" + n);
+    };
+    window.renderParcelTabs = function() {
+      const box = document.getElementById(PARCEL.tabs);
+      if (!box) return;
+      const rows = parcelRows();
+      let html = `<button type="button" class="ptab-add" onclick="PARCEL.add()">➕ طرد آخر</button>`;
+      rows.forEach((r, i) => {
+        const n = parcelNoOf(r);
+        const cls = ["ptab"];
+        if (String(n) === String(window._activeParcel)) cls.push("active");
+        if (window._parcelChecked && window.parcelIsIncomplete(n)) cls.push("bad");
+        html += `<button type="button" class="${cls.join(" ")}" title="الطرد ${i + 1}" onclick="showParcel('${n}')">${i + 1}</button>`;
+        /* الرقم المعروض جوه الكارت = ترتيبه دلوقتي مش رقم العدّاد */
+        const lbl = r.querySelector(".delivery-row-num");
+        if (lbl) lbl.textContent = "📦 الطرد #" + (i + 1);
+        const rm = r.querySelector(".remove-delivery-btn");
+        if (rm) rm.style.display = rows.length > 1 ? "" : "none";
+      });
+      box.innerHTML = html;
+      box.querySelector(".ptab.active")?.scrollIntoView({ inline: "center", block: "nearest" });
+    };
+    window.showParcel = function(n) {
+      const rows = parcelRows();
+      if (!rows.length) { renderParcelTabs(); return; }
+      if (!rows.some(r => parcelNoOf(r) === String(n))) n = parcelNoOf(rows[0]);
+      rows.forEach(r => { r.style.display = parcelNoOf(r) === String(n) ? "" : "none"; });
+      window._activeParcel = String(n);
+      renderParcelTabs();
+    };
+    /* فشل التحقق على طرد: نوريه ونعلّمه بالنقطة الحمرا */
+    window.parcelFail = function(n, msg) { window._parcelChecked = true; showParcel(n); showToast(msg, "error"); };
+    window.handleParcelImages = async function(n, input) {
+      const files = [...(input.files || [])];
+      input.value = "";
+      if (!files.length) return;
+      window._rowImages[n] = window._rowImages[n] || [];
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) { showToast("الملف ده مش صورة", "error"); continue; }
+        if (f.size > 10 * 1024 * 1024) { showToast(f.name + ": أكبر من 10 ميجا", "error"); continue; }
+        const ph = { uploading: true, name: f.name };
+        window._rowImages[n].push(ph);
+        renderRowImages(n);
+        try {
+          let file = f;
+          try { const { compressImage } = await import("./assets/js/imgcompress.js"); file = await compressImage(f); } catch (_) {}
+          const r = await api.upload(file);
+          const url = typeof r === "string" ? r : (r && r.url);
+          if (!url) throw new Error("مافيش رابط");
+          const i = window._rowImages[n].indexOf(ph);
+          if (i > -1) window._rowImages[n][i] = url;
+        } catch (e) {
+          const i = window._rowImages[n].indexOf(ph);
+          if (i > -1) window._rowImages[n].splice(i, 1);
+          showToast("تعذّر رفع الصورة: " + (e.message || ""), "error");
+        }
+        renderRowImages(n);
+      }
+    };
+    window.removeRowImage = function(n, idx) { if (!window._rowImages[n]) return; window._rowImages[n].splice(idx, 1); renderRowImages(n); };
+    function renderRowImages(n) {
+      const box = document.getElementById("pImgs-" + n);
+      if (!box) return;
+      box.innerHTML = (window._rowImages[n] || []).map((it, i) => (typeof it === "object" && it.uploading)
+        ? `<div class="img-thumb img-loading" title="جاري الرفع…">⏳</div>`
+        : `<div class="img-thumb"><img src="${it}" alt="صورة الطرد" onclick="window.open('${it}','_blank')" /><button type="button" class="img-del" onclick="removeRowImage(${n},${i})" title="حذف">✕</button></div>`).join("");
+    }
+    function parcelImagesOf(n) { return (window._rowImages[n] || []).filter(x => typeof x === "string"); }
     window.addDeliveryRow = function () {
       window._deliveryCount++;
       const n   = window._deliveryCount;
@@ -3565,6 +3647,12 @@
             <input id="dPrepaid-${n}" type="number" min="0" step="0.5" placeholder="0.00" dir="ltr"
                    style="text-align:left" oninput="updateOrderPrepaidTotal()" />
           </div>
+          <div class="form-group full">
+            <label>📷 صور الطرد (اختياري) <span style="font-size:.72rem;color:var(--muted)">إيصال / عنوان / البضاعة</span></label>
+            <input type="file" id="pImgInput-${n}" accept="image/*" multiple style="display:none" onchange="handleParcelImages(${n}, this)" />
+            <button type="button" class="img-add-btn" onclick="document.getElementById('pImgInput-${n}').click()">📷 إضافة صور</button>
+            <div class="img-strip" id="pImgs-${n}"></div>
+          </div>
           <div class="form-group full"><label>ملاحظات هذا الطرد</label><input id="dNote-${n}" type="text" /></div>
         </div>`;
       document.getElementById("deliveriesContainer").appendChild(div);
@@ -3594,9 +3682,16 @@
         recalcTotalDelivery();
       });
       activeSel.id = `dZone-${n}`;
+      showParcel(n);
     };
 
     window.removeDeliveryRow = function (n) {
+      const el = document.getElementById(`drow-${n}`);
+      if (el) { el.remove(); delete window._rowImages[n]; }
+      showParcel(null);
+      window.removeDeliveryRowOld(n);
+    };
+    window.removeDeliveryRowOld = function (n) {
       const el = document.getElementById(`drow-${n}`);
       if (el) { el.remove(); recalcTotalDelivery(); updateOrderPrepaidTotal(); }
     };
@@ -3688,7 +3783,7 @@
         document.getElementById('orderSenderPhone').value = '';
         document.getElementById('orderSenderPhone2').value = '';
         document.getElementById('orderSenderAddress').value = '';
-        document.getElementById("deliveriesContainer").innerHTML = "";
+        document.getElementById("deliveriesContainer").innerHTML = ""; window._rowImages = {}; window._parcelChecked = false; window._activeParcel = null; renderParcelTabs();
         window._deliveryCount = 0;
         addDeliveryRow();
         recalcTotalDelivery();
@@ -3746,11 +3841,11 @@
         // العهدة بتتخزّن جوّه الطرد نفسه (orderPrice) عشان تفضل معاه لو
         // الطلب اتفرّق على أكتر من طيار
         const dPrepaid = parseFloat(document.getElementById(`dPrepaid-${n}`)?.value) || 0;
-        if (!recvName) { showToast("يرجى إدخال اسم جهة التسليم لكل طرد", "error"); return; }
-        if (!zoneId)   { showToast("يرجى اختيار المنطقة لكل طرد", "error"); return; }
+        if (!recvName) { parcelFail(n, `يرجى إدخال اسم جهة التسليم — طرد #${parcelDisplayNo(n)}`); return; }
+        if (!zoneId)   { parcelFail(n, `يرجى اختيار المنطقة — طرد #${parcelDisplayNo(n)}`); return; }
         /* 📍 لوكيشن اختياري — بس لو مكتوب لازم يكون مفهوم */
         const dLoc = GeoLoc.read(`dLoc-${n}`);
-        if (!dLoc.ok) { showToast(`لوكيشن الطرد #${n} مش مفهوم — الصق إحداثيات زي 31.0187, 31.2283 أو لينك خرائط جوجل`, "error"); return; }
+        if (!dLoc.ok) { parcelFail(n, `لوكيشن الطرد #${parcelDisplayNo(n)} مش مفهوم — الصق إحداثيات زي 31.0187, 31.2283 أو لينك خرائط جوجل`, "error"); return; }
         deliveries.push({
           lat: dLoc.geo ? dLoc.geo.lat : null, lng: dLoc.geo ? dLoc.geo.lng : null,
           // parcelNo = رقم ثابت للطرد جوّه الطلب، منه بيتبني رقم الجزء المفصول
@@ -3761,7 +3856,8 @@
           receiverPhone2: document.getElementById(`dPhone2-${n}`).value || "",
           zoneId, zoneName, zonePrice,
           orderPrice    : dPrepaid,
-          address: addr, note: dNote, status: "قيد التنفيذ"
+          address: addr, note: dNote, status: "قيد التنفيذ",
+          images: parcelImagesOf(n)
         });
       }
       // عهدة الطلب = مجموع عهدة طروده
@@ -3809,7 +3905,7 @@
             : `تمّ حفظ الطلب ${_created[0] || ""} بنجاح ✓`, "success");
         document.getElementById("addOrderForm").reset();
         document.getElementById("orderStorePrepaidNote").value = "";
-        document.getElementById("deliveriesContainer").innerHTML = "";
+        document.getElementById("deliveriesContainer").innerHTML = ""; window._rowImages = {}; window._parcelChecked = false; window._activeParcel = null; renderParcelTabs();
         updateOrderPrepaidTotal();
         window._deliveryCount = 0;
         window._smartSearchState['senderSearchInput'] = { selectedId: null, selectedData: null };
@@ -9281,6 +9377,22 @@
     .add-delivery-btn { background: rgba(14,165,233,.15); color: var(--sky); border: 1px solid rgba(14,165,233,.3); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: .78rem; font-weight: 600; margin-right: auto; }
     .add-delivery-btn:hover { background: rgba(14,165,233,.28); }
     .delivery-row { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; position: relative; }
+    /* ═══ الطرود زي بوابة المحلات (طلب صاحب النظام 2026-09-05): تبويبات مرقّمة + صور لكل طرد ═══ */
+    .parcel-tabs { display: flex; align-items: center; gap: 7px; overflow-x: auto; overflow-y: hidden; padding: 3px 2px 9px; scrollbar-width: thin; }
+    .parcel-tabs::-webkit-scrollbar { height: 4px; }
+    .parcel-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .ptab-add { flex: 0 0 auto; height: 34px; background: rgba(14,165,233,.12); color: var(--sky); border: 1px dashed var(--sky); border-radius: 9px; padding: 0 13px; font-size: .8rem; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .ptab { position: relative; flex: 0 0 auto; min-width: 38px; height: 34px; padding: 0 11px; background: var(--card); color: var(--muted); border: 1px solid var(--border); border-radius: 9px; font-size: .88rem; font-weight: 700; cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums; }
+    .ptab.active { background: var(--sky); color: #fff; border-color: var(--sky); }
+    .ptab.bad::after { content: ""; position: absolute; top: -3px; left: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); border: 2px solid var(--card); }
+    .img-add-btn { background: var(--card); border: 1px dashed var(--sky); color: var(--sky); border-radius: 9px; padding: 9px 14px; font-size: .84rem; font-weight: 700; cursor: pointer; font-family: inherit; width: 100%; }
+    .img-add-btn:hover { background: rgba(14,165,233,.08); }
+    .img-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .img-thumb { position: relative; width: 74px; height: 74px; border-radius: 9px; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+    .img-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; display: block; }
+    .img-loading { display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: var(--muted); }
+    .img-del { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,.65); color: #fff; font-size: .7rem; cursor: pointer; line-height: 1; padding: 0; }
+    .img-del:hover { background: var(--red); }
     .delivery-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .delivery-row-num { font-size: .78rem; font-weight: 700; color: var(--sky); }
     .remove-delivery-btn { background: rgba(239,68,68,.1); color: var(--red); border: 1px solid rgba(239,68,68,.2); padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: .75rem; }
@@ -11364,6 +11476,7 @@
       </div>
 
       <div class="order-section-title">📦 الطرود / الوجهات<button type="button" class="add-delivery-btn" onclick="addDeliveryRow()">➕ إضافة وجهة</button></div>
+      <div id="parcelTabs" class="parcel-tabs"></div>
       <div id="deliveriesContainer"></div>
 
       <div class="order-total-bar"><span class="order-total-label">💰 إجمالي سعر التوصيل:</span><span class="order-total-value" id="orderTotalDelivery">0 ج.م</span></div>
