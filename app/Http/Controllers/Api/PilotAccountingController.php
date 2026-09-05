@@ -59,6 +59,8 @@ class PilotAccountingController
                والفرع اللي بيتحمّلها كلها (0 = كل فرع بأوردراته) */
             'orderRate'      => max(0, round((float) ($v['orderRate'] ?? 2), 2)),
             'devFeeBranchId' => max(0, (int) ($v['devFeeBranchId'] ?? 0)),
+            /* حدود توصيات التقارير (المرحلة ٤) — الافتراضي في الـWire وبتتعدّل من الإعدادات */
+            'reportThresholds' => W::reportThresholds(is_array($v['reportThresholds'] ?? null) ? $v['reportThresholds'] : null),
         ];
     }
 
@@ -88,6 +90,8 @@ class PilotAccountingController
                 ? max(0, round((float) $in['orderRate'], 2)) : $cur['orderRate'],
             'devFeeBranchId' => array_key_exists('devFeeBranchId', $in)
                 ? max(0, (int) $in['devFeeBranchId']) : $cur['devFeeBranchId'],
+            'reportThresholds' => array_key_exists('reportThresholds', $in) && is_array($in['reportThresholds'])
+                ? W::reportThresholds($in['reportThresholds']) : $cur['reportThresholds'],
         ];
         if ($val['devFeeBranchId'] > 0 && ! DB::select('SELECT id FROM branches WHERE id = ?', [$val['devFeeBranchId']])) {
             throw new ApiException('الفرع المتحمّل لرسوم التطوير غير موجود');
@@ -2768,6 +2772,32 @@ class PilotAccountingController
             $expByBranch[(int) ($e->branch_id ?? 0)][$e->category ?? ''] = round((float) $e->s, 2);
         }
 
+        /* حقائق للتوصيات: الشهر اللي فات، العهدة الواقفة، موظفين بلا سعر */
+        $thr = $set['reportThresholds'];
+        $prevYm = date('Y-m', strtotime($ym . '-01 -1 month'));
+        $pFrom = W::bizWindowUtc($prevYm . '-01', $ds)[0];
+        $pTo   = W::bizWindowUtc($prevYm . '-' . W::daysInMonth($prevYm), $ds)[1];
+        $prevBy = [];
+        foreach (DB::select("SELECT branch_id, COUNT(*) c, COALESCE(SUM(total_delivery_price),0) s, COUNT(DISTINCT DATE(delivered_at)) d
+                               FROM orders WHERE status = 'delivered' AND delivered_at >= ? AND delivered_at < ? GROUP BY branch_id", [$pFrom, $pTo]) as $r) {
+            $prevBy[(int) ($r->branch_id ?? 0)] = ['perDay' => (int) $r->d > 0 ? round((int) $r->c / (int) $r->d, 2) : 0.0, 'revPerDay' => (int) $r->d > 0 ? round((float) $r->s / (int) $r->d, 2) : 0.0];
+        }
+        $custodyBy = [];
+        foreach (DB::select('SELECT assigned_branch_id b, COALESCE(SUM(custody_balance),0) s FROM pilots WHERE archived_at IS NULL GROUP BY assigned_branch_id') as $r) {
+            $custodyBy[(int) ($r->b ?? 0)] = round((float) $r->s, 2);
+        }
+        $staffNoRateBy = [];
+        if ((float) $set['hourRate'] <= 0) {
+            $ph = implode(',', array_fill(0, count(self::STAFF_ROLES), '?'));
+            foreach (DB::select("SELECT branch_id b, COUNT(*) c FROM users WHERE blocked = 0 AND role IN ({$ph}) AND hour_rate = 0 AND monthly_salary = 0 GROUP BY branch_id", self::STAFF_ROLES) as $r) {
+                $staffNoRateBy[(int) ($r->b ?? 0)] = (int) $r->c;
+            }
+        }
+        $expCountBy = [];
+        foreach (DB::select('SELECT branch_id b, COUNT(*) c FROM expenses WHERE expense_date >= ? AND expense_date <= ? GROUP BY branch_id', [$ym . '-01', $ym . '-' . $nd]) as $r) {
+            $expCountBy[(int) ($r->b ?? 0)] = (int) $r->c;
+        }
+
         $blocks = [];
         foreach ($branches as $b) {
             $bid = (int) $b['id'];
@@ -2817,7 +2847,7 @@ class PilotAccountingController
                 $actualBy[$c] = round((float) ($exp[$c] ?? 0), 2);
             }
             $actual = ['byCategory' => $actualBy, 'revenue' => round($revenue, 2), 'orders' => $orders, 'uncategorized' => round((float) ($exp[''] ?? 0), 2)];
-            $blocks[] = [
+            $blk = [
                 'branchId' => $bid,
                 'name'     => (string) $b['name'],
                 'budget'   => $bud['totals'],
@@ -2825,6 +2855,14 @@ class PilotAccountingController
                 'compare'  => W::reportCompare($bud['totals'], $actual, $elapsed, $nd),
                 'daily'    => array_values(array_map(fn ($x) => ['day' => $x['day'], 'orders' => $x['orders'], 'revenue' => round($x['revenue'], 2), 'commission' => round($x['commission'], 2), 'hours' => round($x['hours'], 2)], $daily)),
             ];
+            $blk['recommendations'] = W::reportRecommendations($blk, [
+                'prevOrdersPerDay'  => $prevBy[$bid]['perDay'] ?? 0,
+                'prevRevenuePerDay' => $prevBy[$bid]['revPerDay'] ?? 0,
+                'custody'           => $custodyBy[$bid] ?? 0,
+                'staffNoRate'       => $staffNoRateBy[$bid] ?? 0,
+                'expensesCount'     => $expCountBy[$bid] ?? 0,
+            ], $thr);
+            $blocks[] = $blk;
         }
 
         /* الإجمالي بعد الفروع */
@@ -2851,10 +2889,23 @@ class PilotAccountingController
                 }
             }
             $company = [
+                'name'    => 'الشركة',
                 'budget'  => $budC,
+                'hasBudget' => (bool) array_filter($blocks, fn ($bl) => $bl['hasBudget']),
                 'compare' => W::reportCompare($budC, $actC, $elapsed, $nd),
                 'daily'   => array_values(array_map(fn ($x) => ['day' => $x['day'], 'orders' => $x['orders'], 'revenue' => round($x['revenue'], 2), 'commission' => round($x['commission'], 2), 'hours' => round($x['hours'], 2)], $dailyC)),
             ];
+            $prevAll = 0.0;
+            foreach ($blocks as $bl) {
+                $prevAll += (float) ($prevBy[$bl['branchId']]['perDay'] ?? 0);
+            }
+            $company['recommendations'] = W::reportRecommendations($company, [
+                'prevOrdersPerDay' => $prevAll,
+                'custody'          => array_sum($custodyBy),
+                'staffNoRate'      => array_sum($staffNoRateBy),
+                'expensesCount'    => array_sum($expCountBy),
+                'branches'         => array_map(fn ($bl) => ['name' => $bl['name'], 'profit' => $bl['compare']['totals']['profit'], 'breakEven' => $bl['compare']['totals']['breakEven']], $blocks),
+            ], $thr);
         }
 
         return ApiResponse::out([
@@ -2864,6 +2915,7 @@ class PilotAccountingController
             'daysInMonth' => $nd,
             'branches'    => $blocks,
             'company'     => $company,
+            'thresholds'  => $thr,
             'categories'  => array_map(fn ($k, $v) => ['key' => $k, 'label' => $v[0], 'kind' => $v[1], 'source' => $v[2]],
                 array_keys(W::BUDGET_CATEGORIES), W::BUDGET_CATEGORIES),
         ]);

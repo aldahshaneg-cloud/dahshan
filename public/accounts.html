@@ -143,6 +143,15 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
 .rp-chart .wrap { position: relative; height: 220px; }
 .rp-chart.wide { grid-column: 1 / -1; } .rp-chart.wide .wrap { height: 260px; }
 @media print { .rp-chart .wrap { height: 200px; } }
+.rp-recs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+.rp-rec { background: var(--card); border: 1px solid var(--border); border-right: 4px solid var(--muted); border-radius: 10px; padding: 10px 12px; }
+.rp-rec .t { font-weight: 800; font-size: .86rem; margin-bottom: 3px; }
+.rp-rec .e { font-size: .76rem; color: var(--muted); }
+.rp-rec .a { font-size: .78rem; margin-top: 5px; color: var(--text); }
+.rp-rec.critical { border-right-color: var(--red); } .rp-rec.critical .t { color: var(--red); }
+.rp-rec.warn { border-right-color: var(--orange); } .rp-rec.warn .t { color: var(--orange); }
+.rp-rec.info { border-right-color: var(--blue); } .rp-rec.info .t { color: var(--blue); }
+.rp-rec.good { border-right-color: var(--green); } .rp-rec.good .t { color: var(--green); }
 .rp-st-ok { color: var(--green); } .rp-st-over { color: var(--red); } .rp-st-under { color: var(--blue); } .rp-st-unplanned { color: var(--orange); }
 
 .badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; background: rgba(136,136,136,.13); color: var(--muted); }
@@ -1851,6 +1860,10 @@ async function bootAccounts() {
     const c = blk.compare, t = c.totals, b = blk.budget || {};
     const money = v => paMoney(v);
     const noBudget = blk.hasBudget === false;
+    const RP_ICON = { critical: "🚨", warn: "⚠️", info: "ℹ️", good: "✅" };
+    const recs = (blk.recommendations || []).length
+      ? `<div class="pa-sec-sub" style="margin-top:10px;font-weight:700">💡 التوصيات — كل واحدة بدليلها بالأرقام (الحدود من الإعدادات)</div><div class="rp-recs">${ (blk.recommendations || []).map(r => `<div class="rp-rec ${ esc(r.severity) }"><div class="t">${ RP_ICON[r.severity] || "" } ${ esc(r.title) }</div><div class="e">${ esc(r.evidence) }</div><div class="a">👉 ${ esc(r.action) }</div></div>`).join("") }</div>`
+      : "";
     const cards = `<div class="rp-cards">
       <div class="rp-card"><div class="k">أوردرات في اليوم (فعلي)</div><div class="v" style="color:${ t.breakEven === "below" ? "var(--red)" : "var(--green)" }">${ paNum(t.ordersPerDay) }</div><div class="s">${ t.ordersNeededPerDay === null ? "اكتب الميزانية عشان تعرف التعادل" : `التعادل ${ paNum(t.ordersNeededPerDay) }/يوم — ${ t.breakEven === "below" ? `ناقص ${ paNum(t.ordersGapPerDay) }` : "فوق التعادل ✓" }` }</div></div>
       <div class="rp-card"><div class="k">الإيراد لحد النهارده</div><div class="v" style="color:var(--green)">${ money(t.revenue) }</div><div class="s">${ paNum(t.orders) } أوردر · متوسط ${ money(t.avgPrice) }${ t.expectedRevenueToDate ? ` · المتوقع ${ money(t.expectedRevenueToDate) }` : "" }</div></div>
@@ -1869,6 +1882,7 @@ async function bootAccounts() {
     </tr>`).join("");
     return `<div class="sec-header" style="margin-top:18px"><div><span class="sec-title">${ title }</span><div class="pa-sec-sub">${ esc(sub || "") }</div></div></div>
       ${ noBudget ? `<div class="warn-box">مافيش ميزانية متوقعة للفرع ده في الشهر — الأرقام الفعلية بس. اكتب الميزانية من تبويب «الميزانية المتوقعة».</div>` : "" }
+      ${ recs }
       ${ cards }
       <div class="table-wrap"><table>
         <thead><tr><th>البند</th><th class="num">المتوقع للشهر</th><th class="num">المتوقع لحد النهارده</th><th class="num">الفعلي</th><th class="num">الفرق</th><th class="num">توقّع آخر الشهر</th><th>الحالة</th></tr></thead>
@@ -3342,6 +3356,8 @@ async function bootAccounts() {
             <option value="0">كل فرع لوحده</option>
             ${ (window._branchesData || []).map(b => `<option value="${ esc(b.id) }"${ Number(s.devFeeBranchId) === Number(b.id) ? " selected" : "" }>${ esc(b.name) }</option>`).join("") }
           </select></div>
+        <div class="sum-head" style="border-top:1px solid var(--border)">💡 حدود توصيات التقارير</div>
+        ${ [["idleOrdersPerHour", "أوردرات لكل ساعة طيار — أقل من كده «طيارين قاعدين»"], ["commissionSharePct", "نصيب العمولات ورسوم التطوير من الإيراد % — أعلى من كده تنبيه"], ["overPct", "البند أعلى من المتوقع بأكتر من % ده = تنبيه"], ["custodyMax", "أقصى عهدة واقفة على طياري الفرع (ج.م)"], ["trendPct", "فرق عن الشهر اللي فات % يستاهل تنبيه"], ["minOrdersForRules", "أقل عدد أوردرات قبل ما التوصيات تحكم"]].map(([k, l]) => `<div class="sum-row"><div class="sl">${ l }</div><input class="sv" data-thr="${ k }" type="text" inputmode="decimal" value="${ esc((s.reportThresholds || {})[k] ?? "") }" ${ canSet ? "" : "readonly" } /></div>`).join("") }
         ${ canSet ? `<div style="padding:14px 16px;display:flex;gap:9px"><button class="add-btn" onclick="savePaSettings()">حفظ الإعدادات</button></div>` : "" }
       </div>`;
   };
@@ -3352,7 +3368,9 @@ async function bootAccounts() {
     if (!(dayStartHour >= 0 && dayStartHour <= 23)) { showToast("ساعة بداية اليوم لازم تكون من 0 لـ 23", "error"); return; }
     if (orderRate < 0) { showToast("رسوم التطوير مايصحّش تكون بالسالب", "error"); return; }
     try {
-      await PA_API.put("/api/pilot-accounting/settings", { hourRate, shiftHours, dayStartHour, orderRate, devFeeBranchId });
+      const reportThresholds = {};
+      document.querySelectorAll("[data-thr]").forEach(i => { reportThresholds[i.dataset.thr] = Number(i.value) || 0; });
+      await PA_API.put("/api/pilot-accounting/settings", { hourRate, shiftHours, dayStartHour, orderRate, devFeeBranchId, reportThresholds });
       showToast("تم حفظ الإعدادات", "success");
       loadPilotAcct();
     } catch (e) { showToast("تعذّر الحفظ: " + (e.message || ""), "error"); }

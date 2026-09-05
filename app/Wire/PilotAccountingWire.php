@@ -1074,4 +1074,207 @@ final class PilotAccountingWire
             ],
         ];
     }
+    /* ═══════════════════════════════════════════════════════════
+       💡 التوصيات (المرحلة ٤ — 2026-09-05)
+
+       مش ذكاء اصطناعي غامض: قواعد رقمية لكل واحدة حدّ بيتعدّل من الإعدادات،
+       وكل توصية بتطلع ومعاها الدليل بالأرقام والإجراء المقترح — عشان أي حد
+       يقدر يراجع «ليه قال كده». الترتيب: حرج ← تحذير ← معلومة ← كويس.
+    ═══════════════════════════════════════════════════════════ */
+
+    public const REPORT_THRESHOLDS = [
+        'idleOrdersPerHour'  => 1.5,   // أقل من كده = طيارين قاعدين
+        'commissionSharePct' => 35,    // العمولة + رسوم التطوير من الإيراد
+        'overPct'            => 15,    // البند أعلى من المتوقع بأكتر من كده
+        'custodyMax'         => 2000,  // عهدة واقفة على طياري الفرع
+        'trendPct'           => 10,    // فرق عن الشهر اللي فات يستاهل تنبيه
+        'minOrdersForRules'  => 20,    // قبل كده الأرقام صغيرة على أي حكم
+    ];
+
+    public static function reportThresholds(?array $override): array
+    {
+        $t = self::REPORT_THRESHOLDS;
+        foreach ($override ?? [] as $k => $v) {
+            if (array_key_exists($k, $t) && is_numeric($v) && (float) $v >= 0) {
+                $t[$k] = (float) $v;
+            }
+        }
+
+        return $t;
+    }
+
+    /**
+     * @param array $blk   ['compare', 'budget', 'daily', 'hasBudget', 'name']
+     * @param array $facts ['prevOrdersPerDay', 'prevRevenuePerDay', 'custody', 'staffNoRate',
+     *                      'expensesCount', 'branches' => [['name','profit','breakEven']] للإجمالي]
+     */
+    public static function reportRecommendations(array $blk, array $facts, array $thr): array
+    {
+        $c = $blk['compare'] ?? [];
+        $t = $c['totals'] ?? [];
+        $b = $blk['budget'] ?? [];
+        $out = [];
+        $add = function (string $key, string $sev, string $title, string $evidence, string $action) use (&$out): void {
+            $out[] = ['key' => $key, 'severity' => $sev, 'title' => $title, 'evidence' => $evidence, 'action' => $action];
+        };
+        $m = fn ($v) => number_format((float) $v, 0) . ' ج';
+        $elapsed  = (int) ($c['elapsedDays'] ?? 0);
+        $nd       = (int) ($c['daysInMonth'] ?? 30);
+        $orders   = (int) ($t['orders'] ?? 0);
+        $perDay   = (float) ($t['ordersPerDay'] ?? 0);
+        $needed   = $t['ordersNeededPerDay'] ?? null;
+        $revenue  = (float) ($t['revenue'] ?? 0);
+        $enough   = $orders >= (int) $thr['minOrdersForRules'];
+        $hasBudget = ! empty($blk['hasBudget']);
+
+        /* ① الميزانية */
+        if (! $hasBudget) {
+            $add('no_budget', 'info', 'مافيش ميزانية متوقعة للشهر ده',
+                'الفعلي موجود لكن مافيش متوقع نقارن بيه',
+                'افتح «الميزانية المتوقعة» واضغط «املأ الافتراضي من الحقيقي» واكتب الإيجار والمرافق');
+        }
+
+        /* ② التعادل */
+        if ($needed !== null && $elapsed > 0) {
+            $margin = (float) ($b['margin'] ?? 0);
+            if ($perDay < $needed) {
+                $gap = (int) ceil($needed - $perDay);
+                $cut = $margin > 0 ? $m($gap * $margin * self::BUDGET_WORK_DAYS) : '—';
+                $add('below_breakeven', 'critical', "تحت نقطة التعادل بـ {$gap} أوردر/يوم",
+                    'المعدل الحالي ' . number_format($perDay, 1) . " أوردر/يوم والمطلوب {$needed}",
+                    "يا إما +{$gap} أوردر/يوم، يا إما خفّض الثابت الشهري بحوالي {$cut}");
+            } else {
+                $add('above_breakeven', 'good', 'فوق نقطة التعادل',
+                    'المعدل ' . number_format($perDay, 1) . " أوردر/يوم والتعادل {$needed}",
+                    'كل أوردر فوق التعادل ربح صافي ' . number_format($margin, 1) . ' ج');
+            }
+        }
+
+        /* ③ توقّع نهاية الشهر */
+        $projProfit = (float) ($t['projectedProfit'] ?? 0);
+        if ($hasBudget && $elapsed >= 3 && $projProfit < 0) {
+            $remaining = max(0, $nd - $elapsed);
+            $needMonth = (int) ($b['ordersNeeded'] ?? 0);
+            $restPerDay = $remaining > 0 && $needMonth > 0 ? max(0, (int) ceil(($needMonth - $orders) / $remaining)) : null;
+            $add('month_loss', 'critical', 'بمعدل الأيام دي الشهر هيقفل خسارة ' . $m(abs($projProfit)),
+                'إيراد متوقع ' . $m($t['projectedRevenue'] ?? 0) . ' قصاد تكلفة ' . $m($t['projectedCost'] ?? 0),
+                $restPerDay !== null ? "باقي {$remaining} يوم — محتاجين {$restPerDay} أوردر/يوم عشان نوصل للتعادل" : 'راجع البنود اللي أعلى من المتوقع تحت');
+        }
+
+        /* ④ طيارين قاعدين */
+        $hours = 0.0;
+        foreach ($blk['daily'] ?? [] as $d) {
+            if ((int) $d['day'] <= $elapsed) {
+                $hours += (float) ($d['hours'] ?? 0);
+            }
+        }
+        if ($enough && $hours > 0) {
+            $oph = round($orders / $hours, 2);
+            if ($oph < (float) $thr['idleOrdersPerHour']) {
+                $target = (float) $thr['idleOrdersPerHour'];
+                $idealHoursPerDay = $target > 0 ? round($orders / $target / max(1, $elapsed), 1) : null;
+                $add('idle_pilots', 'warn', "الطيارين قاعدين: {$oph} أوردر لكل ساعة طيار",
+                    number_format($hours / max(1, $elapsed), 1) . ' ساعة طيار في اليوم قصاد ' . number_format($perDay, 1) . ' أوردر — الحد ' . $target,
+                    $idealHoursPerDay !== null ? "قلّل الورديات لحوالي {$idealHoursPerDay} ساعة/يوم في الساعات الميتة، أو زوّد الأوردرات" : 'قلّل الورديات في الساعات الميتة');
+            }
+        }
+
+        /* ⑤ العمولات ماكلة الإيراد */
+        $rows = $c['rows'] ?? [];
+        $rowOf = fn (string $cat) => array_values(array_filter($rows, fn ($r) => $r['category'] === $cat))[0] ?? null;
+        $commActual = (float) (($rowOf('commission')['actual'] ?? 0) + ($rowOf('dev_fee')['actual'] ?? 0));
+        if ($enough && $revenue > 0) {
+            $share = round($commActual / $revenue * 100, 1);
+            if ($share > (float) $thr['commissionSharePct']) {
+                $add('commission_share', 'warn', "العمولات ورسوم التطوير بتاكل {$share}% من الإيراد",
+                    $m($commActual) . ' من ' . $m($revenue) . ' — الحد ' . $thr['commissionSharePct'] . '%',
+                    'راجع سعر التوصيل أو عمولة الأوردر — كل جنيه في العمولة بيتضرب في عدد الأوردرات');
+            }
+        }
+
+        /* ⑥ بنود أعلى من المتوقع / مش في الميزانية */
+        $n = 0;
+        foreach ($rows as $r) {
+            if ($r['status'] === 'over' && (float) $r['diff'] >= 100 && $n < 5) {
+                $n++;
+                $add('over_' . $r['category'], 'warn', "«{$r['label']}» أعلى من المتوقع بـ " . $m($r['diff']),
+                    'فعلي ' . $m($r['actual']) . ' قصاد متوقع لحد النهارده ' . $m($r['expectedToDate']) . ($r['diffPct'] !== null ? " (+{$r['diffPct']}%)" : ''),
+                    $r['source'] === 'expenses' ? 'راجع المصروفات المسجّلة تحت البند ده' : 'راجع الساعات والأسعار في التقفيلة');
+            } elseif ($r['status'] === 'unplanned' && (float) $r['actual'] >= 100) {
+                $add('unplanned_' . $r['category'], 'info', "«{$r['label']}» اتصرف ومش في الميزانية",
+                    'فعلي ' . $m($r['actual']) . ' من غير أي متوقع', 'ضيفه للميزانية عشان يدخل في حسبة التعادل');
+            }
+        }
+
+        /* ⑦ متوسط السعر نازل عن الافتراض */
+        $budAvg = (float) ($b['avgPrice'] ?? 0);
+        $actAvg = (float) ($t['avgPrice'] ?? 0);
+        if ($enough && $budAvg > 0 && $actAvg > 0 && $actAvg < $budAvg * (1 - (float) $thr['trendPct'] / 100)) {
+            $perOrder = (float) ($b['perOrderRate'] ?? 0);
+            $newMargin = $actAvg - $perOrder;
+            $newNeeded = $newMargin > 0 ? (int) ceil((float) ($b['fixed'] ?? 0) / $newMargin / self::BUDGET_WORK_DAYS) : null;
+            $add('avg_price_drop', 'warn', 'متوسط سعر التوصيل أقل من الافتراض',
+                'فعلي ' . number_format($actAvg, 2) . ' قصاد ' . number_format($budAvg, 2) . ' في الميزانية',
+                $newNeeded !== null ? "بالسعر ده التعادل بيطلع لـ {$newNeeded} أوردر/يوم بدل " . ($needed ?? '—') : 'الهامش بيتآكل — راجع الأسعار');
+        }
+
+        /* ⑧ مقارنة بالشهر اللي فات */
+        $prev = (float) ($facts['prevOrdersPerDay'] ?? 0);
+        if ($prev > 0 && $elapsed >= 3) {
+            $chg = round(($perDay - $prev) / $prev * 100, 1);
+            if ($chg <= -(float) $thr['trendPct']) {
+                $add('trend_down', 'warn', "الأوردرات نازلة {$chg}% عن الشهر اللي فات",
+                    number_format($perDay, 1) . ' أوردر/يوم دلوقتي قصاد ' . number_format($prev, 1) . ' الشهر اللي فات',
+                    'شوف المناطق أو المحلات اللي قلّت، وراجع العروض');
+            } elseif ($chg >= (float) $thr['trendPct']) {
+                $add('trend_up', 'good', "الأوردرات طالعة +{$chg}% عن الشهر اللي فات",
+                    number_format($perDay, 1) . ' أوردر/يوم قصاد ' . number_format($prev, 1), 'حافظ على المعدل ده وراجع إن الطيارين كفاية');
+            }
+        }
+
+        /* ⑨ عهدة واقفة */
+        $custody = (float) ($facts['custody'] ?? 0);
+        if ($custody > (float) $thr['custodyMax']) {
+            $add('custody_high', 'warn', 'عهدة واقفة على الطيارين ' . $m($custody),
+                'فلوس الشركة في إيد الطيارين فوق الحد ' . $m($thr['custodyMax']),
+                'حصّلها مع تقفيل الورديات — الوردية مش بتتقفل والعهدة مش صفر إلا بقرار إداري');
+        }
+
+        /* ⑩ بيانات ناقصة */
+        $uncat = (float) ($c['uncategorized'] ?? 0);
+        if ($uncat > 0) {
+            $add('uncategorized', 'info', 'مصروفات غير مصنّفة ' . $m($uncat),
+                'مش بتتقارن بأي بند', 'صنّفها من شاشة المصروفات (إيجار/مرافق/تسويق…)');
+        }
+        if ((int) ($facts['staffNoRate'] ?? 0) > 0) {
+            $add('staff_no_rate', 'info', $facts['staffNoRate'] . ' موظف من غير سعر ساعة ولا راتب',
+                'أجرهم بيطلع صفر في الفعلي', 'اكتب سعر الساعة أو الراتب من «الطيارين والموظفين» أو الافتراضي من الإعدادات');
+        }
+        if ($hasBudget && (int) ($facts['expensesCount'] ?? 0) === 0 && $elapsed >= 5) {
+            $expected = 0.0;
+            foreach ($rows as $r) {
+                if ($r['source'] === 'expenses') {
+                    $expected += (float) $r['expected'];
+                }
+            }
+            if ($expected > 0) {
+                $add('no_expenses', 'warn', 'مافيش أي مصروف متسجّل في الشهر',
+                    'الميزانية فيها ' . $m($expected) . ' إيجار ومصاريف والفعلي صفر — يعني الربح المعروض أعلى من الحقيقة',
+                    'سجّل الإيجار والنت والمصاريف من شاشة المصروفات بتصنيفها');
+            }
+        }
+
+        /* ⑪ للإجمالي: فروع خسرانة */
+        $losing = array_values(array_filter($facts['branches'] ?? [], fn ($x) => (float) ($x['profit'] ?? 0) < 0));
+        if ($losing) {
+            $add('branches_losing', 'warn', 'فروع خسرانة لحد النهارده: ' . implode('، ', array_map(fn ($x) => $x['name'], $losing)),
+                implode(' · ', array_map(fn ($x) => $x['name'] . ' ' . $m($x['profit']), $losing)),
+                'افتح كل فرع لوحده — التعادل بيتحسب لكل فرع');
+        }
+
+        $rank = ['critical' => 0, 'warn' => 1, 'info' => 2, 'good' => 3];
+        usort($out, fn ($x, $y) => $rank[$x['severity']] <=> $rank[$y['severity']]);
+
+        return $out;
+    }
 }
