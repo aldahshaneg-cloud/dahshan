@@ -147,6 +147,8 @@ final class FinanceWire
             'key'         => $r['legacy_key'],
             'date'        => $r['expense_date'],
             'item'        => $r['item'],
+            /* تصنيف المصروف لمقابلة الميزانية في التقارير (2026-09-05) — NULL = غير مصنّف */
+            'category'    => $r['category'] ?? null,
             'amount'      => (float) $r['amount'],
             'branchId'    => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
             'notes'       => $r['notes'],

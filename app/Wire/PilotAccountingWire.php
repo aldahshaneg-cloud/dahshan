@@ -530,6 +530,9 @@ final class PilotAccountingWire
                 /* الخزنة جوه برنامج التقفيل (طلب صاحب النظام 2026-09-04) — نفس خزن
                    لوحة الإدارة ونفس مساراتها، مشرف الفرع بيشوف خزنة فرعه بس */
                 ['page.treasury', 'الخزنة — الخزن وحركاتها'],
+                /* صفحة التقارير (طلب صاحب النظام 2026-09-05): الميزانية المتوقعة لكل فرع
+                   ونقطة التعادل — مشرف الفرع بيشوف فرعه بس */
+                ['page.reports',  'التقارير — الميزانية المتوقعة ونقطة التعادل'],
             ]],
             ['title' => 'أعمدة الشيت اليومي وكشف الطيار', 'items' => [
                 ['col.in',     'ساعة الحضور'],
@@ -582,6 +585,8 @@ final class PilotAccountingWire
                 ['act.settings', 'تعديل إعدادات البرنامج'],
                 /* صرف الراتب من الخزنة (طلب صاحب النظام 2026-09-04) — فلوس بتخرج فعلًا، للإدارة افتراضيًا */
                 ['act.payout',   'صرف الرواتب من الخزنة'],
+                /* كتابة الميزانية المتوقعة — قرار إداري، للإدارة افتراضيًا */
+                ['act.budget',   'كتابة الميزانية المتوقعة (التقارير)'],
             ]],
         ];
     }
@@ -627,7 +632,7 @@ final class PilotAccountingWire
      *
      * يعني: الافتراضي = اللي بيقدر يعمله دلوقتي بالظبط. لا أكتر ولا أقل.
      */
-    public const ADMIN_ONLY_KEYS = ['act.deferred', 'act.lock', 'act.settings', 'act.payout'];
+    public const ADMIN_ONLY_KEYS = ['act.deferred', 'act.lock', 'act.settings', 'act.payout', 'act.budget'];
 
     /** الافتراضي لمن مالوش صف: كل حاجة ماعدا المحجوز للإدارة */
     public static function defaultPermKeys(): array
@@ -854,5 +859,135 @@ final class PilotAccountingWire
         }
 
         return $t;
+    }
+    /* ═══════════════════════════════════════════════════════════
+       📈 الميزانية المتوقعة ونقطة التعادل — صفحة التقارير
+       (طلب صاحب النظام 2026-09-05)
+
+       الشركة عايزة تعرف: بنصرف كام في كل بند، ومحتاجين كام أوردر عشان
+       نغطي النفقات قبل ما نتكلم عن ربح. الميزانية لكل فرع لوحده، وبعدها
+       الإجمالي. أيام الشغل في الشهر ٣٠ (قرار صاحب النظام).
+    ═══════════════════════════════════════════════════════════ */
+
+    public const BUDGET_WORK_DAYS = 30;
+
+    /** التصنيفات: المفتاح ⇒ [الاسم، النوع الافتراضي، بيتقابل مع إيه في الفعلي] */
+    public const BUDGET_CATEGORIES = [
+        'rent'        => ['إيجار',                    'fixed',     'expenses'],
+        'utilities'   => ['نت وكهرباء ومياه',          'fixed',     'expenses'],
+        'staff'       => ['رواتب الموظفين',            'per_hour',  'staff'],
+        'pilot_hours' => ['أجر ساعات الطيارين',        'per_hour',  'pilots'],
+        'commission'  => ['عمولات الطيارين',           'per_order', 'pilots'],
+        'dev_fee'     => ['رسوم التطوير',              'per_order', 'closeout'],
+        'marketing'   => ['تسويق',                    'fixed',     'expenses'],
+        'maintenance' => ['صيانة',                    'fixed',     'expenses'],
+        'fuel'        => ['بنزين وانتقالات',           'fixed',     'expenses'],
+        'other'       => ['أخرى',                     'fixed',     'expenses'],
+    ];
+
+    /** تصنيفات المصروفات في شاشة المصروف (الإدارة والفروع) — نفس المفاتيح عشان الفعلي يتقابل مع المتوقع */
+    public const EXPENSE_CATEGORIES = ['rent', 'utilities', 'marketing', 'maintenance', 'fuel', 'other'];
+
+    public const BUDGET_KINDS = ['fixed', 'per_order', 'per_hour'];
+
+    /**
+     * المتوقع في الشهر لبند واحد.
+     *  • fixed     ⇒ المبلغ المكتوب زي ما هو.
+     *  • per_hour  ⇒ الساعات المتوقعة × سعر الساعة.
+     *  • per_order ⇒ سعر الأوردر × (أوردرات/يوم المفترضة × ٣٠) — الكمية مش
+     *                بتتخزن، بتتبع افتراض الفرع عشان تغييره يجرّ كل البنود.
+     */
+    public static function budgetAmount(string $kind, float $qty, float $rate, float $amount, float $ordersPerDay): float
+    {
+        return match ($kind) {
+            'per_hour'  => round($qty * $rate, 2),
+            'per_order' => round($rate * $ordersPerDay * self::BUDGET_WORK_DAYS, 2),
+            default     => round($amount, 2),
+        };
+    }
+
+    /**
+     * إجماليات فرع: لكل تصنيف، والثابت الشهري، والمتغيّر لكل أوردر، ونقطة
+     * التعادل. الثابت = كل اللي مش «لكل أوردر» — أجر الساعات بيتدفع سواء جه
+     * أوردرات أو لأ فبيتحسب ثابت (دي أهم نقطة في التحليل).
+     *
+     *   هامش الأوردر    = متوسط سعر التوصيل − المتغيّر لكل أوردر
+     *   أوردرات التعادل = الثابت ÷ هامش الأوردر   (في الشهر، وعلى ٣٠ في اليوم)
+     */
+    public static function budgetTotals(array $items, float $ordersPerDay, float $avgPrice): array
+    {
+        $byCat = [];
+        $fixed = 0.0;
+        $perOrderRate = 0.0;
+        foreach ($items as $it) {
+            if (($it['category'] ?? '') === 'assumption') {
+                continue;
+            }
+            $amt = (float) ($it['amount'] ?? 0);
+            $byCat[$it['category']] = round(($byCat[$it['category']] ?? 0) + $amt, 2);
+            if (($it['kind'] ?? 'fixed') === 'per_order') {
+                $perOrderRate += (float) ($it['rate'] ?? 0);
+            } else {
+                $fixed += $amt;
+            }
+        }
+        $fixed        = round($fixed, 2);
+        $perOrderRate = round($perOrderRate, 2);
+        $margin       = round($avgPrice - $perOrderRate, 2);
+        $ordersNeeded = $margin > 0 ? (int) ceil($fixed / $margin) : null;
+        $expOrders    = round($ordersPerDay * self::BUDGET_WORK_DAYS);
+        $expRevenue   = round($expOrders * $avgPrice, 2);
+        $expCost      = round($fixed + $expOrders * $perOrderRate, 2);
+
+        return [
+            'byCategory'         => $byCat,
+            'fixed'              => $fixed,
+            'perOrderRate'       => $perOrderRate,
+            'ordersPerDay'       => round($ordersPerDay, 2),
+            'avgPrice'           => round($avgPrice, 2),
+            'margin'             => $margin,
+            'ordersNeeded'       => $ordersNeeded,
+            'ordersNeededPerDay' => $ordersNeeded !== null ? (int) ceil($ordersNeeded / self::BUDGET_WORK_DAYS) : null,
+            'expectedOrders'     => $expOrders,
+            'expectedRevenue'    => $expRevenue,
+            'expectedCost'       => $expCost,
+            'expectedProfit'     => round($expRevenue - $expCost, 2),
+            'workDays'           => self::BUDGET_WORK_DAYS,
+        ];
+    }
+
+    /** إجمالي الشركة = جمع إجماليات الفروع (الأوردرات بتتجمع والسعر متوسط مرجّح) */
+    public static function budgetCompany(array $branchTotals): array
+    {
+        $fixed = 0.0; $varCost = 0.0; $orders = 0.0; $revenue = 0.0; $byCat = [];
+        foreach ($branchTotals as $t) {
+            $fixed   += (float) $t['fixed'];
+            $orders  += (float) $t['expectedOrders'];
+            $revenue += (float) $t['expectedRevenue'];
+            $varCost += (float) $t['expectedCost'] - (float) $t['fixed'];
+            foreach ($t['byCategory'] as $c => $v) {
+                $byCat[$c] = round(($byCat[$c] ?? 0) + $v, 2);
+            }
+        }
+        $avgPrice = $orders > 0 ? round($revenue / $orders, 2) : 0.0;
+        $perOrder = $orders > 0 ? round($varCost / $orders, 2) : 0.0;
+        $margin   = round($avgPrice - $perOrder, 2);
+        $needed   = $margin > 0 ? (int) ceil($fixed / $margin) : null;
+
+        return [
+            'byCategory'         => $byCat,
+            'fixed'              => round($fixed, 2),
+            'perOrderRate'       => $perOrder,
+            'ordersPerDay'       => round($orders / self::BUDGET_WORK_DAYS, 2),
+            'avgPrice'           => $avgPrice,
+            'margin'             => $margin,
+            'ordersNeeded'       => $needed,
+            'ordersNeededPerDay' => $needed !== null ? (int) ceil($needed / self::BUDGET_WORK_DAYS) : null,
+            'expectedOrders'     => round($orders),
+            'expectedRevenue'    => round($revenue, 2),
+            'expectedCost'       => round($fixed + $varCost, 2),
+            'expectedProfit'     => round($revenue - $fixed - $varCost, 2),
+            'workDays'           => self::BUDGET_WORK_DAYS,
+        ];
     }
 }

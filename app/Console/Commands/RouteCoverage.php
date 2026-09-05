@@ -139,6 +139,15 @@ class RouteCoverage extends Command
         'DELETE /api/pilot-accounting/payout/{}' =>
             'إلغاء صرفة راتب — الفلوس بترجع للخزنة بحركة in مرتبطة',
 
+        'GET /api/pilot-accounting/budget' =>
+            'صفحة التقارير: الميزانية المتوقعة لكل فرع + الإجمالي ونقطة التعادل (طلب 2026-09-05)',
+        'POST /api/pilot-accounting/budget' =>
+            'بند ميزانية (إنشاء/تعديل) أو افتراض الفرع (أوردرات/يوم ومتوسط السعر) — act.budget إدارية',
+        'DELETE /api/pilot-accounting/budget/{}' =>
+            'حذف بند ميزانية',
+        'POST /api/pilot-accounting/budget/prefill' =>
+            'ملء ميزانية الفرع بالافتراضي من الحقيقي: كل موظف وطيار بسعره، العمولة ورسوم التطوير لكل أوردر، وصفوف الإيجار والمرافق',
+
         'GET /api/pilot-accounting/pilot-orders' =>
             'أوردرات الطيار في اليوم التجاري بعمولة كل أوردر (التلقائية والمكتوبة) — شاشة «اضغط على الطيار تشوف أوردراته وتحط العمولة» (طلب 2026-09-04). الكتابة على pilot-commission-adjustments الموجود',
 

@@ -522,6 +522,7 @@ CREATE TABLE `expenses` (
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `expense_date` date NOT NULL COMMENT 'تاريخ المصروف',
   `item` varchar(190) NOT NULL COMMENT 'بند المصروف',
+  `category` varchar(30) DEFAULT NULL COMMENT 'تصنيف المصروف لمقابلة الميزانية: rent/utilities/marketing/maintenance/fuel/other — NULL = غير مصنّف',
   `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
   `branch_id` bigint(20) unsigned DEFAULT NULL,
   `notes` text DEFAULT NULL,
@@ -535,6 +536,7 @@ CREATE TABLE `expenses` (
   KEY `idx_expenses_branch` (`branch_id`),
   KEY `idx_expenses_cash_store` (`cash_store_id`),
   KEY `idx_expenses_cash_txn` (`cash_txn_id`),
+  KEY `idx_expenses_category` (`category`),
   CONSTRAINT `fk_expenses_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`),
   CONSTRAINT `fk_expenses_cash_store_id` FOREIGN KEY (`cash_store_id`) REFERENCES `cash_stores` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='المصروفات اليومية';
@@ -1207,6 +1209,31 @@ CREATE TABLE `party_ratings` (
   CONSTRAINT `fk_party_ratings_subject_customer_id` FOREIGN KEY (`subject_customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_party_ratings_subject_user_id` FOREIGN KEY (`subject_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Ï¬┘é┘è┘è┘àÏºÏ¬ Ïº┘äÏúÏÀÏ▒Ïº┘ü ÔÇö Ïº┘äÏ¼Ï▓Ïí Ïº┘ä┘èÏ»┘ê┘è ┘à┘å Ï»Ï▒Ï¼Ï® Ïº┘ä┘àÏÁÏ»Ïº┘é┘èÏ®';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pa_budget_items` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `month` char(7) NOT NULL COMMENT 'YYYY-MM',
+  `branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع — NULL = الإدارة/عام',
+  `category` varchar(30) NOT NULL COMMENT 'rent/utilities/staff/pilot_hours/commission/dev_fee/marketing/maintenance/fuel/other/assumption',
+  `kind` varchar(12) NOT NULL DEFAULT 'fixed' COMMENT 'fixed=ثابت شهري · per_order=لكل أوردر · per_hour=لكل ساعة',
+  `label` varchar(190) NOT NULL COMMENT 'اسم البند كما يظهر',
+  `ref_type` varchar(10) DEFAULT NULL COMMENT 'user/pilot لبنود الأشخاص',
+  `ref_id` bigint(20) unsigned DEFAULT NULL,
+  `qty` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'ساعات متوقعة للبند بالساعة — الأوردرات بتيجي من افتراض الفرع',
+  `rate` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'سعر الساعة أو سعر الأوردر',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'المتوقع في الشهر — للثابت يُكتب، وللباقي يُحسب',
+  `note` varchar(500) DEFAULT NULL,
+  `created_by` varchar(190) DEFAULT NULL,
+  `updated_by` varchar(190) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_pa_budget_items_month_branch` (`month`,`branch_id`),
+  KEY `fk_pa_budget_items_branch_id` (`branch_id`),
+  CONSTRAINT `fk_pa_budget_items_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='الميزانية المتوقعة لكل فرع في الشهر — صفحة التقارير (طلب 2026-09-05)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

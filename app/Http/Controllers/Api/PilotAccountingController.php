@@ -10,6 +10,7 @@ use App\Support\Actor;
 use App\Support\ApiResponse;
 use App\Support\BizDay;
 use App\Support\WireTime;
+use App\Http\Controllers\Api\AuthController;
 use App\Wire\PilotAccountingWire as W;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -2403,5 +2404,324 @@ class PilotAccountingController
         $this->staffCleanupEntry($ym, $uid, $day);
 
         return ApiResponse::out(['ok' => true, 'count' => count($clean)]);
+    }
+    /* ═══════════════════════════════════════════════════════════
+       📈 التقارير — الميزانية المتوقعة (طلب صاحب النظام 2026-09-05)
+    ═══════════════════════════════════════════════════════════ */
+
+    /** الفرع المطلوب بعد قصّ النطاق: مشرف الفرع مقفول على فرعه، والمحاسب على فروعه المسموحة */
+    private function budgetBranchScope(Actor $actor, array $acl, ?int $branchId): ?int
+    {
+        if ($actor->role === 'branch') {
+            return (int) ($actor->branchId ?? 0);
+        }
+        if ($acl['branches'] && $branchId !== null && ! in_array($branchId, $acl['branches'], true)) {
+            throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+        }
+
+        return $branchId;
+    }
+
+    private function budgetRows(string $ym, ?int $branchId): array
+    {
+        $sql  = 'SELECT * FROM pa_budget_items WHERE month = ?';
+        $args = [$ym];
+        if ($branchId !== null) {
+            $sql .= ' AND branch_id = ?';
+            $args[] = $branchId;
+        }
+
+        return array_map(fn ($r) => (array) $r, DB::select($sql . ' ORDER BY branch_id, id', $args));
+    }
+
+    /** الافتراضات (أوردرات/يوم ومتوسط السعر) متخزنة كبنود category=assumption */
+    private function budgetAssumptions(array $rows): array
+    {
+        $a = ['ordersPerDay' => 0.0, 'avgPrice' => 0.0];
+        foreach ($rows as $r) {
+            if ($r['category'] === 'assumption' && array_key_exists($r['label'], $a)) {
+                $a[$r['label']] = (float) $r['amount'];
+            }
+        }
+
+        return $a;
+    }
+
+    private function budgetItemWire(array $r, float $ordersPerDay): array
+    {
+        $kind = in_array($r['kind'], W::BUDGET_KINDS, true) ? $r['kind'] : 'fixed';
+
+        return [
+            'id'       => (int) $r['id'],
+            'branchId' => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
+            'category' => $r['category'],
+            'kind'     => $kind,
+            'label'    => (string) $r['label'],
+            'refType'  => $r['ref_type'],
+            'refId'    => $r['ref_id'] !== null ? (int) $r['ref_id'] : null,
+            'qty'      => $kind === 'per_order' ? round($ordersPerDay * W::BUDGET_WORK_DAYS, 2) : round((float) $r['qty'], 2),
+            'rate'     => round((float) $r['rate'], 2),
+            'amount'   => W::budgetAmount($kind, (float) $r['qty'], (float) $r['rate'], (float) $r['amount'], $ordersPerDay),
+            'note'     => (string) ($r['note'] ?? ''),
+        ];
+    }
+
+    /** بلوك فرع واحد: البنود مرتّبة بالتصنيف + الإجماليات ونقطة التعادل */
+    private function budgetBranchBlock(int $branchId, string $name, array $rows): array
+    {
+        $a     = $this->budgetAssumptions($rows);
+        $items = [];
+        foreach ($rows as $r) {
+            if ($r['category'] === 'assumption') {
+                continue;
+            }
+            $items[] = $this->budgetItemWire($r, $a['ordersPerDay']);
+        }
+        usort($items, function ($x, $y) {
+            $ox = array_search($x['category'], array_keys(W::BUDGET_CATEGORIES), true);
+            $oy = array_search($y['category'], array_keys(W::BUDGET_CATEGORIES), true);
+
+            return [$ox, $x['id']] <=> [$oy, $y['id']];
+        });
+
+        return [
+            'branchId'    => $branchId,
+            'name'        => $name,
+            'assumptions' => $a,
+            'items'       => $items,
+            'totals'      => W::budgetTotals($items, $a['ordersPerDay'], $a['avgPrice']),
+        ];
+    }
+
+    /** GET /api/pilot-accounting/budget?month=&branchId= */
+    public function budgetList(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $acl   = $this->aclOf($actor);
+        $this->need($acl, 'page.reports', 'على صفحة التقارير');
+        $ym = $this->monthArg((string) $request->query('month', ''));
+        $bq = $request->query('branchId');
+        $branchId = $this->budgetBranchScope($actor, $acl, $bq !== null && $bq !== '' ? (int) $bq : null);
+
+        $branchesSql = 'SELECT id, name FROM branches';
+        $bArgs = [];
+        if ($branchId !== null) {
+            $branchesSql .= ' WHERE id = ?';
+            $bArgs[] = $branchId;
+        } elseif ($acl['branches']) {
+            $branchesSql .= ' WHERE id IN (' . implode(',', array_fill(0, count($acl['branches']), '?')) . ')';
+            $bArgs = $acl['branches'];
+        }
+        $branches = array_map(fn ($r) => (array) $r, DB::select($branchesSql . ' ORDER BY id', $bArgs));
+        $rows = $this->budgetRows($ym, $branchId);
+        $byBranch = [];
+        foreach ($rows as $r) {
+            $byBranch[(int) ($r['branch_id'] ?? 0)][] = $r;
+        }
+        $blocks = [];
+        foreach ($branches as $b) {
+            $blocks[] = $this->budgetBranchBlock((int) $b['id'], (string) $b['name'], $byBranch[(int) $b['id']] ?? []);
+        }
+        $set = $this->settings();
+
+        return ApiResponse::out([
+            'ok'         => true,
+            'month'      => $ym,
+            'branches'   => $blocks,
+            /* الإجمالي بعد الفروع (طلب صاحب النظام) — للي شايف أكتر من فرع */
+            'company'    => count($blocks) > 1 || $branchId === null
+                ? W::budgetCompany(array_map(fn ($b) => $b['totals'], $blocks)) : null,
+            'categories' => array_map(fn ($k, $v) => ['key' => $k, 'label' => $v[0], 'kind' => $v[1], 'source' => $v[2]],
+                array_keys(W::BUDGET_CATEGORIES), W::BUDGET_CATEGORIES),
+            'kinds'      => W::BUDGET_KINDS,
+            'settings'   => ['workDays' => W::BUDGET_WORK_DAYS, 'orderRate' => $set['orderRate'], 'hourRate' => $set['hourRate'],
+                             'shiftHours' => $set['shiftHours'], 'devFeeBranchId' => $set['devFeeBranchId']],
+            'canWrite'   => $this->can($acl, 'act.budget'),
+        ]);
+    }
+
+    /**
+     * POST /api/pilot-accounting/budget — بند واحد (إنشاء أو تعديل)
+     * body: {month, branchId, id?, category, kind, label, refType?, refId?, qty, rate, amount, note}
+     * الافتراضات: category=assumption و label=ordersPerDay|avgPrice و amount=القيمة.
+     */
+    public function budgetSave(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $acl   = $this->aclOf($actor);
+        $this->need($acl, 'act.budget', 'على كتابة الميزانية');
+        $b  = $request->json()->all();
+        $ym = $this->monthArg((string) ($b['month'] ?? ''));
+        $branchId = isset($b['branchId']) && $b['branchId'] !== '' && $b['branchId'] !== null ? (int) $b['branchId'] : null;
+        $branchId = $this->budgetBranchScope($actor, $acl, $branchId);
+        if ($branchId === null || ! DB::selectOne('SELECT id FROM branches WHERE id = ?', [$branchId])) {
+            throw new ApiException('حدّد الفرع — الميزانية لكل فرع لوحده');
+        }
+
+        $category = (string) ($b['category'] ?? '');
+        if ($category === 'assumption') {
+            $label = (string) ($b['label'] ?? '');
+            if (! in_array($label, ['ordersPerDay', 'avgPrice'], true)) {
+                throw new ApiException('الافتراض لازم يكون أوردرات/يوم أو متوسط السعر');
+            }
+            $val = round(max(0, (float) ($b['amount'] ?? 0)), 2);
+            $cur = DB::selectOne('SELECT id FROM pa_budget_items WHERE month = ? AND branch_id = ? AND category = ? AND label = ?', [$ym, $branchId, 'assumption', $label]);
+            if ($cur) {
+                DB::update('UPDATE pa_budget_items SET amount = ?, updated_by = ? WHERE id = ?', [$val, $actor->username, (int) $cur->id]);
+                $id = (int) $cur->id;
+            } else {
+                DB::insert('INSERT INTO pa_budget_items (month, branch_id, category, kind, label, amount, created_by, updated_by, created_at)
+                            VALUES (?,?,?,?,?,?,?,?,?)', [$ym, $branchId, 'assumption', 'fixed', $label, $val, $actor->username, $actor->username, WireTime::nowDb()]);
+                $id = (int) DB::getPdo()->lastInsertId();
+            }
+
+            return ApiResponse::out(['ok' => true, 'id' => $id]);
+        }
+
+        if (! isset(W::BUDGET_CATEGORIES[$category])) {
+            throw new ApiException('تصنيف البند غير معروف');
+        }
+        $kind = (string) ($b['kind'] ?? W::BUDGET_CATEGORIES[$category][1]);
+        if (! in_array($kind, W::BUDGET_KINDS, true)) {
+            throw new ApiException('نوع البند لازم يكون ثابت أو لكل أوردر أو لكل ساعة');
+        }
+        $label = trim((string) ($b['label'] ?? '')) ?: W::BUDGET_CATEGORIES[$category][0];
+        $qty    = round(max(0, (float) ($b['qty'] ?? 0)), 2);
+        $rate   = round(max(0, (float) ($b['rate'] ?? 0)), 2);
+        $amount = round(max(0, (float) ($b['amount'] ?? 0)), 2);
+        $note   = trim((string) ($b['note'] ?? ''));
+        $refType = in_array($b['refType'] ?? null, ['user', 'pilot'], true) ? $b['refType'] : null;
+        $refId   = $refType !== null && (int) ($b['refId'] ?? 0) > 0 ? (int) $b['refId'] : null;
+        $rows = $this->budgetRows($ym, $branchId);
+        $ordersPerDay = $this->budgetAssumptions($rows)['ordersPerDay'];
+        $stored = $kind === 'fixed' ? $amount : W::budgetAmount($kind, $qty, $rate, $amount, $ordersPerDay);
+
+        $id = (int) ($b['id'] ?? 0);
+        if ($id > 0) {
+            $cur = DB::selectOne('SELECT id FROM pa_budget_items WHERE id = ? AND month = ? AND branch_id = ?', [$id, $ym, $branchId]);
+            if (! $cur) {
+                throw ApiException::notFound('البند غير موجود');
+            }
+            DB::update('UPDATE pa_budget_items SET category = ?, kind = ?, label = ?, ref_type = ?, ref_id = ?, qty = ?, rate = ?, amount = ?, note = ?, updated_by = ? WHERE id = ?',
+                [$category, $kind, mb_substr($label, 0, 190), $refType, $refId, $qty, $rate, $stored, $note !== '' ? mb_substr($note, 0, 500) : null, $actor->username, $id]);
+        } else {
+            DB::insert('INSERT INTO pa_budget_items (month, branch_id, category, kind, label, ref_type, ref_id, qty, rate, amount, note, created_by, updated_by, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [$ym, $branchId, $category, $kind, mb_substr($label, 0, 190), $refType, $refId, $qty, $rate, $stored, $note !== '' ? mb_substr($note, 0, 500) : null,
+                 $actor->username, $actor->username, WireTime::nowDb()]);
+            $id = (int) DB::getPdo()->lastInsertId();
+        }
+        $row = (array) DB::selectOne('SELECT * FROM pa_budget_items WHERE id = ?', [$id]);
+
+        return ApiResponse::out(['ok' => true, 'item' => $this->budgetItemWire($row, $ordersPerDay)]);
+    }
+
+    /** DELETE /api/pilot-accounting/budget/{id} */
+    public function budgetDelete(Request $request, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $acl   = $this->aclOf($actor);
+        $this->need($acl, 'act.budget', 'على كتابة الميزانية');
+        $row = DB::selectOne('SELECT id, branch_id FROM pa_budget_items WHERE id = ?', [(int) $id]);
+        if (! $row) {
+            throw ApiException::notFound('البند غير موجود');
+        }
+        $this->budgetBranchScope($actor, $acl, $row->branch_id !== null ? (int) $row->branch_id : null);
+        DB::delete('DELETE FROM pa_budget_items WHERE id = ?', [(int) $row->id]);
+
+        return ApiResponse::ok();
+    }
+
+    /**
+     * POST /api/pilot-accounting/budget/prefill — {month, branchId}
+     * بيملا الفرع بالبنود الافتراضية من الحقيقي: كل موظف وكل طيار بسعره،
+     * العمولة ورسوم التطوير لكل أوردر، وصفوف فاضية للإيجار والمرافق —
+     * من غير ما يلمس بند موجود (اللي المستخدم كتبه بيفضل).
+     */
+    public function budgetPrefill(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $acl   = $this->aclOf($actor);
+        $this->need($acl, 'act.budget', 'على كتابة الميزانية');
+        $b  = $request->json()->all();
+        $ym = $this->monthArg((string) ($b['month'] ?? ''));
+        $branchId = isset($b['branchId']) && $b['branchId'] !== '' && $b['branchId'] !== null ? (int) $b['branchId'] : null;
+        $branchId = $this->budgetBranchScope($actor, $acl, $branchId);
+        if ($branchId === null || ! DB::selectOne('SELECT id FROM branches WHERE id = ?', [$branchId])) {
+            throw new ApiException('حدّد الفرع — الميزانية لكل فرع لوحده');
+        }
+        $set   = $this->settings();
+        $rows  = $this->budgetRows($ym, $branchId);
+        $have  = [];
+        foreach ($rows as $r) {
+            $have[$r['category'] . ':' . ($r['ref_type'] ?? '') . ':' . ($r['ref_id'] ?? '')] = true;
+        }
+        $hours = round(W::BUDGET_WORK_DAYS * (float) $set['shiftHours'], 2);
+        $now   = WireTime::nowDb();
+        $added = 0;
+        $ins = function (string $cat, string $kind, string $label, ?string $refType, ?int $refId, float $qty, float $rate, float $amount, ?string $note) use (&$added, &$have, $ym, $branchId, $actor, $now): void {
+            $k = $cat . ':' . ($refType ?? '') . ':' . ($refId ?? '');
+            if (isset($have[$k])) {
+                return;
+            }
+            DB::insert('INSERT INTO pa_budget_items (month, branch_id, category, kind, label, ref_type, ref_id, qty, rate, amount, note, created_by, updated_by, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [$ym, $branchId, $cat, $kind, $label, $refType, $refId, $qty, $rate, $amount, $note, $actor->username, $actor->username, $now]);
+            $have[$k] = true;
+            $added++;
+        };
+
+        /* الافتراضات: أوردرات/يوم من الشهر اللي فات (أو الحالي) ومتوسط السعر الفعلي */
+        $from = W::bizWindowUtc($ym . '-01', (int) $set['dayStartHour'])[0];
+        $to   = W::bizWindowUtc($ym . '-' . W::daysInMonth($ym), (int) $set['dayStartHour'])[1];
+        $act = DB::selectOne("SELECT COUNT(*) c, COALESCE(AVG(total_delivery_price),0) p, COUNT(DISTINCT DATE(delivered_at)) d
+                                FROM orders WHERE status = 'delivered' AND branch_id = ? AND delivered_at >= ? AND delivered_at < ?", [$branchId, $from, $to]);
+        $perDay = (int) $act->d > 0 ? round((int) $act->c / (int) $act->d, 2) : 0.0;
+        $avg    = round((float) $act->p, 2);
+        if (! isset($have['assumption::']) ) {
+            foreach ([['ordersPerDay', $perDay], ['avgPrice', $avg]] as [$lbl, $val]) {
+                if (! DB::selectOne('SELECT id FROM pa_budget_items WHERE month = ? AND branch_id = ? AND category = ? AND label = ?', [$ym, $branchId, 'assumption', $lbl])) {
+                    DB::insert('INSERT INTO pa_budget_items (month, branch_id, category, kind, label, amount, created_by, updated_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+                        [$ym, $branchId, 'assumption', 'fixed', $lbl, $val, $actor->username, $actor->username, $now]);
+                    $added++;
+                }
+            }
+        }
+
+        /* الموظفين: راتب شهري ⇒ ثابت، وإلا سعر ساعة × ساعات الشهر */
+        $ph = implode(',', array_fill(0, count(self::STAFF_ROLES), '?'));
+        $args = array_merge(self::STAFF_ROLES, [$branchId]);
+        $rd = AuthController::damascusOnlyUserIds();
+        $rdSql = $rd ? ' AND id NOT IN (' . implode(',', array_fill(0, count($rd), '?')) . ')' : '';
+        foreach (DB::select("SELECT id, name, username, hour_rate, monthly_salary FROM users WHERE blocked = 0 AND role IN ({$ph}) AND branch_id = ?{$rdSql} ORDER BY id", array_merge($args, $rd)) as $u) {
+            $name = (string) ($u->name ?: $u->username);
+            if ((float) $u->monthly_salary > 0) {
+                $ins('staff', 'fixed', $name, 'user', (int) $u->id, 0, 0, round((float) $u->monthly_salary, 2), 'راتب شهري');
+            } else {
+                $rate = (float) $u->hour_rate > 0 ? (float) $u->hour_rate : (float) $set['hourRate'];
+                $ins('staff', 'per_hour', $name, 'user', (int) $u->id, $hours, round($rate, 2), round($hours * $rate, 2), (float) $u->hour_rate > 0 ? null : 'بالسعر الافتراضي');
+            }
+        }
+
+        /* الطيارين: ساعات الشهر × سعر ساعته + عمولته لكل أوردر (متوسط) */
+        $pilots = array_map(fn ($r) => (array) $r, DB::select('SELECT id, name, hour_rate, commission_type, commission_value FROM pilots WHERE archived_at IS NULL AND assigned_branch_id = ? ORDER BY id', [$branchId]));
+        $commSum = 0.0;
+        foreach ($pilots as $p) {
+            $rate = W::hourRateOf($p, $set);
+            $ins('pilot_hours', 'per_hour', (string) $p['name'], 'pilot', (int) $p['id'], $hours, round($rate, 2), round($hours * $rate, 2), (float) $p['hour_rate'] > 0 ? null : 'بالسعر الافتراضي');
+            $commSum += ($p['commission_type'] ?: 'percent') === 'fixed' ? (float) $p['commission_value'] : $avg * (float) $p['commission_value'] / 100;
+        }
+        if ($pilots) {
+            $ins('commission', 'per_order', 'عمولة الطيار لكل أوردر (متوسط)', null, null, 0, round($commSum / count($pilots), 2), 0, count($pilots) . ' طيار');
+        }
+        $dfb = (int) $set['devFeeBranchId'];
+        if ($dfb === 0 || $dfb === $branchId) {
+            $ins('dev_fee', 'per_order', 'رسوم التطوير لكل أوردر', null, null, 0, round((float) $set['orderRate'], 2), 0, $dfb ? 'على أوردرات كل الفروع' : null);
+        }
+        foreach (['rent', 'utilities'] as $cat) {
+            $ins($cat, 'fixed', W::BUDGET_CATEGORIES[$cat][0], null, null, 0, 0, 0, 'اكتب المبلغ');
+        }
+
+        return ApiResponse::out(['ok' => true, 'added' => $added]);
     }
 }

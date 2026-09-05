@@ -235,21 +235,24 @@ class FinanceController
                 LEFT JOIN cash_stores s ON s.id = e.cash_store_id WHERE 1=1';
         $params = [];
         if (! empty($q['from'])) {
-            $sql .= ' AND expense_date >= ?';
+            $sql .= ' AND e.expense_date >= ?';
             $params[] = $q['from'];
         }
         if (! empty($q['to'])) {
-            $sql .= ' AND expense_date <= ?';
+            $sql .= ' AND e.expense_date <= ?';
             $params[] = $q['to'];
         }
         /* 🔒 كان `!empty($q['branchId'])` — يعني من غير الباراميتر بترجّع
            مصروفات الشركة كلها لمشرف أي فرع. `scopeBranch` بيلزّمه بفرعه. */
         $scope = $this->scopeBranch($actor, $q['branchId'] ?? null);
         if ($scope !== null) {
-            $sql .= ' AND branch_id = ?';
+            /* 🔴 كان `branch_id` من غير e. — والـJOIN على cash_stores فيه branch_id
+               برضه، فالاستعلام كان بيقع «ambiguous» لأي طلب بفرع (اتلقى بحارس
+               الميزانية 2026-09-05). */
+            $sql .= ' AND e.branch_id = ?';
             $params[] = $scope;
         }
-        $sql .= ' ORDER BY expense_date DESC, id DESC LIMIT 500';
+        $sql .= ' ORDER BY e.expense_date DESC, e.id DESC LIMIT 500';
 
         return PollableList::items(array_map(
             fn ($r) => FinanceWire::expense($r),
@@ -903,6 +906,14 @@ class FinanceController
      * التاريخ: لو مش متبعت = يوم القاهرة الحالي (مش UTC) — المصروف اللي
      * اتسجّل الساعة 1 بالليل بتوقيت القاهرة يقع على يومه الصح.
      */
+    /** تصنيف المصروف — من قايمة الميزانية بس، وإلا NULL (غير مصنّف) */
+    private function expenseCategory(mixed $v): ?string
+    {
+        $v = trim((string) ($v ?? ''));
+
+        return $v !== '' && in_array($v, \App\Wire\PilotAccountingWire::EXPENSE_CATEGORIES, true) ? $v : null;
+    }
+
     public function expensesCreate(Request $request): JsonResponse
     {
         $user = $request->actorOrFail();
@@ -918,18 +929,19 @@ class FinanceController
             throw new ApiException('تاريخ المصروف غير صالح');
         }
         $notes = isset($body['notes']) ? trim((string) $body['notes']) : null;
+        $category = $this->expenseCategory($body['category'] ?? null);
         $branchId = isset($body['branchId']) && $body['branchId'] !== ''
             ? (int) $body['branchId'] : $user->branchId;
         $cashStoreId = isset($body['cashStoreId']) && $body['cashStoreId'] !== ''
             ? (int) $body['cashStoreId'] : null;
 
         $expenseId = $this->tx(function () use (
-            $item, $amount, $date, $notes, $branchId, $cashStoreId, $user
+            $item, $amount, $date, $notes, $branchId, $cashStoreId, $user, $category
         ): int {
             DB::insert(
-                'INSERT INTO expenses (expense_date, item, amount, branch_id, notes, cash_store_id, created_by, created_at)
-                 VALUES (?,?,?,?,?,?,?,?)',
-                [$date, $item, $amount, $branchId, $notes, $cashStoreId, $user->username, WireTime::nowDb()]
+                'INSERT INTO expenses (expense_date, item, category, amount, branch_id, notes, cash_store_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [$date, $item, $category, $amount, $branchId, $notes, $cashStoreId, $user->username, WireTime::nowDb()]
             );
             $expenseId = (int) DB::getPdo()->lastInsertId();
 
@@ -1028,9 +1040,10 @@ class FinanceController
                 }
             }
 
+            $category = array_key_exists('category', $body) ? $this->expenseCategory($body['category']) : ($exp['category'] ?? null);
             DB::update(
-                'UPDATE expenses SET item = ?, expense_date = ?, notes = ?, amount = ? WHERE id = ?',
-                [$item, $date, $notes, $amount, $id]
+                'UPDATE expenses SET item = ?, expense_date = ?, notes = ?, amount = ?, category = ? WHERE id = ?',
+                [$item, $date, $notes, $amount, $category, $id]
             );
         });
 

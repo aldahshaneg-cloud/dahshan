@@ -86,7 +86,7 @@ register_shutdown_function(function (): void {
        طفرة شالت `act.settings` من الثابت وعدّت: الحلقة قصرت والفحوص
        نجحت والصلاحية الإدارية بقت في الافتراضي للكل.
        القايمة دي هي العقد، والثابت لازم يطابقها. */
-    $RESERVED = ['act.deferred', 'act.lock', 'act.settings', 'act.payout'];
+    $RESERVED = ['act.deferred', 'act.lock', 'act.settings', 'act.payout', 'act.budget'];
     ok('🔴 الثابت مطابق للعقد المكتوب هنا',
         $W::ADMIN_ONLY_KEYS === $RESERVED,
         'الثابت: ' . implode(',', $W::ADMIN_ONLY_KEYS));
@@ -256,6 +256,7 @@ register_shutdown_function(function (): void {
         "'act.lock'"                             => 'قفل الشهر',
         "'act.settings'"                         => 'الإعدادات',
         "'act.payout'"                           => 'صرف الرواتب من الخزنة',
+        "'act.budget'"                           => 'كتابة الميزانية المتوقعة',
     ];
     foreach ($guards as $needle => $what) {
         ok("حارس {$what}", str_contains($code, $needle));

@@ -354,6 +354,8 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <button class="nav-item" id="patab-staff" onclick="switchPaTab('staff')">👥 تقفيل الموظفين</button>
       <div class="sidebar-section-label" id="navSectionTreasury">الفلوس</div>
       <button class="nav-item" id="patab-treasury" onclick="switchPaTab('treasury')">💰 الخزنة</button>
+      <div class="sidebar-section-label" id="navSectionReports">التقارير</div>
+      <button class="nav-item" id="patab-reports" onclick="switchPaTab('reports')">📈 الميزانية والتعادل</button>
       <div class="sidebar-section-label" id="navSectionSetup">الإعداد</div>
       <!-- 🔐 للأدمن بس — `applyPaAcl` بتخفيهم لغيره -->
       <button class="nav-item" id="patab-emps" style="display:none" onclick="switchPaTab('emps')">⚙️ الطيارين والموظفين</button>
@@ -643,6 +645,28 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
     <div style="margin-top:10px"><button class="btn-ghost" id="trMoreBtn" style="display:none" onclick="window._trLimit += 100; renderTreasuryTxns()">عرض المزيد</button></div>
   </div>
 
+  <!-- ══ 📈 التقارير — الميزانية المتوقعة ونقطة التعادل (طلب صاحب النظام 2026-09-05) ══
+       المرحلة الأولى: فورم النفقات المتوقعة لكل فرع + الإجمالي + نقطة التعادل.
+       المرحلة الجاية: الفعلي قصاد المتوقع، الرسوم البيانية، والتوصيات. -->
+  <div class="page" id="pa-reports">
+    <div class="sec-header">
+      <div>
+        <span class="sec-title">📈 الميزانية المتوقعة ونقطة التعادل</span>
+        <div class="pa-sec-sub">اكتب النفقات المتوقعة لكل فرع — والبرنامج يقولك محتاج كام أوردر في اليوم عشان تغطيها</div>
+      </div>
+      <div class="toolbar">
+        <input type="month" class="field" id="rpMonth" onchange="loadReports(true)" />
+        <select class="field" id="rpBranch" onchange="loadReports(true)"><option value="">كل الفروع</option></select>
+        <button class="btn-ghost" onclick="loadReports(true)">🔄 تحديث</button>
+        <button class="add-btn" id="rpPrefillBtn" style="display:none" onclick="rpPrefill()">⚡ املأ الافتراضي من الحقيقي</button>
+      </div>
+    </div>
+    <div class="info-box" style="margin-bottom:14px">
+      <b>إزاي بيتحسب:</b> الثابت الشهري = كل البنود ما عدا «لكل أوردر» (أجر الساعات بيتدفع سواء جه أوردرات أو لأ فبيتحسب ثابت).
+      هامش الأوردر = متوسط سعر التوصيل − المتغيّر لكل أوردر (عمولة + رسوم تطوير). <b>أوردرات التعادل = الثابت ÷ الهامش</b>، وعلى ٣٠ يوم شغل.
+    </div>
+    <div id="rpBody"><div class="empty-row">جاري التحميل…</div></div>
+  </div>
   <!-- ══ 🔐 الصلاحيات — للأدمن بس ══
        الشاشة بتتبني من `permGroups` الجاية من السيرفر، مش من قايمة
        هنا — عشان مفتاح جديد في الـWire يظهر لوحده. -->
@@ -1209,12 +1233,14 @@ async function bootAccounts() {
     st.textContent = rules.join('\n');
 
     /* ── الشاشات (القايمة الجانبية) ── */
-    ['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury'].forEach(t => {
+    ['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury', 'reports'].forEach(t => {
       const b = document.getElementById('patab-' + t);
       if (b) b.style.display = paCan('page.' + t) ? '' : 'none';
     });
     const lblTr = document.getElementById('navSectionTreasury');
     if (lblTr) lblTr.style.display = paCan('page.treasury') ? '' : 'none';
+    const lblRp = document.getElementById('navSectionReports');
+    if (lblRp) lblRp.style.display = paCan('page.reports') ? '' : 'none';
     const permTab = document.getElementById('patab-perms');
     if (permTab) permTab.style.display = acl.isAdmin ? '' : 'none';
     const empsTab = document.getElementById('patab-emps');
@@ -1233,7 +1259,7 @@ async function bootAccounts() {
 
     /* لو الشاشة المفتوحة دلوقتي مقفولة عليه، ننقله لأول شاشة مسموحة.
        من غير ده بيفضل قاعد على شاشة فاضية ومش فاهم ليه. */
-    const open = ['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury']
+    const open = ['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury', 'reports']
       .filter(t => paCan('page.' + t));
     if (window._paTab !== 'perms' && window._paTab !== 'emps' && window._paTab !== 'settings' && !paCan('page.' + window._paTab)) {
       if (open.length) switchPaTab(open[0]);
@@ -1273,13 +1299,14 @@ async function bootAccounts() {
 
   window.switchPaTab = function(tab) {
     window._paTab = tab;
-    ["daily","pilot","month","deferred","staff","treasury","perms","emps","settings"].forEach(t => {
+    ["daily","pilot","month","deferred","staff","treasury","reports","perms","emps","settings"].forEach(t => {
       document.getElementById("patab-" + t)?.classList.toggle("active", t === tab);
       const el = document.getElementById("pa-" + t);
       if (el) el.style.display = t === tab ? "block" : "none";
     });
     window.scrollTo(0, 0);
     if (tab === "treasury") loadTreasury();
+    if (tab === "reports")  loadReports();
     if (tab === "daily")    renderPaDaily();
     if (tab === "pilot")    renderPaPilot();
     if (tab === "month")    renderPaMonth();
@@ -1775,6 +1802,134 @@ async function bootAccounts() {
     </tr>`).join("");
   };
 
+  /* ═══════════ 📈 التقارير — الميزانية المتوقعة (2026-09-05) ═══════════
+     كل الأرقام من رد `pilot-accounting/budget` — الشاشة بتعرض وبتحفظ بند بند.
+     البنود «لكل أوردر» كميتها بتتبع افتراض الفرع (أوردرات/يوم × ٣٠) فتغيير
+     الافتراض بيجرّ العمولة ورسوم التطوير لوحده. */
+  window._rpData = null;
+  const RP_KIND = { fixed: "ثابت شهري", per_order: "لكل أوردر", per_hour: "لكل ساعة" };
+  window.loadReports = async function(force) {
+    if (!force && window._rpData) { renderReports(); return; }
+    const m = $("rpMonth");
+    if (!m.value) m.value = bizMonth();
+    const bsel = $("rpBranch");
+    if (bsel.options.length <= 1) {
+      [...$("paBranch").options].forEach(o => { if (o.value) bsel.appendChild(new Option(o.textContent, o.value)); });
+    }
+    $("rpBody").innerHTML = `<div class="empty-row">جاري التحميل…</div>`;
+    try {
+      const q = new URLSearchParams({ month: m.value });
+      if (bsel.value) q.set("branchId", bsel.value);
+      window._rpData = await PA_API.get("/api/pilot-accounting/budget?" + q.toString());
+    } catch (e) {
+      $("rpBody").innerHTML = `<div class="warn-box">${ esc(e.message || "تعذّر التحميل") }</div>`;
+      return;
+    }
+    renderReports();
+  };
+  function rpCatLabel(key) { const c = (window._rpData?.categories || []).find(x => x.key === key); return c ? c.label : key; }
+  function rpTotalsBlock(title, t, sub) {
+    if (!t) return "";
+    const cats = (window._rpData?.categories || []).filter(c => t.byCategory && t.byCategory[c.key] !== undefined);
+    const beOk = t.ordersNeededPerDay !== null && t.ordersPerDay >= t.ordersNeededPerDay;
+    return `<div class="sum-block">
+      <div class="sum-head">${ esc(title) }${ sub ? `<div style="font-size:.72rem;font-weight:600;color:var(--muted)">${ esc(sub) }</div>` : "" }</div>
+      ${ cats.map(c => `<div class="sum-row calc"><div class="sl">${ esc(c.label) }</div><div class="sv">${ paMoney(t.byCategory[c.key]) }</div></div>`).join("") }
+      <div class="sum-row" style="background:rgba(249,115,22,.07)"><div class="sl">الثابت الشهري<div class="sh">كل البنود ما عدا «لكل أوردر»</div></div><div class="sv" style="color:var(--orange)">${ paMoney(t.fixed) }</div></div>
+      <div class="sum-row calc"><div class="sl">المتغيّر لكل أوردر<div class="sh">عمولة + رسوم تطوير</div></div><div class="sv">${ paMoney(t.perOrderRate) }</div></div>
+      <div class="sum-row calc"><div class="sl">هامش الأوردر<div class="sh">متوسط السعر ${ paMoney(t.avgPrice) } − المتغيّر</div></div><div class="sv" style="color:${ t.margin > 0 ? "var(--green)" : "var(--red)" }">${ paMoney(t.margin) }</div></div>
+      <div class="sum-row grand"><div class="sl">🎯 أوردرات التعادل<div class="sh">الثابت ÷ الهامش — قبلها الشركة خسرانة وبعدها ربح</div></div><div class="sv" style="color:var(--blue)">${ t.ordersNeeded === null ? "—" : `${ paNum(t.ordersNeeded) } / شهر · <b>${ paNum(t.ordersNeededPerDay) } / يوم</b>` }</div></div>
+      <div class="sum-row" style="background:${ t.ordersPerDay ? (beOk ? "rgba(34,197,94,.08)" : "rgba(232,25,44,.08)") : "transparent" }"><div class="sl">بافتراض ${ paNum(t.ordersPerDay) } أوردر/يوم<div class="sh">${ t.ordersPerDay ? (beOk ? "فوق التعادل ✓" : `تحت التعادل — ناقص ${ paNum((t.ordersNeededPerDay || 0) - t.ordersPerDay) } أوردر/يوم`) : "اكتب أوردرات اليوم المتوقعة" }</div></div>
+        <div class="sv" style="color:${ t.expectedProfit >= 0 ? "var(--green)" : "var(--red)" }">${ t.ordersPerDay ? `إيراد ${ paMoney(t.expectedRevenue) } − تكلفة ${ paMoney(t.expectedCost) } = <b>${ paMoney(t.expectedProfit) }</b>` : "—" }</div></div>
+    </div>`;
+  }
+  window.renderReports = function() {
+    const d = window._rpData; if (!d) return;
+    const canW = !!d.canWrite;
+    $("rpPrefillBtn").style.display = canW && $("rpBranch").value ? "" : "none";
+    const blocks = (d.branches || []).map(b => {
+      const a = b.assumptions || {};
+      const rows = b.items.map(it => {
+        const lock = canW ? "" : "readonly";
+        const inp = (f, v, extra = "") => `<input class="pa-in" data-f="${f}" value="${ esc(v) }" ${lock} onchange="rpSaveItem(${ Number(it.id) }, this)" ${extra} />`;
+        return `<tr data-id="${ Number(it.id) }">
+          <td class="lbl" style="font-size:.78rem;color:var(--muted)">${ esc(rpCatLabel(it.category)) }</td>
+          <td>${ inp("label", it.label, 'class="pa-in txt"') }</td>
+          <td class="lbl" style="font-size:.76rem">${ esc(RP_KIND[it.kind] || it.kind) }</td>
+          <td class="num">${ it.kind === "per_hour" ? inp("qty", fmt2(it.qty)) : it.kind === "per_order" ? `<span style="color:var(--muted);font-size:.78rem">${ paNum(it.qty) } أوردر</span>` : "" }</td>
+          <td class="num">${ it.kind === "fixed" ? "" : inp("rate", fmt2(it.rate)) }</td>
+          <td class="num">${ it.kind === "fixed" ? inp("amount", fmt2(it.amount)) : `<b>${ paMoney(it.amount) }</b>` }</td>
+          <td>${ inp("note", it.note || "", 'class="pa-in txt" placeholder="—"') }</td>
+          <td>${ canW ? `<button class="btn-red btn-xs" onclick="rpDeleteItem(${ Number(it.id) })">🗑</button>` : "" }</td>
+        </tr>`;
+      }).join("");
+      const addRow = canW ? `<tr class="no-print" style="background:var(--panel)">
+          <td><select class="field" id="rpNewCat_${ b.branchId }" onchange="rpNewKindSync(${ b.branchId })">${ (d.categories || []).map(c => `<option value="${ esc(c.key) }" data-kind="${ esc(c.kind) }">${ esc(c.label) }</option>`).join("") }</select></td>
+          <td><input class="pa-in txt" id="rpNewLabel_${ b.branchId }" placeholder="اسم البند" /></td>
+          <td><select class="field" id="rpNewKind_${ b.branchId }">${ Object.entries(RP_KIND).map(([k, v]) => `<option value="${k}">${v}</option>`).join("") }</select></td>
+          <td class="num"><input class="pa-in" id="rpNewQty_${ b.branchId }" placeholder="ساعات" /></td>
+          <td class="num"><input class="pa-in" id="rpNewRate_${ b.branchId }" placeholder="سعر" /></td>
+          <td class="num"><input class="pa-in" id="rpNewAmount_${ b.branchId }" placeholder="مبلغ" /></td>
+          <td><input class="pa-in txt" id="rpNewNote_${ b.branchId }" placeholder="ملاحظة" /></td>
+          <td><button class="add-btn btn-xs" onclick="rpAddItem(${ b.branchId })">➕</button></td>
+        </tr>` : "";
+      return `<div class="sec-header" style="margin-top:22px"><div><span class="sec-title">🏪 ${ esc(b.name) }</span><div class="pa-sec-sub">${ b.items.length ? `${ paNum(b.items.length) } بند` : "مافيش بنود لسه — اضغط «املأ الافتراضي» أو ضيف بند" }</div></div></div>
+      <div class="sum-block" style="margin-top:8px">
+        <div class="sum-head">الافتراضات</div>
+        <div class="sum-row"><div class="sl">أوردرات في اليوم<div class="sh">المتوقع — بيتحسب عليه العمولة ورسوم التطوير والإيراد</div></div><input class="sv" type="text" inputmode="decimal" value="${ esc(fmt2(a.ordersPerDay)) }" ${ canW ? "" : "readonly" } onchange="rpSaveAssumption(${ b.branchId },'ordersPerDay',this.value)" /></div>
+        <div class="sum-row"><div class="sl">متوسط سعر التوصيل<div class="sh">بالجنيه — الافتراضي من الأوردرات الحقيقية</div></div><input class="sv" type="text" inputmode="decimal" value="${ esc(fmt2(a.avgPrice)) }" ${ canW ? "" : "readonly" } onchange="rpSaveAssumption(${ b.branchId },'avgPrice',this.value)" /></div>
+      </div>
+      <div class="table-wrap" style="margin-top:12px"><table>
+        <thead><tr><th>التصنيف</th><th style="min-width:160px">البند</th><th>النوع</th><th class="num">الكمية</th><th class="num">السعر</th><th class="num">المتوقع / شهر</th><th style="min-width:140px">ملاحظة</th><th></th></tr></thead>
+        <tbody>${ rows || `<tr><td colspan="8" class="empty-row">مافيش بنود</td></tr>` }${ addRow }</tbody>
+      </table></div>
+      ${ rpTotalsBlock(`إجمالي ${ b.name } · ${ monthLabel(d.month) }`, b.totals) }`;
+    }).join("");
+    const company = d.company ? `<div style="margin-top:30px;border-top:2px dashed var(--border);padding-top:8px">${ rpTotalsBlock(`🏢 إجمالي الشركة · ${ monthLabel(d.month) }`, d.company, `${ paNum((d.branches || []).length) } فرع — الأوردرات مجموعة والسعر متوسط مرجّح`) }</div>` : "";
+    $("rpBody").innerHTML = (blocks || `<div class="empty-row">مافيش فروع</div>`) + company;
+  };
+  window.rpNewKindSync = function(bid) {
+    const cat = $("rpNewCat_" + bid); const opt = cat.options[cat.selectedIndex];
+    $("rpNewKind_" + bid).value = opt?.dataset.kind || "fixed";
+  };
+  window.rpSaveAssumption = function(bid, label, value) {
+    PA_API.post("/api/pilot-accounting/budget", { month: $("rpMonth").value, branchId: bid, category: "assumption", label, amount: Number(value) || 0 })
+      .then(() => loadReports(true))
+      .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
+  };
+  window.rpSaveItem = function(id, el) {
+    const tr = el.closest("tr"); const d = window._rpData;
+    let item = null, bid = null;
+    (d.branches || []).forEach(b => b.items.forEach(it => { if (it.id === id) { item = it; bid = b.branchId; } }));
+    if (!item) return;
+    const v = f => { const i = tr.querySelector(`[data-f="${f}"]`); return i ? i.value : undefined; };
+    const body = { month: $("rpMonth").value, branchId: bid, id, category: item.category, kind: item.kind,
+      label: v("label") ?? item.label, note: v("note") ?? item.note,
+      qty: Number(v("qty") ?? item.qty) || 0, rate: Number(v("rate") ?? item.rate) || 0, amount: Number(v("amount") ?? item.amount) || 0 };
+    PA_API.post("/api/pilot-accounting/budget", body).then(() => loadReports(true))
+      .catch(e => showToast("تعذّر الحفظ: " + (e.message || ""), "error"));
+  };
+  window.rpAddItem = function(bid) {
+    const body = { month: $("rpMonth").value, branchId: bid, category: $("rpNewCat_" + bid).value, kind: $("rpNewKind_" + bid).value,
+      label: $("rpNewLabel_" + bid).value.trim(), note: $("rpNewNote_" + bid).value.trim(),
+      qty: Number($("rpNewQty_" + bid).value) || 0, rate: Number($("rpNewRate_" + bid).value) || 0, amount: Number($("rpNewAmount_" + bid).value) || 0 };
+    if (body.kind === "fixed" && !body.amount) { showToast("اكتب المبلغ الشهري", "error"); return; }
+    if (body.kind !== "fixed" && !body.rate) { showToast("اكتب السعر", "error"); return; }
+    PA_API.post("/api/pilot-accounting/budget", body).then(() => { showToast("اتضاف", "success"); loadReports(true); })
+      .catch(e => showToast("تعذّر الإضافة: " + (e.message || ""), "error"));
+  };
+  window.rpDeleteItem = function(id) {
+    if (!confirm("تحذف البند ده من الميزانية؟")) return;
+    PA_API.del("/api/pilot-accounting/budget/" + id).then(() => loadReports(true))
+      .catch(e => showToast("تعذّر الحذف: " + (e.message || ""), "error"));
+  };
+  window.rpPrefill = function() {
+    const bid = $("rpBranch").value; if (!bid) { showToast("اختار فرع الأول", "error"); return; }
+    if (!confirm("يملأ ميزانية الفرع بالافتراضي من الحقيقي (كل موظف وطيار بسعره، العمولة ورسوم التطوير لكل أوردر، وصفوف الإيجار والمرافق)؟ البنود الموجودة مش هتتلمس.")) return;
+    PA_API.post("/api/pilot-accounting/budget/prefill", { month: $("rpMonth").value, branchId: bid })
+      .then(r => { showToast(`اتضاف ${ paNum(r.added) } بند`, "success"); loadReports(true); })
+      .catch(e => showToast("تعذّر: " + (e.message || ""), "error"));
+  };
   /* ═══════════ 👥 تقفيلة الموظفين ═══════════
 
      نفس عقد شاشات الطيارين: `_stData` مرآة `_paData`، والتحديث من

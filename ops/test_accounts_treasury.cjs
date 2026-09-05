@@ -39,7 +39,8 @@ console.log('\n══ 2) الشاشة والصلاحية ══');
 ok('تبويب الخزنة في القايمة', /id="patab-treasury"/.test(UI) && /id="pa-treasury"/.test(UI));
 ok('مفتاح page.treasury على السلك', /\['page\.treasury',/.test(WIRE));
 ok('التبويب محكوم بـpage.treasury زي باقي الشاشات',
-  /\['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury'\]\.forEach/.test(UI));
+  /* القايمة اتوسّعت 2026-09-05 بـreports (صفحة التقارير) */
+  /\['daily', 'pilot', 'month', 'deferred', 'staff', 'treasury', 'reports'\]\.forEach/.test(UI));
 ok('السبب إجباري على كل حركة', /اكتب السبب — كل حركة فلوس لازم يبقى لها سبب/.test(tr));
 ok('خزنة جديدة للأدمن بس', /\$\("trNewStoreBtn"\)\.style\.display = isAdmin \? "" : "none"/.test(tr));
 ok('الزرار بيتقفل وقت الحفظ — دوسة تانية ماتعملش حركتين', /btn\.disabled = true;[\s\S]*?finally \{ btn\.disabled = false; \}/.test(tr));

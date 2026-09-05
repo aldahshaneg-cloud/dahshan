@@ -353,6 +353,15 @@ Route::post('pilot-accounting/payout', [PilotAccountingController::class, 'payou
     ->middleware('role:admin,branch,accountant');
 Route::delete('pilot-accounting/payout/{id}', [PilotAccountingController::class, 'payoutDelete'])
     ->middleware('role:admin,branch,accountant');
+/* 📈 صفحة التقارير: الميزانية المتوقعة لكل فرع ونقطة التعادل (2026-09-05) */
+Route::get('pilot-accounting/budget', [PilotAccountingController::class, 'budgetList'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/budget', [PilotAccountingController::class, 'budgetSave'])
+    ->middleware('role:admin,branch,accountant');
+Route::delete('pilot-accounting/budget/{id}', [PilotAccountingController::class, 'budgetDelete'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/budget/prefill', [PilotAccountingController::class, 'budgetPrefill'])
+    ->middleware('role:admin,branch,accountant');
 /* أوردرات الطيار في يوم بعمولة كل أوردر — الضغط على اسم الطيار في الشيت (2026-09-04) */
 Route::get('pilot-accounting/pilot-orders', [PilotAccountingController::class, 'pilotOrders'])
     ->middleware('role:admin,branch,accountant');
