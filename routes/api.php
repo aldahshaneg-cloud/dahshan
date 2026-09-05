@@ -354,6 +354,8 @@ Route::post('pilot-accounting/payout', [PilotAccountingController::class, 'payou
 Route::delete('pilot-accounting/payout/{id}', [PilotAccountingController::class, 'payoutDelete'])
     ->middleware('role:admin,branch,accountant');
 /* 📈 صفحة التقارير: الميزانية المتوقعة لكل فرع ونقطة التعادل (2026-09-05) */
+Route::get('pilot-accounting/reports', [PilotAccountingController::class, 'reportsMonth'])
+    ->middleware('role:admin,branch,accountant');
 Route::get('pilot-accounting/budget', [PilotAccountingController::class, 'budgetList'])
     ->middleware('role:admin,branch,accountant');
 Route::post('pilot-accounting/budget', [PilotAccountingController::class, 'budgetSave'])

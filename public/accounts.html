@@ -129,6 +129,13 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
 .pa-tot { font-weight: 800; font-size: .82rem; font-variant-numeric: tabular-nums; }
 /* خانة للقراءة بس (سلّم للخزنة) — من حركات الخزنة، مش بتتعدّل من الشيت */
 .pa-ro { background: rgba(29,78,216,.04); font-variant-numeric: tabular-nums; }
+.rp-view.active { background: rgba(232,25,44,.12); color: var(--sky); font-weight: 700; border-color: rgba(232,25,44,.3); }
+.rp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.rp-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.rp-card .k { font-size: .74rem; color: var(--muted); margin-bottom: 4px; }
+.rp-card .v { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rp-card .s { font-size: .7rem; color: var(--muted); margin-top: 3px; }
+.rp-st-ok { color: var(--green); } .rp-st-over { color: var(--red); } .rp-st-under { color: var(--blue); } .rp-st-unplanned { color: var(--orange); }
 
 .badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; background: rgba(136,136,136,.13); color: var(--muted); }
 .pa-badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; white-space: nowrap; background: rgba(139,147,167,.14); color: var(--muted); }
@@ -665,7 +672,12 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <b>إزاي بيتحسب:</b> الثابت الشهري = كل البنود ما عدا «لكل أوردر» (أجر الساعات بيتدفع سواء جه أوردرات أو لأ فبيتحسب ثابت).
       هامش الأوردر = متوسط سعر التوصيل − المتغيّر لكل أوردر (عمولة + رسوم تطوير). <b>أوردرات التعادل = الثابت ÷ الهامش</b>، وعلى ٣٠ يوم شغل.
     </div>
-    <div id="rpBody"><div class="empty-row">جاري التحميل…</div></div>
+    <div class="toolbar" style="margin-bottom:12px">
+      <button class="btn-ghost rp-view active" id="rpView-compare" onclick="rpSetView('compare')">📊 الواقع قصاد المتوقع</button>
+      <button class="btn-ghost rp-view" id="rpView-budget" onclick="rpSetView('budget')">📝 الميزانية المتوقعة</button>
+    </div>
+    <div id="rpCompare"><div class="empty-row">جاري التحميل…</div></div>
+    <div id="rpBody" style="display:none"><div class="empty-row">جاري التحميل…</div></div>
   </div>
   <!-- ══ 🔐 الصلاحيات — للأدمن بس ══
        الشاشة بتتبني من `permGroups` الجاية من السيرفر، مش من قايمة
@@ -1802,6 +1814,67 @@ async function bootAccounts() {
     </tr>`).join("");
   };
 
+  /* ═══════════ 📊 الواقع قصاد المتوقع (المرحلة ٢ — 2026-09-05) ═══════════
+     رد `pilot-accounting/reports`: لكل فرع compare.rows (بند بند) وtotals،
+     والإجمالي تحت. الأرقام كلها من السيرفر — هنا عرض بس. */
+  window._rpView = "compare";
+  window._rpCmp = null;
+  window.rpSetView = function(v) {
+    window._rpView = v;
+    ["compare", "budget"].forEach(x => $("rpView-" + x).classList.toggle("active", x === v));
+    $("rpCompare").style.display = v === "compare" ? "" : "none";
+    $("rpBody").style.display = v === "budget" ? "" : "none";
+    $("rpPrefillBtn").style.display = v === "budget" && window._rpData?.canWrite && $("rpBranch").value ? "" : "none";
+  };
+  window.loadReportsCompare = async function() {
+    $("rpCompare").innerHTML = `<div class="empty-row">جاري التحميل…</div>`;
+    try {
+      const q = new URLSearchParams({ month: $("rpMonth").value });
+      if ($("rpBranch").value) q.set("branchId", $("rpBranch").value);
+      window._rpCmp = await PA_API.get("/api/pilot-accounting/reports?" + q.toString());
+    } catch (e) {
+      $("rpCompare").innerHTML = `<div class="warn-box">${ esc(e.message || "تعذّر التحميل") }</div>`;
+      return;
+    }
+    renderReportsCompare();
+  };
+  const RP_ST = { ok: "في المتوقع ✓", over: "أعلى من المتوقع", under: "أقل من المتوقع", unplanned: "مش في الميزانية" };
+  function rpCompareBlock(title, blk, sub) {
+    const c = blk.compare, t = c.totals, b = blk.budget || {};
+    const money = v => paMoney(v);
+    const noBudget = blk.hasBudget === false;
+    const cards = `<div class="rp-cards">
+      <div class="rp-card"><div class="k">أوردرات في اليوم (فعلي)</div><div class="v" style="color:${ t.breakEven === "below" ? "var(--red)" : "var(--green)" }">${ paNum(t.ordersPerDay) }</div><div class="s">${ t.ordersNeededPerDay === null ? "اكتب الميزانية عشان تعرف التعادل" : `التعادل ${ paNum(t.ordersNeededPerDay) }/يوم — ${ t.breakEven === "below" ? `ناقص ${ paNum(t.ordersGapPerDay) }` : "فوق التعادل ✓" }` }</div></div>
+      <div class="rp-card"><div class="k">الإيراد لحد النهارده</div><div class="v" style="color:var(--green)">${ money(t.revenue) }</div><div class="s">${ paNum(t.orders) } أوردر · متوسط ${ money(t.avgPrice) }${ t.expectedRevenueToDate ? ` · المتوقع ${ money(t.expectedRevenueToDate) }` : "" }</div></div>
+      <div class="rp-card"><div class="k">التكلفة لحد النهارده</div><div class="v" style="color:var(--orange)">${ money(t.actualCost) }</div><div class="s">${ t.expectedToDate ? `المتوقع ${ money(t.expectedToDate) } · فرق ${ t.costDiff >= 0 ? "+" : "−" }${ money(Math.abs(t.costDiff)) }` : "مافيش متوقع" }</div></div>
+      <div class="rp-card"><div class="k">ربح / خسارة لحد النهارده</div><div class="v" style="color:${ t.profit >= 0 ? "var(--green)" : "var(--red)" }">${ money(t.profit) }</div><div class="s">${ c.elapsedDays } يوم من ${ c.daysInMonth }</div></div>
+      <div class="rp-card"><div class="k">توقّع آخر الشهر بنفس المعدل</div><div class="v" style="color:${ t.projectedProfit >= 0 ? "var(--green)" : "var(--red)" }">${ money(t.projectedProfit) }</div><div class="s">إيراد ${ money(t.projectedRevenue) } − تكلفة ${ money(t.projectedCost) }</div></div>
+    </div>`;
+    const rows = (c.rows || []).map(r => `<tr>
+      <td class="lbl">${ esc(r.label) }</td>
+      <td class="num">${ money(r.expected) }</td>
+      <td class="num">${ money(r.expectedToDate) }</td>
+      <td class="num"><b>${ money(r.actual) }</b></td>
+      <td class="num rp-st-${ r.status }">${ r.diff >= 0 ? "+" : "−" }${ money(Math.abs(r.diff)) }${ r.diffPct !== null ? ` <span style="font-size:.72rem">(${ r.diffPct >= 0 ? "+" : "" }${ paNum(r.diffPct) }%)</span>` : "" }</td>
+      <td class="num">${ money(r.projected) }</td>
+      <td class="rp-st-${ r.status }" style="font-size:.76rem;font-weight:700">${ RP_ST[r.status] || "" }</td>
+    </tr>`).join("");
+    return `<div class="sec-header" style="margin-top:18px"><div><span class="sec-title">${ title }</span><div class="pa-sec-sub">${ esc(sub || "") }</div></div></div>
+      ${ noBudget ? `<div class="warn-box">مافيش ميزانية متوقعة للفرع ده في الشهر — الأرقام الفعلية بس. اكتب الميزانية من تبويب «الميزانية المتوقعة».</div>` : "" }
+      ${ cards }
+      <div class="table-wrap"><table>
+        <thead><tr><th>البند</th><th class="num">المتوقع للشهر</th><th class="num">المتوقع لحد النهارده</th><th class="num">الفعلي</th><th class="num">الفرق</th><th class="num">توقّع آخر الشهر</th><th>الحالة</th></tr></thead>
+        <tbody>${ rows || `<tr><td colspan="7" class="empty-row">مافيش بنود ولا مصروفات لسه</td></tr>` }
+        ${ c.uncategorized > 0 ? `<tr><td class="lbl" style="color:var(--orange)">مصروفات غير مصنّفة</td><td></td><td></td><td class="num"><b>${ money(c.uncategorized) }</b></td><td></td><td></td><td style="font-size:.74rem;color:var(--muted)">صنّفها من شاشة المصروفات عشان تتقارن</td></tr>` : "" }</tbody>
+        <tfoot><tr><td class="lbl" style="font-weight:800">الإجمالي</td><td class="pa-tot">${ money(t.expectedMonth) }</td><td class="pa-tot">${ money(t.expectedToDate) }</td><td class="pa-tot">${ money(t.actualCost) }</td><td class="pa-tot" style="color:${ t.costDiff > 0 ? "var(--red)" : "var(--green)" }">${ t.costDiff >= 0 ? "+" : "−" }${ money(Math.abs(t.costDiff)) }</td><td class="pa-tot">${ money(t.projectedCost) }</td><td></td></tr></tfoot>
+      </table></div>`;
+  }
+  window.renderReportsCompare = function() {
+    const d = window._rpCmp; if (!d) return;
+    const blocks = (d.branches || []).map(b => rpCompareBlock(`🏪 ${ esc(b.name) } · ${ esc(monthLabel(d.month)) }`, b, "المتوقع لحد النهارده = الثابت على ٣٠ يوم × الأيام اللي عدّت، ولكل أوردر على الأوردرات الفعلية")).join("");
+    const company = d.company ? `<div style="margin-top:30px;border-top:2px dashed var(--border);padding-top:8px">${ rpCompareBlock(`🏢 إجمالي الشركة · ${ esc(monthLabel(d.month)) }`, { ...d.company, hasBudget: true }, `${ paNum((d.branches || []).length) } فرع`) }</div>` : "";
+    $("rpCompare").innerHTML = (blocks || `<div class="empty-row">مافيش فروع</div>`) + company;
+  };
   /* ═══════════ 📈 التقارير — الميزانية المتوقعة (2026-09-05) ═══════════
      كل الأرقام من رد `pilot-accounting/budget` — الشاشة بتعرض وبتحفظ بند بند.
      البنود «لكل أوردر» كميتها بتتبع افتراض الفرع (أوردرات/يوم × ٣٠) فتغيير
@@ -1817,6 +1890,7 @@ async function bootAccounts() {
       [...$("paBranch").options].forEach(o => { if (o.value) bsel.appendChild(new Option(o.textContent, o.value)); });
     }
     $("rpBody").innerHTML = `<div class="empty-row">جاري التحميل…</div>`;
+    loadReportsCompare();
     try {
       const q = new URLSearchParams({ month: m.value });
       if (bsel.value) q.set("branchId", bsel.value);
@@ -1846,7 +1920,7 @@ async function bootAccounts() {
   window.renderReports = function() {
     const d = window._rpData; if (!d) return;
     const canW = !!d.canWrite;
-    $("rpPrefillBtn").style.display = canW && $("rpBranch").value ? "" : "none";
+    $("rpPrefillBtn").style.display = window._rpView === "budget" && canW && $("rpBranch").value ? "" : "none";
     const blocks = (d.branches || []).map(b => {
       const a = b.assumptions || {};
       const rows = b.items.map(it => {

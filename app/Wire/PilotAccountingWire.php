@@ -990,4 +990,88 @@ final class PilotAccountingWire
             'workDays'           => self::BUDGET_WORK_DAYS,
         ];
     }
+    /**
+     * 📊 الواقع قصاد المتوقع (المرحلة ٢ — 2026-09-05).
+     *
+     * لكل تصنيف: المتوقع للشهر كله، والمتوقع **لحد النهارده** (الثابت بيتقسم على
+     * ٣٠ يوم × الأيام اللي عدّت، و«لكل أوردر» بيتحسب على الأوردرات الفعلية)، والفعلي
+     * لحد النهارده، والفرق. وتوقّع نهاية الشهر بمعدل الأيام اللي عدّت:
+     *   الإيراد والمتغيّر والساعات ⇒ فعلي ÷ الأيام × أيام الشهر
+     *   بنود المصروفات الثابتة (إيجار…) ⇒ الأكبر من الفعلي والمتوقع (بتتسجّل مرة)
+     *
+     * @param array $budget   إجماليات الفرع من budgetTotals
+     * @param array $actual   ['byCategory' => [cat => مبلغ], 'revenue', 'orders', 'uncategorized']
+     */
+    public static function reportCompare(array $budget, array $actual, int $elapsed, int $daysInMonth): array
+    {
+        $wd   = self::BUDGET_WORK_DAYS;
+        $frac = $elapsed > 0 ? min(1.0, $elapsed / $wd) : 0.0;
+        $orders = (float) ($actual['orders'] ?? 0);
+        $expOrders = (float) ($budget['expectedOrders'] ?? 0);
+        $rows = [];
+        $expToDate = 0.0; $actCost = 0.0; $proj = 0.0; $expMonth = 0.0;
+        foreach (self::BUDGET_CATEGORIES as $cat => [$label, $kind, $source]) {
+            $exp = (float) ($budget['byCategory'][$cat] ?? 0);
+            $act = round((float) ($actual['byCategory'][$cat] ?? 0), 2);
+            if ($exp <= 0 && $act <= 0) {
+                continue;
+            }
+            $perOrder = $kind === 'per_order';
+            $etd = $perOrder
+                ? ($expOrders > 0 ? round($exp * $orders / $expOrders, 2) : round($exp * $frac, 2))
+                : round($exp * $frac, 2);
+            if ($source === 'expenses') {
+                $p = max($act, $exp);
+            } else {
+                $p = $elapsed > 0 ? round($act / $elapsed * $daysInMonth, 2) : $exp;
+            }
+            $diff = round($act - $etd, 2);
+            $rows[] = [
+                'category'       => $cat,
+                'label'          => $label,
+                'source'         => $source,
+                'expected'       => round($exp, 2),
+                'expectedToDate' => $etd,
+                'actual'         => $act,
+                'diff'           => $diff,
+                'diffPct'        => $etd > 0 ? round($diff / $etd * 100, 1) : null,
+                'projected'      => round($p, 2),
+                'status'         => $etd <= 0 ? ($act > 0 ? 'unplanned' : 'ok') : ($diff > $etd * 0.15 ? 'over' : ($diff < -$etd * 0.15 ? 'under' : 'ok')),
+            ];
+            $expToDate += $etd; $actCost += $act; $proj += $p; $expMonth += $exp;
+        }
+        $uncat = round((float) ($actual['uncategorized'] ?? 0), 2);
+        $actCost += $uncat;
+        $proj    += $elapsed > 0 ? round($uncat / $elapsed * $daysInMonth, 2) : 0;
+        $revenue = round((float) ($actual['revenue'] ?? 0), 2);
+        $expRevToDate = round((float) ($budget['expectedRevenue'] ?? 0) * $frac, 2);
+        $projRevenue  = $elapsed > 0 ? round($revenue / $elapsed * $daysInMonth, 2) : 0.0;
+        $perDay = $elapsed > 0 ? round($orders / $elapsed, 2) : 0.0;
+        $needed = $budget['ordersNeededPerDay'] ?? null;
+
+        return [
+            'elapsedDays'  => $elapsed,
+            'daysInMonth'  => $daysInMonth,
+            'rows'         => $rows,
+            'uncategorized' => $uncat,
+            'totals' => [
+                'expectedMonth'     => round($expMonth, 2),
+                'expectedToDate'    => round($expToDate, 2),
+                'actualCost'        => round($actCost, 2),
+                'costDiff'          => round($actCost - $expToDate, 2),
+                'revenue'           => $revenue,
+                'expectedRevenueToDate' => $expRevToDate,
+                'profit'            => round($revenue - $actCost, 2),
+                'projectedRevenue'  => $projRevenue,
+                'projectedCost'     => round($proj, 2),
+                'projectedProfit'   => round($projRevenue - $proj, 2),
+                'orders'            => (int) $orders,
+                'ordersPerDay'      => $perDay,
+                'ordersNeededPerDay' => $needed,
+                'avgPrice'          => $orders > 0 ? round($revenue / $orders, 2) : 0.0,
+                'breakEven'         => $needed === null ? null : ($perDay >= $needed ? 'above' : 'below'),
+                'ordersGapPerDay'   => $needed === null ? null : max(0, (int) ceil($needed - $perDay)),
+            ],
+        ];
+    }
 }

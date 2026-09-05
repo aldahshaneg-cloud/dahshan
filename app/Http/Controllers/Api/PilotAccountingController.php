@@ -2724,4 +2724,148 @@ class PilotAccountingController
 
         return ApiResponse::out(['ok' => true, 'added' => $added]);
     }
+    /**
+     * GET /api/pilot-accounting/reports?month=&branchId= — الواقع قصاد المتوقع (المرحلة ٢).
+     *
+     * الفعلي بييجي من نفس التقفيلات الموجودة (مش حساب جديد): أجر الطيارين
+     * والعمولة والإيراد من `month`، رواتب الموظفين من `staff-month`، رسوم التطوير
+     * من بلوك التقفيل اليومي، وباقي البنود من المصروفات المصنّفة. بيرجع كمان
+     * سلسلة يومية (أوردرات/إيراد/عمولة) للرسوم.
+     */
+    public function reportsMonth(Request $request): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $acl   = $this->aclOf($actor);
+        $this->need($acl, 'page.reports', 'على صفحة التقارير');
+        $ym = $this->monthArg((string) $request->query('month', ''));
+        $bq = $request->query('branchId');
+        $branchId = $this->budgetBranchScope($actor, $acl, $bq !== null && $bq !== '' ? (int) $bq : null);
+        $set = $this->settings();
+        $ds  = (int) $set['dayStartHour'];
+        $nd  = W::daysInMonth($ym);
+        $elapsed = W::countedDays($ym, $ds);
+
+        $branchesSql = 'SELECT id, name FROM branches';
+        $bArgs = [];
+        if ($branchId !== null) {
+            $branchesSql .= ' WHERE id = ?';
+            $bArgs[] = $branchId;
+        } elseif ($acl['branches']) {
+            $branchesSql .= ' WHERE id IN (' . implode(',', array_fill(0, count($acl['branches']), '?')) . ')';
+            $bArgs = $acl['branches'];
+        }
+        $branches = array_map(fn ($r) => (array) $r, DB::select($branchesSql . ' ORDER BY id', $bArgs));
+        $rows = $this->budgetRows($ym, $branchId);
+        $byBranch = [];
+        foreach ($rows as $r) {
+            $byBranch[(int) ($r['branch_id'] ?? 0)][] = $r;
+        }
+        /* المصروفات المصنّفة في الشهر (بتاريخ المصروف) */
+        $expByBranch = [];
+        foreach (DB::select("SELECT branch_id, category, SUM(amount) s FROM expenses
+                              WHERE expense_date >= ? AND expense_date <= ? GROUP BY branch_id, category",
+            [$ym . '-01', $ym . '-' . $nd]) as $e) {
+            $expByBranch[(int) ($e->branch_id ?? 0)][$e->category ?? ''] = round((float) $e->s, 2);
+        }
+
+        $blocks = [];
+        foreach ($branches as $b) {
+            $bid = (int) $b['id'];
+            $bud = $this->budgetBranchBlock($bid, (string) $b['name'], $byBranch[$bid] ?? []);
+            $m   = $this->internalGet($request, '/api/pilot-accounting/month', ['month' => $ym, 'branchId' => (string) $bid]);
+            $st  = $this->internalGet($request, '/api/pilot-accounting/staff-month', ['month' => $ym, 'branchId' => (string) $bid]);
+            $daily = [];
+            for ($d = 1; $d <= $nd; $d++) {
+                $daily[$d] = ['day' => $d, 'orders' => 0, 'revenue' => 0.0, 'commission' => 0.0, 'hours' => 0.0];
+            }
+            $pilotHours = 0.0; $commission = 0.0; $revenue = 0.0; $orders = 0;
+            foreach ($m['pilots'] ?? [] as $p) {
+                $t = $p['totals'] ?? [];
+                $pilotHours += (float) ($t['hourPay'] ?? 0) + (float) ($t['salaryShare'] ?? 0) + (float) ($t['leavePay'] ?? 0) + (float) ($t['bonusDue'] ?? 0);
+                $commission += (float) ($t['psvc'] ?? 0);
+                $revenue    += (float) ($t['svc'] ?? 0);
+                $orders     += (int) ($t['orders'] ?? 0);
+                foreach ($p['days'] ?? [] as $row) {
+                    $d = (int) ($row['day'] ?? 0);
+                    if (! isset($daily[$d])) {
+                        continue;
+                    }
+                    $daily[$d]['orders']     += (int) ($row['orders'] ?? 0);
+                    $daily[$d]['revenue']    += (float) ($row['svc'] ?? 0);
+                    $daily[$d]['commission'] += (float) ($row['psvc'] ?? 0);
+                    $daily[$d]['hours']      += (float) ($row['hours'] ?? 0);
+                }
+            }
+            $staff = 0.0;
+            foreach ($st['staff'] ?? [] as $u) {
+                $t = $u['totals'] ?? [];
+                $staff += isset($t['gross']) ? (float) $t['gross']
+                    : (float) ($t['hourPay'] ?? 0) + (float) ($t['salaryShare'] ?? 0) + (float) ($t['leavePay'] ?? 0) + (float) ($t['bonusDue'] ?? 0);
+            }
+            $devFee = 0.0;
+            foreach ($m['closeout']['branches'] ?? [] as $cb) {
+                if ((int) ($cb['branchId'] ?? 0) !== $bid) {
+                    continue;
+                }
+                foreach ($cb['days'] ?? [] as $cd) {
+                    $devFee += (float) ($cd['devFee'] ?? 0);
+                }
+            }
+            $exp = $expByBranch[$bid] ?? [];
+            $actualBy = ['staff' => round($staff, 2), 'pilot_hours' => round($pilotHours, 2), 'commission' => round($commission, 2), 'dev_fee' => round($devFee, 2)];
+            foreach (W::EXPENSE_CATEGORIES as $c) {
+                $actualBy[$c] = round((float) ($exp[$c] ?? 0), 2);
+            }
+            $actual = ['byCategory' => $actualBy, 'revenue' => round($revenue, 2), 'orders' => $orders, 'uncategorized' => round((float) ($exp[''] ?? 0), 2)];
+            $blocks[] = [
+                'branchId' => $bid,
+                'name'     => (string) $b['name'],
+                'budget'   => $bud['totals'],
+                'hasBudget' => count($bud['items']) > 0,
+                'compare'  => W::reportCompare($bud['totals'], $actual, $elapsed, $nd),
+                'daily'    => array_values(array_map(fn ($x) => ['day' => $x['day'], 'orders' => $x['orders'], 'revenue' => round($x['revenue'], 2), 'commission' => round($x['commission'], 2), 'hours' => round($x['hours'], 2)], $daily)),
+            ];
+        }
+
+        /* الإجمالي بعد الفروع */
+        $company = null;
+        if (count($blocks) > 1 || $branchId === null) {
+            $budC = W::budgetCompany(array_map(fn ($b) => $b['budget'], $blocks));
+            $actC = ['byCategory' => [], 'revenue' => 0.0, 'orders' => 0, 'uncategorized' => 0.0];
+            $dailyC = [];
+            for ($d = 1; $d <= $nd; $d++) {
+                $dailyC[$d] = ['day' => $d, 'orders' => 0, 'revenue' => 0.0, 'commission' => 0.0, 'hours' => 0.0];
+            }
+            foreach ($blocks as $bl) {
+                foreach ($bl['compare']['rows'] as $r) {
+                    $actC['byCategory'][$r['category']] = round(($actC['byCategory'][$r['category']] ?? 0) + $r['actual'], 2);
+                }
+                $actC['revenue'] += (float) $bl['compare']['totals']['revenue'];
+                $actC['orders']  += (int) $bl['compare']['totals']['orders'];
+                $actC['uncategorized'] += (float) $bl['compare']['uncategorized'];
+                foreach ($bl['daily'] as $x) {
+                    $dailyC[$x['day']]['orders'] += $x['orders'];
+                    $dailyC[$x['day']]['revenue'] += $x['revenue'];
+                    $dailyC[$x['day']]['commission'] += $x['commission'];
+                    $dailyC[$x['day']]['hours'] += $x['hours'];
+                }
+            }
+            $company = [
+                'budget'  => $budC,
+                'compare' => W::reportCompare($budC, $actC, $elapsed, $nd),
+                'daily'   => array_values(array_map(fn ($x) => ['day' => $x['day'], 'orders' => $x['orders'], 'revenue' => round($x['revenue'], 2), 'commission' => round($x['commission'], 2), 'hours' => round($x['hours'], 2)], $dailyC)),
+            ];
+        }
+
+        return ApiResponse::out([
+            'ok'          => true,
+            'month'       => $ym,
+            'elapsedDays' => $elapsed,
+            'daysInMonth' => $nd,
+            'branches'    => $blocks,
+            'company'     => $company,
+            'categories'  => array_map(fn ($k, $v) => ['key' => $k, 'label' => $v[0], 'kind' => $v[1], 'source' => $v[2]],
+                array_keys(W::BUDGET_CATEGORIES), W::BUDGET_CATEGORIES),
+        ]);
+    }
 }

@@ -139,6 +139,8 @@ class RouteCoverage extends Command
         'DELETE /api/pilot-accounting/payout/{}' =>
             'إلغاء صرفة راتب — الفلوس بترجع للخزنة بحركة in مرتبطة',
 
+        'GET /api/pilot-accounting/reports' =>
+            'الواقع قصاد المتوقع لكل فرع + الإجمالي: الفعلي من التقفيلات والمصروفات المصنّفة، المتوقع لحد النهارده، التوقّع لآخر الشهر، وسلسلة يومية للرسوم (المرحلة ٢ — 2026-09-05)',
         'GET /api/pilot-accounting/budget' =>
             'صفحة التقارير: الميزانية المتوقعة لكل فرع + الإجمالي ونقطة التعادل (طلب 2026-09-05)',
         'POST /api/pilot-accounting/budget' =>
