@@ -299,8 +299,10 @@ class PilotAccountingController
                FROM shifts
               WHERE pilot_id IN ({$ph}) AND started_at >= ? AND started_at < ?
               ORDER BY started_at",
-            array_merge($ids, [$from, $to])
+            /* يوم قبل بداية الشهر — الوردية اللي بتبدأ ٠٨:٥٣ آخر يوم في الشهر اللي فات بتتحسب على أول يوم هنا */
+            array_merge($ids, [gmdate('Y-m-d H:i:s', strtotime($from . ' UTC') - 86400), $to])
         );
+        $monthKey = substr(W::bizMoment($from, $ds)['date'] ?? '', 0, 7);
         foreach ($shifts as $s) {
             $s   = (array) $s;
             $pid = (int) $s['pilot_id'];
@@ -308,7 +310,22 @@ class PilotAccountingController
             if (! $bm) {
                 continue;
             }
-            $day = (int) substr($bm['date'], 8, 2);
+            /* 🔴 اليوم اللي الوردية بتتحسب عليه = اليوم اللي فيه **نصّها** مش بدايتها.
+               مراجعة 2026-09-05: طيار صباحي بدأ ٠٨:٥٣ (قبل بداية اليوم ٩) اتحسبت ورديته
+               على اليوم اللي فات فوق وردية امبارح (٢٣٫٨٥ ساعة في يوم، وصفر في يومه).
+               الوردية المقطوعة (أطول من LONG_SHIFT_HOURS) بتفضل على يوم بدايتها. */
+            $dayMoment = $bm;
+            if ($s['ended_at'] !== null) {
+                $t0 = strtotime($s['started_at'] . ' UTC');
+                $t1 = strtotime($s['ended_at'] . ' UTC');
+                if ($t1 > $t0 && ($t1 - $t0) / 3600 <= W::LONG_SHIFT_HOURS) {
+                    $dayMoment = W::bizMoment(gmdate('Y-m-d H:i:s', intdiv($t0 + $t1, 2)), $ds) ?: $bm;
+                }
+            }
+            if (substr($dayMoment['date'], 0, 7) !== $monthKey) {
+                continue;   // من الشهر اللي فات أو الجاي
+            }
+            $day = (int) substr($dayMoment['date'], 8, 2);
             $cell = &$m[$pid][$day];
             $cell ??= self::emptyCell();
 

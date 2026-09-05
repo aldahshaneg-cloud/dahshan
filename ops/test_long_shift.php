@@ -87,6 +87,9 @@ try {
         return (int) DB::getPdo()->lastInsertId();
     };
     $mk(5, 57.3);    // مقطوعة — زي اللي حصل
+    /* وردية صباحية بتبدأ ٠٨:٣٠ القاهرة يوم ١٢ (قبل بداية اليوم ٩) وتخلص ١٨:٣٠ — لازم تتحسب على يوم ١٢ مش ١١ */
+    DB::insert('INSERT INTO shifts (pilot_id, branch_id, status, started_at, ended_at, created_at) VALUES (?,?,?,?,?,NOW())',
+        [$pid, $pilot->assigned_branch_id, 'ended', "{$ym}-12 05:30:00", "{$ym}-12 15:30:00"]);
     $mk(10, 12.0);   // عادية طويلة شوية
     $mk(15, 16.0);   // على الحد بالظبط — مش مقطوعة
 
@@ -117,6 +120,11 @@ try {
     $p2 = null;
     foreach ($m2['pilots'] ?? [] as $x) { if ((int) $x['pilotId'] === $pid) { $p2 = $x; } }
     ok('التعديل اليدوي ١٣ بيغلب والعلامة فضلت', $c === 200 && $near($p2['days'][4]['hours'], 13) && $p2['days'][4]['longShift'] === true && in_array('hours', $p2['days'][4]['edited']));
+
+    echo "\n══ 1ب) الوردية اللي بتبدأ قبل بداية اليوم ══\n";
+    ok('🔴 ٠٨:٣٠ → ١٨:٣٠ اتحسبت على يومها (١٢) بـ١٠ ساعات، وحضورها ٠٨:٣٠', $near($row(12)['hours'] ?? -1, 10) && in_array($row(12)['in'] ?? '', ['08:30', '07:30'], true) /* توقيت صيفي أو شتوي */, json_encode([$row(12)['hours'] ?? null, $row(12)['in'] ?? null]));
+    ok('ويوم ١١ فاضي — مش اتحسبت عليه', $near($row(11)['hours'] ?? -1, 0) && ($row(11)['in'] ?? null) === null);
+    ok('والوردية المسائية (١١ ص → ٩ م يوم ١٠) فضلت على يومها', $near($row(10)['hours'] ?? -1, 11.5));
 
     echo "\n══ 2) الاستئذان بالغلط ══\n";
     $perms = $row(10)['perms'] ?? [];
