@@ -34,6 +34,15 @@ final class PilotAccountingWire
     /** ساعات الوردية المعيارية — بتستخدم في حساب أجر يوم الإجازة المدفوعة */
     public const DEFAULT_SHIFT_HOURS = 10.0;
 
+    /* 🔴 مراجعة كشف الطيار (2026-09-05): ورديات فضلت مفتوحة يومين وتلاتة (الطيار
+       نسي يقفل والمشرف قفلها بعدين) طلّعت ٥٧ ساعة في يوم واحد، والإدارة اضطرت
+       تصلّح بالإيد. الوردية اللي أطول من الحد دي «مقطوعة»: بتتحسب بساعات
+       الوردية من الإعدادات وبتتعلّم عشان المشرف يراجعها. */
+    public const LONG_SHIFT_HOURS = 16.0;
+
+    /* استئذان أقل من كده = ضغطة بالغلط (موافقة وإنهاء في ثواني) — مش بيتحسب ولا بيتعرض */
+    public const MIN_PERM_MINUTES = 5;
+
     private const TZ = 'Africa/Cairo';
 
     /* ═══════════════════════════════════════════════════════════
@@ -401,6 +410,8 @@ final class PilotAccountingWire
             ])),
             'shiftIds' => array_values($auto['shiftIds'] ?? []),
             'openShift' => (bool) ($auto['openShift'] ?? false),
+            // وردية أطول من LONG_SHIFT_HOURS — الساعات اتحسبت بساعات الوردية، والمشرف يراجع
+            'longShift' => (bool) ($auto['longShift'] ?? false),
         ];
     }
 

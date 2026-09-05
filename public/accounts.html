@@ -1466,9 +1466,10 @@ async function bootAccounts() {
        التنسيق العربي للعرض بس (الإجماليات وجدول الشهر). */
     const val = opts.money ? Number(row[field] ?? 0).toFixed(2) : (row[field] ?? "");
     const auto = row.auto?.[field];
+    /* الخانة المعدّلة بتقول رقم النظام وإزاي ترجعله — الإدارة كانت بتكتب أصفار ومش عارفة ترجّع */
     const tip = edited && auto !== undefined && auto !== null
-      ? `رقم النظام: ${ opts.money ? Number(auto).toFixed(2) : auto }`
-      : "";
+      ? `رقم النظام: ${ opts.money ? Number(auto).toFixed(2) : auto } — امسح الخانة واضغط Enter ترجع لرقم النظام`
+      : (field === "hours" && row.longShift ? "وردية مقطوعة — الساعات = ساعات الوردية من الإعدادات، عدّلها لو لازم" : "");
     /* خانة الوقت = عرض بالعربي (صباحًا/مساءً) بيفتح منتقي الوقت بالنقر —
        بدل input[type=time] اللي بيعرض AM/PM إنجليزي من المتصفح */
     if (field === "in" || field === "out") {
@@ -1532,7 +1533,7 @@ async function bootAccounts() {
     body.innerHTML = ps.map((p, i) => {
       const row = (p.days || [])[day - 1] || { day };
       return `<tr${ row.openShift ? ' title="وردية لسه مفتوحة — الساعات ناقصة"' : "" }><td class="lbl idx">${i + 1}</td>
-        <td class="lbl" style="font-weight:600;min-width:140px"><span class="pilot-link" title="أوردرات اليوم وعمولة كل أوردر" onclick="openPilotOrders('${ escJs(p.pilotId) }',${day})">${ esc(p.name) }</span>${ row.openShift ? ' <span class="badge bg-blue">مفتوحة</span>' : "" }</td>
+        <td class="lbl" style="font-weight:600;min-width:140px"><span class="pilot-link" title="أوردرات اليوم وعمولة كل أوردر" onclick="openPilotOrders('${ escJs(p.pilotId) }',${day})">${ esc(p.name) }</span>${ row.openShift ? ' <span class="badge bg-blue">مفتوحة</span>' : "" }${ row.longShift ? ' <span class="badge" style="background:rgba(249,115,22,.15);color:var(--orange)" title="الوردية فضلت مفتوحة أكتر من 16 ساعة — الساعات اتحسبت بساعات الوردية من الإعدادات، عدّلها لو لازم">⚠️ مقطوعة</span>' : "" }</td>
         ${ paRowCells(p.pilotId, row) }</tr>`;
     }).join("");
 
@@ -1672,7 +1673,7 @@ async function bootAccounts() {
     const today = bizToday();
 
     body.innerHTML = (p.days || []).map(row => `<tr class="${ `${d.month}-${String(row.day).padStart(2, "0")}` === today ? "today-row" : "" }">
-        <td class="lbl" style="font-weight:700"><span class="pilot-link" title="أوردرات اليوم وعمولة كل أوردر" onclick="openPilotOrders('${ escJs(p.pilotId) }',${ row.day })">${ row.day }</span></td>
+        <td class="lbl" style="font-weight:700"><span class="pilot-link" title="أوردرات اليوم وعمولة كل أوردر" onclick="openPilotOrders('${ escJs(p.pilotId) }',${ row.day })">${ row.day }</span>${ row.longShift ? ' <span class="badge" style="background:rgba(249,115,22,.15);color:var(--orange)" title="الوردية فضلت مفتوحة أكتر من 16 ساعة — الساعات اتحسبت بساعات الوردية من الإعدادات، عدّلها لو لازم">⚠️ مقطوعة</span>' : "" }</td>
         <td class="lbl idx">${ esc(paWeekday(d.month, row.day)) }</td>
         ${ paRowCells(p.pilotId, row) }</tr>`).join("");
 

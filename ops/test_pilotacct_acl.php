@@ -131,7 +131,7 @@ register_shutdown_function(function (): void {
     /* 🔴 كل حقل في الصف لازم يكون: يا إما مربوط بمفتاح، يا إما في القايمة
        البيضا. حقل جديد يتضاف لـ`dayRow` من غير مفتاح هيخرج للكل من غير
        ما حد ياخد باله — الفحص ده هو اللي بيمسكها. */
-    $ALWAYS = ['day', 'carry', 'edited', 'auto', 'shiftIds', 'openShift'];
+    $ALWAYS = ['day', 'carry', 'edited', 'auto', 'shiftIds', 'openShift', 'longShift'];
     $cut = $W::filterDay($row, []);   // مافيش أي صلاحية خالص
     $leaked = array_diff(array_keys($cut), $ALWAYS);
     ok('🔴 بلا أي صلاحية: مافيش حقل بيخرج غير المسموح دايمًا',

@@ -283,6 +283,7 @@ class PilotAccountingController
      */
     private function autoMatrix(array $ids, array $pilots, string $from, string $to, int $ds): array
     {
+        $shiftHours = (float) $this->settings()['shiftHours'];
         $ph = implode(',', array_fill(0, count($ids), '?'));
         $byId = [];
         foreach ($pilots as $p) {
@@ -321,6 +322,12 @@ class PilotAccountingController
                     $cell['out'] = $outM['hm'];
                 }
                 $h = (strtotime($s['ended_at'] . ' UTC') - strtotime($s['started_at'] . ' UTC')) / 3600;
+                /* 🔴 وردية مقطوعة (فضلت مفتوحة أكتر من LONG_SHIFT_HOURS): محدش اشتغل ٥٧
+                   ساعة — بتتحسب بساعات الوردية وبتتعلّم عشان المشرف يراجع ويعدّل. */
+                if ($h > W::LONG_SHIFT_HOURS) {
+                    $cell['longShift'] = true;
+                    $h = min($h, $shiftHours);
+                }
                 $cell['hours'] += max(0, $h);
             } else {
                 $cell['openShift'] = true;   // وردية لسه مفتوحة — الساعات ناقصة
@@ -467,6 +474,10 @@ class PilotAccountingController
             array_merge($ids, [$from, $to])
         ) as $lr) {
             $lr = (array) $lr;
+            /* ضغطة بالغلط: موافقة وإنهاء في ثواني — مش استئذان (مراجعة 2026-09-05: ١٨ من ٣٥) */
+            if ((strtotime($lr['ended_at'] . ' UTC') - strtotime($lr['responded_at'] . ' UTC')) / 60 < W::MIN_PERM_MINUTES) {
+                continue;
+            }
             $a = W::bizMoment($lr['responded_at'], $ds);
             $b = W::bizMoment($lr['ended_at'], $ds);
             if (! $a || ! $b || $a['date'] !== $b['date']) {
@@ -508,7 +519,7 @@ class PilotAccountingController
                 // المرحّل للشهر — منفصل عن المعروض
                 'psvcCarry' => 0.0, 'advCarry' => 0.0, 'dedCarry' => 0.0, 'bonusCarry' => 0.0,
                 'commMonthly' => false,
-                'perms' => [], 'shiftIds' => [], 'openShift' => false];
+                'perms' => [], 'shiftIds' => [], 'openShift' => false, 'longShift' => false];
     }
 
     /** صفوف التدخّل اليدوي + فترات الاستئذان اليدوية */
