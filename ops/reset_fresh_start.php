@@ -159,7 +159,8 @@ DB::transaction(function () use ($plan, $tb, $testPilots, $testUsers, $testZones
             DB::table('shift_branch_history')->where('branch_id', $tb)->delete();
             DB::table('shifts')->whereIn('id', $shiftIds)->delete();
         }
-        foreach (['attendance_sessions', 'pilot_leave_requests', 'pilot_shift_requests', 'pilot_join_requests', 'pilot_transfers',
+        /* attendance_sessions مالهاش pilot_id (حضور الموظفين) — أول تنفيذ وقع عليها واتراجع كله */
+        foreach (['pilot_leave_requests', 'pilot_shift_requests', 'pilot_join_requests', 'pilot_transfers',
                   'pilot_support_requests'] as $t) {
             if ($exists($t) && $testPilots) { DB::table($t)->whereIn('pilot_id', $testPilots)->delete(); }
         }
