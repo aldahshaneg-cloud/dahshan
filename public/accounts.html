@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- الرسوم البيانية لصفحة التقارير (المرحلة ٣ — 2026-09-05) — نفس الـCDN، نسخة مثبّتة -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
    تقفيل الطيارين — برنامج مستقل.
@@ -135,6 +137,12 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
 .rp-card .k { font-size: .74rem; color: var(--muted); margin-bottom: 4px; }
 .rp-card .v { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .rp-card .s { font-size: .7rem; color: var(--muted); margin-top: 3px; }
+.rp-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 14px; }
+.rp-chart { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.rp-chart h4 { margin: 0 0 8px; font-size: .82rem; color: var(--muted); font-weight: 700; }
+.rp-chart .wrap { position: relative; height: 220px; }
+.rp-chart.wide { grid-column: 1 / -1; } .rp-chart.wide .wrap { height: 260px; }
+@media print { .rp-chart .wrap { height: 200px; } }
 .rp-st-ok { color: var(--green); } .rp-st-over { color: var(--red); } .rp-st-under { color: var(--blue); } .rp-st-unplanned { color: var(--orange); }
 
 .badge { padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: .74rem; display: inline-block; white-space: nowrap; background: rgba(136,136,136,.13); color: var(--muted); }
@@ -1839,7 +1847,7 @@ async function bootAccounts() {
     renderReportsCompare();
   };
   const RP_ST = { ok: "في المتوقع ✓", over: "أعلى من المتوقع", under: "أقل من المتوقع", unplanned: "مش في الميزانية" };
-  function rpCompareBlock(title, blk, sub) {
+  function rpCompareBlock(title, blk, sub, cid) {
     const c = blk.compare, t = c.totals, b = blk.budget || {};
     const money = v => paMoney(v);
     const noBudget = blk.hasBudget === false;
@@ -1867,13 +1875,91 @@ async function bootAccounts() {
         <tbody>${ rows || `<tr><td colspan="7" class="empty-row">مافيش بنود ولا مصروفات لسه</td></tr>` }
         ${ c.uncategorized > 0 ? `<tr><td class="lbl" style="color:var(--orange)">مصروفات غير مصنّفة</td><td></td><td></td><td class="num"><b>${ money(c.uncategorized) }</b></td><td></td><td></td><td style="font-size:.74rem;color:var(--muted)">صنّفها من شاشة المصروفات عشان تتقارن</td></tr>` : "" }</tbody>
         <tfoot><tr><td class="lbl" style="font-weight:800">الإجمالي</td><td class="pa-tot">${ money(t.expectedMonth) }</td><td class="pa-tot">${ money(t.expectedToDate) }</td><td class="pa-tot">${ money(t.actualCost) }</td><td class="pa-tot" style="color:${ t.costDiff > 0 ? "var(--red)" : "var(--green)" }">${ t.costDiff >= 0 ? "+" : "−" }${ money(Math.abs(t.costDiff)) }</td><td class="pa-tot">${ money(t.projectedCost) }</td><td></td></tr></tfoot>
-      </table></div>`;
+      </table></div>
+      <div class="rp-charts" id="rpCharts_${ cid }">
+        <div class="rp-chart wide"><h4>📈 الأوردرات يوم بيوم قصاد خط التعادل</h4><div class="wrap"><canvas id="rpc_daily_${ cid }"></canvas></div></div>
+        <div class="rp-chart"><h4>📊 المتوقع لحد النهارده قصاد الفعلي — لكل بند</h4><div class="wrap"><canvas id="rpc_cat_${ cid }"></canvas></div></div>
+        <div class="rp-chart"><h4>🍩 توزيع التكلفة الفعلية</h4><div class="wrap"><canvas id="rpc_donut_${ cid }"></canvas></div></div>
+        <div class="rp-chart"><h4>💰 الإيراد التراكمي قصاد التكلفة المتوقعة التراكمية — نقطة التقاطع = يوم التعادل</h4><div class="wrap"><canvas id="rpc_cum_${ cid }"></canvas></div></div>
+        <div class="rp-chart"><h4>🛵 أوردرات لكل ساعة طيار — يوم بيوم</h4><div class="wrap"><canvas id="rpc_eff_${ cid }"></canvas></div></div>
+      </div>`;
   }
+
+  /* ═══════════ الرسوم البيانية (المرحلة ٣ — 2026-09-05) ═══════════
+     Chart.js من cdnjs. الألوان من متغيرات الثيم عشان الليلي والنهاري. كل رسم
+     بيتسجّل في `_rpCharts` ويتدمّر قبل ما يتعاد رسمه — وإلا الكانفاس بيتكرّر. */
+  window._rpCharts = {};
+  function rpCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888"; }
+  function rpChart(id, cfg) {
+    const el = document.getElementById(id);
+    if (!el || !window.Chart) return;
+    if (window._rpCharts[id]) { try { window._rpCharts[id].destroy(); } catch (e) {} }
+    window._rpCharts[id] = new Chart(el.getContext("2d"), cfg);
+  }
+  window.rpDrawCharts = function(blk, cid) {
+    if (!window.Chart) return;
+    const c = blk.compare, t = c.totals, b = blk.budget || {};
+    const muted = rpCssVar("--muted"), border = rpCssVar("--border"), text = rpCssVar("--text");
+    const sky = rpCssVar("--sky"), green = rpCssVar("--green"), blue = rpCssVar("--blue"), orange = rpCssVar("--orange"), purple = rpCssVar("--purple"), teal = rpCssVar("--teal"), red = rpCssVar("--red");
+    Chart.defaults.font.family = "Cairo, system-ui, sans-serif";
+    Chart.defaults.color = muted;
+    const days = (blk.daily || []).filter(x => x.day <= (c.elapsedDays || 0));
+    const labels = days.map(x => String(x.day));
+    const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { rtl: true, labels: { color: text, boxWidth: 12 } }, tooltip: { rtl: true } },
+      scales: { x: { grid: { color: border }, ticks: { color: muted } }, y: { grid: { color: border }, ticks: { color: muted }, beginAtZero: true } } };
+
+    /* ① الأوردرات اليومية + خط التعادل */
+    const needed = t.ordersNeededPerDay;
+    rpChart("rpc_daily_" + cid, { type: "line",
+      data: { labels, datasets: [
+        { label: "أوردرات اليوم", data: days.map(x => x.orders), borderColor: sky, backgroundColor: sky + "33", fill: true, tension: .3, pointRadius: 3 },
+        ...(needed !== null ? [{ label: `خط التعادل (${ needed }/يوم)`, data: days.map(() => needed), borderColor: orange, borderDash: [6, 4], pointRadius: 0, fill: false }] : []),
+      ] }, options: common });
+
+    /* ② متوقع لحد النهارده قصاد الفعلي لكل بند */
+    const rows = c.rows || [];
+    rpChart("rpc_cat_" + cid, { type: "bar",
+      data: { labels: rows.map(r => r.label), datasets: [
+        { label: "المتوقع لحد النهارده", data: rows.map(r => r.expectedToDate), backgroundColor: blue + "99", borderColor: blue, borderWidth: 1 },
+        { label: "الفعلي", data: rows.map(r => r.actual), backgroundColor: rows.map(r => (r.status === "over" || r.status === "unplanned" ? red : green) + "99"), borderColor: rows.map(r => r.status === "over" || r.status === "unplanned" ? red : green), borderWidth: 1 },
+      ] }, options: common });
+
+    /* ③ توزيع التكلفة الفعلية */
+    const palette = [sky, blue, green, orange, purple, teal, red, muted, "#eab308", "#06b6d4", "#84cc16"];
+    const donutRows = rows.filter(r => r.actual > 0);
+    const donutLabels = donutRows.map(r => r.label), donutData = donutRows.map(r => r.actual);
+    if (c.uncategorized > 0) { donutLabels.push("غير مصنّف"); donutData.push(c.uncategorized); }
+    rpChart("rpc_donut_" + cid, { type: "doughnut",
+      data: { labels: donutLabels, datasets: [{ data: donutData, backgroundColor: donutLabels.map((_, i) => palette[i % palette.length]), borderColor: rpCssVar("--card"), borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { rtl: true, position: "left", labels: { color: text, boxWidth: 10, font: { size: 11 } } }, tooltip: { rtl: true } } } });
+
+    /* ④ التراكمي: الإيراد الفعلي قصاد التكلفة المتوقعة (ثابت/٣٠ × اليوم + متغيّر × الأوردرات التراكمية) */
+    let cumRev = 0, cumOrd = 0;
+    const fixedPerDay = (Number(b.fixed) || 0) / (Number(b.workDays) || 30);
+    const perOrder = Number(b.perOrderRate) || 0;
+    const revSeries = [], costSeries = [];
+    days.forEach(x => { cumRev += Number(x.revenue) || 0; cumOrd += Number(x.orders) || 0; revSeries.push(Math.round(cumRev)); costSeries.push(Math.round(fixedPerDay * x.day + perOrder * cumOrd)); });
+    rpChart("rpc_cum_" + cid, { type: "line",
+      data: { labels, datasets: [
+        { label: "الإيراد التراكمي (فعلي)", data: revSeries, borderColor: green, backgroundColor: green + "22", fill: true, tension: .25, pointRadius: 2 },
+        { label: "التكلفة المتوقعة التراكمية", data: costSeries, borderColor: orange, borderDash: [5, 4], fill: false, tension: .25, pointRadius: 2 },
+      ] }, options: common });
+
+    /* ⑤ أوردرات لكل ساعة طيار */
+    rpChart("rpc_eff_" + cid, { type: "bar",
+      data: { labels, datasets: [{ label: "أوردر / ساعة طيار", data: days.map(x => x.hours > 0 ? Math.round(x.orders / x.hours * 100) / 100 : 0), backgroundColor: teal + "99", borderColor: teal, borderWidth: 1 }] },
+      options: common });
+  };
   window.renderReportsCompare = function() {
     const d = window._rpCmp; if (!d) return;
-    const blocks = (d.branches || []).map(b => rpCompareBlock(`🏪 ${ esc(b.name) } · ${ esc(monthLabel(d.month)) }`, b, "المتوقع لحد النهارده = الثابت على ٣٠ يوم × الأيام اللي عدّت، ولكل أوردر على الأوردرات الفعلية")).join("");
-    const company = d.company ? `<div style="margin-top:30px;border-top:2px dashed var(--border);padding-top:8px">${ rpCompareBlock(`🏢 إجمالي الشركة · ${ esc(monthLabel(d.month)) }`, { ...d.company, hasBudget: true }, `${ paNum((d.branches || []).length) } فرع`) }</div>` : "";
+    const blocks = (d.branches || []).map(b => rpCompareBlock(`🏪 ${ esc(b.name) } · ${ esc(monthLabel(d.month)) }`, b, "المتوقع لحد النهارده = الثابت على ٣٠ يوم × الأيام اللي عدّت، ولكل أوردر على الأوردرات الفعلية", "b" + b.branchId)).join("");
+    const company = d.company ? `<div style="margin-top:30px;border-top:2px dashed var(--border);padding-top:8px">${ rpCompareBlock(`🏢 إجمالي الشركة · ${ esc(monthLabel(d.month)) }`, { ...d.company, hasBudget: true }, `${ paNum((d.branches || []).length) } فرع`, "co") }</div>` : "";
     $("rpCompare").innerHTML = (blocks || `<div class="empty-row">مافيش فروع</div>`) + company;
+    /* الرسم بعد ما الكانفاس يبقى في الصفحة */
+    requestAnimationFrame(() => {
+      (d.branches || []).forEach(b => rpDrawCharts(b, "b" + b.branchId));
+      if (d.company) rpDrawCharts(d.company, "co");
+    });
   };
   /* ═══════════ 📈 التقارير — الميزانية المتوقعة (2026-09-05) ═══════════
      كل الأرقام من رد `pilot-accounting/budget` — الشاشة بتعرض وبتحفظ بند بند.
