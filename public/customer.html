@@ -21,7 +21,7 @@
        regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
        نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
        ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
-  <meta name="app-version" content="1.7.1" />
+  <meta name="app-version" content="1.7.2" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -2213,7 +2213,7 @@ function renderSupportBar() {
       ${SUPPORT.phone ? `<a href="tel:${esc(SUPPORT.phone)}" style="text-decoration:none;
         background:#0ea5e9;color:#fff;padding:9px 13px;border-radius:10px;font-weight:800;
         font-size:13px">📞 اتصل</a>` : ""}
-      ${SUPPORT.whatsapp ? `<a href="https://wa.me/${esc(SUPPORT.whatsapp)}" target="_blank"
+      ${SUPPORT.whatsapp ? `<a href="https://wa.me/${waNum(SUPPORT.whatsapp)}" target="_blank"
         rel="noopener" style="text-decoration:none;background:rgba(34,197,94,.16);color:#22c55e;
         padding:9px 13px;border-radius:10px;font-weight:800;font-size:13px">💬</a>` : ""}
     </div>
@@ -2227,7 +2227,7 @@ function extraSupportHtml() {
     .concat((SUPPORT.whatsapps || []).slice(1).map(x => ({ ...x, wa: true })));
   if (!rest.length) return "";
   return `<div style="display:flex;flex-wrap:wrap;gap:7px;margin:-8px 0 14px">
-    ${rest.map(x => `<a href="${x.wa ? `https://wa.me/${esc(x.n)}` : `tel:${esc(x.n)}`}"
+    ${rest.map(x => `<a href="${x.wa ? `https://wa.me/${waNum(x.n)}` : `tel:${esc(x.n)}`}"
         ${x.wa ? 'target="_blank" rel="noopener"' : ""}
         style="text-decoration:none;background:rgba(14,165,233,.09);
           border:1px solid rgba(14,165,233,.28);color:var(--txt);padding:6px 11px;
@@ -3286,7 +3286,7 @@ const openSupport = () => openModal("الدعم والمساعدة", `
       <a class="btn" style="margin-top:8px" href="tel:${esc(SUPPORT.phone)}">📞 اتصل بنا</a>` : ""}
     ${SUPPORT.whatsapp ? `
       <a class="btn ghost" style="margin-top:9px" target="_blank" rel="noopener"
-         href="https://wa.me/${esc(SUPPORT.whatsapp)}">💬 واتساب</a>` : ""}
+         href="https://wa.me/${waNum(SUPPORT.whatsapp)}">💬 واتساب</a>` : ""}
     ${!SUPPORT.phone && !SUPPORT.whatsapp
       ? `<div style="font-size:12.5px;color:var(--muted);margin-top:12px">
            أرقام الدعم لسه ماتسجّلتش — كلّم الفرع</div>` : ""}

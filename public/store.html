@@ -36,7 +36,7 @@
   <link rel="apple-touch-icon" href="assets/icon-192.png" />
   <!-- نسخة البوابة — التحديث الذاتي تحت بيقارن بيها نسخة السيرفر.
        لازم تتحرّك مع أي رفعة فيها تغيير جافاسكربت، وإلا الآلية عمياء. -->
-  <meta name="app-version" content="1.1.2" />
+  <meta name="app-version" content="1.1.3" />
 
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
@@ -4482,7 +4482,7 @@
         .concat((s.whatsapps || []).slice(1).map(x => ({ ...x, wa: true })));
       if (!rest.length) return "";
       return `<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px">
-        ${rest.map(x => `<a href="${ x.wa ? `https://wa.me/${ esc(x.n) }` : `tel:${ esc(x.n) }` }"
+        ${rest.map(x => `<a href="${ x.wa ? `https://wa.me/${ SupportNums.intl(x.n) }` : `tel:${ esc(x.n) }` }"
             ${ x.wa ? 'target="_blank" rel="noopener"' : "" }
             style="text-decoration:none;background:var(--tint);border:1px solid var(--tint-bd);
               color:var(--text);padding:6px 11px;border-radius:999px;font-size:.74rem;font-weight:700">
@@ -4495,7 +4495,9 @@
       const s = window._support || {};
       if (!s.phone && !s.whatsapp) return "";
       const tel = String(s.phone || "").replace(/[^\d+]/g, "");
-      const wa  = String(s.whatsapp || "").replace(/\D/g, "");
+      /* 💬 دولي عبر SupportNums.intl — الأرقام في الإعدادات محلية (01…)
+         وwa.me/01… بيرجّع «رمز الدولة غير صحيح» (بلاغ 2026-09-05) */
+      const wa  = SupportNums.intl(s.whatsapp || "");
       return `
         <div style="display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:14px;
           background:var(--tint);border:1px solid var(--tint-bd)">
@@ -4508,7 +4510,7 @@
           </div>
           ${tel ? `<a href="tel:${ esc(tel) }" style="text-decoration:none;background:var(--sky);
             color:#fff;padding:9px 13px;border-radius:10px;font-weight:800;font-size:.8rem">📞 اتصل</a>` : ""}
-          ${wa ? `<a href="https://wa.me/${ esc(wa) }" target="_blank" rel="noopener"
+          ${wa ? `<a href="https://wa.me/${ SupportNums.intl(s.whatsapp || "") }" target="_blank" rel="noopener"
             style="text-decoration:none;background:rgba(34,197,94,.16);color:var(--green);
             padding:9px 13px;border-radius:10px;font-weight:800;font-size:.8rem">💬</a>` : ""}
         </div>

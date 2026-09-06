@@ -423,6 +423,8 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <div class="toolbar">
         <select class="field" id="paBranch" onchange="loadPilotAcct()"><option value="">كل الفروع</option></select>
         <input type="month" class="field" id="paMonth" onchange="loadPilotAcct()" />
+        <!-- 🎯 فلتر الشخص (طلب 2026-09-05: «أختار بيه أنا عايز أعدّل مين») -->
+        <select class="field" id="paDailyPilotFilter" onchange="renderPaDaily()" style="min-width:170px" title="اشتغل على طيار واحد"><option value="">كل الطيارين</option></select>
         <button class="btn-ghost" onclick="paDay(-1)" title="اليوم السابق">▶</button>
         <select class="field" id="paDaySelect" onchange="renderPaDaily()"></select>
         <button class="btn-ghost" onclick="paDay(1)" title="اليوم التالي">◀</button>
@@ -488,6 +490,7 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
         <div class="sec-sub">كل الطيارين في شهر واحد — الأجر والعمولة والسلف وصافي الراتب</div>
       </div>
       <div class="toolbar">
+        <select class="field" id="paMonthPilotFilter" onchange="renderPaMonth()" style="min-width:170px" title="اشتغل على طيار واحد"><option value="">كل الطيارين</option></select>
         <button class="btn-ghost" data-act="print" onclick="window.print()">🖨️ طباعة</button>
         <button class="btn-green" data-act="export" onclick="exportMonth()">📥 إكسل</button>
       </div>
@@ -556,6 +559,7 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
       <div class="sec-header">
         <span class="sec-title">📋 حضور الموظفين — يوم واحد</span>
         <div class="toolbar">
+          <select class="field" id="stDailyPersonFilter" onchange="renderStDaily()" style="min-width:170px" title="اشتغل على موظف واحد"><option value="">كل الموظفين</option></select>
           <button class="btn-ghost" onclick="stDay(-1)">▶</button>
           <select class="field" id="stDaySelect" onchange="renderStDaily()"></select>
           <button class="btn-ghost" onclick="stDay(1)">◀</button>
@@ -599,7 +603,11 @@ tfoot td, tr.total-row td { font-weight: 800; background: var(--panel); border-t
     </div>
 
     <div id="st-month" style="display:none">
-      <div class="sec-header"><span class="sec-title">💵 مرتبات الموظفين — تقفيلة الشهر</span></div>
+      <div class="sec-header"><span class="sec-title">💵 مرتبات الموظفين — تقفيلة الشهر</span>
+        <div class="toolbar">
+          <select class="field" id="stMonthPersonFilter" onchange="renderStMonth()" style="min-width:170px" title="اشتغل على موظف واحد"><option value="">كل الموظفين</option></select>
+        </div>
+      </div>
       <div class="table-wrap"><table>
         <thead><tr>
           <th style="width:34px">#</th><th>الموظف</th><th>الدور</th><th>الفرع</th>
@@ -1517,6 +1525,30 @@ async function bootAccounts() {
   }
 
   /* ═══════════ 1) التقفيل اليومي ═══════════ */
+  /* 🎯 فلتر الشخص في الشيتات (طلب صاحب النظام 2026-09-05: «في تقفيل
+     الطيارين — الطيارين والموظفين — عايز أضيف فلتر أختار بيه أنا عايز
+     أعدّل مين»). بيعبّي القايمة من نفس بيانات الشيت (ويحافظ على الاختيار
+     لما البيانات تتحدّث)، ويرجّع الصفوف المفلترة — فالإجماليات تحت
+     الجدول بتبقى إجماليات المختار بس. الافتراضي «الكل» = زي ما كان. */
+  function paPersonFilter(selId, items, idOf, labelOf) {
+    const sel = document.getElementById(selId);
+    if (!sel) return items;
+    const sig = items.map(x => String(idOf(x))).join(",");
+    if (sel.dataset.sig !== sig) {
+      const keep = sel.value;
+      const all  = sel.options[0] ? sel.options[0].textContent : "الكل";
+      sel.innerHTML = `<option value="">${ esc(all) }</option>` +
+        items.map(x => `<option value="${ esc(idOf(x)) }">${ esc(labelOf(x)) }</option>`).join("");
+      sel.dataset.sig = sig;
+      sel.value = keep;
+      if (sel.value !== keep) sel.value = "";   // الشخص اختفى من البيانات
+    }
+    const v = sel.value;
+    return v ? items.filter(x => String(idOf(x)) === v) : items;
+  }
+  const paPilotLabel = p => (p.name || "—") + (p.branchName ? " — " + p.branchName : "");
+  const paStaffLabel = u => (u.name || u.username || "—") + " — " + paRole(u.role) + (u.branchName ? " · " + u.branchName : "");
+
   window.renderPaDaily = function() {
     const d = window._paData;
     const body = document.getElementById("paDailyBody");
@@ -1527,7 +1559,7 @@ async function bootAccounts() {
     document.getElementById("paDayLabel").textContent =
       `تقفيل يومي · ${day} ${paWeekday(d.month, day)} · ${monthLabel(d.month)} · ${bName}`;
 
-    const ps = d.pilots || [];
+    const ps = paPersonFilter("paDailyPilotFilter", d.pilots || [], p => p.pilotId, paPilotLabel);
     if (!ps.length) { body.innerHTML = `<tr><td colspan="16" class="empty-row">مفيش طيارين</td></tr>`; $("paDailyFoot").innerHTML = ""; $("paDailySum").innerHTML = ""; return; }
 
     body.innerHTML = ps.map((p, i) => {
@@ -1721,9 +1753,10 @@ async function bootAccounts() {
     const d = window._paData;
     const body = document.getElementById("paMonthBody");
     if (!d) return;
-    const ps = d.pilots || [];
+    const ps = paPersonFilter("paMonthPilotFilter", d.pilots || [], p => p.pilotId, paPilotLabel);
     const bName = $("paBranch").selectedOptions[0]?.textContent || "كل الفروع";
-    document.getElementById("paMonthTitle").textContent = `تقفيل ${monthLabel(d.month)} · ${bName}`;
+    document.getElementById("paMonthTitle").textContent = `تقفيل ${monthLabel(d.month)} · ${bName}`
+      + (ps.length === 1 && (d.pilots || []).length > 1 ? ` · ${ ps[0].name }` : "");
     if (!ps.length) { body.innerHTML = `<tr><td colspan="15" class="empty-row">مفيش طيارين</td></tr>`; $("paMonthFoot").innerHTML = ""; return; }
 
     body.innerHTML = ps.map((p, i) => {
@@ -2217,7 +2250,7 @@ async function bootAccounts() {
     document.getElementById("stDayLabel").textContent =
       `${day} ${paWeekday(d.month, day)} · ${d.month}`;
 
-    const us = d.staff || [];
+    const us = paPersonFilter("stDailyPersonFilter", d.staff || [], u => u.userId, paStaffLabel);
     if (!us.length) { body.innerHTML = `<tr><td colspan="12" class="empty-row">مفيش موظفين</td></tr>`; return; }
 
     body.innerHTML = us.map((u, i) => {
@@ -2267,7 +2300,7 @@ async function bootAccounts() {
     const d = window._stData;
     const body = document.getElementById("stMonthBody");
     if (!d) return;
-    const us = d.staff || [];
+    const us = paPersonFilter("stMonthPersonFilter", d.staff || [], u => u.userId, paStaffLabel);
     if (!us.length) { body.innerHTML = `<tr><td colspan="13" class="empty-row">مفيش موظفين</td></tr>`; return; }
 
     body.innerHTML = us.map((u, i) => {

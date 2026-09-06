@@ -3558,7 +3558,7 @@
                 if (assignedAt) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:assignedAt, color:"249,115,22" });
                 // مراحل النقل بين الطيارين — الوقت بيكمّل ولا يبدأ من جديد
                 for (const t of (Array.isArray(o.transferHistory) ? o.transferHistory : [])) {
-                  stages.push({ icon:"🔄", label:`نقل من ${ esc(t.fromName || "—") } إلى ${ esc(t.toName || "—") }`,
+                  stages.push({ icon:"🔄", label:`نقل من ${ esc(t.fromName || "—") } إلى ${ esc(t.toName || "—") }${ t.toBranchName && t.fromBranchName !== t.toBranchName ? ` — والأوردر اتنقل من فرع «${ esc(t.fromBranchName || "—") }» إلى «${ esc(t.toBranchName) }»` : "" }`,
                                 time:t.at, color:"249,115,22" });
                 }
                 if (o.receivedAt) stages.push({ icon:"📦", label:"استلام الطلب", time:o.receivedAt, color:"20,184,166" });

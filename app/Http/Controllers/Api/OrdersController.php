@@ -1229,7 +1229,7 @@ class OrdersController
         $now = WireTime::nowDb();
 
         try {
-            [$orderId, $newShiftId, $toPilotName] = DB::transaction(function () use (
+            [$orderId, $newShiftId, $toPilotName, $fromBranchId, $toBranchId] = DB::transaction(function () use (
                 $actor, $id, $toPilotId, $now
             ): array {
                 $order = self::lockOrderRow($id);
@@ -1264,25 +1264,41 @@ class OrdersController
                 // قاعدة 3: الوردية بتنتقل لوردية الطيار الجديد المفتوحة — أو NULL + تحذير
                 $newShiftId = self::activeShiftId($toPilotId);
 
+                /* 🔴 قاعدة 4 (طلب صاحب النظام 2026-09-06): الأوردر بينتقل **لفرع الطيار
+                   الجديد** مع النقل — سواء نفس الفرع أو فرع تاني. قبل كده أوردر
+                   اتعمل بالغلط على «المدير» واتنقل لطيار «حي شرق» واتسلّم، وفضل
+                   مسجّل على المدير في كل الشاشات. فرع الطيار = فرع ورديته المفتوحة،
+                   وإلا فرعه الحالي. `origin_branch_id` بيفضل زي ما هو (تاريخ الإنشاء). */
+                $fromBranchId = (int) $order['branch_id'];
+                $toBranchId   = $fromBranchId;
+                if ($newShiftId !== null) {
+                    $sb = DB::select('SELECT branch_id FROM shifts WHERE id = ?', [$newShiftId])[0]->branch_id ?? null;
+                    if ($sb !== null) {
+                        $toBranchId = (int) $sb;
+                    }
+                } elseif ($toPilot['assigned_branch_id'] !== null) {
+                    $toBranchId = (int) $toPilot['assigned_branch_id'];
+                }
+
                 // قاعدة 1: statusSince ممنوع لمسه — الوقت التراكمي بيكمّل من أول تحميل،
                 // ووقت الطيار الحالي بيتسجل منفصل في current_pilot_since
                 DB::update(
                     'UPDATE orders
-                     SET pilot_id = ?, pilot_name = ?, shift_id = ?,
+                     SET pilot_id = ?, pilot_name = ?, shift_id = ?, branch_id = ?,
                          current_pilot_since = ?, transfer_count = transfer_count + 1
                      WHERE id = ?',
-                    [$toPilotId, $toPilot['name'], $newShiftId, $now, (int) $order['id']]
+                    [$toPilotId, $toPilot['name'], $newShiftId, $toBranchId, $now, (int) $order['id']]
                 );
 
                 // سجل النقل — منه بيتبني transferHistory وtransferredFrom/At على السلك
                 DB::insert(
                     'INSERT INTO order_transfers
-                       (order_id, from_pilot_id, to_pilot_id, from_shift_id, to_shift_id, transferred_at, transferred_by)
-                     VALUES (?,?,?,?,?,?,?)',
+                       (order_id, from_pilot_id, to_pilot_id, from_shift_id, to_shift_id, from_branch_id, to_branch_id, transferred_at, transferred_by)
+                     VALUES (?,?,?,?,?,?,?,?,?)',
                     [
                         (int) $order['id'], $fromPilotId, $toPilotId,
                         $order['shift_id'] !== null ? (int) $order['shift_id'] : null,
-                        $newShiftId, $now, $actor->username,
+                        $newShiftId, $fromBranchId, $toBranchId, $now, $actor->username,
                     ]
                 );
 
@@ -1294,7 +1310,7 @@ class OrdersController
                 // حمولة الحدث نفسها، فاللوحة تقدر تحدّث الصف محليًا
                 $this->broadcastOrder((int) $order['id']);
 
-                return [(int) $order['id'], $newShiftId, (string) $toPilot['name']];
+                return [(int) $order['id'], $newShiftId, (string) $toPilot['name'], $fromBranchId, $toBranchId];
             });
         } catch (QueryException $e) {
             report($e);
@@ -1306,6 +1322,10 @@ class OrdersController
             'warning' => $newShiftId === null
                 ? '⚠️ ' . $toPilotName . ' مالوش وردية مفتوحة — الأوردر مش هيتحسب في تقفيلة وردية'
                 : null,
+            /* الأوردر اتنقل لفرع تاني — الشاشة بتقول للمشرف إنه خرج من لوحته */
+            'movedBranch' => $fromBranchId !== $toBranchId,
+            'fromBranchId' => $fromBranchId,
+            'toBranchId'   => $toBranchId,
         ]);
     }
 

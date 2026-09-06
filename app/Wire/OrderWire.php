@@ -88,10 +88,13 @@ final class OrderWire
         // ── سجل النقلات بين الطيارين (بأسماءهم) ──
         $transfersByOrder = [];
         foreach (DB::select(
-            'SELECT t.*, pf.name AS _from_name, pt.name AS _to_name
+            'SELECT t.*, pf.name AS _from_name, pt.name AS _to_name,
+                    bf.name AS _from_branch, bt.name AS _to_branch
                FROM order_transfers t
                LEFT JOIN pilots pf ON pf.id = t.from_pilot_id
                LEFT JOIN pilots pt ON pt.id = t.to_pilot_id
+               LEFT JOIN branches bf ON bf.id = t.from_branch_id
+               LEFT JOIN branches bt ON bt.id = t.to_branch_id
               WHERE t.order_id IN (' . self::ph($ids) . ')
               ORDER BY t.order_id, t.transferred_at, t.id',
             $ids
@@ -203,6 +206,16 @@ final class OrderWire
                 'at'          => WireTime::toWire($t['transferred_at']),
                 'by'          => $t['transferred_by'] ?? '',
             ];
+            /* الفرعين — الأوردر بينتقل لفرع الطيار الجديد (2026-09-06). بيتضافوا **بس**
+               لما يكونوا متسجّلين: النقلات القديمة مالهاش، وعقد السلك المجمّد
+               (VerifyWireParity) بيقارن الشكل القديم بالحرف. */
+            if ($t['from_branch_id'] !== null || $t['to_branch_id'] !== null) {
+                $i = count($history) - 1;
+                $history[$i]['fromBranchId']   = $t['from_branch_id'] !== null ? (int) $t['from_branch_id'] : null;
+                $history[$i]['fromBranchName'] = $t['_from_branch'] ?? null;
+                $history[$i]['toBranchId']     = $t['to_branch_id'] !== null ? (int) $t['to_branch_id'] : null;
+                $history[$i]['toBranchName']   = $t['_to_branch'] ?? null;
+            }
         }
         $last = $history ? $history[count($history) - 1] : null;
 

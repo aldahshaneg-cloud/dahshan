@@ -1037,6 +1037,8 @@ CREATE TABLE `order_transfers` (
   `to_pilot_id` bigint(20) unsigned NOT NULL COMMENT 'الطيار المنقول إليه',
   `from_shift_id` bigint(20) unsigned DEFAULT NULL COMMENT 'ÙˆØ±Ø¯ÙŠØ© Ø§Ù„Ø·ÙŠØ§Ø± Ø§Ù„Ù…Ù†Ù‚ÙˆÙ„ Ù…Ù†Ù‡ ÙˆÙ‚Øª Ø§Ù„Ù†Ù‚Ù„',
   `to_shift_id` bigint(20) unsigned DEFAULT NULL COMMENT 'ÙˆØ±Ø¯ÙŠØ© Ø§Ù„Ø·ÙŠØ§Ø± Ø§Ù„Ù…Ù†Ù‚ÙˆÙ„ Ø¥Ù„ÙŠÙ‡ ÙˆÙ‚Øª Ø§Ù„Ù†Ù‚Ù„ â€” NULL Ù„Ùˆ Ù…Ù„ÙˆØ´ ÙˆØ±Ø¯ÙŠØ© Ù…ÙØªÙˆØ­Ø©',
+  `from_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'فرع الأوردر وقت النقل',
+  `to_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'فرع الطيار الجديد — الأوردر بينتقل له مع الطيار (2026-09-06)',
   `transferred_at` datetime NOT NULL DEFAULT current_timestamp(),
   `transferred_by` varchar(190) DEFAULT NULL COMMENT 'مين نفّذ النقل (اسم/معرّف مستخدم الفرع أو الإدارة)',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -1048,7 +1050,7 @@ CREATE TABLE `order_transfers` (
   CONSTRAINT `fk_order_transfers_from_pilot_id` FOREIGN KEY (`from_pilot_id`) REFERENCES `pilots` (`id`),
   CONSTRAINT `fk_order_transfers_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_order_transfers_to_pilot_id` FOREIGN KEY (`to_pilot_id`) REFERENCES `pilots` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='سجل نقل الأوردرات بين الطيارين — لحساب الوقت التراكمي وبصمة الوردية';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='سجل نقل الأوردرات بين الطيارين — لحساب الوقت التراكمي وبصمة الوردية';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

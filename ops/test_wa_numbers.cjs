@@ -37,13 +37,31 @@ ok("🔴 الصيغة الغلط («2» + الرقم بلا صفر) اختفت",
    !/"2" \+ String\(p \|\| ""\)\.replace\(\/\\D\/g, ""\)\.replace\(\/\^0\/, ""\)/.test(C), "لسه موجودة");
 ok("support-numbers.js متحمّل قبل الاستخدام", /assets\/js\/support-numbers\.js/.test(C));
 
-console.log("\n══ 3) الصفحات كلها — مافيش «2» + رقم منزوع الصفر ══");
+console.log("\n══ 3) الصفحات كلها — كل wa.me بيمر على محوّل دولي ══");
+/* المحوّلات المعروفة: SupportNums.intl/waLink، waNum (customer)،
+   _toWhatsAppNumber (branch/tiar)، _notifWaPhone/_waIntl/_ccNotifWaPhone
+   (رسايل العملاء)، وبناء «2 + رقم بصفره» (20…) — أي تعبير غيرهم
+   (esc(x.n)، esc(SUPPORT.whatsapp)، رقم خام) = زرار بيفتح رقم محلي. */
+const OKX = /SupportNums\.(intl|waLink)\(|waNum\(|_toWhatsAppNumber\(|_notifWaPhone\(|_waIntl\(|_ccNotifWaPhone\(|\$\{(phone|waNumber|p)\}|' \+ SupportNums|\+ _waIntl/;
 for (const f of fs.readdirSync("public").filter(x => x.endsWith(".html"))) {
   const s = fs.readFileSync("public/" + f, "utf8");
-  // النمط الغلط: حط «2» بعد ما شال الصفر
   const bad = /"2"\s*\+[^;\n]*replace\(\/\^0\/, ""\)/.test(s) || /replace\(\/\^0\/, ""\)[^;\n]*"2"\s*\+/.test(s);
   ok(f + " — مافيش بناء «2 + رقم بلا صفر»", !bad);
+  const raw = [];
+  for (const m of s.matchAll(/wa\.me\/(\$\{[^}]*\}|[^"'`\s?)]+)/g)) {
+    const expr = m[1];
+    if (/^\d+$/.test(expr)) continue;                 // رقم ثابت مكتوب بالإيد
+    if (expr === "" || expr === "2" || /…/.test(expr)) continue;   // نص تعليق/توثيق
+    if (!OKX.test(expr)) raw.push(expr);
+  }
+  ok(f + " — كل wa.me بمحوّل دولي", raw.length === 0, raw.join(" | "));
 }
+// الحالات اللي كانت بتفتح رقم محلي في البلاغ لازم تكون اختفت بالنص
+const C2 = fs.readFileSync("public/customer.html", "utf8");
+ok("🔴 customer: مافيش wa.me/${esc(SUPPORT.whatsapp)}", !C2.includes("wa.me/${esc(SUPPORT.whatsapp)}"));
+ok("🔴 customer: مافيش wa.me/${esc(x.n)}", !C2.includes("wa.me/${esc(x.n)}"));
+const S2 = fs.readFileSync("public/store.html", "utf8");
+ok("🔴 store: مافيش wa.me/${ esc(x.n) } ولا wa.me/${ esc(wa) }", !S2.includes("wa.me/${ esc(x.n) }") && !S2.includes("wa.me/${ esc(wa) }"));
 
 console.log("\n" + "─".repeat(50));
 if (fail) { console.log(`🔴 وقع ${fail} من ${pass + fail}`); process.exit(1); }

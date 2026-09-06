@@ -4231,6 +4231,7 @@
     async function applyOrderTransfer({ order, fromPilot, toPilot }) {
       // السيرفر بيرجّع warning لو الطيار الجديد مالوش وردية مفتوحة
       const res = await api.post(`/api/orders/${order.id}/transfer`, { toPilotId: toPilot.id });
+      if (res.movedBranch) showToast("الأوردر اتنقل مع الطيار لفرعه — هيختفي من لوحة الفرع ده ويظهر عند الفرع التاني", "success");
       if (res.warning) showToast(res.warning, "error");
       return new Date().toISOString();
     }
@@ -4620,7 +4621,7 @@
                 if (o.statusSince) stages.push({ icon:"🛵", label:"تحميل الطلب على المندوب", time:o.statusSince, color:"249,115,22" });
                 // مراحل النقل بين الطيارين — الوقت بيكمّل ولا يبدأ من جديد
                 for (const t of (Array.isArray(o.transferHistory) ? o.transferHistory : [])) {
-                  stages.push({ icon:"🔄", label:`نقل من ${ esc(t.fromName || "—") } إلى ${ esc(t.toName || "—") }`,
+                  stages.push({ icon:"🔄", label:`نقل من ${ esc(t.fromName || "—") } إلى ${ esc(t.toName || "—") }${ t.toBranchName && t.fromBranchName !== t.toBranchName ? ` — والأوردر اتنقل من فرع «${ esc(t.fromBranchName || "—") }» إلى «${ esc(t.toBranchName) }»` : "" }`,
                                 time:t.at, color:"249,115,22" });
                 }
                 if (o.receivedAt) stages.push({ icon:"📦", label:"استلام الطلب", time:o.receivedAt, color:"20,184,166" });

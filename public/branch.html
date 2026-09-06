@@ -3805,6 +3805,7 @@
         (statusSince مش بيتلمس — عمر الأوردر بيكمّل من أول تحميل) */
     async function applyOrderTransfer({ order, fromPilot, toPilot }) {
       const res = await api.post(`/api/orders/${order.id}/transfer`, { toPilotId: toPilot.id });
+      if (res.movedBranch) showToast("الأوردر اتنقل مع الطيار لفرعه — هيختفي من لوحة الفرع ده ويظهر عند الفرع التاني", "success");
       if (res.warning) showToast(res.warning, "error");
       return new Date().toISOString();
     }

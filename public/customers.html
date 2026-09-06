@@ -242,6 +242,7 @@ img{display:block;max-width:100%}
 </div></div>
 <div id="toast"></div>
 
+<script src="assets/js/support-numbers.js?v=20260905"></script>
 <script src="assets/js/constants.js"></script>
 <script src="assets/js/api.js"></script>
 <script>
@@ -556,7 +557,7 @@ function renderPane(id) {
       </div>
       ${c.phone1 ? `<a class="btn" href="tel:${esc(c.phone1)}">📞 اتصل</a>` : ""}
       ${c.phone1 ? `<a class="btn" target="_blank" rel="noopener"
-         href="https://wa.me/2${esc(String(c.phone1).replace(/\D/g,""))}">💬 واتساب</a>` : ""}
+         href="https://wa.me/${SupportNums.intl(c.phone1)}">💬 واتساب</a>` : ""}
     </div>
 
     <div class="pane-body">
