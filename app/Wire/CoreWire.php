@@ -207,7 +207,7 @@ final class CoreWire
     {
         $r = self::row($row);
 
-        return self::wireId($r) + [
+        $out = self::wireId($r) + [
             'name'      => $r['name'],
             'phone1'    => $r['phone1'],
             'phone2'    => $r['phone2'] ?? null,
@@ -216,6 +216,19 @@ final class CoreWire
             'source'    => $r['source'] ?? null,
             'createdAt' => WireTime::toWire($r['created_at'] ?? null),
         ];
+        /* بطاقة العميل (2026-09-06): عناوين إضافية وملاحظات — بيتضافوا **بس** لما
+           يكونوا مكتوبين، عشان الصفوف القديمة تفضل بنفس شكلها في عقد السلك المجمّد. */
+        if (! empty($r['extra_addresses'])) {
+            $extra = json_decode((string) $r['extra_addresses'], true);
+            if (is_array($extra) && $extra) {
+                $out['extraAddresses'] = array_values($extra);
+            }
+        }
+        if (isset($r['notes']) && trim((string) $r['notes']) !== '') {
+            $out['notes'] = (string) $r['notes'];
+        }
+
+        return $out;
     }
 
     /** المستلم = نفس بنية المُرسِل بالحرف (زي ser_receiver في الأصل) */

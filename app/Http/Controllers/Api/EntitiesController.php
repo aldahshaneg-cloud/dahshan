@@ -1547,6 +1547,29 @@ class EntitiesController
                 $id,
             ]
         );
+        /* بطاقة العميل (طلب صاحب النظام 2026-09-06): التاجر ليه أكتر من عنوان استلام
+           وملاحظات — للمرسلين بس. المفتاح الغايب = مايتلمسش؛ القايمة الفاضية = تتمسح. */
+        if ($table === 'senders') {
+            if (array_key_exists('extraAddresses', $b)) {
+                $clean = [];
+                foreach (is_array($b['extraAddresses']) ? $b['extraAddresses'] : [] as $x) {
+                    $addr = trim((string) (is_array($x) ? ($x['address'] ?? '') : $x));
+                    if ($addr === '') {
+                        continue;
+                    }
+                    $clean[] = ['label' => mb_substr(trim((string) (is_array($x) ? ($x['label'] ?? '') : '')), 0, 60),
+                                'address' => mb_substr($addr, 0, 300)];
+                    if (count($clean) >= 10) {
+                        break;
+                    }
+                }
+                DB::update('UPDATE senders SET extra_addresses = ? WHERE id = ?', [$clean ? json_encode($clean, JSON_UNESCAPED_UNICODE) : null, $id]);
+            }
+            if (array_key_exists('notes', $b)) {
+                $notes = trim((string) $b['notes']);
+                DB::update('UPDATE senders SET notes = ? WHERE id = ?', [$notes !== '' ? mb_substr($notes, 0, 1000) : null, $id]);
+            }
+        }
 
         $row = DB::select("SELECT * FROM {$table} WHERE id = ?", [$id])[0] ?? null;
         if (! $row) {

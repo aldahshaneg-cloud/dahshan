@@ -11467,7 +11467,7 @@
         <div class="form-group"><label>هاتف 2</label><input id="orderSenderPhone2" type="tel" dir="ltr" readonly /></div>
         <div class="form-group full"><label>عنوان جهة الاستلام</label><input id="orderSenderAddress" type="text" readonly /></div>
         <div class="form-group full" id="senderEditBtnRow" style="display:none">
-          <button type="button" onclick="openInlineEdit('sender')" style="background:rgba(14,165,233,.12);color:var(--sky);border:1px solid rgba(14,165,233,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">✏️ تعديل بيانات هذا العميل</button>
+          <button type="button" onclick="openSenderCard()" style="background:rgba(14,165,233,.12);color:var(--sky);border:1px solid rgba(14,165,233,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">🧾 بطاقة العميل — تعديل البيانات والعناوين والأوردرات السابقة</button>
         </div>
       </div>
 
@@ -11993,6 +11993,43 @@
 </script>
 
   <!-- modal التعديل السريع للعميل من داخل فورم الطلب -->
+  <!-- 🧾 بطاقة العميل / التاجر (طلب صاحب النظام 2026-09-06): تعديل بياناته + عناوين إضافية + أوردراته السابقة -->
+  <div id="modal-sender-card" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center;padding:14px">
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:22px 26px;width:min(780px,96vw);max-height:92vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 id="sc-title" style="margin:0;color:var(--sky);font-size:1rem">🧾 بطاقة العميل</h3>
+        <button onclick="closeSenderCard()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="grid-column:1/-1"><label class="sc-lbl">الاسم</label><input id="sc-name" class="sc-in"></div>
+        <div><label class="sc-lbl">رقم الهاتف 1</label><input id="sc-phone1" dir="ltr" class="sc-in"></div>
+        <div><label class="sc-lbl">رقم الهاتف 2</label><input id="sc-phone2" dir="ltr" class="sc-in"></div>
+        <div style="grid-column:1/-1"><label class="sc-lbl">العنوان الأساسي</label><div id="sc-addrWidget"></div></div>
+        <div style="grid-column:1/-1">
+          <label class="sc-lbl">📍 عناوين إضافية <span style="font-weight:400">— للتاجر اللي ليه أكتر من مكان استلام؛ «استخدم» بيحطه في الطلب ده</span></label>
+          <div id="sc-extra"></div>
+          <button type="button" onclick="scAddExtra()" style="margin-top:6px;background:rgba(14,165,233,.12);color:var(--sky);border:1px dashed var(--sky);border-radius:8px;padding:7px 14px;cursor:pointer;font-size:.8rem;font-weight:700">➕ عنوان آخر</button>
+        </div>
+        <div style="grid-column:1/-1"><label class="sc-lbl">ملاحظات عن العميل</label><textarea id="sc-notes" class="sc-in" rows="2" placeholder="مثال: تاجر ملابس — الاستلام بعد الظهر"></textarea></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+        <button onclick="closeSenderCard()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:9px 20px;border-radius:8px;cursor:pointer">إغلاق</button>
+        <button onclick="saveSenderCard()" style="background:var(--sky);color:#fff;border:none;padding:9px 24px;border-radius:8px;cursor:pointer;font-weight:700">💾 حفظ البيانات</button>
+      </div>
+      <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:12px">
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:8px">📦 الأوردرات السابقة <span id="sc-orders-count" style="font-size:.76rem;color:var(--muted);font-weight:600"></span></div>
+        <div id="sc-orders" style="font-size:.8rem;color:var(--muted)">جاري التحميل…</div>
+      </div>
+    </div>
+  </div>
+  <style>
+    .sc-lbl { font-size:.78rem; color:var(--muted); display:block; margin-bottom:4px; font-weight:700; }
+    .sc-in { width:100%; padding:9px; background:var(--card); border:1px solid var(--border); border-radius:8px; color:var(--text); box-sizing:border-box; font-family:inherit; font-size:.85rem; }
+    .sc-extra-row { display:grid; grid-template-columns:120px 1fr auto auto; gap:6px; margin-bottom:6px; align-items:center; }
+    .sc-orders-tbl { width:100%; border-collapse:collapse; font-size:.78rem; }
+    .sc-orders-tbl th, .sc-orders-tbl td { padding:6px 8px; border-bottom:1px solid var(--border); text-align:right; white-space:nowrap; }
+    .sc-orders-tbl th { color:var(--muted); font-weight:700; background:var(--card); }
+  </style>
   <div id="modal-inline-edit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center">
     <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:28px 32px;width:min(480px,95vw)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
@@ -12016,6 +12053,74 @@
   /* التعديل السريع بقى REST مباشر عبر window.API — مفيش فايربيز */
   let _ieType = null, _ieRowN = null, _ieClientId = null, _ieCollection = null;
 
+  /* ═══ 🧾 بطاقة العميل / التاجر (طلب صاحب النظام 2026-09-06) ═══
+     الموظف بيدوس «تعديل» على عميل الاستلام: بياناته كلها قابلة للتعديل، عناوين
+     إضافية (التاجر ليه أكتر من مكان)، ملاحظات، وتحتها كل أوردراته السابقة. */
+  const SC = { search: "senderSearchInput", phone: "orderSenderPhone", phone2: "orderSenderPhone2", addr: "orderSenderAddress", nameInput: "senderSearchInput" };
+  window._sc = { id: null, extra: [] };
+  window.openSenderCard = async function() {
+    const state = window._smartSearchState[SC.search];
+    const d = state?.selectedData;
+    if (!d || !d.id) { showToast("اختار عميل محفوظ الأول — العميل الجديد بيتسجّل مع حفظ الطلب", "error"); return; }
+    window._sc = { id: d.id, extra: Array.isArray(d.extraAddresses) ? d.extraAddresses.map(x => ({ label: x.label || "", address: x.address || "" })) : [] };
+    document.getElementById("sc-title").textContent = "🧾 بطاقة العميل — " + (d.name || "");
+    document.getElementById("sc-name").value   = d.name   || "";
+    document.getElementById("sc-phone1").value = d.phone1 || "";
+    document.getElementById("sc-phone2").value = d.phone2 || "";
+    document.getElementById("sc-notes").value  = d.notes  || "";
+    if (!document.getElementById("sc-addrWidget-gov")) window.renderAddressWidget("sc-addrWidget", { required: false });
+    window.setAddressValue("sc-addrWidget", d.address || "");
+    renderScExtra();
+    document.getElementById("modal-sender-card").style.display = "flex";
+    loadScOrders(d.id);
+  };
+  window.closeSenderCard = function() { document.getElementById("modal-sender-card").style.display = "none"; };
+  function renderScExtra() {
+    const box = document.getElementById("sc-extra");
+    box.innerHTML = window._sc.extra.map((x, i) => `<div class="sc-extra-row">
+        <input class="sc-in" placeholder="مثلًا: المخزن" value="${ esc(x.label) }" oninput="window._sc.extra[${i}].label = this.value" />
+        <input class="sc-in" placeholder="العنوان" value="${ esc(x.address) }" oninput="window._sc.extra[${i}].address = this.value" />
+        <button type="button" title="استخدم العنوان ده في الطلب" onclick="scUseExtra(${i})" style="background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:7px;padding:6px 10px;cursor:pointer;font-size:.76rem;font-weight:700">استخدم</button>
+        <button type="button" onclick="window._sc.extra.splice(${i},1); renderScExtra()" style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25);border-radius:7px;padding:6px 9px;cursor:pointer;font-size:.76rem">✕</button>
+      </div>`).join("") || `<div style="font-size:.76rem;color:var(--muted)">مافيش عناوين إضافية</div>`;
+  }
+  window.scAddExtra = function() { window._sc.extra.push({ label: "", address: "" }); renderScExtra(); document.querySelector("#sc-extra .sc-extra-row:last-child input")?.focus(); };
+  window.scUseExtra = function(i) {
+    const x = window._sc.extra[i]; if (!x || !x.address.trim()) { showToast("اكتب العنوان الأول", "error"); return; }
+    const el = document.getElementById(SC.addr); if (el) el.value = x.address.trim();
+    showToast("العنوان اتحط في الطلب ده" + (x.label ? " (" + x.label + ")" : ""), "success");
+  };
+  window.saveSenderCard = async function() {
+    if (!window._sc.id) return;
+    const name = document.getElementById("sc-name").value.trim(), phone1 = document.getElementById("sc-phone1").value.trim(), phone2 = document.getElementById("sc-phone2").value.trim();
+    const address = window.getAddressValue("sc-addrWidget"), notes = document.getElementById("sc-notes").value.trim();
+    const extraAddresses = window._sc.extra.filter(x => x.address.trim()).map(x => ({ label: x.label.trim(), address: x.address.trim() }));
+    if (!name || !phone1) { showToast("الاسم ورقم الهاتف مطلوبين", "error"); return; }
+    try {
+      const r = await window.API.put(`/api/senders/${window._sc.id}`, { name, phone1, phone2, address, notes, extraAddresses });
+      const item = r.item || {};
+      const state = window._smartSearchState[SC.search];
+      if (state?.selectedData) Object.assign(state.selectedData, { name, phone1, phone2, address, notes, extraAddresses: item.extraAddresses || extraAddresses });
+      const nm = document.getElementById(SC.nameInput); if (nm) nm.value = name;
+      const p1 = document.getElementById(SC.phone); if (p1) p1.value = phone1;
+      const p2 = document.getElementById(SC.phone2); if (p2) p2.value = phone2;
+      const ad = document.getElementById(SC.addr); if (ad && !ad.value.trim()) ad.value = address;
+      showToast("اتحفظت بيانات العميل ✓", "success");
+    } catch (e) { showToast("خطأ: " + (e.message || ""), "error"); }
+  };
+  async function loadScOrders(id) {
+    const box = document.getElementById("sc-orders"), cnt = document.getElementById("sc-orders-count");
+    box.innerHTML = "جاري التحميل…"; cnt.textContent = "";
+    let items = [];
+    try { items = (await window.API.get(`/api/orders?senderId=${encodeURIComponent(id)}&limit=100`)).items || []; }
+    catch (e) { box.innerHTML = "تعذّر تحميل الأوردرات: " + esc(e.message || ""); return; }
+    cnt.textContent = items.length ? `(${items.length})` : "";
+    if (!items.length) { box.innerHTML = "مافيش أوردرات سابقة للعميل ده"; return; }
+    const fmt = t => t ? new Date(t).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—";
+    box.innerHTML = `<div style="overflow:auto"><table class="sc-orders-tbl"><thead><tr><th>رقم الأوردر</th><th>التاريخ</th><th>الحالة</th><th>المستلم</th><th>المنطقة</th><th>التوصيل</th><th>الطيار</th><th>الفرع</th></tr></thead><tbody>
+      ${ items.map(o => { const d = (o.deliveries || [])[0] || {}; return `<tr><td><b>${ esc(o.orderNum || "—") }</b></td><td>${ esc(fmt(o.createdAt)) }</td><td>${ esc(o.status || "—") }</td><td>${ esc(d.receiverName || "—") }</td><td>${ esc(d.zoneName || "—") }</td><td>${ esc(String(o.totalDeliveryPrice ?? "—")) } ج</td><td>${ esc(o.pilotName || "—") }</td><td>${ esc(o.branchName || "—") }</td></tr>`; }).join("") }
+    </tbody></table></div>`;
+  }
   window.openInlineEdit = function(type, rowN) {
     _ieType = type;
     _ieRowN = rowN || null;

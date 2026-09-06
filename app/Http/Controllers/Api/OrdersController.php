@@ -79,6 +79,13 @@ class OrdersController
         /* فلترة بمالك الشحنة — للأدمن والكول سنتر بس. لوحة المحلات ولوحة
            العملاء كانت بتحسب أرقامها من نافذة «آخر N أوردر في الشركة». */
         $isBackOffice = $actor->hasRole('admin', 'callcenter');
+        /* بطاقة العميل (2026-09-06): أوردرات المرسل السابقة — للموظفين؛ مشرف الفرع
+           مقفول على فرعه بالشرط اللي فوق فبيشوف أوردرات العميل عند فرعه بس. */
+        if (! empty($q['senderId']) && $actor->hasRole('admin', 'callcenter', 'branch')) {
+            $selective = true;
+            $where[] = 'o.sender_id = ?';
+            $params[] = (int) $q['senderId'];
+        }
         if ($isBackOffice && ! empty($q['addedBy'])) {
             $selective = true;
             $where[] = 'o.added_by = ?';
