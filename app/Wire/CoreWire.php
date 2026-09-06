@@ -231,7 +231,7 @@ final class CoreWire
         return $out;
     }
 
-    /** المستلم = نفس بنية المُرسِل بالحرف (زي ser_receiver في الأصل) */
+    /** المستلم = نفس بنية المُرسِل بالحرف (زي ser_receiver في الأصل) — وبنفس عمودي بطاقة العميل (2026-09-06) */
     public static function receiver(array|object $row): array
     {
         return self::sender($row);

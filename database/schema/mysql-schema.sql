@@ -1837,6 +1837,8 @@ CREATE TABLE `receivers` (
   `phone1` varchar(20) NOT NULL COMMENT 'التليفون الأساسي — مفتاح البحث',
   `phone2` varchar(20) DEFAULT NULL,
   `address` varchar(190) DEFAULT NULL,
+  `extra_addresses` text DEFAULT NULL COMMENT 'عناوين إضافية للمستلم — JSON [{label, address}] (بطاقة العميل 2026-09-06)',
+  `notes` text DEFAULT NULL COMMENT 'ملاحظات الموظف عن المستلم',
   `created_by` varchar(190) DEFAULT NULL COMMENT 'اسم المستخدم اللي أضاف المستلم',
   `source` varchar(32) DEFAULT NULL COMMENT 'مصدر إضافة المستلم',
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',

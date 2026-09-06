@@ -86,6 +86,12 @@ class OrdersController
             $where[] = 'o.sender_id = ?';
             $params[] = (int) $q['senderId'];
         }
+        /* نفس البطاقة للمستلم: أوردراته السابقة = اللي فيها طرد ليه */
+        if (! empty($q['receiverId']) && $actor->hasRole('admin', 'callcenter', 'branch')) {
+            $selective = true;
+            $where[] = 'EXISTS (SELECT 1 FROM order_deliveries rd WHERE rd.order_id = o.id AND rd.receiver_id = ?)';
+            $params[] = (int) $q['receiverId'];
+        }
         if ($isBackOffice && ! empty($q['addedBy'])) {
             $selective = true;
             $where[] = 'o.added_by = ?';

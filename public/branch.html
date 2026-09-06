@@ -6390,7 +6390,7 @@
           <!-- 📍 لوكيشن بالإحداثيات (طلب 2026-09-03) — من غيره النقطة كانت «بدون موقع» -->
           <div class="form-group full">${ GeoLoc.fieldHtml(`bDLoc-${n}`, "") }</div>
           <div class="form-group full" id="bRecvEditBtnRow-${n}" style="display:none">
-            <button type="button" onclick="openInlineEdit('receiver',${n})" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">✏️ تعديل بيانات هذا العميل</button>
+            <button type="button" onclick="openReceiverCard(${n})" style="background:rgba(14,165,233,.12);color:var(--sky);border:1px solid rgba(14,165,233,.3);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:600">🧾 بطاقة العميل — تعديل البيانات والعناوين والأوردرات السابقة</button>
           </div>
           <div class="form-group full">
             <label>المنطقة <span style="color:var(--red)">*</span></label>
@@ -9097,13 +9097,17 @@
      الموظف بيدوس «تعديل» على عميل الاستلام: بياناته كلها قابلة للتعديل، عناوين
      إضافية (التاجر ليه أكتر من مكان)، ملاحظات، وتحتها كل أوردراته السابقة. */
   const SC = { search: "bOrderSenderSearchInput", phone: "bOrderSenderPhone", phone2: "bOrderSenderPhone2", addr: "bOrderSenderAddress", nameInput: "bOrderSenderSearchInput" };
-  window._sc = { id: null, extra: [] };
-  window.openSenderCard = async function() {
-    const state = window._smartSearchState[SC.search];
+  /* نفس البطاقة لعميل التسليم (طلب صاحب النظام 2026-09-06) — حقول طرد رقم n */
+  const SC_RECV = n => ({ search: `bDRecv-${n}`, phone: `bDPhone-${n}`, phone2: `bDPhone2-${n}`, addr: `bDAddr-${n}`, nameInput: `bDRecv-${n}` });
+  window._sc = { id: null, kind: "senders", f: SC, extra: [] };
+  window.openSenderCard = function() { return openPartyCard("senders", SC); };
+  window.openReceiverCard = function(n) { return openPartyCard("receivers", SC_RECV(n)); };
+  async function openPartyCard(kind, f) {
+    const state = window._smartSearchState[f.search];
     const d = state?.selectedData;
     if (!d || !d.id) { showToast("اختار عميل محفوظ الأول — العميل الجديد بيتسجّل مع حفظ الطلب", "error"); return; }
-    window._sc = { id: d.id, extra: Array.isArray(d.extraAddresses) ? d.extraAddresses.map(x => ({ label: x.label || "", address: x.address || "" })) : [] };
-    document.getElementById("sc-title").textContent = "🧾 بطاقة العميل — " + (d.name || "");
+    window._sc = { id: d.id, kind, f, extra: Array.isArray(d.extraAddresses) ? d.extraAddresses.map(x => ({ label: x.label || "", address: x.address || "" })) : [] };
+    document.getElementById("sc-title").textContent = (kind === "receivers" ? "🧾 بطاقة عميل التسليم — " : "🧾 بطاقة العميل — ") + (d.name || "");
     document.getElementById("sc-name").value   = d.name   || "";
     document.getElementById("sc-phone1").value = d.phone1 || "";
     document.getElementById("sc-phone2").value = d.phone2 || "";
@@ -9112,8 +9116,8 @@
     window.setAddressValue("sc-addrWidget", d.address || "");
     renderScExtra();
     document.getElementById("modal-sender-card").style.display = "flex";
-    loadScOrders(d.id);
-  };
+    loadScOrders(kind, d.id);
+  }
   window.closeSenderCard = function() { document.getElementById("modal-sender-card").style.display = "none"; };
   function renderScExtra() {
     const box = document.getElementById("sc-extra");
@@ -9127,7 +9131,7 @@
   window.scAddExtra = function() { window._sc.extra.push({ label: "", address: "" }); renderScExtra(); document.querySelector("#sc-extra .sc-extra-row:last-child input")?.focus(); };
   window.scUseExtra = function(i) {
     const x = window._sc.extra[i]; if (!x || !x.address.trim()) { showToast("اكتب العنوان الأول", "error"); return; }
-    const el = document.getElementById(SC.addr); if (el) el.value = x.address.trim();
+    const el = document.getElementById(window._sc.f.addr); if (el) el.value = x.address.trim();
     showToast("العنوان اتحط في الطلب ده" + (x.label ? " (" + x.label + ")" : ""), "success");
   };
   window.saveSenderCard = async function() {
@@ -9137,28 +9141,29 @@
     const extraAddresses = window._sc.extra.filter(x => x.address.trim()).map(x => ({ label: x.label.trim(), address: x.address.trim() }));
     if (!name || !phone1) { showToast("الاسم ورقم الهاتف مطلوبين", "error"); return; }
     try {
-      const r = await window.API.put(`/api/senders/${window._sc.id}`, { name, phone1, phone2, address, notes, extraAddresses });
+      const r = await window.API.put(`/api/${window._sc.kind}/${window._sc.id}`, { name, phone1, phone2, address, notes, extraAddresses });
       const item = r.item || {};
-      const state = window._smartSearchState[SC.search];
+      const state = window._smartSearchState[window._sc.f.search];
       if (state?.selectedData) Object.assign(state.selectedData, { name, phone1, phone2, address, notes, extraAddresses: item.extraAddresses || extraAddresses });
-      const nm = document.getElementById(SC.nameInput); if (nm) nm.value = name;
-      const p1 = document.getElementById(SC.phone); if (p1) p1.value = phone1;
-      const p2 = document.getElementById(SC.phone2); if (p2) p2.value = phone2;
-      const ad = document.getElementById(SC.addr); if (ad && !ad.value.trim()) ad.value = address;
+      const F = window._sc.f;
+      const nm = document.getElementById(F.nameInput); if (nm) nm.value = name;
+      const p1 = document.getElementById(F.phone); if (p1) p1.value = phone1;
+      const p2 = document.getElementById(F.phone2); if (p2) p2.value = phone2;
+      const ad = document.getElementById(F.addr); if (ad && !ad.value.trim()) ad.value = address;
       showToast("اتحفظت بيانات العميل ✓", "success");
     } catch (e) { showToast("خطأ: " + (e.message || ""), "error"); }
   };
-  async function loadScOrders(id) {
+  async function loadScOrders(kind, id) {
     const box = document.getElementById("sc-orders"), cnt = document.getElementById("sc-orders-count");
     box.innerHTML = "جاري التحميل…"; cnt.textContent = "";
     let items = [];
-    try { items = (await window.API.get(`/api/orders?senderId=${encodeURIComponent(id)}&limit=100`)).items || []; }
+    try { items = (await window.API.get(`/api/orders?${kind === "receivers" ? "receiverId" : "senderId"}=${encodeURIComponent(id)}&limit=100`)).items || []; }
     catch (e) { box.innerHTML = "تعذّر تحميل الأوردرات: " + esc(e.message || ""); return; }
     cnt.textContent = items.length ? `(${items.length})` : "";
     if (!items.length) { box.innerHTML = "مافيش أوردرات سابقة للعميل ده"; return; }
     const fmt = t => t ? new Date(t).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—";
-    box.innerHTML = `<div style="overflow:auto"><table class="sc-orders-tbl"><thead><tr><th>رقم الأوردر</th><th>التاريخ</th><th>الحالة</th><th>المستلم</th><th>المنطقة</th><th>التوصيل</th><th>الطيار</th><th>الفرع</th></tr></thead><tbody>
-      ${ items.map(o => { const d = (o.deliveries || [])[0] || {}; return `<tr><td><b>${ esc(o.orderNum || "—") }</b></td><td>${ esc(fmt(o.createdAt)) }</td><td>${ esc(o.status || "—") }</td><td>${ esc(d.receiverName || "—") }</td><td>${ esc(d.zoneName || "—") }</td><td>${ esc(String(o.totalDeliveryPrice ?? "—")) } ج</td><td>${ esc(o.pilotName || "—") }</td><td>${ esc(o.branchName || "—") }</td></tr>`; }).join("") }
+    box.innerHTML = `<div style="overflow:auto"><table class="sc-orders-tbl"><thead><tr><th>رقم الأوردر</th><th>التاريخ</th><th>الحالة</th><th>${ kind === "receivers" ? "المرسل" : "المستلم" }</th><th>المنطقة</th><th>التوصيل</th><th>الطيار</th><th>الفرع</th></tr></thead><tbody>
+      ${ items.map(o => { const d = (o.deliveries || [])[0] || {}; return `<tr><td><b>${ esc(o.orderNum || "—") }</b></td><td>${ esc(fmt(o.createdAt)) }</td><td>${ esc(o.status || "—") }</td><td>${ esc((kind === "receivers" ? o.senderName : d.receiverName) || "—") }</td><td>${ esc(d.zoneName || "—") }</td><td>${ esc(String(o.totalDeliveryPrice ?? "—")) } ج</td><td>${ esc(o.pilotName || "—") }</td><td>${ esc(o.branchName || "—") }</td></tr>`; }).join("") }
     </tbody></table></div>`;
   }
   window.openInlineEdit = function(type, rowN) {

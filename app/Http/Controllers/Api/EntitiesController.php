@@ -1548,8 +1548,9 @@ class EntitiesController
             ]
         );
         /* بطاقة العميل (طلب صاحب النظام 2026-09-06): التاجر ليه أكتر من عنوان استلام
-           وملاحظات — للمرسلين بس. المفتاح الغايب = مايتلمسش؛ القايمة الفاضية = تتمسح. */
-        if ($table === 'senders') {
+           وملاحظات — للمرسلين والمستلمين (نفس البطاقة للمستلم من نفس اليوم).
+           المفتاح الغايب = مايتلمسش؛ القايمة الفاضية = تتمسح. */
+        if (in_array($table, ['senders', 'receivers'], true)) {
             if (array_key_exists('extraAddresses', $b)) {
                 $clean = [];
                 foreach (is_array($b['extraAddresses']) ? $b['extraAddresses'] : [] as $x) {
@@ -1563,11 +1564,11 @@ class EntitiesController
                         break;
                     }
                 }
-                DB::update('UPDATE senders SET extra_addresses = ? WHERE id = ?', [$clean ? json_encode($clean, JSON_UNESCAPED_UNICODE) : null, $id]);
+                DB::update("UPDATE {$table} SET extra_addresses = ? WHERE id = ?", [$clean ? json_encode($clean, JSON_UNESCAPED_UNICODE) : null, $id]);
             }
             if (array_key_exists('notes', $b)) {
                 $notes = trim((string) $b['notes']);
-                DB::update('UPDATE senders SET notes = ? WHERE id = ?', [$notes !== '' ? mb_substr($notes, 0, 1000) : null, $id]);
+                DB::update("UPDATE {$table} SET notes = ? WHERE id = ?", [$notes !== '' ? mb_substr($notes, 0, 1000) : null, $id]);
             }
         }
 

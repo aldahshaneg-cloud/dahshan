@@ -8,10 +8,10 @@
  * السابقة» — ونفس الشغل في الإدارة والفروع.
  *
  * ═══ العقود المثبتة ═══
- * • PUT senders/{id} بيقبل extraAddresses [{label, address}] وnotes ويرجّعهم؛ الفاضي
- *   بيتمسح؛ المفتاح الغايب مايلمسش؛ المستلمين مش بيتأثروا.
+ * • PUT senders/{id} **وreceivers/{id}** بيقبلوا extraAddresses [{label, address}] وnotes
+ *   ويرجّعوهم؛ الفاضي بيتمسح؛ المفتاح الغايب مايلمسش (نفس البطاقة للمستلم — طلب تاني نفس اليوم).
  * • السلك بيطلّع extraAddresses/notes **بس** لما يكونوا موجودين (عقد السلك المجمّد).
- * • GET orders?senderId= للموظفين بيرجّع أوردرات المرسل ده بس؛ مشرف الفرع على فرعه.
+ * • GET orders?senderId= / ?receiverId= للموظفين بيرجّعوا أوردرات العميل ده بس؛ مشرف الفرع على فرعه.
  * • التلات صفحات فيها زرار «بطاقة العميل» والمودال وقايمة الأوردرات السابقة.
  * كله جوه معاملة بتترجع.
  *
@@ -93,8 +93,10 @@ try {
     ok('القايمة الفاضية بتمسح — والمفاتيح بتختفي من السلك', $c === 200 && ! array_key_exists('extraAddresses', $j['item']) && ! array_key_exists('notes', $j['item']), json_encode($j['item'] ?? null, JSON_UNESCAPED_UNICODE));
     DB::insert('INSERT INTO receivers (name, phone1, created_by, created_at) VALUES (?,?,?,?)', ['مستلم فحص', '01066666666', 'test', $now]);
     $rid = (int) DB::getPdo()->lastInsertId();
-    [$c, $j] = hit($kernel, $admin, 'PUT', "/api/receivers/{$rid}", ['name' => 'مستلم فحص', 'phone1' => '01066666666', 'extraAddresses' => [['label' => 'x', 'address' => 'y']]]);
-    ok('المستلم مش بيتأثر (مالوش العمود)', $c === 200 && ! array_key_exists('extraAddresses', $j['item']));
+    [$c, $j] = hit($kernel, $admin, 'PUT', "/api/receivers/{$rid}", ['name' => 'مستلم فحص', 'phone1' => '01066666666', 'notes' => 'الدور التالت', 'extraAddresses' => [['label' => 'الشغل', 'address' => 'شارع الشغل']]]);
+    ok('🔴 المستلم كمان ليه عناوين إضافية وملاحظات', $c === 200 && ($j['item']['extraAddresses'][0]['label'] ?? '') === 'الشغل' && ($j['item']['notes'] ?? '') === 'الدور التالت', json_encode($j['item'] ?? $j, JSON_UNESCAPED_UNICODE));
+    $rw = DB::selectOne('SELECT extra_addresses, notes FROM receivers WHERE id = ?', [$rid]);
+    ok('واتخزنوا في جدول المستلمين', str_contains((string) $rw->extra_addresses, 'الشغل') && $rw->notes === 'الدور التالت');
 
     echo "\n══ 2) أوردرات العميل السابقة ══\n";
     $mk = function (int $senderId, int $branch, string $num) use ($now): int {
@@ -102,7 +104,13 @@ try {
                     VALUES (?,?,?,?,'تاجر فحص','01099999999','delivered',?,?,25)", [$num, $branch, $branch, $senderId, $now, $now]);
         return (int) DB::getPdo()->lastInsertId();
     };
-    $mk($sid, $bA, 'TST-SC-1'); $mk($sid, $bB, 'TST-SC-2'); $mk($sid2, $bA, 'TST-SC-3');
+    $oid1 = $mk($sid, $bA, 'TST-SC-1'); $mk($sid, $bB, 'TST-SC-2'); $oid3 = $mk($sid2, $bA, 'TST-SC-3');
+    DB::insert('INSERT INTO order_deliveries (order_id, parcel_no, receiver_id, receiver_name, receiver_phone, created_at) VALUES (?,?,?,?,?,?)', [$oid1, 1, $rid, 'مستلم فحص', '01066666666', $now]);
+    DB::insert('INSERT INTO order_deliveries (order_id, parcel_no, receiver_id, receiver_name, receiver_phone, created_at) VALUES (?,?,?,?,?,?)', [$oid3, 1, $rid, 'مستلم فحص', '01066666666', $now]);
+    [$c, $L] = hit($kernel, $admin, 'GET', "/api/orders?receiverId={$rid}&limit=100");
+    $nums = array_map(fn ($o) => $o['orderNum'], $L['items'] ?? []);
+    sort($nums);
+    ok('🔴 أوردرات المستلم السابقة = اللي فيها طرد ليه (٢ من مرسلين مختلفين)', $c === 200 && $nums === ['TST-SC-1', 'TST-SC-3'], json_encode($nums));
     [$c, $L] = hit($kernel, $admin, 'GET', "/api/orders?senderId={$sid}&limit=100");
     $nums = array_map(fn ($o) => $o['orderNum'], $L['items'] ?? []);
     ok('🔴 الأدمن بيشوف أوردرات العميل ده بس (٢)', $c === 200 && count($nums) === 2 && ! in_array('TST-SC-3', $nums, true), json_encode($nums));
@@ -124,8 +132,10 @@ echo "\n══ 3) الواجهات ══\n";
 foreach (['callcenter', 'tiar', 'branch'] as $pg) {
     $html = file_get_contents($ROOT . "/public/{$pg}.html");
     ok("{$pg}: زرار «بطاقة العميل» بدل التعديل القديم", str_contains($html, 'onclick="openSenderCard()"') && ! str_contains($html, "onclick=\"openInlineEdit('sender')\""));
+    ok("{$pg}: 🔴 ونفس البطاقة لعميل التسليم في كل طرد", str_contains($html, 'onclick="openReceiverCard(${n})"') && ! str_contains($html, "openInlineEdit('receiver'") && str_contains($html, 'window.openReceiverCard = function(n) { return openPartyCard("receivers", SC_RECV(n)); }'));
+    ok("{$pg}: حقول المستلم بتشاور على صف الطرد الصح", str_contains($html, $pg === 'branch' ? 'search: `bDRecv-${n}`, phone: `bDPhone-${n}`, phone2: `bDPhone2-${n}`, addr: `bDAddr-${n}`' : 'search: `dRecv-${n}`, phone: `dPhone-${n}`, phone2: `dPhone2-${n}`, addr: `dAddr-${n}`'));
     ok("{$pg}: المودال فيه العناوين الإضافية والملاحظات والأوردرات السابقة", str_contains($html, 'id="modal-sender-card"') && str_contains($html, 'id="sc-extra"') && str_contains($html, 'id="sc-notes"') && str_contains($html, 'id="sc-orders"'));
-    ok("{$pg}: الحفظ بيبعت extraAddresses وnotes وبيجيب الأوردرات بـsenderId", str_contains($html, '{ name, phone1, phone2, address, notes, extraAddresses }') && str_contains($html, '/api/orders?senderId='));
+    ok("{$pg}: الحفظ بيبعت extraAddresses وnotes وبيجيب الأوردرات بـsenderId", str_contains($html, '{ name, phone1, phone2, address, notes, extraAddresses }') && str_contains($html, '/api/orders?${kind === "receivers" ? "receiverId" : "senderId"}=') && str_contains($html, '/api/${window._sc.kind}/${window._sc.id}'));
     ok("{$pg}: «استخدم» بيحط العنوان في الطلب", str_contains($html, 'window.scUseExtra = function(i)'));
 }
 
