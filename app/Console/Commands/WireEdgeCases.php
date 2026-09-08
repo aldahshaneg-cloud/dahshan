@@ -98,6 +98,11 @@ class WireEdgeCases extends Command
                    الطيار والمستخدم. شوف VerifyWireParity للسبب الكامل. */
                 'hourRate'        => true,
                 'paidLeaveDays'   => true,
+                /* التتبّع الحي (2026-09-07) — اتجاه/سرعة آخر نقطة وأثر
+                   آخر دقيقتين. أعلى مستوى عن قصد: `location` بيتقارن ككائن. */
+                'heading'         => true,
+                'speed'           => true,
+                'trail'           => true,
                 'monthlySalary'   => true,
             ];
             // وحقول الطرد الجديدة (2026-08-27)

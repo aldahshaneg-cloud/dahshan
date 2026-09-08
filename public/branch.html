@@ -93,6 +93,8 @@
   <script src="assets/js/commadj.js?v=20260903"></script>
   <script src="assets/js/geoloc.js?v=20260903"></script>
   <script src="assets/js/locfresh.js?v=20260830"></script>
+  <!-- حركة ماركر الطيار: تزحلق على الأثر بدل النطّ + سهم اتجاه (2026-09-07) -->
+  <script src="assets/js/pilotmotion.js?v=20260907"></script>
   <!-- التحديث الفوري (Reverb). المكتبة **محليًا** مش من CDN: المشروع
        اتلسع قبل كده من SheetJS اللي بيتحمّل من cdnjs، ولو الشبكة مقفولة
        على النت الصفحة بتقع.
@@ -598,7 +600,8 @@
          البحث بقى على السيرفر (?q=) وبيمشي على القاعدة كلها — شوف doSearch. */
 
       // Pilots: كل الطيارين (قائمة الإضافة) + طياري الفرع للوحة
-      reg(new P("/api/pilots", { interval: 15000, useSince: false, onChange: d => {
+      // trail:1 — أثر آخر دقيقتين لكل طيار شغّال، الخريطة بتزحلق عليه (pilotmotion.js)
+      reg(new P("/api/pilots", { interval: 15000, useSince: false, params: { trail: 1 }, onChange: d => {
         const all = nrmList(d.items);
         window._pilotsData    = all.filter(p => p.assignedBranchId === branchId);
         window._allPilotsData = all; // كل الطيارين لقائمة الإضافة
@@ -10031,7 +10034,9 @@ window.clearBrDeliveredFilters = function() {
     const ring    = st.tier === "ok" ? (isOtherBranch ? "#64748b" : "#fff") : st.ring;
     const border  = (isOtherBranch || st.dashed) ? `3px dashed ${ring}` : `2px solid ${ring}`;
     const opacity = Math.min(isOtherBranch ? 0.8 : 1, st.opacity);
-    return L.divIcon({ className:"", html:`<div style="position:relative;width:40px;height:40px">${ LocFresh.badgeHtml(st) }<div style="background:${bg};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:${border};opacity:${opacity}">🛵</div></div>`, iconSize:[40,40], iconAnchor:[20,20] });
+    // سهم الاتجاه (pilotmotion.js) جوه الغلاف — بيتلف حوالين مركز الدايرة
+    const arrow = window.PilotMotion ? PilotMotion.arrowHtml() : "";
+    return L.divIcon({ className:"", html:`<div style="position:relative;width:40px;height:40px">${ LocFresh.badgeHtml(st) }<div style="background:${bg};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:${border};opacity:${opacity}">🛵</div>${arrow}</div>`, iconSize:[40,40], iconAnchor:[20,20] });
   }
   function _mkOrderSenderIcon(status, orderNum) {
     const bg = status==="جاري التوصيل" ? "#f97316" : "#3b82f6";
@@ -10109,10 +10114,14 @@ window.clearBrDeliveredFilters = function() {
       seenIds.add(id);
       const lat=parseFloat(loc.lat), lng=parseFloat(loc.lng);
       const icon=_mkPilotIcon(p.pilotStatus, !isMine, p);
-      if (_pilotMarkers[id]) { _pilotMarkers[id].setLatLng([lat,lng]); _pilotMarkers[id].setIcon(icon); _pilotMarkers[id].getPopup()?.setContent(_pilotPopupHtml(p, !isMine)); }
+      /* الماركر الجديد بيتحط في مكانه مباشرة؛ الموجود **مابيتنقلش** هنا —
+         PilotMotion بيزحلقه على الأثر (أو من مكانه الحالي للجديد)
+         بدل النطّة اللي كانت بتبان تجميد. */
+      if (_pilotMarkers[id]) { _pilotMarkers[id].setIcon(icon); _pilotMarkers[id].getPopup()?.setContent(_pilotPopupHtml(p, !isMine)); }
       else { _pilotMarkers[id]=L.marker([lat,lng],{icon,zIndexOffset:isMine?1000:900}).addTo(_layerPilots).bindPopup(_pilotPopupHtml(p, !isMine)); }
+      if (window.PilotMotion) PilotMotion.apply(_pilotMarkers[id], p, { trailLayer: window._layerTrails, color: p.pilotStatus==="delivering" ? "#3b82f6" : "#22c55e" });
     });
-    Object.keys(_pilotMarkers).forEach(id=>{ if(!seenIds.has(id)){_layerPilots.removeLayer(_pilotMarkers[id]);delete _pilotMarkers[id];} });
+    Object.keys(_pilotMarkers).forEach(id=>{ if(!seenIds.has(id)){_layerPilots.removeLayer(_pilotMarkers[id]);delete _pilotMarkers[id]; if (window.PilotMotion) PilotMotion.remove(id);} });
     if (!_firstFit) {
       const locs=Object.entries(data).filter(([id,p])=>(branchPilotIds.has(id)||_showAllPilots)&&p.location?.lat&&p.pilotStatus).map(([id,p])=>[parseFloat(p.location.lat),parseFloat(p.location.lng)]);
       if (locs.length) { _firstFit=true; _pilotMap.fitBounds(locs,{padding:[50,50],maxZoom:14}); }
@@ -10303,6 +10312,7 @@ window.clearBrDeliveredFilters = function() {
     if (!_pilotMap) {
       _pilotMap=L.map("pilot-map").setView([30.0444,31.2357],11);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:19}).addTo(_pilotMap);
+      window._layerTrails=L.layerGroup().addTo(_pilotMap);   // خطوط الأثر تحت الماركرات
       _layerPilots=L.layerGroup().addTo(_pilotMap);
       _layerOrders=L.layerGroup().addTo(_pilotMap);
     } else { _pilotMap.invalidateSize(); }

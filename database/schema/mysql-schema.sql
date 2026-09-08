@@ -1596,6 +1596,23 @@ CREATE TABLE `pilot_support_responses` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `pilot_track_points` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `pilot_id` bigint(20) unsigned NOT NULL,
+  `lat` decimal(10,7) NOT NULL,
+  `lng` decimal(10,7) NOT NULL,
+  `heading` decimal(5,1) DEFAULT NULL COMMENT 'اتجاه الحركة بالدرجات',
+  `speed` decimal(6,2) DEFAULT NULL COMMENT 'م/ث',
+  `accuracy` decimal(6,1) DEFAULT NULL COMMENT 'دقة القراءة بالمتر',
+  `at` datetime(3) NOT NULL COMMENT 'وقت القراءة على الجهاز (UTC) — مش وقت الوصول',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_pilot_track_points_pilot_at` (`pilot_id`,`at`),
+  CONSTRAINT `fk_pilot_track_points_pilot_id` FOREIGN KEY (`pilot_id`) REFERENCES `pilots` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='أثر حركة الطيار وقت الشيل — نقطة كل ~٥ث بتوصل في دفعات كل ١٥ث، بتتمسح بعد ٢٤ ساعة';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `pilot_transfers` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
@@ -1647,6 +1664,8 @@ CREATE TABLE `pilots` (
   `lat` decimal(10,7) DEFAULT NULL COMMENT 'آخر موقع معروف',
   `lng` decimal(10,7) DEFAULT NULL,
   `location_updated_at` datetime DEFAULT NULL COMMENT 'آخر تحديث للموقع',
+  `heading` decimal(5,1) DEFAULT NULL COMMENT 'اتجاه الحركة بالدرجات (0-360) من آخر نقطة — سهم الخريطة',
+  `speed` decimal(6,2) DEFAULT NULL COMMENT 'السرعة م/ث من آخر نقطة',
   `app_version` varchar(20) DEFAULT NULL COMMENT 'إصدار تطبيق الطيار المثبت',
   `app_version_at` datetime DEFAULT NULL COMMENT 'آخر إبلاغ عن الإصدار',
   `notes` text DEFAULT NULL,

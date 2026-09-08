@@ -732,6 +732,19 @@ class PilotAppController
     public function location(Request $request): JsonResponse
     {
         $pilot = $this->pilotCtx($request);
+        $pilotId = (int) $pilot['id'];
+
+        /* ═══ دفعة نقاط (2.5.5+، 2026-09-07) ═══
+           التطبيق وهو شايل أوردر بيجمّع نقطة كل ~٥ث من تيار الـGPS
+           وبيبعتها دفعة كل ١٥ث: `points: [{lat,lng,at,heading,speed,acc}]`
+           — طلب واحد بدل تلاتة، والخريطة بتاخد الأثر كامل. الشكل القديم
+           `{lat,lng}` لسه شغّال زي ما هو للنسخ الأقدم. */
+        $pointsIn = $request->input('points');
+        if (is_array($pointsIn) && count($pointsIn)) {
+            $this->storeTrackBatch($pilotId, $pointsIn);
+
+            return ApiResponse::ok();
+        }
 
         $latIn = $request->input('lat');
         $lngIn = $request->input('lng');
@@ -747,10 +760,85 @@ class PilotAppController
 
         DB::update(
             'UPDATE pilots SET lat = ?, lng = ?, location_updated_at = ? WHERE id = ?',
-            [$lat, $lng, WireTime::nowDb(), (int) $pilot['id']]
+            [$lat, $lng, WireTime::nowDb(), $pilotId]
         );
 
         return ApiResponse::ok();
+    }
+
+    /**
+     * تخزين دفعة نقاط أثر — الصالح منها بس، وآخرها زمنيًا بيبقى موقع
+     * الطيار الحالي (lat/lng/heading/speed على صف الطيار).
+     *
+     * ⚠️ `at` وقت **الجهاز** — ممكن يكون ساعته مضبوطة غلط. لو النقطة
+     * في المستقبل بأكتر من دقيقة أو أقدم من ساعة بنستبدلها بوقت السيرفر
+     * عشان الأثر مايطلعش ملخبط على الخريطة. سقف ٦٠ نقطة في الدفعة —
+     * التطبيق بيبعت ٣، والسقف حماية من جسم مفبرك.
+     */
+    private function storeTrackBatch(int $pilotId, array $pointsIn): void
+    {
+        $nowMs  = (int) round(microtime(true) * 1000);
+        $rows   = [];
+        foreach (array_slice($pointsIn, 0, 60) as $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+            $lat = $p['lat'] ?? null;
+            $lng = $p['lng'] ?? null;
+            if (! is_numeric($lat) || ! is_numeric($lng)) {
+                continue;
+            }
+            $lat = (float) $lat;
+            $lng = (float) $lng;
+            if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180 || ($lat == 0.0 && $lng == 0.0)) {
+                continue;
+            }
+            $atMs = is_numeric($p['at'] ?? null) ? (int) $p['at'] : $nowMs;
+            if ($atMs > $nowMs + 60_000 || $atMs < $nowMs - 3_600_000) {
+                $atMs = $nowMs;
+            }
+            $heading = is_numeric($p['heading'] ?? null) ? fmod((float) $p['heading'] + 360.0, 360.0) : null;
+            $speed   = is_numeric($p['speed'] ?? null) ? max(0.0, (float) $p['speed']) : null;
+            $acc     = is_numeric($p['acc'] ?? null) ? max(0.0, (float) $p['acc']) : null;
+            $rows[] = [
+                'pilot_id' => $pilotId,
+                'lat'      => $lat,
+                'lng'      => $lng,
+                'heading'  => $heading,
+                'speed'    => $speed,
+                'accuracy' => $acc,
+                'at'       => gmdate('Y-m-d H:i:s', intdiv($atMs, 1000)) . '.' . sprintf('%03d', $atMs % 1000),
+                '_ms'      => $atMs,
+            ];
+        }
+        if (! $rows) {
+            throw new ApiException('مافيش نقاط صالحة في الدفعة');
+        }
+        usort($rows, fn ($a, $b) => $a['_ms'] <=> $b['_ms']);
+        $last = $rows[count($rows) - 1];
+
+        DB::transaction(function () use ($pilotId, $rows, $last): void {
+            foreach ($rows as $r) {
+                DB::insert(
+                    'INSERT INTO pilot_track_points (pilot_id, lat, lng, heading, speed, accuracy, at) VALUES (?,?,?,?,?,?,?)',
+                    [$r['pilot_id'], $r['lat'], $r['lng'], $r['heading'], $r['speed'], $r['accuracy'], $r['at']]
+                );
+            }
+            /* الموقع الحالي = آخر نقطة زمنيًا في الدفعة. `location_updated_at`
+               بوقت السيرفر (زي المسار القديم) — ده اللي LocFresh بيقيس
+               عليه «قديم/بايت»، ولازم يفضل بساعة السيرفر مش الجهاز. */
+            DB::update(
+                'UPDATE pilots SET lat = ?, lng = ?, heading = ?, speed = ?, location_updated_at = ? WHERE id = ?',
+                [$last['lat'], $last['lng'], $last['heading'], $last['speed'], WireTime::nowDb(), $pilotId]
+            );
+            /* تنضيف: الأثر مالوش لازمة بعد ٢٤ ساعة — DELETE بالفهرس
+               (pilot_id, at) رخيص، وبيتعمل مع كل دفعة فالجدول عمره ما
+               يكبر. */
+            DB::delete(
+                'DELETE FROM pilot_track_points WHERE pilot_id = ? AND at < (UTC_TIMESTAMP(3) - INTERVAL 24 HOUR)',
+                [$pilotId]
+            );
+        });
     }
 
     /**

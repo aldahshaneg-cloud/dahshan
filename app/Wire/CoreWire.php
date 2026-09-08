@@ -127,6 +127,14 @@ final class CoreWire
             'leaveForced' => ($onLeave && (int) ($r['leave_forced'] ?? 0) === 1) ? true : null,
             'breakStartedAt' => WireTime::toWire($r['break_started_at'] ?? null),
             'location'    => $location,
+            /* التتبّع الحي (2026-09-07) — حقول **أعلى مستوى** مش جوه
+               `location` عن قصد: بوابة wire:edge بتقارن `location` ككائن
+               واحد، والإضافات المقصودة بتتسجّل بأسماء أعلى مستوى بس.
+               heading/speed من آخر نقطة (سهم الخريطة)، وtrail آخر دقيقتين
+               من الأثر — بيتحقن من pilotsList لما `?trail=1` بس. */
+            'heading' => isset($r['heading']) && $r['heading'] !== null ? (float) $r['heading'] : null,
+            'speed'   => isset($r['speed']) && $r['speed'] !== null ? (float) $r['speed'] : null,
+            'trail'   => isset($r['_trail']) && is_array($r['_trail']) ? $r['_trail'] : null,
             // حقول اللوحة الإدارية (مش في اللسان القديم لكن اللوحات محتاجاها)
             'custody'       => (float) ($r['custody_balance'] ?? 0),
             'monthlySalary' => (float) ($r['monthly_salary'] ?? 0),

@@ -144,10 +144,49 @@ class EntitiesController
         }
         $sql .= ' WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name';
 
+        $rows = array_map(fn ($r) => (array) $r, DB::select($sql, $vals));
+
+        /* ═══ أثر الحركة (التتبّع الحي 2026-09-07) — `?trail=1` بس ═══
+           خرايط الإدارة والفرع بتطلبه عشان تزحلق الماركر على النقاط
+           الحقيقية بدل النطّ. استعلام واحد لكل الطيارين الشغّالين
+           (مش N+1)، آخر دقيقتين وبسقف ٤٠ نقطة للطيار. باقي مستهلكي
+           `/api/pilots` (قوايم · لوحات) مابياخدوش الحمولة دي. */
+        if ((string) $request->query('trail', '') === '1') {
+            $ids = array_values(array_filter(array_map(
+                fn ($r) => ($r['status'] ?? null) !== null ? (int) $r['id'] : 0,
+                $rows
+            )));
+            if ($ids) {
+                $ph = implode(',', array_fill(0, count($ids), '?'));
+                $trail = [];
+                foreach (DB::select(
+                    "SELECT pilot_id, lat, lng, at FROM pilot_track_points
+                      WHERE pilot_id IN ({$ph}) AND at >= (UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE)
+                      ORDER BY pilot_id, at",
+                    $ids
+                ) as $t) {
+                    $pid = (int) $t->pilot_id;
+                    if (count($trail[$pid] ?? []) >= 40) {
+                        continue;
+                    }
+                    // وقت النقطة بالملي ثانية (UTC) — الخريطة بتحسب عليه مباشرة
+                    $trail[$pid][] = [
+                        'lat' => (float) $t->lat,
+                        'lng' => (float) $t->lng,
+                        't'   => (int) round(strtotime($t->at . ' UTC') * 1000 + (float) ('0.' . (explode('.', $t->at)[1] ?? '0')) * 1000),
+                    ];
+                }
+                foreach ($rows as &$r) {
+                    $r['_trail'] = $trail[(int) $r['id']] ?? [];
+                }
+                unset($r);
+            }
+        }
+
         // مشرف الطيارين بياخد الكارت بلا عهدة/مرتب/عمولة — شوف CoreWire::pilotFor
         return PollableList::items(array_map(
             fn ($r) => CoreWire::pilotFor($actor->role, $r),
-            DB::select($sql, $vals)
+            $rows
         ));
     }
 
