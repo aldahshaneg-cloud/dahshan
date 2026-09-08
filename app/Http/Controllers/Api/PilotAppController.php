@@ -231,6 +231,8 @@ class PilotAppController
         $pilot   = $this->pilotCtx($request);
         $pilotId = (int) $pilot['id'];
 
+        // الطابع قبل الفحص والاستعلام (2026-09-08): أوردر يتحمّل وسط النداء كان بيقع في الفجوة ويختفي لحد ريستارت
+        $now = PollableList::serverNowMs();
         $since = $this->since($request);
         if ($since > 0) {
             $changed = DB::select(
@@ -242,7 +244,7 @@ class PilotAppController
             )[0]->c;
 
             if (! (int) $changed) {
-                return PollableList::unchanged();
+                return PollableList::unchanged($now);
             }
         }
 
@@ -255,7 +257,7 @@ class PilotAppController
             [$pilotId]
         );
 
-        return PollableList::items(self::netCollectView(OrderWire::batch($rows)));
+        return PollableList::items(self::netCollectView(OrderWire::batch($rows)), $now);
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1001,7 +1003,8 @@ class PilotAppController
     {
         $raw = $request->query('since');
 
-        return $raw === null ? 0 : max(0, (int) $raw);
+        // سماحية ثانية (2026-09-08): أعمدة بدقة ثانية ضد طابع بالميلي — رد في نفس الثانية كان بيضيع
+        return $raw === null ? 0 : max(0, (int) $raw - 1000);
     }
 
     /**

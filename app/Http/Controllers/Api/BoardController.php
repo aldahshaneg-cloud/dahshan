@@ -2595,7 +2595,8 @@ class BoardController
     /** المقابل لـ board_since() — `?since=` فاضية = 0 (يعني بلا فلترة) */
     private function sinceParam(Request $request): int
     {
-        return $request->query->has('since') ? max(0, (int) $request->query('since')) : 0;
+        // سماحية ثانية (2026-09-08): _ts بدقة ثانية ضد since بالميلي — تغيير في نفس الثانية كان بيضيع
+        return $request->query->has('since') ? max(0, (int) $request->query('since') - 1000) : 0;
     }
 
     /**

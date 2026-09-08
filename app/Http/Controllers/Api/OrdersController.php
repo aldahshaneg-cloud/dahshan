@@ -152,7 +152,8 @@ class OrdersController
         }
 
         // ?since=<server_ms> — delta حسب الدستور بند 5
-        $since = isset($q['since']) && $q['since'] !== '' ? (int) $q['since'] : null;
+        // سماحية ثانية (−1000): الأعمدة بدقة ثانية والطابع بالميلي — رد في نفس الثانية كان بيضيع
+        $since = isset($q['since']) && $q['since'] !== '' ? max(0, (int) $q['since'] - 1000) : null;
         if ($since !== null) {
             $where[] = 'o.updated_at > FROM_UNIXTIME(? / 1000)';
             $params[] = $since;
@@ -177,8 +178,10 @@ class OrdersController
             . ' ORDER BY o.created_at DESC LIMIT ' . $limit
             . ($offset > 0 ? ' OFFSET ' . $offset : '');
 
-        $rows = DB::select($sql, $params);
+        /* الطابع قبل الاستعلام مش بعده (2026-09-08): صف اتعدّل جوه معاملة لسه ماعملتش
+           commit وقت الاستعلام كان بيقع في فجوة الدلتا ويضيع لحد تغيير تاني. */
         $serverNow = PollableList::serverNowMs();
+        $rows = DB::select($sql, $params);
 
         if ($since !== null && ! $rows) {
             return PollableList::unchanged($serverNow);
@@ -382,6 +385,9 @@ class OrdersController
 
         $senderId   = self::intOrNull($request->input('senderId'));
         $senderName = trim((string) ($request->input('senderName') ?? ''));
+        if (mb_strlen($senderName) > 190) {
+            throw new ApiException('اسم المرسل أطول من المسموح (190 حرف) — اختصره وجرّب تاني');
+        }
         if (! $senderId && $senderName === '') {
             throw new ApiException('يرجى اختيار أو إدخال العميل استلام');
         }
@@ -435,13 +441,16 @@ class OrdersController
                 if (! $senderId && $senderName !== '') {
                     $sPhone = trim((string) ($request->input('senderPhone') ?? ''));
                     $sAddr  = trim((string) ($request->input('senderAddress') ?? ''));
+                    if (mb_strlen($sPhone) > 20 || mb_strlen($sAddr) > 190) {
+                        throw new ApiException(mb_strlen($sPhone) > 20 ? 'رقم هاتف المرسل أطول من المسموح (20 حرف)' : 'عنوان المرسل أطول من المسموح (190 حرف) — اختصره وجرّب تاني');
+                    }
                     if ($sPhone !== '' && $sAddr !== '') {
                         DB::insert(
                             'INSERT INTO senders (name, phone1, phone2, address, created_by, source, created_at)
                              VALUES (?,?,?,?,?,?,?)',
                             [
                                 $senderName, $sPhone,
-                                self::trimOrNull($request->input('senderPhone2')),
+                                self::strMax($request->input('senderPhone2'), 20, 'رقم الهاتف الثاني للمرسل'),
                                 $sAddr, $actor->username, $source, $now,
                             ]
                         );
@@ -522,12 +531,15 @@ class OrdersController
                         throw new ApiException('المنطقة المختارة غير موجودة');
                     }
 
+                    if (mb_strlen($recvName) > 190) {
+                        throw new ApiException("اسم جهة التسليم أطول من المسموح (190 حرف) — طرد #{$no}");
+                    }
                     $parcels[] = [
                         'parcel_no'       => isset($d['parcelNo']) && (int) $d['parcelNo'] > 0 ? (int) $d['parcelNo'] : $no,
                         'receiver_id'     => self::intOrNull($d['receiverId'] ?? null),
                         'receiver_name'   => $recvName,
-                        'receiver_phone'  => self::trimOrNull($d['receiverPhone'] ?? null),
-                        'receiver_phone2' => self::trimOrNull($d['receiverPhone2'] ?? null),
+                        'receiver_phone'  => self::strMax($d['receiverPhone'] ?? null, 20, "رقم هاتف المستلم — طرد #{$no}"),
+                        'receiver_phone2' => self::strMax($d['receiverPhone2'] ?? null, 20, "رقم الهاتف الثاني للمستلم — طرد #{$no}"),
                         'from_receipt'    => $fromReceipt ? 1 : 0,
                         'zone_id'         => $zoneId,
                         // snapshot الزون: الاسم والسعر بيتخزّنوا على الطرد نفسه
@@ -535,7 +547,7 @@ class OrdersController
                         'zone_name'       => (string) ($d['zoneName'] ?? $zone['area_name']),
                         'zone_price'      => self::deliveryPrice($actor, $d, $zone, $no),
                         'order_price'     => (float) ($d['orderPrice'] ?? 0),   // عهدة الطرد — جوّاه عشان تتنقل معاه لو اتفرّق
-                        'address'         => self::trimOrNull($d['address'] ?? null),
+                        'address'         => self::strMax($d['address'] ?? null, 190, "عنوان التسليم — طرد #{$no}"),
                         'note'            => self::trimOrNull($d['note'] ?? null),
                         'lat'             => self::floatOrNull($d['lat'] ?? null),
                         'lng'             => self::floatOrNull($d['lng'] ?? null),
@@ -610,9 +622,9 @@ class OrdersController
                                خالص ومحدش يعرف الأوردر ده جه منين. */
                             $orderNum, $branchId, $branchId, $senderId,
                             $senderName !== '' ? $senderName : null,
-                            self::trimOrNull($request->input('senderPhone')),
-                            self::trimOrNull($request->input('senderPhone2')),
-                            self::trimOrNull($request->input('senderAddress')),
+                            self::strMax($request->input('senderPhone'), 20, 'رقم هاتف المرسل'),
+                            self::strMax($request->input('senderPhone2'), 20, 'رقم الهاتف الثاني للمرسل'),
+                            self::strMax($request->input('senderAddress'), 190, 'عنوان المرسل'),
                             self::intOrNull($request->input('senderZoneId')),
                             self::floatOrNull($request->input('senderLat')),
                             self::floatOrNull($request->input('senderLng')),
@@ -950,10 +962,10 @@ class OrdersController
                 DB::update(
                     'UPDATE orders SET sender_name = ?, sender_phone = ?, sender_phone2 = ?, sender_address = ? WHERE id = ?',
                     [
-                        self::trimOrNull($request->input('senderName') ?? $order['sender_name'] ?? ''),
-                        self::trimOrNull($request->input('senderPhone') ?? $order['sender_phone'] ?? ''),
-                        self::trimOrNull($request->input('senderPhone2') ?? $order['sender_phone2'] ?? ''),
-                        self::trimOrNull($request->input('senderAddress') ?? $order['sender_address'] ?? ''),
+                        self::strMax($request->input('senderName') ?? $order['sender_name'] ?? '', 190, 'اسم المرسل'),
+                        self::strMax($request->input('senderPhone') ?? $order['sender_phone'] ?? '', 20, 'رقم هاتف المرسل'),
+                        self::strMax($request->input('senderPhone2') ?? $order['sender_phone2'] ?? '', 20, 'رقم الهاتف الثاني للمرسل'),
+                        self::strMax($request->input('senderAddress') ?? $order['sender_address'] ?? '', 190, 'عنوان المرسل'),
                         $orderId,
                     ]
                 );
@@ -2257,6 +2269,21 @@ class OrdersController
         $s = trim((string) ($v ?? ''));
 
         return $s !== '' ? $s : null;
+    }
+
+    /**
+     * نص بحد أقصى (2026-09-08): أطول من العمود كان بيرمي 500 «Data too long»
+     * ويضيّع الأوردر كله بدل رسالة مفهومة — عناوين ١٨ مرة وتليفونات ١٢ مرة
+     * في أسبوع. الحدود = أطوال الأعمدة في المخطط (190 / 20).
+     */
+    private static function strMax(mixed $v, int $max, string $label): ?string
+    {
+        $s = self::trimOrNull($v);
+        if ($s !== null && mb_strlen($s) > $max) {
+            throw new ApiException("{$label} أطول من المسموح ({$max} حرف) — اختصره وجرّب تاني");
+        }
+
+        return $s;
     }
 
     /** pilot_id المرتبط بحساب الجلسة — null لو الحساب مش مربوط بطيار */

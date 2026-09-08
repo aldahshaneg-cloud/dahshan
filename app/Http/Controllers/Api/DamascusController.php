@@ -200,6 +200,14 @@ class DamascusController
                 $store = null;
             } else {
                 $n = DamascusWire::num($raw);
+                /* حدود القاعدة (2026-09-08): hours decimal(5,2) — أكبر من 999.99 كان بيرمي 500
+                   «Out of range» (20 مرة لحد 2026-09-07)، والساعات في اليوم مش بتعدّي 24 أصلًا. */
+                if ($col === 'hours' && abs($n) > 24) {
+                    throw new ApiException('عدد الساعات لازم يكون بين 0 و24 — راجع الخانة');
+                }
+                if (abs($n) >= 10000000000) {
+                    throw new ApiException('الرقم أكبر من المسموح — راجع الخانة');
+                }
                 $store = ($n === 0.0) ? null : $n;     // الصفر = مسح الخانة (زي القديم)
             }
         }

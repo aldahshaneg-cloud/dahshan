@@ -1216,9 +1216,9 @@ class FinanceController
             // قفل جلسات اليوم للمستخدم ده — منع فتح جلستين متوازيتين
             $open = DB::select(
                 'SELECT id FROM attendance_sessions
-                 WHERE session_date = ? AND username = ? AND check_out IS NULL
+                 WHERE username = ? AND check_out IS NULL
                  ORDER BY id DESC LIMIT 1 FOR UPDATE',
-                [$day, $username]
+                [$username]
             )[0] ?? null;
             if ($open) {
                 // جلسة مفتوحة بالفعل — نحدث النبض ونرجعها (idempotent)
@@ -1264,9 +1264,9 @@ class FinanceController
 
         $open = DB::select(
             'SELECT id FROM attendance_sessions
-             WHERE session_date = ? AND username = ? AND check_out IS NULL
+             WHERE username = ? AND check_out IS NULL
              ORDER BY id DESC LIMIT 1',
-            [$day, $user->username]
+            [$user->username]
         )[0] ?? null;
 
         if (! $open) {
@@ -1300,9 +1300,9 @@ class FinanceController
         $sessionId = $this->tx(function () use ($day, $username, $now): int {
             $open = DB::select(
                 'SELECT id FROM attendance_sessions
-                 WHERE session_date = ? AND username = ? AND check_out IS NULL
+                 WHERE username = ? AND check_out IS NULL
                  ORDER BY id DESC LIMIT 1 FOR UPDATE',
-                [$day, $username]
+                [$username]
             )[0] ?? null;
             if (! $open) {
                 throw new ApiException('مفيش جلسة حضور مفتوحة النهارده');
@@ -1574,7 +1574,10 @@ class FinanceController
     private function tx(callable $work): mixed
     {
         try {
-            return DB::transaction($work);
+            /* 3 محاولات: MariaDB بترمي deadlock (1213) لما حركتين على نفس الخزنة
+               يتقابلوا — كان بيوصل للموظف كخطأ فورًا (15 مرة لحد 2026-09-08)، ولارافل
+               بتعيد المحاولة تلقائيًا على 1213/1205 بس، والمعاملة بتتعاد من أولها. */
+            return DB::transaction($work, 3);
         } catch (ApiException $e) {
             throw $e;   // fail() القديمة كانت exit — مكانتش بتعدي على الـcatch
         } catch (Throwable $e) {

@@ -1001,6 +1001,7 @@ CREATE TABLE `order_notifications` (
   `sent_by` varchar(190) DEFAULT NULL COMMENT 'مين بعت: اسم الموظف في الوضع اليدوي، NULL في التلقائي',
   `sent_at` datetime DEFAULT NULL COMMENT 'وقت الإرسال — NULL يعني لسه ما اتبعتتش',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime(3) NOT NULL DEFAULT current_timestamp(3) ON UPDATE current_timestamp(3) COMMENT 'آخر تعديل — أساس ?since (2026-09-08)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_order_notifications_target` (`order_id`,`channel`,`recipient_phone`),
   KEY `idx_order_notifications_status` (`status`,`created_at`),
@@ -2178,6 +2179,7 @@ CREATE TABLE `zones` (
   `source_branch_id` bigint(20) unsigned DEFAULT NULL COMMENT 'الفرع مصدر الإضافة — NULL يعني اتضافت يدوي من الإدارة',
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime(3) NOT NULL DEFAULT current_timestamp(3) ON UPDATE current_timestamp(3) COMMENT 'آخر تعديل — أساس ?since (2026-09-08)',
   PRIMARY KEY (`id`),
   /* 🔴 نفس المنطقة ممكن تتسجّل مرة لكل فرع بيوصّل لها (من/إلى) — ده مقصود.
      اللي مش مقصود إنها تتسجّل مرتين لنفس الفرع: بيخلّي الاسم يتكرر في

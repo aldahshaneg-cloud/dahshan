@@ -710,7 +710,8 @@
       reg(ordersPoller);
 
       // Zones for this branch + global list for order modal
-      reg(new P("/api/zones", { interval: 60000, useSince: false, onChange: d => {
+      reg(new P("/api/zones", { interval: 60000, useSince: true, onChange: d => {
+        if (!d.items) return;   // changed:false
         const all = nrmList(d.items);
         window._zonesList = all;
         window._zonesData = all.filter(z => (z.deliveryBranchId || z.branchId) === branchId);

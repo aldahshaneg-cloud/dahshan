@@ -5,6 +5,7 @@ use App\Http\Middleware\BroadcastActor;
 use App\Http\Middleware\ResolveApiActor;
 use App\Http\Middleware\TolerantJsonBody;
 use App\Support\ApiResponse;
+use App\Http\Middleware\TokenSessionInMemory;
 use App\Support\ErrorAlert;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\QueryException;
@@ -73,6 +74,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * (ALDAHSHAN_SESS)، مش توكن. فبنضيف StartSession يدويًا.
          */
         $middleware->group('api', [
+            TokenSessionInMemory::class,   // قبل StartSession: طلبات التوكن بلا ملف جلسة (2026-09-08)
             AddQueuedCookiesToResponse::class,
             StartSession::class,
             TolerantJsonBody::class,
@@ -173,8 +175,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::fail('المسار غير موجود', 404);
             }
 
+            /* من غير report() هنا (2026-09-08): الكيرنل بلّغ الاستثناء خلاص قبل ما
+               ينده render — النداء التاني كان بيكتب كل عطل مرتين في اللوج وبيزوّد عدّاد التنبيه مرتين. */
             if ($e instanceof QueryException) {
-                report($e);
                 return ApiResponse::fail('خطأ في قاعدة البيانات', 500);
             }
 
@@ -194,7 +197,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::fail($msg, $code);
             }
 
-            report($e);
             return ApiResponse::fail('حدث خطأ غير متوقع', 500);
         });
     })->create();

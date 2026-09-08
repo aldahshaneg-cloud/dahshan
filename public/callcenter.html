@@ -1023,7 +1023,8 @@
          مش شغّال. */
       try { _rtSyncBranches(); } catch (e) {}
     }});
-    ccPoller("/api/zones", { interval: 60000, useSince: false, onChange: d => {
+    ccPoller("/api/zones", { interval: 60000, useSince: true, onChange: d => {
+      if (!d.items) return;   // changed:false
       window._zonesList = nrmList(d.items);
       renderZonesTable(window._zonesList);
       document.getElementById("totalZones") && (document.getElementById("totalZones").textContent = window._zonesList.length);
@@ -3058,9 +3059,10 @@
        (GISH-260902-002/003/004 صباح 2026-09-02). */
     if (typeof ccPoller === "function") {
       ccPoller("/api/order-notifications", {
-        interval: 30000, useSince: false,
+        interval: 30000, useSince: true,
         onChange: (d) => {
-          window._ccNotifs = (d.items || []);
+          if (!d.items) return;   // changed:false — مفيش جديد (السيرفر بيدعم since من 2026-09-08)
+          window._ccNotifs = d.items;
           window._ccNotifPending = Number.isFinite(d.pending)
             ? d.pending
             : window._ccNotifs.filter(n => n.status === "pending").length;

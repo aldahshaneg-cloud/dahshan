@@ -100,7 +100,31 @@ final class ErrorAlert
     /** بصمة العطل: نوعه + مكانه. الرسالة **مش** جزء منها لأنها بتتغيّر بالقيم */
     private static function signature(Throwable $e): string
     {
-        return sha1(get_class($e) . '|' . $e->getFile() . '|' . $e->getLine());
+        [$file, $line] = self::appFrame($e);
+
+        return sha1(get_class($e) . '|' . $file . '|' . $line);
+    }
+
+    /**
+     * أول إطار جوه app/ (2026-09-08): أخطاء القاعدة كلها بترمي من نفس سطر لارافل
+     * (Connection.php)، فكانت كلها بصمة واحدة — صف واحد بعنوان أول عطل حصل
+     * والأعطال الجديدة مابتبانش ولا بتنبّه.
+     */
+    public static function appFrame(Throwable $e): array
+    {
+        $app = str_replace('\\', '/', app_path());
+        $own = str_replace('\\', '/', $e->getFile());
+        if (str_starts_with($own, $app)) {
+            return [$own, $e->getLine()];
+        }
+        foreach ($e->getTrace() as $fr) {
+            $file = str_replace('\\', '/', (string) ($fr['file'] ?? ''));
+            if ($file !== '' && str_starts_with($file, $app)) {
+                return [$file, (int) ($fr['line'] ?? 0)];
+            }
+        }
+
+        return [$own, $e->getLine()];
     }
 
     private static function title(Throwable $e): string

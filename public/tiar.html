@@ -186,7 +186,7 @@
        مع دمج في كاش محلي (نفس نمط branch.html). */
     const LISTENER_CFG = {
       branches:            { path: "/api/branches",         interval: 60000 },
-      zones:               { path: "/api/zones",            interval: 60000 },
+      zones:               { path: "/api/zones",            interval: 60000, since: true },
       /* merge:true بيفعّل ?since — قبل كده كان الدفتر كله (5000 صف لكل جدول،
          ~2.5 ميجا) بينزل **كل 45 ثانية**. دلوقتي أول تحميل بس، وبعده
          المتغيّر فقط. الدلتا بقت على updated_at فتعديل بيانات عميل بيوصل
@@ -9154,8 +9154,9 @@
        الأدوار التانية موجودة في المسار للوحات التانية لما تتعمل. */
     let _notifPoller = null;
     _regCustomListener(() => {
-      const p = new api.Poller("/api/order-notifications", { interval: 60000, useSince: false, onChange: (d) => {
-        window._orderNotifs  = nrmList(d.items || []);
+      const p = new api.Poller("/api/order-notifications", { interval: 60000, useSince: true, onChange: (d) => {
+        if (!d.items) return;   // changed:false — مفيش جديد (السيرفر بيدعم since من 2026-09-08)
+        window._orderNotifs  = nrmList(d.items);
         window._notifPending = Number.isFinite(d.pending)
           ? d.pending
           : window._orderNotifs.filter(n => n.status === "pending").length;

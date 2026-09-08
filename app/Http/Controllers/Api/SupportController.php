@@ -239,6 +239,21 @@ class SupportController
 
         /* الـJOIN على `orders` بيخدم غرضين: `order_num` للعرض (مش متخزّن في
            صف الرسالة)، و`branch_id` للقصّ. مفتاح أجنبي مفهرس فالربط رخيص. */
+        /* ?since (2026-09-08): الإدارة والكول سنتر بيستطلعوا القايمة كل دقيقة والرد الكامل
+           ~257 كيلو (352 ميجا في 13 ساعة). آخر تعديل = أكبر updated_at (بيتحدّث مع أي تغيير
+           حالة/إرسال) — لو أقدم من since نرد changed:false من غير items. */
+        $since = $request->query->has('since') ? max(0, (int) $request->query('since') - 1000) : 0;
+        if ($since > 0) {
+            $mx = DB::select(
+                'SELECT UNIX_TIMESTAMP(MAX(n.updated_at)) * 1000 AS m FROM order_notifications n JOIN orders o ON o.id = n.order_id'
+                . ($where !== [] ? ' WHERE ' . implode(' AND ', $where) : ''),
+                $args
+            )[0]->m ?? null;
+            if ($mx !== null && (int) $mx <= $since) {
+                return PollableList::unchanged();
+            }
+        }
+
         $sql = 'SELECT n.*, o.order_num AS order_num
                   FROM order_notifications n
                   JOIN orders o ON o.id = n.order_id';

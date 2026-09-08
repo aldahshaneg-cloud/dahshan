@@ -79,6 +79,18 @@ class EntitiesController
     {
         $request->actorOrFail();
 
+        /* ?since (2026-09-08): الإدارة كانت بتنزّل 165 كيلو كل دقيقة بلا تغيير. آخر تعديل =
+           أكبر updated_at، والحذف (مش بيبان في MAX) بيتختم في site_settings.zones_touched_at. */
+        $since = $request->query->has('since') ? max(0, (int) $request->query('since') - 1000) : 0;
+        if ($since > 0) {
+            $mx = (int) (DB::select('SELECT UNIX_TIMESTAMP(MAX(updated_at)) * 1000 AS m FROM zones')[0]->m ?? 0);
+            $touch = (int) json_decode((string) (DB::select("SELECT setting_value FROM site_settings WHERE setting_key = 'zones_touched_at'")[0]->setting_value ?? '0'), true);
+            $last = max($mx, $touch);
+            if ($last > 0 && $last <= $since) {
+                return PollableList::unchanged();
+            }
+        }
+
         $rows = DB::select(
             'SELECT z.*, d.name AS delivery_branch_name, s.name AS source_branch_name
                FROM zones z
@@ -750,6 +762,12 @@ class EntitiesController
 
         try {
             $n = DB::delete('DELETE FROM zones WHERE id = ?', [$id]);
+            // ختم الحذف — فحص ?since في zonesList بيقراه (الحذف مش بيبان في MAX(updated_at))
+            DB::statement(
+                "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('zones_touched_at', ?, ?)
+                 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)",
+                [json_encode(PollableList::serverNowMs()), gmdate('Y-m-d H:i:s')]
+            );
             if ($n === 0) {
                 throw ApiException::notFound('المنطقة غير موجودة');
             }
