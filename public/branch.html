@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="assets/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
@@ -85,10 +85,10 @@
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
   </script>
-  <script src="assets/js/constants.js"></script>
+  <script src="assets/js/constants.js?v=20260908"></script>
   <!-- ?v: كسر كاش المتصفح — hiddenTick (رنين التاب المخفي) محتاج النسخة دي -->
   <script src="assets/js/api.js?v=20260901ring"></script>
-  <script src="assets/js/trust-admin.js"></script>
+  <script src="assets/js/trust-admin.js?v=20260908"></script>
   <script src="assets/js/zonepick.js?v=20260830b"></script>
   <script src="assets/js/commadj.js?v=20260903"></script>
   <script src="assets/js/geoloc.js?v=20260903"></script>
@@ -106,7 +106,7 @@
        معالجة لازمة هنا: السكربت اللي بعده بيفحص `window.REALTIME` و
        `REALTIME.available()` قبل ما يلمس أي حاجة، والصفحة تفضل ماشية
        بالاستطلاع من غير أي خطأ للمستخدم (متجرَّب فعليًا بإخفاء الملف). -->
-  <script src="assets/js/vendor/pusher.min.js"></script>
+  <script src="assets/js/vendor/pusher.min.js?v=20260908"></script>
   <script src="assets/js/realtime.js?v=20260829a"></script>
   <script type="module">
     /* ═══ REST بدل فايربيز — كل القراءة والكتابة عبر assets/js/api.js ═══
@@ -280,7 +280,7 @@
     window._onSessionExpired = function () {
       if (!window._currentUser) return;
       clearSession();
-      window._currentUser = null;
+      window._currentUser = null; window._pilotsSig = null; window._overdueKey = null;
       window._branchListeners && window._branchListeners.forEach(u => u && u());
       window._branchListeners = [];
       _teardownSessionState();
@@ -339,10 +339,14 @@
 
     // نبضة lastSeen كل دقيقة — بديل onDisconnect بتاع فايربيز:
     // السيرفر بيقفل الجلسات اللي نبضها واقف (cron في مرحلة 5)
+    /* noPoke: النبضة كتابة، وأي كتابة كانت بتعمل تحديث فوري لكل القوايم
+       (25 طلب كل دقيقة من كل تاب — مراجعة 2026-09-08). ومن غير فحص
+       document.hidden: التاب اللي ورا لسه شغّال، ووقف النبضة كان بيسجّل
+       انصراف تلقائي بعد ربع ساعة على تاب تاني. */
     setInterval(() => {
       try {
-        if (!window._currentUser?.username || document.hidden) return;
-        api.post("/api/attendance/heartbeat").catch(() => {});
+        if (!window._currentUser?.username) return;
+        api.post("/api/attendance/heartbeat", {}, { noPoke: true }).catch(() => {});
       } catch(e) {}
     }, 60000);
 
@@ -421,7 +425,7 @@
       const username = window._currentUser?.username;
       if (username) recordCheckOut(username);
       clearSession();
-      window._currentUser = null;
+      window._currentUser = null; window._pilotsSig = null; window._overdueKey = null;
       window._branchListeners && window._branchListeners.forEach(u => u && u());
       window._branchListeners = [];
       _teardownSessionState();
@@ -601,10 +605,18 @@
 
       // Pilots: كل الطيارين (قائمة الإضافة) + طياري الفرع للوحة
       // trail:1 — أثر آخر دقيقتين لكل طيار شغّال، الخريطة بتزحلق عليه (pilotmotion.js)
-      reg(new P("/api/pilots", { interval: 15000, useSince: false, params: { trail: 1 }, onChange: d => {
+    /* بصمة رخيصة لرد الطيارين — من غير الأعمدة اللي بتتغيّر كل ثانية (الموقع
+       والأثر). الرد بيجي كامل كل 15 ثانية، ومن غير المقارنة كل الجداول
+       واللوحة والداشبورد كانوا بيتعاد رسمهم 240 مرة في الساعة (مراجعة 2026-09-08). */
+    function pilotsSig(list) {
+      return JSON.stringify(list.map(({ location, trail, locationUpdatedAt, heading, speed, updatedAt, lastSeen, ...rest }) => rest));
+    }      reg(new P("/api/pilots", { interval: 15000, useSince: false, params: { trail: 1 }, onChange: d => {
         const all = nrmList(d.items);
         window._pilotsData    = all.filter(p => p.assignedBranchId === branchId);
         window._allPilotsData = all; // كل الطيارين لقائمة الإضافة
+        const _psig = pilotsSig(all);
+        if (_psig === window._pilotsSig) return;
+        window._pilotsSig = _psig;
         renderPilotsPage();
         renderPilotsPanel();
         populatePanelPilotSelect();
@@ -866,7 +878,6 @@
           const msg = `⚠️ الطلب ${ esc(o.orderNum || "—") } مع الطيار ${ esc(o.pilotName || "—") } تجاوز ${mins} دقيقة في التوصيل — يُنصح بالاطمئنان عليه`;
           // تنبيهان في نفس اللحظة (Toast مزدوج) عشان يبقى ملحوظ أكتر
           showToast(msg, "error");
-          setTimeout(() => showToast(msg, "error"), 400);
           if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             try {
               new Notification("⏰ تأخر في التوصيل", {
@@ -879,6 +890,10 @@
       // إزالة أي أوردر خرج من حالة التأخر (سُلّم/أُلغي) من قائمة التنبيهات
       window._overdueLastAlertedAt.forEach((_, id) => { if (!nowOverdue.has(id)) window._overdueLastAlertedAt.delete(id); });
       window._overdueOrderIds = nowOverdue;
+      /* ارسم بس لو مجموعة المتأخرين اتغيّرت (مراجعة 2026-09-08) */
+      const _okey = [...nowOverdue].sort().join(",");
+      if (_okey === window._overdueKey) return;
+      window._overdueKey = _okey;
       // إعادة رسم أي قوائم بتعرض حالة التأخر عشان الشارات تتحدّث
       try { renderPilotsPanel(); } catch(e) {}
       if (document.getElementById("page-delivering")?.classList.contains("active")) { try { renderDeliveringPage(); } catch(e) {} }
@@ -944,7 +959,6 @@
       const who = u.pilotId ? `مع الطيار ${ u.pilotName || "—" }` : "لسه في المكتب";
       const msg = `⏰ ${ u.storeName || "المحل" } بيستعجل الطلب ${ u.orderNum || "—" } — ${who}`;
       showToast(msg, "error");
-      setTimeout(() => showToast(msg, "error"), 400);
       playNotificationSound();
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
@@ -1125,6 +1139,27 @@
       const s = arr.slice().sort((a,b) => _orderTime(b) - _orderTime(a));
       return s.length <= limit ? s : s.slice(0, limit);
     }
+    /* ── 50 صف + «عرض المزيد» (طلب صاحب النظام 2026-09-08) ─────────────
+       الجداول الكبيرة (المستلمين والمسلّمين لحد 5000 صف، المناطق، الورديات،
+       رسايل العملاء) كانت بتترسم كاملة مع كل استطلاع. دلوقتي 50 صف، وزرار
+       بيزوّد 50 كل ضغطة، والعدّاد بيفضل محفوظ لحد ما الصفحة تتقفل. */
+    window.PAGE_ROWS = 50;
+    window._pageMul = window._pageMul || {};
+    window._pageRender = window._pageRender || {};
+    function pagedRows(key, list, rowFn, cols, rerender) {
+      if (rerender) window._pageRender[key] = rerender;
+      const n = (window._pageMul[key] || 1) * window.PAGE_ROWS;
+      let html = list.slice(0, n).map(rowFn).join("");
+      if (list.length > n) {
+        html += `<tr><td colspan="${cols}" style="text-align:center;padding:10px;background:rgba(56,189,248,.06)">
+          <button type="button" class="more-rows-btn" onclick="showMoreRows('${key}')">⬇️ عرض ${Math.min(window.PAGE_ROWS, list.length - n)} صف كمان — ظاهر ${n} من ${list.length}</button></td></tr>`;
+      }
+      return html;
+    }
+    window.showMoreRows = function (key) {
+      window._pageMul[key] = (window._pageMul[key] || 1) + 1;
+      try { if (window._pageRender[key]) window._pageRender[key](); } catch (e) { console.error(e); }
+    };
     function rowsCapNote(shown, total, cols) {
       if (shown >= total) return "";
       return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
@@ -2808,7 +2843,9 @@
       const w = window.open("", "_blank");
       w.document.write(`
         <html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقفيلة شهرية — ${ esc(data.pilot.name) }</title>
-        <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:20px}h2{font-size:15px;margin-top:18px;border-bottom:2px solid #333;padding-bottom:4px}.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.net{font-size:18px;font-weight:800;color:#0a7}</style>
+        <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:20px}h2{font-size:15px;margin-top:18px;border-bottom:2px solid #333;padding-bottom:4px}.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.net{font-size:18px;font-weight:800;color:#0a7}    .more-rows-btn { background:rgba(56,189,248,.12); color:var(--sky); border:1px solid rgba(56,189,248,.35); border-radius:8px; padding:7px 18px; cursor:pointer; font-weight:700; font-size:.85rem; font-family:inherit; }
+    .more-rows-btn:hover { background:rgba(56,189,248,.22); }
+  </style>
         </head><body>
         <h1>🧾 التقفيلة الشهرية — ${ esc(data.pilot.name) }</h1>
         <div class="row"><span>الشهر</span><span>${monthLabel}</span></div>
@@ -3324,8 +3361,7 @@
       if (!tbody) return;
       if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="8" class="empty-row">لا توجد ورديات</td></tr>`; return; }
 
-      tbody.innerHTML = filtered.map((s, i) => {
-        const shiftOrders = orders.filter(o => o.shiftId === s.id);
+      tbody.innerHTML = pagedRows("shifts", filtered, (s, i) => {        const shiftOrders = orders.filter(o => o.shiftId === s.id);
         const delivered   = shiftOrders.filter(o => o.status === "تم التسليم").length;
         const undelivered = shiftOrders.filter(o => o.status === "لم يتم التوصيل").length;
         const active = (s.status || "active") === "active";
@@ -3342,8 +3378,7 @@
             <td style="font-size:.82rem"><span style="color:var(--green)">${delivered} تم</span> / <span style="color:var(--orange)">${undelivered} لم يتم</span></td>
             <td><button class="view-btn" onclick="openShiftOrders('${ escJs(s.id) }')">🔍 عرض الطلبات</button>${active ? ` <button class="del-btn" onclick="branchEndPilotShift('${ escJs(s.id) }','${ escJs(s.pilotId) }')">🔴 إنهاء الوردية</button>` : ` <button class="view-btn" onclick="viewOldShiftReport('${ escJs(s.id) }')">📊 عرض التقفيلة</button>`}</td>
           </tr>`;
-      }).join("");
-    };
+      }, 8, () => window.renderShiftsPage());    };
 
     /* ── بحث ذكي عن الطيار داخل فلتر الورديات ──────────────────────── */
     window._shiftsPilotFilterId = "";
@@ -9985,7 +10020,7 @@ window.clearBrDeliveredFilters = function() {
 </script>
 <!-- Leaflet — خريطة الطيارين والأوردرات (الفرع) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   /* ═══════════════════════════════════════════════════════════════════
      خريطة الفرع — طيارو الفرع + أوردراتهم — تتبع فوري real-time

@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="assets/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
@@ -116,9 +116,9 @@
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
   </script>
-  <script src="assets/js/constants.js"></script>
-  <script src="assets/js/api.js"></script>
-  <script src="assets/js/trust-admin.js"></script>
+  <script src="assets/js/constants.js?v=20260908"></script>
+  <script src="assets/js/api.js?v=20260908"></script>
+  <script src="assets/js/trust-admin.js?v=20260908"></script>
   <script src="assets/js/zonepick.js?v=20260830b"></script>
   <script src="assets/js/commadj.js?v=20260903"></script>
   <script src="assets/js/geoloc.js?v=20260903"></script>
@@ -137,7 +137,7 @@
        معالجة لازمة هنا: `window.REALTIME` مابيتعرّفش أصلًا، والموديول
        بيفحصه قبل ما يلمسه، والصفحة تفضل ماشية بالاستطلاع بالظبط زي ما
        كانت قبل الجولة دي — من غير خطأ ظاهر للمستخدم. -->
-  <script src="assets/js/vendor/pusher.min.js"></script>
+  <script src="assets/js/vendor/pusher.min.js?v=20260908"></script>
   <script src="assets/js/realtime.js?v=20260829a"></script>
   <script type="module">
     /* ═══ REST بدل فايربيز — كل القراءة والكتابة عبر assets/js/api.js ═══
@@ -194,7 +194,7 @@
     // انتهاء جلسة السيرفر (401 من أي نداء) → رجوع لشاشة الدخول
     window._onSessionExpired = function () {
       if (!window._currentUser) return;
-      window._currentUser = null;
+      window._currentUser = null; window._pilotsSig = null; window._overdueKey = null;
       // نفس سبب doLogout — جلسة السيرفر خلصت فالقناة الخاصة مابقاش ليها تفويض
       try { _rtStop(); } catch (e) {}
       localStorage.removeItem("tiar-session");
@@ -927,10 +927,14 @@
 
     // نبضة lastSeen كل دقيقة — بديل onDisconnect بتاع فايربيز:
     // السيرفر بيقفل الجلسات اللي نبضها واقف (cron في مرحلة 5)
+    /* noPoke: النبضة كتابة، وأي كتابة كانت بتعمل تحديث فوري لكل القوايم
+       (25 طلب كل دقيقة من كل تاب — مراجعة 2026-09-08). ومن غير فحص
+       document.hidden: التاب اللي ورا لسه شغّال، ووقف النبضة كان بيسجّل
+       انصراف تلقائي بعد ربع ساعة على تاب تاني. */
     setInterval(() => {
       try {
-        if (!window._currentUser?.username || document.hidden) return;
-        api.post("/api/attendance/heartbeat").catch(() => {});
+        if (!window._currentUser?.username) return;
+        api.post("/api/attendance/heartbeat", {}, { noPoke: true }).catch(() => {});
       } catch(e) {}
     }, 60000);
 
@@ -978,7 +982,7 @@
       const username = window._currentUser?.username;
       if (username) await recordCheckOut(username).catch(() => {});
       clearSession();
-      window._currentUser = null;
+      window._currentUser = null; window._pilotsSig = null; window._overdueKey = null;
       // قفل الويبسوكت والاشتراكات — الجلسة راحت، والقنوات الخاصة تفويضها معاها
       try { _rtStop(); } catch (e) {}
       // إنهاء جلسة السيرفر كمان
@@ -1278,6 +1282,10 @@
       const pilotsBody    = document.getElementById("accPilotsBody");
       const expensesBody  = document.getElementById("accExpensesBody");
       if (!branchesBody) return;
+      /* الصفحة مقفولة = مفيش حساب ولا نداء (كانت بتتحسب كل 15 ثانية مع بولر
+         الطيارين — 3,617 نداء في 13 ساعة منهم 2,759 مرفوض؛ مراجعة 2026-09-08).
+         navigateTo بتنديها لما الصفحة تتفتح. */
+      if (!document.getElementById("page-accounting")?.classList.contains("active")) return;
 
       const { from, to } = getAccDateRange();
       const orders   = window._ordersData || [];
@@ -1495,9 +1503,17 @@
       openModal("expense");
     };
 
-        ccPoller("/api/pilots", { interval: 15000, useSince: false, onChange: d => {
+    /* بصمة رخيصة لرد الطيارين — من غير الأعمدة اللي بتتغيّر كل ثانية (الموقع
+       والأثر). الرد بيجي كامل كل 15 ثانية، ومن غير المقارنة كل الجداول
+       واللوحة والداشبورد كانوا بيتعاد رسمهم 240 مرة في الساعة (مراجعة 2026-09-08). */
+    function pilotsSig(list) {
+      return JSON.stringify(list.map(({ location, trail, locationUpdatedAt, heading, speed, updatedAt, lastSeen, ...rest }) => rest));
+    }        ccPoller("/api/pilots", { interval: 15000, useSince: false, onChange: d => {
       const pilots = nrmList(d.items);
       window._pilotsData = pilots;
+      const _psig = pilotsSig(pilots);
+      if (_psig === window._pilotsSig) return;
+      window._pilotsSig = _psig;
       renderPilotsTable(pilots);
       renderPilotsPanel(pilots);
       if (window._ordersData) startOrderTimers(window._ordersData.filter(o => o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل"));
@@ -1508,7 +1524,8 @@
 
     /* ── ورديات الطيارين ─────────────────────────────────────────────── */
     window._shiftsData = [];
-    ccPoller("/api/shifts", { interval: 60000, useSince: false, onChange: d => {
+    ccPoller("/api/shifts", { interval: 60000, useSince: true, onChange: d => {
+      if (!d.items) return;   // changed:false — مفيش جديد
       window._shiftsData = nrmList(d.items);
     }});
 
@@ -1683,8 +1700,7 @@
     window._sendersData = [];
     window._receiversData = [];
     // استلامون — كانت onValue("senders"): دمج delta الـ ?since في كاش بالمعرّف
-    ccPoller("/api/senders", { interval: 60000, onChange: (d) => {
-      if (!d.items) return;
+    ccPoller("/api/senders", { interval: 60000, onChange: function ccSendersOnChange(d) {      if (!d.items) return;
       const byId = new Map((window._sendersData || []).map(x => [x.id, x]));
       nrmList(d.items).forEach(it => byId.set(it.id, it));
       const list = [...byId.values()];
@@ -1692,18 +1708,15 @@
       document.getElementById("totalSenders").textContent = list.length;
       const tbody = document.getElementById("sendersBody");
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا يوجد عملاء الاستلام بعد</td></tr>`; return; }
-      tbody.innerHTML = list.map((c, i) => `<tr>
-        <td class="idx">${i+1}</td>
+      tbody.innerHTML = pagedRows("senders", list, (c, i) => `<tr>        <td class="idx">${i+1}</td>
         <td><span class="name-badge">${ esc(c.name) }</span></td>
         <td dir="ltr">${ esc(c.phone1) }</td>
         <td dir="ltr">${ esc(c.phone2 || "—") }</td>
         <td>${ esc(c.address) }</td>
         <td><button class="edit-btn" onclick="openEditClient('senders','${ escJs(c.id) }','sender')">تعديل</button>${isCC() ? "" : `<button class="del-btn" onclick="deleteClient('senders','${ escJs(c.id) }')">حذف</button>`}</td>
-      </tr>`).join("");
-    }});
+      </tr>`, 6, () => ccSendersOnChange(d));    }});
     // تسليمون — كانت onValue("receivers")
-    ccPoller("/api/receivers", { interval: 60000, onChange: (d) => {
-      if (!d.items) return;
+    ccPoller("/api/receivers", { interval: 60000, onChange: function ccReceiversOnChange(d) {      if (!d.items) return;
       const byId = new Map((window._receiversData || []).map(x => [x.id, x]));
       nrmList(d.items).forEach(it => byId.set(it.id, it));
       const list = [...byId.values()];
@@ -1711,15 +1724,13 @@
       document.getElementById("totalReceivers").textContent = list.length;
       const tbody = document.getElementById("receiversBody");
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا يوجد عملاء التسليم بعد</td></tr>`; return; }
-      tbody.innerHTML = list.map((c, i) => `<tr>
-        <td class="idx">${i+1}</td>
+      tbody.innerHTML = pagedRows("receivers", list, (c, i) => `<tr>        <td class="idx">${i+1}</td>
         <td><span class="name-badge">${ esc(c.name) }</span></td>
         <td dir="ltr">${ esc(c.phone1) }</td>
         <td dir="ltr">${ esc(c.phone2 || "—") }</td>
         <td>${ esc(c.address) }</td>
         <td><button class="edit-btn" onclick="openEditClient('receivers','${ escJs(c.id) }','receiver')">تعديل</button>${isCC() ? "" : `<button class="del-btn" onclick="deleteClient('receivers','${ escJs(c.id) }')">حذف</button>`}</td>
-      </tr>`).join("");
-    }});
+      </tr>`, 6, () => ccReceiversOnChange(d));    }});
 
     /* ══════════════════════════════════════════════════════════════
        AUTOCOMPLETE لنماذج إضافة / تعديل العملاء (استلام وتسليم)
@@ -2137,8 +2148,7 @@
       if (!tbody) return;
       window._zonesData = zones;
       if (!zones.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا توجد مناطق مسجّلة بعد</td></tr>`; return; }
-      tbody.innerHTML = zones.map((z, i) => {
-        const srcLabel = z.sourceBranchId
+      tbody.innerHTML = pagedRows("zones", zones, (z, i) => {        const srcLabel = z.sourceBranchId
           ? `<span style="background:rgba(14,165,233,.12);color:var(--sky);padding:2px 8px;border-radius:12px;font-size:.8rem">${ esc(z.sourceBranchName || '—') }</span>`
           : `<span style="background:rgba(168,85,247,.12);color:var(--purple);padding:2px 8px;border-radius:12px;font-size:.8rem">يدوي</span>`;
         return `<tr>
@@ -2149,8 +2159,7 @@
           <td><span style="color:var(--green);font-weight:700">${ esc(z.price) } ج.م</span></td>
           <td><button class="edit-btn" onclick="openEditZone('${ escJs(z.id) }')">تعديل</button><button class="del-btn" onclick="deleteZone('${ escJs(z.id) }')">حذف</button></td>
         </tr>`;
-      }).join("");
-    }
+      }, 6, () => renderZonesTable(window._zonesData));    }
 
     /* ── Smart Search Helper ────────────────────────────────────────────── */
     window._smartSearchState = {};
@@ -3031,8 +3040,7 @@
         </td></tr>`;
         return;
       }
-      body.innerHTML = list.map(ccNotifRowHTML).join("");
-      body.querySelectorAll("[data-ccnwa]").forEach(b =>
+      body.innerHTML = pagedRows("notifs", list, ccNotifRowHTML, 6, () => window.ccRenderNotifs());      body.querySelectorAll("[data-ccnwa]").forEach(b =>
         b.addEventListener("click", () => window.ccOpenNotifWhatsApp(b.dataset.ccnwa)));
       body.querySelectorAll("[data-ccnsent]").forEach(b =>
         b.addEventListener("click", () => window.ccMarkNotifSent(b.dataset.ccnsent, b)));
@@ -3826,6 +3834,7 @@
     }
 
     function checkOverdueOrders() {
+      if (!window._currentUser) return;   // كان بيفضل ينبّه على شاشة الدخول بعد الخروج
       const delivering = (window._ordersData || []).filter(o => o.status === "جاري التوصيل");
       const nowOverdue = new Set();
       const now = Date.now();
@@ -3846,7 +3855,6 @@
           const msg = `⚠️ الطلب ${ esc(o.orderNum || "—") } مع الطيار ${ esc(o.pilotName || "—") } تجاوز ${mins} دقيقة في التوصيل — يُنصح بالاطمئنان عليه`;
           // تنبيهان في نفس اللحظة (Toast مزدوج) عشان يبقى ملحوظ أكتر
           showToast(msg, "error");
-          setTimeout(() => showToast(msg, "error"), 400);
           if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             try {
               new Notification("⏰ تأخر في التوصيل", {
@@ -3857,7 +3865,11 @@
         }
       });
       window._overdueLastAlertedAt.forEach((_, id) => { if (!nowOverdue.has(id)) window._overdueLastAlertedAt.delete(id); });
-      // إعادة رسم بطاقات الطيارين (دالة مسمّاة يمكن استدعاؤها مباشرة) لتحديث شاراتها
+      /* ارسم بس لو مجموعة المتأخرين اتغيّرت (مراجعة 2026-09-08) — قبل كده
+         لوحة الطيارين والجرس كانوا بيتعاد رسمهم كل 20 ثانية على الفاضي. */
+      const _okey = [...nowOverdue].sort().join(",");
+      if (_okey === window._overdueKey) return;
+      window._overdueKey = _okey;
       try { renderPilotsPanel(window._pilotsData || []); } catch(e) {}
       if (window.renderNotifBell) renderNotifBell();
     }
@@ -3998,6 +4010,27 @@
       const s = arr.slice().sort((a,b) => _orderTime(b) - _orderTime(a));
       return s.length <= limit ? s : s.slice(0, limit);
     }
+    /* ── 50 صف + «عرض المزيد» (طلب صاحب النظام 2026-09-08) ─────────────
+       الجداول الكبيرة (المستلمين والمسلّمين لحد 5000 صف، المناطق، الورديات،
+       رسايل العملاء) كانت بتترسم كاملة مع كل استطلاع. دلوقتي 50 صف، وزرار
+       بيزوّد 50 كل ضغطة، والعدّاد بيفضل محفوظ لحد ما الصفحة تتقفل. */
+    window.PAGE_ROWS = 50;
+    window._pageMul = window._pageMul || {};
+    window._pageRender = window._pageRender || {};
+    function pagedRows(key, list, rowFn, cols, rerender) {
+      if (rerender) window._pageRender[key] = rerender;
+      const n = (window._pageMul[key] || 1) * window.PAGE_ROWS;
+      let html = list.slice(0, n).map(rowFn).join("");
+      if (list.length > n) {
+        html += `<tr><td colspan="${cols}" style="text-align:center;padding:10px;background:rgba(56,189,248,.06)">
+          <button type="button" class="more-rows-btn" onclick="showMoreRows('${key}')">⬇️ عرض ${Math.min(window.PAGE_ROWS, list.length - n)} صف كمان — ظاهر ${n} من ${list.length}</button></td></tr>`;
+      }
+      return html;
+    }
+    window.showMoreRows = function (key) {
+      window._pageMul[key] = (window._pageMul[key] || 1) + 1;
+      try { if (window._pageRender[key]) window._pageRender[key](); } catch (e) { console.error(e); }
+    };
     function rowsCapNote(shown, total, cols) {
       if (shown >= total) return "";
       return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
@@ -4502,7 +4535,7 @@
     };
     window._usersData = [];
     // كانت onValue("users") — المفتاح القديم كان الـ username نفسه
-    ccPoller("/api/users", { interval: 15000, useSince: false, onChange: (d) => {
+    ccPoller("/api/users", { interval: 60000, useSince: false, onChange: (d) => {
       const users = nrmList(d.items).map(v => ({ ...v, _key: v.username }));
       window._usersData = users;
       renderUsersTable(users);
@@ -4534,7 +4567,7 @@
 
     window._hrTodayData = {};
     // كانت onValue(attendance/{اليوم}) — GET /api/attendance بيرجّع days بنفس شكل VOCAB بند 12
-    ccPoller("/api/attendance", { interval: 15000, useSince: false, onChange: (d) => {
+    ccPoller("/api/attendance", { interval: 60000, useSince: false, onChange: (d) => {
       window._hrTodayData = (d.days || {})[todayKeyHR()] || {};
       window.renderHRPage();
     }});
@@ -4944,7 +4977,8 @@
     };
 
     // كانت onValue("pilotJoinRequests")
-    ccPoller("/api/join-requests", { interval: 60000, useSince: false, onChange: (d) => {
+    ccPoller("/api/join-requests", { interval: 60000, useSince: true, onChange: (d) => {
+      if (!d.items) return;
       const list = nrmList(d.items);
       list.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
       window._joinRequestsData = list;
@@ -4974,7 +5008,8 @@
     window._shiftRequestsData = [];
 
     // كانت onValue("pilotLeaveRequests")
-    ccPoller("/api/leave-requests", { interval: 15000, useSince: false, onChange: (d) => {
+    ccPoller("/api/leave-requests", { interval: 15000, useSince: true, onChange: (d) => {
+      if (!d.items) return;
       const list = nrmList(d.items);
       list.sort((a,b) => (b.requestedAt||"").localeCompare(a.requestedAt||""));
       window._leaveRequestsData = list;
@@ -4983,7 +5018,8 @@
       if (window.renderNotifBell) renderNotifBell();
     }});
     // كانت onValue("pilotShiftRequests")
-    ccPoller("/api/shift-requests", { interval: 60000, useSince: false, onChange: (d) => {
+    ccPoller("/api/shift-requests", { interval: 60000, useSince: true, onChange: (d) => {
+      if (!d.items) return;
       const list = nrmList(d.items);
       list.sort((a,b) => (b.requestedAt||"").localeCompare(a.requestedAt||""));
       window._shiftRequestsData = list;
@@ -4992,7 +5028,8 @@
       if (window.renderNotifBell) renderNotifBell();
     }});
     // كانت onValue("pilotReturnRequests")
-    ccPoller("/api/return-requests", { interval: 15000, useSince: false, onChange: (d) => {
+    ccPoller("/api/return-requests", { interval: 15000, useSince: true, onChange: (d) => {
+      if (!d.items) return;
       const list = nrmList(d.items);
       list.sort((a,b) => (b.requestedAt||"").localeCompare(a.requestedAt||""));
       window._returnRequestsData = list;
@@ -5194,7 +5231,8 @@
     window._pilotSupportData   = [];
 
     // كانت onValue("pilotTransfers")
-    ccPoller("/api/pilot-transfers", { interval: 15000, useSince: false, onChange: (d) => {
+    ccPoller("/api/pilot-transfers", { interval: 15000, useSince: true, onChange: (d) => {
+      if (!d.items) return;
       window._pilotTransfersData = nrmList(d.items);
       renderAdminTransfersPage();
       updateAdminTransfersBadge();
@@ -5464,12 +5502,7 @@
       } catch (e) { showToast("خطأ: " + e.message, "error"); }
     };
 
-    // ── 2. إرسال heartbeat كل دقيقة ────────────────────────────────
-    // السيرفر بيحدّث lastSeen لجلسة المستخدم المفتوحة بنفسه
-    setInterval(() => {
-      if (!window._currentUser?.username) return;
-      api.post("/api/attendance/heartbeat").catch(() => {});
-    }, 60000);
+    // ── 2. النبضة بتتبعت من مكان واحد بس (فوق، كل دقيقة) — كانت مكررة هنا
 
     // ── 3. فحص الموظفين الصامتين وتسجيل انصرافهم ─────────────────
     // بقى مسؤولية السيرفر (cron الانصراف التلقائي بيقرا last_seen) —
@@ -6539,6 +6572,8 @@
     .notif-ok { background: var(--sky); color: #fff; }
     .notif-ok:disabled { opacity: .45; cursor: not-allowed; }
 
+      .more-rows-btn { background:rgba(56,189,248,.12); color:var(--sky); border:1px solid rgba(56,189,248,.35); border-radius:8px; padding:7px 18px; cursor:pointer; font-weight:700; font-size:.85rem; font-family:inherit; }
+    .more-rows-btn:hover { background:rgba(56,189,248,.22); }
   </style>
 </head>
 <body>
@@ -9135,7 +9170,7 @@
 
 <!-- Leaflet خريطة الطيارين + الأوردرات -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   /* ═══════════════════════════════════════════════════════════════════
      خريطة الطيارين والأوردرات — تتبع فوري real-time
