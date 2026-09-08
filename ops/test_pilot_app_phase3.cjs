@@ -36,11 +36,19 @@ ok('pilot/state من غير fresh في مزامنة الوردية', /getShiftRa
 ok('طلب واحد في الرحلة للأوردرات النشطة', M.includes('return _ordersInflight ??= _fetchActiveOrders().whenComplete(() => _ordersInflight = null);'));
 ok('تاب الحساب بإحصائيات السيرفر مش 1000 أوردر', M.includes("final fin = await Api.finishedOrders(period: 'year');") && !M.includes('final all = await Api.myOrders();'));
 ok('السبلاش: الشبكة بالتوازي (900 مللي بدل 2000)', M.includes('final updF = checkAppUpdate();\n    Future.delayed(const Duration(milliseconds: 900)') && M.includes('final upd = await updF;'));
-ok('الشاشة السودا بعد 5 دقايق مش دقيقة', M.includes('idleTimeout: const Duration(minutes: 5),'));
 
 console.log('\n══ التوقيتات ══');
 ok('ساعة السيرفر: clockOffset من serverNow وبتتحدّث من state وactive-orders', M.includes('static int clockOffsetMs = 0;') && count(M, 'syncClock(d);') === 2 && M.includes('_elapsed.value = start != null ? Svc.now().difference(start) : Duration.zero;'));
 ok('عدّاد الوردية بيعيد القراءة مع تغيّر الإذن', M.includes('if (old.onBreak != widget.onBreak) _loadShiftInfo();'));
+
+console.log('\n══ شكوى «الأزرار مابتشتغلش» (2.5.7) ══');
+ok('🔴 بانر الموقع الكاذب: sinceLastOk بتعمل reload', /sinceLastOk\(\) async \{[\s\S]{0,400}?prefs\.reload\(\)/.test(M));
+ok('🔴 شاشة السكون اتشالت من الشاشة الرئيسية', !M.includes('child: IdleOverlay(') && !M.includes('),  // IdleOverlay'));
+ok('🔴 تنبيه علوي مابيمنعش الضغط بدل SnackBar', M.includes('void showTopToast(BuildContext context, String msg, {Color? color, int seconds = 3})') && M.includes('child: IgnorePointer(') && count(M, 'SnackBarBehavior.floating') === 0);
+ok('زرار «بدء الرحلة» بيوري سبينر', /onPressed: _processing \? null : _startTripToCustomer,\s*\n\s*icon: _processing/.test(M));
+ok('🔴 الجلب بعد الفعل مابيتخطّاش (تفاصيل الأوردر + تاب الطلبات)', count(M, 'if (running != null) return running.then((_) => _load(showSpinner: showSpinner));') === 2 && !M.includes('if (_fetching) return;\n    _fetching = true;\n    if (showSpinner && mounted) setState(() => _loading = true);\n    try {\n      final raw = await Api.getOrder'));
+ok('«عدت للعمل» بيقول لما يفشل', M.includes("showErrorSnack(context, e, fallback: 'ما قدرناش نسجّل رجوعك للعمل — جرّب تاني')"));
+ok('عدّاد الوردية والإذن بساعة السيرفر', M.includes('final end = _breakStart ?? Svc.now();') && M.includes('final extra = Svc.now().difference(start).inSeconds;') && count(M, "?? '') ?? Svc.now();") === 2);
 
 console.log('\n══ سلامة نصية بسيطة ══');
 const braces = count(M, '{') - count(M, '}');
