@@ -1099,7 +1099,8 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "pane-" + t.dataset.p));
 });
 
-const validPhone = p => /^0?1[0-9]{9}$/.test(String(p || "").replace(/[\s-]/g, ""));
+/* أي رقم من 8 لـ 15 رقم (طلب صاحب النظام 2026-09-09): 010/011/012/015/050/أرضي/دولي — نفس قاعدة السيرفر */
+const validPhone = p => /^\d{8,15}$/.test(String(p || "").replace(/[\s\-()+]/g, ""));
 const say = (el, txt, ok) => { el.className = "msg on " + (ok ? "ok" : "bad"); el.textContent = txt; };
 
 /* ══ طلب انضمام طيار — POST /api/public/join-request (الفرع بيحدده الإدارة عند القبول) ══ */
@@ -1110,7 +1111,7 @@ $("pilotForm").addEventListener("submit", async e => {
   const name = $("pName").value.trim(), phone1 = $("pPhone1").value.trim();
   const vehicleNo = $("pVehicle").value.trim(), address = $("pAddress").value.trim();
   if (!name)               return say(msg, "اكتب اسمك بالكامل", false);
-  if (!validPhone(phone1)) return say(msg, "رقم الهاتف غير صحيح — لازم 11 رقم يبدأ بـ 01", false);
+  if (!validPhone(phone1)) return say(msg, "رقم الهاتف غير صحيح — من 8 لـ 15 رقم", false);
   if (!vehicleNo)          return say(msg, "اكتب رقم الموتوسيكل", false);
   if (!address)            return say(msg, "اكتب عنوانك", false);
   btn.disabled = true; btn.textContent = "⏳ بنبعت طلبك…";

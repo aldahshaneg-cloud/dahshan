@@ -960,10 +960,9 @@ function askEdit(c) {
   $("okBtn").onclick = async () => {
     const name = $("eName").value.trim(), p1 = $("ePh1").value.trim();
     if (!name) return $("eErr").textContent = "اكتب اسم العميل";
-    // موبايل أو أرضي مصري (يبدأ 02–09، ٩–١٠ أرقام) — نفس قاعدة السيرفر
-    if (p1 && !/^0?1[0-9]{9}$/.test(p1.replace(/[\s-]/g, ""))
-           && !/^0[2-9][0-9]{7,8}$/.test(p1.replace(/[\s-]/g, "")))
-      return $("eErr").textContent = "رقم الهاتف غير صحيح";
+    /* أي رقم من 8 لـ 15 رقم (طلب صاحب النظام 2026-09-09): 010/011/012/015/050/أرضي/دولي — نفس قاعدة السيرفر */
+    if (p1 && !/^\d{8,15}$/.test(p1.replace(/[\s\-()+]/g, "")))
+      return $("eErr").textContent = "رقم الهاتف غير صحيح — من 8 لـ 15 رقم";
     try {
       const d = await API.put(`/api/customers/${c.id}`, {
         name, phone1: p1,

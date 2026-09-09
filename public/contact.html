@@ -647,8 +647,9 @@
     /* نفس قواعد التحقّق اللي كانت على السيرفر — ونفس نصوص الأخطاء */
     var bad = false, firstBad = null;
     if (v.name.length < 3) { setErr('eName', 'برجاء كتابة الاسم بشكل صحيح.'); bad = true; firstBad = firstBad || 'name'; }
-    if (!/^(01[0125]\d{8}|201[0125]\d{8})$/.test(v.phone.replace(/\D+/g, ''))) {
-      setErr('ePhone', 'برجاء إدخال رقم موبايل مصري صحيح.'); bad = true; firstBad = firstBad || 'phone';
+    /* أي رقم من 8 لـ 15 رقم (طلب صاحب النظام 2026-09-09): 010/011/012/015/050/أرضي/دولي — نفس قاعدة السيرفر */
+    if (!/^\d{8,15}$/.test(v.phone.replace(/\D+/g, ''))) {
+      setErr('ePhone', 'برجاء إدخال رقم هاتف صحيح (من 8 لـ 15 رقم).'); bad = true; firstBad = firstBad || 'phone';
     }
     if (v.email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.email)) {
       setErr('eEmail', 'صيغة البريد الإلكتروني غير صحيحة.'); bad = true; firstBad = firstBad || 'email';

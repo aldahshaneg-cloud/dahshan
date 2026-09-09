@@ -23,19 +23,27 @@ const ok = (what, cond, got) => {
   else { fail++; console.log('  ✗ ' + what + (got !== undefined ? '   ← ' + got : '')); }
 };
 
+/* 2026-09-09 (طلب صاحب النظام): «تأكد إن رقم الهاتف مقبول سواء 010 أو 011 أو 015 أو 012 أو 050 أو أي
+   رقم» — القاعدة بقت: أي رقم من 8 لـ 15 رقم بعد شيل المسافات والشرط والأقواس و+. الحروف والقصير بس بيترفضوا. */
 const CASES = [
   // [الرقم, المفروض يتقبل؟, الوصف]
-  ['01012345678', true,  'موبايل 11 رقم'],
+  ['01012345678', true,  'موبايل 010'],
+  ['01112345678', true,  'موبايل 011'],
+  ['01212345678', true,  'موبايل 012'],
+  ['01512345678', true,  'موبايل 015'],
+  ['05012345678', true,  'يبدأ بـ 050 (11 رقم)'],
   ['1012345678',  true,  'موبايل من غير الصفر'],
   ['010 1234-5678', true, 'موبايل بمسافات وشُرط'],
   ['0212345678',  true,  'أرضي قاهرة (02 + 8)'],
   ['034567890',   true,  'أرضي إسكندرية (03 + 7)'],
   ['0502345678',  true,  'أرضي دقهلية (050 + 7)'],
-  ['212345678',   false, 'أرضي من غير صفر — مرفوض (الصفر إجباري)'],
-  ['02123456',    false, 'أقصر من أرضي حقيقي'],
-  ['02123456789', false, 'أطول من أرضي حقيقي'],
-  ['0101234567',  false, 'موبايل ناقص رقم'],
+  ['+201012345678', true, 'دولي بعلامة +'],
+  ['00966501234567', true, 'دولي سعودي'],
+  ['212345678',   true,  'أرضي من غير صفر — 9 أرقام مقبولة'],
+  ['02123456',    true,  '8 أرقام — الحد الأدنى'],
   ['012345',      false, 'رقم قصير عشوائي'],
+  ['1234567',     false, '7 أرقام — أقل من الحد'],
+  ['0123456789012345', false, '16 رقم — أكتر من الحد'],
   ['05023456x8',  false, 'فيه حرف'],
   ['',            false, 'فاضي'],
 ];
@@ -63,20 +71,24 @@ const k = CAC.indexOf('private static function validPhone');
 // الريجيكس نفسه (`{9}`) وبتقص الفرع التاني
 const fnPhp = k > 0 ? CAC.slice(k, CAC.indexOf('\n    }', k)) : '';
 ok('validPhone السيرفرية موجودة', fnPhp.length > 0);
-const mob = fnPhp.includes('/^0?1[0-9]{9}$/');
-const land = fnPhp.includes('/^0[2-9][0-9]{7,8}$/');
-ok('🔴 فيها فرعين: موبايل + أرضي', mob && land,
-  'فحص موبايل-بس بيزنق اللي مالوش غير أرضي في «رقم غير صحيح»');
-// نفس ريجيكسات السيرفر بتتجرب هنا بالحالات — صيغة PCRE دي متوافقة مع JS
-runCases('ريجيكسات السيرفر مجتمعة',
-  p => { const d = String(p).replace(/[\s-]/g, ''); return /^0?1[0-9]{9}$/.test(d) || /^0[2-9][0-9]{7,8}$/.test(d); });
+ok('🔴 القاعدة الواحدة: أي 8→15 رقم (مفيش فحص بادئة)', fnPhp.includes("/^[0-9]{8,15}$/") && !fnPhp.includes('01[0125]') && !fnPhp.includes('0?1[0-9]{9}'),
+  'فحص البادئة كان بيزنق 050 والدولي في «رقم غير صحيح»');
+// نفس ريجيكس السيرفر بيتجرب هنا بالحالات — صيغة PCRE دي متوافقة مع JS
+runCases('ريجيكس السيرفر',
+  p => { const d = String(p).replace(/[\s\-()+]/g, ''); return /^[0-9]{8,15}$/.test(d); });
 
 console.log('\n══ 3) دفتر العملاء — لوحة الإدارة والسيرفر ══');
 const CC = fs.readFileSync('app/Http/Controllers/Api/CustomersController.php', 'utf8');
-ok('CustomersController بيقبل الأرضي', CC.includes("'/^0[2-9][0-9]{7,8}$/'"));
+ok('CustomersController بنفس القاعدة (8→15 رقم)', CC.includes("'/^[0-9]{8,15}$/'") && !CC.includes('0?1[0-9]{9}'));
 const CUI = fs.readFileSync('public/customers.html', 'utf8');
-ok('وواجهة دفتر العملاء بتقبله برضه (وإلا الموظف مايعرفش يسجّل رقم الأوردر الواصل)',
-  CUI.includes('/^0[2-9][0-9]{7,8}$/'));
+ok('وواجهة دفتر العملاء بنفس القاعدة (وإلا الموظف مايعرفش يسجّل رقم الأوردر الواصل)',
+  CUI.includes('/^\\d{8,15}$/') && !CUI.includes('0?1[0-9]{9}'));
+console.log('\n══ 3ب) صفحة الدخول وصفحة التواصل والسيرفر العام ══');
+const IDX = fs.readFileSync('public/index.html', 'utf8');
+const CON = fs.readFileSync('public/contact.html', 'utf8');
+const PUB = fs.readFileSync('app/Http/Controllers/Api/PublicSiteController.php', 'utf8');
+ok('index.html وcontact.html من غير فحص بادئة', IDX.includes('/^\\d{8,15}$/') && !IDX.includes('0?1[0-9]{9}') && CON.includes('/^\\d{8,15}$/') && !CON.includes('01[0125]'));
+ok('PublicSiteController::contactMessage من غير فحص بادئة', PUB.includes("/^[0-9]{8,15}$/") && !PUB.includes("preg_match('/^01[0125]"));
 
 console.log('\n══ 4) بوابة المحلات ══');
 const ST = fs.readFileSync('public/store.html', 'utf8');

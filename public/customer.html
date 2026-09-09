@@ -21,7 +21,7 @@
        regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
        نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
        ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
-  <meta name="app-version" content="1.7.2" />
+  <meta name="app-version" content="1.7.3" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -2107,9 +2107,10 @@ window.setupNext = setupNext;
    050234567x). فيه عملاء مالهمش غير تلفون أرضي والطيار بيتصل بيه
    عادي؛ الواتساب أصلًا بيتفلتر سيرفريًا للموبايل بس (OrderRecipients)
    فمفيش رسالة بتضيع بصمت. */
+/* أي رقم من 8 لـ 15 رقم (طلب صاحب النظام 2026-09-09): 010/011/012/015/050/أرضي/دولي — نفس قاعدة السيرفر */
 function validPhone(p) {
-  const d = String(p || "").replace(/\s|-/g, "");
-  return /^0?1[0-9]{9}$/.test(d) || /^0[2-9][0-9]{7,8}$/.test(d);
+  const d = String(p || "").replace(/[\s\-()+]/g, "");
+  return /^\d{8,15}$/.test(d);
 }
 
 async function saveProfile() {

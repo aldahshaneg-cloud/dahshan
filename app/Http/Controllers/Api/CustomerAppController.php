@@ -492,9 +492,11 @@ class CustomerAppController
      */
     private static function validPhone(string $p): bool
     {
-        $d = str_replace([' ', '-'], '', $p);
+        /* أي رقم من 8 لـ 15 رقم (طلب صاحب النظام 2026-09-09): 010/011/012/015/050/أرضي/دولي —
+           الشبكات بتزيد والعملاء فيهم أجانب. الحروف والأرقام القصيرة بس اللي بتترفض. */
+        $d = str_replace([' ', '-', '(', ')', '+'], '', $p);
 
-        return (bool) (preg_match('/^0?1[0-9]{9}$/', $d) || preg_match('/^0[2-9][0-9]{7,8}$/', $d));
+        return (bool) preg_match('/^[0-9]{8,15}$/', $d);
     }
 
     public function profileUpdate(Request $request): JsonResponse
