@@ -103,6 +103,18 @@ try {
     $ins(10, 18);
     $ins(10, 1800);
 
+    /* 2026-09-09 — الإذن يتقصّ على الوردية والطويلة تتقسم على أيامها:
+       • وردية طويلة ٣٠ ساعة من يوم ٢٠ الساعة ٠٨:٠٠ القاهرة، وفيها إذن ٠٨:٣٠→١٠:٠٠ يوم ٢١ (عدّى ٩ الصبح)
+       • وردية عادية يوم ٢٥ (١١ ص → ١١ م) وإذن **بعدها** ٢٣:٣٠→٠٠:٠٠ — برّه الوردية = مش استئذان */
+    DB::insert('INSERT INTO shifts (pilot_id, branch_id, status, started_at, ended_at, created_at) VALUES (?,?,?,?,?,NOW())',
+        [$pid, $pilot->assigned_branch_id, 'ended', "{$ym}-20 05:00:00", "{$ym}-21 11:00:00"]);
+    $bid = (int) ($pilot->assigned_branch_id ?: DB::selectOne('SELECT id FROM branches ORDER BY id LIMIT 1')->id);
+    DB::insert("INSERT INTO pilot_leave_requests (pilot_id, branch_id, type, status, requested_at, responded_at, responded_by, ended_at, ended_by, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,NOW())", [$pid, $bid, 'rest', 'ended', "{$ym}-21 05:30:00", "{$ym}-21 05:30:00", 'test', "{$ym}-21 07:00:00", 'test']);
+    $mk(25, 12.0);
+    DB::insert("INSERT INTO pilot_leave_requests (pilot_id, branch_id, type, status, requested_at, responded_at, responded_by, ended_at, ended_by, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,NOW())", [$pid, $bid, 'rest', 'ended', "{$ym}-25 20:30:00", "{$ym}-25 20:30:00", 'test', "{$ym}-25 21:00:00", 'test']);
+
     [$c, $m] = hit($kernel, $admin, 'GET', "/api/pilot-accounting/month?month={$ym}&pilotId={$pid}");
     ok('الشهر 200', $c === 200, (string) $c);
     $p = null;
@@ -132,6 +144,17 @@ try {
     ok('🔴 استئذان ١٨ ثانية مش موجود، و٣٠ دقيقة موجود (واحد بس ومدته ٣٠ دقيقة)', count($perms) === 1 && $mins === 30, json_encode($perms));
     ok('وساعات اليوم اتخصم منها نص ساعة بس (١٢ − ٠٫٥)', $near($row(10)['hours'] ?? -1, 11.5), (string) ($row(10)['hours'] ?? '؟'));
     ok('الثوابت: ١٦ ساعة و٥ دقايق', W::LONG_SHIFT_HOURS == 16 && W::MIN_PERM_MINUTES == 5);
+
+    echo "\n══ 2026-09-09: الوردية الطويلة بتتقسم على أيامها والإذن بيتقصّ عليها ══\n";
+    ok('🔴 اليوم التاني والتالت من وردية الـ٥٧ ساعة بياخدوا ساعاتهم (بسقف ساعات الوردية) ومتعلّمين مقطوعة',
+        $near($row(6)['hours'] ?? -1, $shiftHours) && ($row(6)['longShift'] ?? false) === true && $near($row(7)['hours'] ?? -1, $shiftHours),
+        json_encode([$row(6)['hours'] ?? null, $row(7)['hours'] ?? null]));
+    ok('🔴 إذن عدّى ٩ الصبح جوه وردية طويلة: يوم ٢٠ انصرافه ٠٨:٣٠ (بداية الإذن) ويوم ٢١ حضوره ١٠:٠٠ (نهايته) بـ٤ ساعات',
+        /* ٠٧:٣٠/٠٩:٠٠ = نفس اللحظات على جهاز بيانات توقيته للقاهرة +٢ (من غير التوقيت الصيفي) */
+        in_array($row(20)['out'] ?? null, ['08:30', '07:30'], true) && in_array($row(21)['in'] ?? null, ['10:00', '09:00'], true) && $near($row(21)['hours'] ?? -1, 4),
+        json_encode([$row(20)['out'] ?? null, $row(21)['in'] ?? null, $row(21)['hours'] ?? null]));
+    ok('🔴 إذن بعد نهاية الوردية مش استئذان — يوم ٢٥ بـ١٢ ساعة ومفيش استئذان',
+        $near($row(25)['hours'] ?? -1, 12) && count($row(25)['perms'] ?? []) === 0, json_encode([$row(25)['hours'] ?? null, $row(25)['perms'] ?? null]));
 } finally {
     DB::rollBack();
 }

@@ -1742,6 +1742,13 @@ class BoardController
                     if ((int) $pilot['leave_forced'] === 1 || $req['forced_by']) {
                         throw ApiException::forbidden('تم إيقافك من الإدارة/الفرع — مينفعش تنهي الإذن بنفسك');
                     }
+                    /* 🔴 ضغطة بالغلط (2026-09-09): زرار «عدت للعمل» بيظهر في التطبيق مكان «طلب إذن» أول
+                       ما الموافقة توصل — ضغطة تانية كانت بتنهي الإذن بعد ثواني، فمابيتحسبش في
+                       التقفيلة والساعات بتطلع كاملة. أقل من دقيقة من الموافقة = مش رجوع فعلي. */
+                    $sinceResp = time() - (int) strtotime((string) $req['responded_at'] . ' UTC');
+                    if ($req['responded_at'] !== null && $sinceResp < 60) {
+                        throw new ApiException('الإذن لسه بادئ من ' . max(0, $sinceResp) . ' ثانية — لو رجعت فعلًا استنى دقيقة واضغط تاني', 409);
+                    }
                 }
 
                 $now = WireTime::nowDb();

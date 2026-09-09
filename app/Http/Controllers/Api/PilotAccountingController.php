@@ -303,68 +303,166 @@ class PilotAccountingController
             array_merge($ids, [gmdate('Y-m-d H:i:s', strtotime($from . ' UTC') - 86400), $to])
         );
         $monthKey = substr(W::bizMoment($from, $ds)['date'] ?? '', 0, 7);
+
+        /* ── الأذونات المنتهية للطيارين دول (بهامش يوم قبل وبعد الشهر) ──
+           2026-09-09 (شكوى صاحب النظام «الإذن مابيتسجلش والساعات كاملة»): الإذن كان بينتسب
+           ليوم «الموافقة» ويتخطّى لو عدّى حدود اليوم (٩ الصبح)، والوردية الطويلة كانت تتقص
+           على يوم بدايتها بس. فرع الليل اللي مابيقفلش الوردية وبيطلّع الطيارين إذن بين
+           الليلتين كان بيطلع بصفر ساعات يومين ومن غير أي إذن. دلوقتي: الإذن بيتقصّ على
+           فترة الوردية نفسها، والوردية الطويلة بتتقسم على أيامها التجارية. */
+        $leavesByPilot = [];
+        foreach (DB::select(
+            "SELECT pilot_id, responded_at, ended_at
+               FROM pilot_leave_requests
+              WHERE pilot_id IN ({$ph}) AND status IN ('approved','ended')
+                AND responded_at IS NOT NULL AND ended_at IS NOT NULL
+                AND ended_at >= ? AND responded_at < ?",
+            array_merge($ids, [
+                gmdate('Y-m-d H:i:s', strtotime($from . ' UTC') - 86400),
+                gmdate('Y-m-d H:i:s', strtotime($to . ' UTC') + 86400),
+            ])
+        ) as $lr) {
+            $a = strtotime($lr->responded_at . ' UTC');
+            $b = strtotime($lr->ended_at . ' UTC');
+            if ($a !== false && $b !== false && $b > $a) {
+                $leavesByPilot[(int) $lr->pilot_id][] = [$a, $b];
+            }
+        }
+        $nowTs = time();
+        $hmOf  = fn (int $ts): string => (string) (W::bizMoment(gmdate('Y-m-d H:i:s', $ts), $ds)['hm'] ?? '');
+
         foreach ($shifts as $s) {
             $s   = (array) $s;
             $pid = (int) $s['pilot_id'];
-            $bm  = W::bizMoment($s['started_at'], $ds);
-            if (! $bm) {
+            $t0  = strtotime($s['started_at'] . ' UTC');
+            if ($t0 === false) {
                 continue;
             }
-            /* 🔴 اليوم اللي الوردية بتتحسب عليه = اليوم اللي فيه **نصّها** مش بدايتها.
-               مراجعة 2026-09-05: طيار صباحي بدأ ٠٨:٥٣ (قبل بداية اليوم ٩) اتحسبت ورديته
-               على اليوم اللي فات فوق وردية امبارح (٢٣٫٨٥ ساعة في يوم، وصفر في يومه).
-               الوردية المقطوعة (أطول من LONG_SHIFT_HOURS) بتفضل على يوم بدايتها. */
-            $dayMoment = $bm;
-            if ($s['ended_at'] !== null) {
-                $t0 = strtotime($s['started_at'] . ' UTC');
-                $t1 = strtotime($s['ended_at'] . ' UTC');
-                if ($t1 > $t0 && ($t1 - $t0) / 3600 <= W::LONG_SHIFT_HOURS) {
-                    $dayMoment = W::bizMoment(gmdate('Y-m-d H:i:s', intdiv($t0 + $t1, 2)), $ds) ?: $bm;
-                }
+            $open = $s['ended_at'] === null;
+            $t1   = $open ? $nowTs : strtotime($s['ended_at'] . ' UTC');
+            if ($t1 === false || $t1 < $t0) {
+                $t1 = $t0;
             }
-            if (substr($dayMoment['date'], 0, 7) !== $monthKey) {
-                continue;   // من الشهر اللي فات أو الجاي
-            }
-            $day = (int) substr($dayMoment['date'], 8, 2);
-            $cell = &$m[$pid][$day];
-            $cell ??= self::emptyCell();
+            $long = ($t1 - $t0) / 3600 > W::LONG_SHIFT_HOURS;
 
-            // أول حضور وآخر انصراف في اليوم — الطيار ممكن يفتح أكتر من وردية
-            if ($cell['in'] === null || $bm['hm'] < $cell['in']) {
-                $cell['in'] = $bm['hm'];
+            /* الأذونات اللي جوه الوردية — مقصوصة عليها، و≥ MIN_PERM_MINUTES (الضغطة بالغلط مش استئذان) */
+            $cuts = [];
+            foreach ($leavesByPilot[$pid] ?? [] as [$a, $b]) {
+                $a = max($a, $t0);
+                $b = min($b, $t1);
+                if ($b - $a >= W::MIN_PERM_MINUTES * 60) {
+                    $cuts[] = [$a, $b];
+                }
             }
-            $outM = W::bizMoment($s['ended_at'] ?? null, $ds);
-            if ($outM) {
-                if ($cell['out'] === null || $outM['hm'] > $cell['out']) {
-                    $cell['out'] = $outM['hm'];
+            usort($cuts, fn ($x, $y) => $x[0] <=> $y[0]);
+
+            /* أجزاء الوردية: العادية جزء واحد على يوم **نصّها** (مراجعة 2026-09-05: الصباحي اللي
+               بيبدأ ٠٨:٥٣ بيتحسب على يومه)، والطويلة (أكتر من LONG_SHIFT_HOURS) بتتقسم على
+               حدود اليوم التجاري — كل يوم بياخد ساعاته بسقف ساعات الوردية ومتعلّم «مقطوعة». */
+            $parts = [];
+            if (! $long) {
+                $mid = W::bizMoment(gmdate('Y-m-d H:i:s', intdiv($t0 + $t1, 2)), $ds) ?: W::bizMoment($s['started_at'], $ds);
+                if ($mid) {
+                    $parts[] = [$t0, $t1, $mid['date']];
                 }
-                $h = (strtotime($s['ended_at'] . ' UTC') - strtotime($s['started_at'] . ' UTC')) / 3600;
-                /* 🔴 وردية مقطوعة (فضلت مفتوحة أكتر من LONG_SHIFT_HOURS): محدش اشتغل ٥٧
-                   ساعة — بتتحسب بساعات الوردية وبتتعلّم عشان المشرف يراجع ويعدّل. */
-                if ($h > W::LONG_SHIFT_HOURS) {
-                    $cell['longShift'] = true;
-                    $h = min($h, $shiftHours);
-                }
-                $cell['hours'] += max(0, $h);
             } else {
-                $cell['openShift'] = true;   // وردية لسه مفتوحة — الساعات ناقصة
+                $cur = $t0;
+                while ($cur < $t1) {
+                    $bm = W::bizMoment(gmdate('Y-m-d H:i:s', $cur), $ds);
+                    if (! $bm) {
+                        break;
+                    }
+                    [, $endUtc] = W::bizWindowUtc($bm['date'], $ds);
+                    $end = min($t1, (int) strtotime($endUtc . ' UTC'));
+                    if ($end <= $cur) {
+                        break;
+                    }
+                    $parts[] = [$cur, $end, $bm['date']];
+                    $cur = $end;
+                }
             }
 
-            $cell['adv']   += (float) $s['advance_amount'];
-            $cell['ded']   += (float) $s['deduction_amount'];
-            $cell['bonus'] += (float) $s['bonus_amount'];
+            $moneyDone = false;
+            foreach ($parts as [$p0, $p1, $date]) {
+                if (substr($date, 0, 7) !== $monthKey) {
+                    continue;   // من الشهر اللي فات أو الجاي
+                }
+                $inner = [];
+                foreach ($cuts as [$a, $b]) {
+                    $a2 = max($a, $p0);
+                    $b2 = min($b, $p1);
+                    if ($b2 > $a2) {
+                        $inner[] = [$a2, $b2];
+                    }
+                }
+                /* الحضور = أول لحظة شغل، والانصراف = آخر لحظة شغل: الإذن اللي على طرف الجزء
+                   بيقصّ الطرف (الطيار مشي فعلًا)، واللي في النص بيتسجّل استئذان وبيتخصم في dayRow */
+                $w0 = $p0;
+                $w1 = $p1;
+                foreach ($inner as [$a, $b]) {
+                    if ($a <= $w0) {
+                        $w0 = max($w0, $b);
+                    }
+                }
+                foreach (array_reverse($inner) as [$a, $b]) {
+                    if ($b >= $w1) {
+                        $w1 = min($w1, $a);
+                    }
+                }
+                if ($w1 < $w0) {
+                    $w1 = $w0;   // الجزء كله إذن
+                }
+                $perms = [];
+                foreach ($inner as [$a, $b]) {
+                    if ($a > $w0 && $b < $w1) {
+                        $perms[] = ['out' => $hmOf($a), 'in' => $hmOf($b)];
+                    }
+                }
 
-            /* المرحّل للشهر = اللي مكتوب عليه `monthly` بس. الافتراضي في
-               المخطط `daily` يعني اتصفّى مع الطيار عند قفل الوردية.
-               نفس شرط `BoardController::buildMonthlyData` بالحرف عشان
-               التقفيلتين مايختلفوش. */
-            if (($s['advance_settle']   ?: 'monthly') === 'monthly') { $cell['advCarry']   += (float) $s['advance_amount']; }
-            if (($s['deduction_settle'] ?: 'monthly') === 'monthly') { $cell['dedCarry']   += (float) $s['deduction_amount']; }
-            if (($s['bonus_settle']     ?: 'monthly') === 'monthly') { $cell['bonusCarry'] += (float) $s['bonus_amount']; }
-            $cell['commMonthly'] = $cell['commMonthly'] || (($s['commission_settle'] ?: 'monthly') === 'monthly');
+                $day  = (int) substr($date, 8, 2);
+                $cell = &$m[$pid][$day];
+                $cell ??= self::emptyCell();
+                if ($cell['in'] === null || $w0 < ($cell['_inTs'] ?? PHP_INT_MAX)) {
+                    $cell['in']    = $hmOf($w0);
+                    $cell['_inTs'] = $w0;
+                }
+                if ($open && $p1 >= $t1) {
+                    $cell['openShift'] = true;   // وردية لسه مفتوحة — ساعات الجزء الأخير ناقصة
+                } else {
+                    if ($cell['out'] === null || $w1 > ($cell['_outTs'] ?? 0)) {
+                        $cell['out']    = $hmOf($w1);
+                        $cell['_outTs'] = $w1;
+                    }
+                    $h = ($w1 - $w0) / 3600;
+                    if ($long) {
+                        $cell['longShift'] = true;
+                        $h = min($h, $shiftHours);
+                    }
+                    $cell['hours'] += max(0, $h);
+                }
+                foreach ($perms as $pm) {
+                    $cell['perms'][] = $pm;
+                }
 
-            $cell['shiftIds'][] = (int) $s['id'];
-            unset($cell);
+                /* السلف والخصومات والبونص على أول يوم من الوردية (مرة واحدة) */
+                if (! $moneyDone) {
+                    $moneyDone = true;
+                    $cell['adv']   += (float) $s['advance_amount'];
+                    $cell['ded']   += (float) $s['deduction_amount'];
+                    $cell['bonus'] += (float) $s['bonus_amount'];
+
+                    /* المرحّل للشهر = اللي مكتوب عليه `monthly` بس. الافتراضي في
+                       المخطط `daily` يعني اتصفّى مع الطيار عند قفل الوردية.
+                       نفس شرط `BoardController::buildMonthlyData` بالحرف عشان
+                       التقفيلتين مايختلفوش. */
+                    if (($s['advance_settle']   ?: 'monthly') === 'monthly') { $cell['advCarry']   += (float) $s['advance_amount']; }
+                    if (($s['deduction_settle'] ?: 'monthly') === 'monthly') { $cell['dedCarry']   += (float) $s['deduction_amount']; }
+                    if (($s['bonus_settle']     ?: 'monthly') === 'monthly') { $cell['bonusCarry'] += (float) $s['bonus_amount']; }
+                    $cell['commMonthly'] = $cell['commMonthly'] || (($s['commission_settle'] ?: 'monthly') === 'monthly');
+                }
+                $cell['shiftIds'][] = (int) $s['id'];
+                unset($cell);
+            }
         }
 
         /* ── 1ب) 💵 اللي سلّمه الطيار للخزنة فعلًا (طلب صاحب النظام 2026-09-04:
@@ -481,31 +579,7 @@ class PilotAccountingController
             }
         }
 
-        // ── 4) الاستئذان من طلبات الراحة اللي بدأت وخلصت جوه اليوم ──
-        foreach (DB::select(
-            "SELECT pilot_id, responded_at, ended_at
-               FROM pilot_leave_requests
-              WHERE pilot_id IN ({$ph}) AND status IN ('approved','ended')
-                AND responded_at IS NOT NULL AND ended_at IS NOT NULL
-                AND responded_at >= ? AND responded_at < ?",
-            array_merge($ids, [$from, $to])
-        ) as $lr) {
-            $lr = (array) $lr;
-            /* ضغطة بالغلط: موافقة وإنهاء في ثواني — مش استئذان (مراجعة 2026-09-05: ١٨ من ٣٥) */
-            if ((strtotime($lr['ended_at'] . ' UTC') - strtotime($lr['responded_at'] . ' UTC')) / 60 < W::MIN_PERM_MINUTES) {
-                continue;
-            }
-            $a = W::bizMoment($lr['responded_at'], $ds);
-            $b = W::bizMoment($lr['ended_at'], $ds);
-            if (! $a || ! $b || $a['date'] !== $b['date']) {
-                continue;   // إجازة عدّت اليوم = غياب مش استئذان
-            }
-            $day = (int) substr($a['date'], 8, 2);
-            $cell = &$m[(int) $lr['pilot_id']][$day];
-            $cell ??= self::emptyCell();
-            $cell['perms'][] = ['out' => $a['hm'], 'in' => $b['hm']];
-            unset($cell);
-        }
+        // ── 4) الاستئذان: بقى جوه حلقة الورديات فوق (مقصوص على الوردية ومقسوم على الأيام) ──
 
         /* 🔴 الساعات هنا **قبل** خصم الاستئذان عن قصد.
            كانت بتتخصم هنا، وبعدها dayRow بتخصمها **تاني** (hours =
@@ -521,6 +595,7 @@ class PilotAccountingController
                 $m[$pid][$day]['psvc']      = round($c['psvc'], 2);
                 $m[$pid][$day]['psvcCarry'] = round($c['psvcCarry'], 2);
                 $m[$pid][$day]['handed']    = round($c['handed'], 2);
+                unset($m[$pid][$day]['_inTs'], $m[$pid][$day]['_outTs']);
             }
         }
 
