@@ -610,7 +610,8 @@
        واللوحة والداشبورد كانوا بيتعاد رسمهم 240 مرة في الساعة (مراجعة 2026-09-08). */
     function pilotsSig(list) {
       return JSON.stringify(list.map(({ location, trail, locationUpdatedAt, heading, speed, updatedAt, lastSeen, ...rest }) => rest));
-    }      reg(new P("/api/pilots", { interval: 15000, useSince: false, params: { trail: 1 }, onChange: d => {
+    }      /* all: 1 (2026-09-09) — روستر الشركة كله للخريطة («كل الطيارين») وقايمة «أضف طيارًا»؛ السيرفر بيقصّ بيانات طيار الفرع التاني */
+      reg(new P("/api/pilots", { interval: 15000, useSince: false, params: { trail: 1, all: 1 }, onChange: d => {
         const all = nrmList(d.items);
         window._pilotsData    = all.filter(p => p.assignedBranchId === branchId);
         window._allPilotsData = all; // كل الطيارين لقائمة الإضافة

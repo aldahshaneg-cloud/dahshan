@@ -28,6 +28,12 @@ use stdClass;
  */
 class EntitiesController
 {
+    /* «كل الطيارين» لمشرف الفرع (2026-09-09): اللي بيوصله عن طيار من فرع تاني —
+       اسم وحالة وفرع ومكان بس. مفيش تليفونات ولا عناوين ولا فلوس ولا مرتبات. */
+    private const PILOT_MAP_KEYS = ['id', 'name', 'vehicleNo', 'pilotStatus', 'queueNo', 'statusSince',
+        'assignedBranchId', 'assignedBranchName', 'homeBranchId', 'homeBranchName', 'activeOrders',
+        'leaveType', 'location', 'heading', 'speed', 'trail', 'updatedAt'];
+
     /* ═══════════════════════════════════════════════════════════
        الفروع
     ═══════════════════════════════════════════════════════════ */
@@ -140,10 +146,20 @@ class EntitiesController
         /* 🔒 مشرف الفرع مقفول على فرعه — كان بيقدر يشيل `?branchId=` ويسحب
            **كل طياري الشركة** بعهدتهم ومرتباتهم ومواقعهم الحيّة. */
         $branchId = $request->query('branchId');
+        $mapAll = false;
+        $ownBranch = 0;
         if ($actor->role === 'branch') {
             $branchId = (int) ($actor->branchId ?? 0);
             if ($branchId === 0) {
                 throw ApiException::forbidden('حسابك مش مربوط بفرع');
+            }
+            /* `?all=1` (2026-09-09): زرار «🏢 كل الطيارين» على خريطة الفرع وقايمة «أضف طيارًا»
+               (الطيار الحرّ بلا فرع) محتاجين روستر الشركة كله — قفل النطاق (2026-09-04) كان
+               بيرجّع طياري الفرع بس فالزرار بقى فاضي. الغريب بيتقصّ لـPILOT_MAP_KEYS تحت. */
+            if ((string) $request->query('all', '') === '1') {
+                $mapAll    = true;
+                $ownBranch = $branchId;
+                $branchId  = null;
             }
         }
         if ($branchId !== null && $branchId !== '') {
@@ -196,10 +212,17 @@ class EntitiesController
         }
 
         // مشرف الطيارين بياخد الكارت بلا عهدة/مرتب/عمولة — شوف CoreWire::pilotFor
-        return PollableList::items(array_map(
-            fn ($r) => CoreWire::pilotFor($actor->role, $r),
-            $rows
-        ));
+        $items = array_map(fn ($r) => CoreWire::pilotFor($actor->role, $r), $rows);
+        if ($mapAll) {
+            $keep = array_flip(self::PILOT_MAP_KEYS);
+            $items = array_map(function (array $w) use ($ownBranch, $keep): array {
+                $mine = (int) ($w['homeBranchId'] ?? 0) === $ownBranch || (int) ($w['assignedBranchId'] ?? 0) === $ownBranch;
+
+                return $mine ? $w : array_intersect_key($w, $keep);
+            }, $items);
+        }
+
+        return PollableList::items($items);
     }
 
     /* ═══════════════════════════════════════════════════════════
