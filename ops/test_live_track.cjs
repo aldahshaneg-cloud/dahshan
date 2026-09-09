@@ -63,7 +63,8 @@ ok('  ونبضة كل دقيقة وهو واقف', /_heartbeat = Duration\(secon
 ok('  والفشل بيرجّع النقاط للبفر', /_buf\.insertAll\(0, pts\)/.test(APP));
 ok('  وبتتشغّل/تتقفل من الدورة الخلفية بحالة الشيل', /unawaited\(LiveTrack\.ensure\(pilotId, carrying\)\);/.test(APP),
    'التيار مش بيتفتح — الحل كله ميت');
-ok('  والقراءة الباردة بتسكت طول ما التيار حي', /prefs\.getInt\(LiveTrack\.kStreamMs\)/.test(APP) && /if \(nowMs - streamMs < 45000\) return;/.test(APP),
+// من 2026-09-09 السكوت مشروط كمان بإن آخر إرسال ناجح قريب (أقل من 90 ثانية) — تيار حي وإرسال فاشل مايسكتش الباردة
+ok('  والقراءة الباردة بتسكت طول ما التيار حي (والإرسال ناجح)', /prefs\.getInt\(LiveTrack\.kStreamMs\)/.test(APP) && /if \(nowMs - streamMs < 45000 && nowMs - \(prefs\.getInt\(_kOk\) \?\? 0\) < 90000\) return;/.test(APP),
    'GPS بارد فوق التيار = بطارية ×٢');
 ok('  وقفل الخدمة بيفضّي البفر ويقفل التيار', /onDestroy\(DateTime timestamp\) async \{\s*\n\s*await LiveTrack\.stop\(flush: true\);/.test(APP));
 ok('api_client بيبعت الدفعة على نفس المسار', /sendLocationBatch\(List<Map<String, dynamic>> points\)/.test(API) && /_post\('\/api\/pilot\/location', \{'points': points\}\)/.test(API));
