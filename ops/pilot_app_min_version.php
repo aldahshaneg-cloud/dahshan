@@ -18,6 +18,7 @@ declare(strict_types=1);
      php ops/pilot_app_min_version.php 2.5.8 --dry      → بيطبع من غير كتابة
      php ops/pilot_app_min_version.php 2.5.8 --auto     → للكرون: ساكت لو مش منشور/متطبّق، وبيكتب علامة بعد التطبيق
      php ops/pilot_app_min_version.php 2.5.8 --force    → بيتخطّى فحص الرابط (مش للاستعمال العادي)
+     php ops/pilot_app_min_version.php 2.5.8 --refresh  → بيعيد كتابة الرسالة/الرابط حتى لو الحد متطبّق
 ═══════════════════════════════════════════════════════════════ */
 
 $root = dirname(__DIR__);
@@ -27,6 +28,7 @@ $ver = array_values(array_filter($args, fn ($a) => ! str_starts_with($a, '--')))
 $dry = in_array('--dry', $flags, true);
 $auto = in_array('--auto', $flags, true);
 $force = in_array('--force', $flags, true);
+$refresh = in_array('--refresh', $flags, true); // إعادة كتابة الرسالة حتى لو الحد متطبّق
 
 if (! preg_match('/^\d+\.\d+\.\d+$/', $ver)) {
     fwrite(STDERR, "الاستعمال: php ops/pilot_app_min_version.php <x.y.z> [--dry|--auto|--force]\n");
@@ -64,7 +66,7 @@ if (! is_array($cur)) {
     $cur = [];
 }
 $cmp = fn (string $a, string $b): int => version_compare($a, $b);
-if (($cur['minVersion'] ?? '') === $ver && ($cur['latestVersion'] ?? '') === $ver) {
+if (! $refresh && ($cur['minVersion'] ?? '') === $ver && ($cur['latestVersion'] ?? '') === $ver) {
     if ($auto) {
         touch($marker);
         exit(0);
@@ -83,7 +85,7 @@ $new['latestVersion'] = $ver;
 $new['updateUrl'] = $cur['updateUrl'] ?? 'https://aldahshan.cloud/downloads/dahshan-pilot-latest.apk';
 /* 2.5.8 اتبنت بمفتاح توقيع جديد (المفتاح القديم كان على جهاز hp ومش موجود) — أندرويد مابيركّبش نسخة بمفتاح
    مختلف فوق القديمة، فلازم الطيار يمسح القديمة الأول. الرسالة بتقول كده صراحة وفي الأول. */
-$new['message'] = "نسخة جديدة من تطبيق الطيار {$ver} — مهم جدًا: امسح التطبيق القديم الأول (الإعدادات ← التطبيقات ← الدهشان ← إلغاء التثبيت) وبعدين نزّل النسخة الجديدة وركّبها وسجّل دخول تاني. النسخة دي مش هتتركّب فوق القديمة. الجديد فيها: الأزرار والتوقيتات اتظبطت، تنبيه فوري لو الـGPS مقفول، والوردية بتتزامن مع الفرع أول ما تفتح التطبيق. لو التثبيت مش راضي يكمّل نزّل نسخة 32 بت من موقع aldahshan.cloud";
+$new['message'] = "نسخة جديدة من تطبيق الطيار {$ver} — مهم جدًا: امسح التطبيق القديم الأول (الإعدادات ← التطبيقات ← الدهشان ← إلغاء التثبيت) وبعدين نزّل النسخة الجديدة وركّبها وسجّل دخول تاني. النسخة دي مش هتتركّب فوق القديمة. لو ظهرت رسالة «Google Play للحماية: تم حظر التطبيق»: اضغط «مزيد من التفاصيل» ثم «التثبيت على أي حال». ولو الزرار ده مش موجود: افتح متجر Play ← صورة الحساب ← Play للحماية ← الترس ← اقفل «فحص التطبيقات» مؤقتًا، ركّب التطبيق، ورجّعه. الجديد فيها: الأزرار والتوقيتات اتظبطت، تنبيه فوري لو الـGPS مقفول، والوردية بتتزامن مع الفرع أول ما تفتح التطبيق. لو التثبيت مش راضي يكمّل نزّل نسخة 32 بت من موقع aldahshan.cloud";
 
 echo "الحالي: " . json_encode($cur, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
 echo "الجديد: " . json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
