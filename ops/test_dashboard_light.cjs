@@ -34,6 +34,7 @@ for (const p of PAGES) {
   ok('البصمة بتتصفّر عند الخروج', count(s, 'window._currentUser = null; window._pilotsSig = null; window._overdueKey = null;') === 2);
   ok('المتأخرين: رسم بس لو المجموعة اتغيّرت', s.includes('const _okey = [...nowOverdue].sort().join(",");') && s.includes('if (_okey === window._overdueKey) return;'));
   ok('التوست المزدوج اتشال من تنبيه التأخر', !/showToast\(msg, "error"\);\s*\n\s*setTimeout\(\(\) => showToast\(msg, "error"\), 400\);/.test(s));
+  ok('🔴 لوحة الطيارين بتتعاد مع تغيّر الأوردرات (مش مع رد الطيارين بس)', /window\._ordersData = [^\n]*\n[^\n]*(\n[^\n]*){0,4}try \{ renderPilotsPanel\((window\._pilotsData \|\| \[\])?\); \} catch\(e\) \{\}/.test(s));
   ok('🔴 50 صف + «عرض المزيد»: الدالة والزرار والـCSS', s.includes('window.PAGE_ROWS = 50;') && s.includes('function pagedRows(key, list, rowFn, cols, rerender)') && s.includes('window.showMoreRows = function (key)') && s.includes('.more-rows-btn {'));
 }
 

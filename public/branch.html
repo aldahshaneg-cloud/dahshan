@@ -704,6 +704,10 @@
         }
         branchOrders.forEach(o => window._knownOrderIds.add(o.id));
         window._ordersData = branchOrders;
+        /* لوحة الطيارين بتعرض أوردرات كل طيار من _ordersData — لازم تتعاد مع كل تغيير في
+         الأوردرات مش مع رد الطيارين بس (بعد بصمة الطيارين 2026-09-08 الطيار كان يبان
+         «معهوش حاجة» وهو شايل أوردرات — شكوى صاحب النظام 2026-09-09). */
+        try { renderPilotsPanel(); } catch(e) {}
         window._isFirstLoad = false;
         _queueBranchRender();
       }});

@@ -5348,6 +5348,10 @@
       _ordersRaw = snapshot.val();
       window._ordersData = _ordersRaw
         ? Object.entries(_ordersRaw).map(([id,v]) => ({id,...v})) : [];
+      /* لوحة الطيارين بتعرض أوردرات كل طيار من _ordersData — لازم تتعاد مع كل تغيير في
+         الأوردرات مش مع رد الطيارين بس (بعد بصمة الطيارين 2026-09-08 الطيار كان يبان
+         «معهوش حاجة» وهو شايل أوردرات — شكوى صاحب النظام 2026-09-09). */
+      try { renderPilotsPanel(window._pilotsData || []); } catch(e) {}
       if (_ordersRenderQueued) return;
       _ordersRenderQueued = true;
       setTimeout(() => {
