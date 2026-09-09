@@ -39,7 +39,8 @@ for (const [name, S] of [['branch.html', BR], ['tiar.html', TI]]) {
   const C = strip(S);
   const ap = C.slice(C.indexOf('function _applyPilots('), C.indexOf('function _applyOrders('));
   ok(name + ' بيحمّل pilotmotion.js', S.includes('src="assets/js/pilotmotion.js?v='));
-  ok('  وبيطلب الأثر (?trail=1)', /"\/api\/pilots",\s*\{[^}]*params: \{ trail: 1 \}/.test(S) || /path: "\/api\/pilots",[^\n]*params: \{ trail: 1 \}/.test(S),
+  // الفرع بيبعت كمان all: 1 من 2026-09-09 («كل الطيارين» على الخريطة)
+  ok('  وبيطلب الأثر (?trail=1)', /"\/api\/pilots",\s*\{[^}]*params: \{ trail: 1(, all: 1)? \}/.test(S) || /path: "\/api\/pilots",[^\n]*params: \{ trail: 1(, all: 1)? \}/.test(S),
      'الخريطة مش هتاخد الأثر — رجعت نطّ');
   ok('  و_applyPilots بينده PilotMotion.apply', /PilotMotion\.apply\(_pilotMarkers\[id\], p, \{ trailLayer: window\._layerTrails/.test(ap));
   ok('  ومابينقلش الماركر الموجود بـsetLatLng (ده شغل التنعيم)', !/_pilotMarkers\[id\]\.setLatLng/.test(ap),
@@ -66,7 +67,12 @@ ok('  والقراءة الباردة بتسكت طول ما التيار حي',
    'GPS بارد فوق التيار = بطارية ×٢');
 ok('  وقفل الخدمة بيفضّي البفر ويقفل التيار', /onDestroy\(DateTime timestamp\) async \{\s*\n\s*await LiveTrack\.stop\(flush: true\);/.test(APP));
 ok('api_client بيبعت الدفعة على نفس المسار', /sendLocationBatch\(List<Map<String, dynamic>> points\)/.test(API) && /_post\('\/api\/pilot\/location', \{'points': points\}\)/.test(API));
-ok('النسخة 2.5.7+31', /^version: 2\.5\.7\+31/m.test(PUB) && /kAppVersion = '2\.5\.7'/.test(APP));
+/* النسخة مش مثبّتة برقم بعينه (كانت 2.5.7+31 وقت التتبّع الحي): المهم إن pubspec وkAppVersion
+   نفس الرقم، وإنه مش أقل من 2.5.7 اللي فيها التتبّع الحي. */
+const pubV = (PUB.match(/^version: (\d+\.\d+\.\d+)\+(\d+)/m) || [])[1] || '';
+const appV = (APP.match(/kAppVersion = '(\d+\.\d+\.\d+)'/) || [])[1] || '';
+const geq  = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] > y[i]; } return true; };
+ok('النسخة متسقة (pubspec = kAppVersion) ومش أقل من 2.5.7', pubV !== '' && pubV === appV && geq(pubV, '2.5.7'), pubV + ' / ' + appV);
 
 console.log('\n════════════════════════════════════════');
 console.log('LIVE TRACK (ui+app): ' + pass + ' ناجح · ' + fail + ' فاشل');

@@ -65,7 +65,8 @@ if (!fs.existsSync(APP_PATH)) {
   ok('🔴 والمسح بس لما السيرفر يقول صراحةً «شغّال»',
     /else if \(status == 'waiting' \|\| status == 'delivering'\) \{/.test(sync),
     'أي رد ناقص أو حالة غريبة هتمسح إذن ساري');
-  ok('ووقت البداية الغايب له بديل', /: DateTime\.now\(\);/.test(sync));
+  // من 2.5.8 البديل بساعة السيرفر (Svc.now) مش ساعة الموبايل
+  ok('ووقت البداية الغايب له بديل', /: (DateTime|Svc)\.now\(\);/.test(sync));
 
   ok('🔴 المزامنة كل ١٥ث — مش ٦٠',
     /_touchForegroundHeartbeat\(\);[\s\S]{0,600}_syncPilotStatus\(\);/.test(A),
