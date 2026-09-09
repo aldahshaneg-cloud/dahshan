@@ -47,6 +47,12 @@ ok('  و--auto ساكت (كود 0) لحد ما تتنشر', $c === 0 && trim($o)
 ok('--dry --force بيطبع من غير كتابة', $c === 0 && str_contains($o, 'الجديد:') && str_contains($o, '--dry'), $c . ' ' . mb_substr($o, 0, 200));
 ok('  والرسالة فيها رقم النسخة', str_contains($o, 'تطبيق الطيار 9.9.9'));
 
+// الجدولة في routes/console.php (schedule:run بيتشغّل كل دقيقة على الإنتاج كـwww-data)
+$con = file_get_contents($root . '/routes/console.php');
+ok('مجدول كل 5 دقايق بـ--auto من routes/console.php',
+    str_contains($con, "Schedule::exec('php ' . base_path('ops/pilot_app_min_version.php') . ' 2.5.8 --auto')")
+    && (bool) preg_match('/2\.5\.8 --auto\'\)\s*\n\s*->everyFiveMinutes\(\)/', $con));
+
 echo "\n════════════════════════════════════════\n";
 echo "MIN VERSION SCRIPT: {$pass} ناجح · {$fail} فاشل\n";
 echo "════════════════════════════════════════\n";
