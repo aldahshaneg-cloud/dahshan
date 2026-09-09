@@ -54,6 +54,7 @@ ok('location() بيفرّق بوجود points', str_contains($loc, "\$pointsIn =
 ok('  والشكل القديم {lat,lng} لسه شغّال', str_contains($loc, "\$latIn = \$request->input('lat');"));
 $sb = substr($pc, (int) strpos($pc, 'private function storeTrackBatch('), 5000);
 ok('الدفعة بتتخزّن في pilot_track_points', str_contains($sb, 'INSERT INTO pilot_track_points'));
+ok('  والمعاملة بـ3 محاولات عند deadlock (2026-09-09 — كانت الدفعة بتضيع بـ500)', str_contains($sb, '}, 3);'));
 ok('  وآخر نقطة زمنيًا بتبقى موقع الطيار (heading/speed كمان)',
     str_contains($sb, "usort(\$rows, fn (\$a, \$b) => \$a['_ms'] <=> \$b['_ms']);")
     && str_contains($sb, 'UPDATE pilots SET lat = ?, lng = ?, heading = ?, speed = ?, location_updated_at = ?'));

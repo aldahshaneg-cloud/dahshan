@@ -819,6 +819,8 @@ class PilotAppController
         usort($rows, fn ($a, $b) => $a['_ms'] <=> $b['_ms']);
         $last = $rows[count($rows) - 1];
 
+        /* 3 محاولات (2026-09-09): دفعتين من نفس الطيار (الخدمة والواجهة) بيتقابلوا على صف pilots
+           → deadlock 1213 كان بيرمي 500 والدفعة كلها بتضيع (اتلقى في laravel.log 2026-09-08). */
         DB::transaction(function () use ($pilotId, $rows, $last): void {
             foreach ($rows as $r) {
                 DB::insert(
@@ -840,7 +842,7 @@ class PilotAppController
                 'DELETE FROM pilot_track_points WHERE pilot_id = ? AND at < (UTC_TIMESTAMP(3) - INTERVAL 24 HOUR)',
                 [$pilotId]
             );
-        });
+        }, 3);
     }
 
     /**

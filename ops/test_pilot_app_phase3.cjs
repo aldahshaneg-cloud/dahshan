@@ -50,6 +50,11 @@ ok('🔴 الجلب بعد الفعل مابيتخطّاش (تفاصيل الأ�
 ok('«عدت للعمل» بيقول لما يفشل', M.includes("showErrorSnack(context, e, fallback: 'ما قدرناش نسجّل رجوعك للعمل — جرّب تاني')"));
 ok('عدّاد الوردية والإذن بساعة السيرفر', M.includes('final end = _breakStart ?? Svc.now();') && M.includes('final extra = Svc.now().difference(start).inSeconds;') && count(M, "?? '') ?? Svc.now();") === 2);
 
+console.log('\n══ التتبّع (2026-09-09: طيار ٣ ساعات ونص من غير موقع) ══');
+ok('🔴 بانر فوري لما الـGPS مقفول أو الإذن مرفوض', M.includes('Widget _gpsOffBanner() {') && M.includes("if ((_gpsOff || _locDenied) && !_gpsBannerHidden) _gpsOffBanner(),") && M.includes('gpsOff = !await Geolocator.isLocationServiceEnabled();'));
+ok('🔴 تيار الموقع بيعيد فتح نفسه: خطأ = قفل، وسكوت دقيقة = إعادة فتح', M.includes('onError: (Object _) { unawaited(_sub?.cancel()); _sub = null; },') && M.includes('DateTime.now().millisecondsSinceEpoch - _lastPointMs > 60000) {\n      await stop(flush: true);'));
+ok('المسار البارد مابيسكتش لو الإرسال فاشل من دقيقة ونص', M.includes('if (nowMs - streamMs < 45000 && nowMs - (prefs.getInt(_kOk) ?? 0) < 90000) return;'));
+
 console.log('\n══ سلامة نصية بسيطة ══');
 const braces = count(M, '{') - count(M, '}');
 ok('الأقواس متوازنة في main.dart', braces === 0, 'diff=' + braces);
