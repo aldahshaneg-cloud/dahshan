@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Support\ApiResponse;
+use App\Support\WireTime;
 use App\Wire\DamascusWire;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -438,10 +439,16 @@ class DamascusController
         foreach ($allowed as $bid) {
             foreach (DamascusWire::pilotsOfBranch($ctx, $bid) as $p) {
                 $e = DamascusWire::entryAt($ctx, $p['id'], $day);
+                /* المُرحَّل للأرشيف بيبان في الأيام اللي اشتغلها بس — عرض بس.
+                   الحساب فوق (dayAllBranches) شايفه عادي، فالتقفيلة ماتتغيّرش. */
+                if (! empty($p['archived']) && ! $e) {
+                    continue;
+                }
                 $rows[] = [
                     'pilotId'  => $p['id'],
                     'name'     => $p['name'],
                     'branchId' => $bid,
+                    'archived' => (bool) ($p['archived'] ?? false),
                     'entry'    => (object) $e,
                     'hours'    => DamascusWire::hoursOf($e),
                     'orders'   => DamascusWire::num($e['o'] ?? 0),
@@ -565,6 +572,7 @@ class DamascusController
                 'branchId'   => $p['branchId'],
                 'branchName' => $names[$p['branchId']] ?? '—',
                 'active'     => $p['active'],
+                'archived'   => (bool) ($p['archived'] ?? false),
             ] + $t;
         }
         foreach ($G as $k => $v) {
@@ -596,6 +604,12 @@ class DamascusController
         $this->requirePerm($user, 'page.pilot', 'كشف الطيار');
 
         $p = DamascusWire::pilotById($ctx, $pid);
+        /* المُرحَّل للأرشيف مش في سياق الشهور اللي مااشتغلش فيها — بنجيبه من
+           القاعدة مباشرة عشان كشفه يفتح فاضي بدل «الطيار غير موجود». */
+        if (! $p) {
+            $row = DB::select('SELECT * FROM rd_pilots WHERE id = ? AND archived_at IS NOT NULL', [$pid])[0] ?? null;
+            $p = $row ? DamascusWire::pilot($row) : null;
+        }
         if (! $p) {
             throw ApiException::notFound('الطيار غير موجود');
         }
@@ -893,6 +907,156 @@ class DamascusController
         });
 
         return ApiResponse::ok();
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       6ب) أرشيف الطيارين (page.archive / act.archive)
+       ───────────────────────────────────────────────────────────
+       الطيار اللي خرج من الشغل مايتحذفش — بيترحّل للأرشيف. الحذف
+       بيشيل الاسم من قدّام كل خانة قديمة وبيغيّر تقفيلات شهور فاتت،
+       والترحيل **مابيغيّرش ولا رقم**: الصف بيفضل مكانه بكل خاناته
+       وأسعاره، وبيختفي بس من الشهور اللي مافيهاش شغل ليه (شوف ctx).
+    ═══════════════════════════════════════════════════════════ */
+
+    /** GET /api/rd/archive — الطيارين المُرحَّلين في فروعي */
+    public function archiveList(Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $this->requirePerm($user, 'page.archive', 'أرشيف الطيارين');
+        $ctx     = $this->ctx(substr(DamascusWire::today(), 0, 7));
+        $allowed = $this->allowedBranchIds($user, $ctx);
+
+        $names = [];
+        foreach ($ctx['branches'] as $b) {
+            $names[$b['id']] = $b['name'];
+        }
+
+        // إحصاء الخانات لكل مُرحَّل في استعلام واحد (مفيش N+1)
+        $stats = [];
+        foreach (DB::select(
+            'SELECT e.pilot_id, COUNT(*) c, MIN(e.month) f, MAX(e.month) l
+             FROM rd_entries e JOIN rd_pilots p ON p.id = e.pilot_id
+             WHERE p.archived_at IS NOT NULL GROUP BY e.pilot_id'
+        ) as $s) {
+            $stats[(int) $s->pilot_id] = $s;
+        }
+
+        $items = [];
+        foreach (DB::select(
+            'SELECT * FROM rd_pilots WHERE archived_at IS NOT NULL ORDER BY archived_at DESC, id DESC'
+        ) as $r) {
+            $p = DamascusWire::pilotArchived($r);
+            if (! in_array($p['branchId'], $allowed, true)) {
+                continue;
+            }
+            // حسابات المُلّاك بتفضل مخفية في الأرشيف زي ما هي في الكشوف
+            if ($this->sheetHidden($user, $p)) {
+                continue;
+            }
+            $s = $stats[$p['id']] ?? null;
+            $items[] = $p + [
+                'branchName' => $names[$p['branchId']] ?? '—',
+                'daysCount'  => $s ? (int) $s->c : 0,
+                'firstMonth' => $s ? (string) $s->f : '',
+                'lastMonth'  => $s ? (string) $s->l : '',
+            ];
+        }
+
+        return ApiResponse::out(['ok' => true, 'serverNow' => DamascusWire::nowMs(), 'items' => $items]);
+    }
+
+    /**
+     * POST /api/rd/pilots/{id}/archive — {note?} — ترحيل الطيار للأرشيف.
+     *
+     * ⚠️ `active` والأسعار وأيام الإجازة **ماتتلمسش** عن قصد: دي الأعمدة
+     * اللي بتدخل في `branchDayCloseout` و`pilotMonthTotals`، ولمسها كان
+     * هيغيّر تقفيلات شهور فاتت. الترحيل بيكتب `archived_at` وبس.
+     */
+    public function pilotsArchive(Request $request, string $id): JsonResponse
+    {
+        $user = $this->user($request);
+        $this->requirePerm($user, 'act.archive', 'ترحيل الطيارين للأرشيف');
+        $pid  = $this->intId($id);
+        $b    = $this->body($request);
+        $note = trim((string) ($b['note'] ?? ''));
+
+        $pilot = DB::transaction(function () use ($user, $pid, $note): array {
+            $row = DB::select('SELECT * FROM rd_pilots WHERE id = ?', [$pid])[0] ?? null;
+            if (! $row) {
+                throw ApiException::notFound('الطيار غير موجود');
+            }
+            if (DamascusWire::has($row->archived_at)) {
+                throw new ApiException('الطيار مُرحَّل للأرشيف بالفعل');
+            }
+            $ctx = $this->ctx(substr(DamascusWire::today(), 0, 7));
+            $this->requireBranch($user, $ctx, (int) $row->branch_id);
+
+            /* حساب المالك بيرحّله المدير العام بس — نفس قاعدة pilotsUpdate:
+               مشرف مايقدرش يلعب في حساب مخفي عنه أصلًا. */
+            if ((string) $row->job === DamascusWire::OWNER_JOB && empty($user['isAdmin'])) {
+                throw ApiException::forbidden('حساب «مالك» بيرحّله المدير العام بس');
+            }
+
+            /* عليه سلفة مؤجلة لسه مامتسدّدتش؟ ماينفعش يتقفل عليها الباب —
+               الأرشيف بيشيله من شاشة السلف فالقسط هيقف من غير ما حد ياخد باله. */
+            $ym   = substr(DamascusWire::today(), 0, 7);
+            $left = 0.0;
+            foreach ($this->deferredAll()[$pid] ?? [] as $rec) {
+                $left += DamascusWire::deferredForMonth($rec, $ym)['after'];
+            }
+            if ($left > 0) {
+                throw new ApiException(
+                    'الطيار عليه سلفة مؤجلة متبقي منها ' . DamascusWire::round2($left) .
+                    ' — سوّها أو احذفها من شاشة «السلف المؤجلة» قبل الترحيل'
+                );
+            }
+
+            DB::update(
+                'UPDATE rd_pilots SET archived_at = ?, archived_by = ?, archive_note = ? WHERE id = ?',
+                [WireTime::nowDb(), (string) $user['username'], $note !== '' ? $note : null, $pid]
+            );
+
+            return DamascusWire::pilotArchived(DB::select('SELECT * FROM rd_pilots WHERE id = ?', [$pid])[0]);
+        });
+
+        return ApiResponse::out(['ok' => true, 'pilot' => $pilot]);
+    }
+
+    /** POST /api/rd/pilots/{id}/unarchive — يرجّع المُرحَّل لقائمة الشغل زي ما كان */
+    public function pilotsUnarchive(Request $request, string $id): JsonResponse
+    {
+        $user = $this->user($request);
+        $this->requirePerm($user, 'act.archive', 'إرجاع الطيارين من الأرشيف');
+        $pid = $this->intId($id);
+
+        $pilot = DB::transaction(function () use ($user, $pid): array {
+            $row = DB::select('SELECT * FROM rd_pilots WHERE id = ?', [$pid])[0] ?? null;
+            if (! $row) {
+                throw ApiException::notFound('الطيار غير موجود');
+            }
+            if (! DamascusWire::has($row->archived_at)) {
+                throw new ApiException('الطيار مش في الأرشيف');
+            }
+            $ctx = $this->ctx(substr(DamascusWire::today(), 0, 7));
+            $this->requireBranch($user, $ctx, (int) $row->branch_id);
+            if ((string) $row->job === DamascusWire::OWNER_JOB && empty($user['isAdmin'])) {
+                throw ApiException::forbidden('حساب «مالك» بيرجّعه المدير العام بس');
+            }
+            // الفرع ممكن يكون اتحذف وهو في الأرشيف — ساعتها لازم يتعمل فرع الأول
+            $exists = (bool) DB::select('SELECT 1 FROM rd_branches WHERE id = ?', [(int) $row->branch_id]);
+            if (! $exists) {
+                throw new ApiException('فرع الطيار مابقاش موجود — اعمل الفرع الأول');
+            }
+
+            DB::update(
+                'UPDATE rd_pilots SET archived_at = NULL, archived_by = NULL, archive_note = NULL WHERE id = ?',
+                [$pid]
+            );
+
+            return DamascusWire::pilot(DB::select('SELECT * FROM rd_pilots WHERE id = ?', [$pid])[0]);
+        });
+
+        return ApiResponse::out(['ok' => true, 'pilot' => $pilot]);
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1466,7 +1630,17 @@ class DamascusController
         foreach (DB::select('SELECT * FROM rd_branches ORDER BY id') as $b) {
             $ctx['branches'][] = DamascusWire::branch($b);
         }
-        foreach (DB::select('SELECT * FROM rd_pilots ORDER BY id') as $p) {
+        /* الطيار المُرحَّل للأرشيف (خرج من الشغل) بيختفي من الشهر — **إلا** لو
+           له خانات في الشهر ده. القاعدة دي هي اللي بتضمن إن الترحيل
+           مايغيّرش ولا رقم: كل شهر اشتغل فيه بيفضل بطيارينه بالكامل،
+           وبيقع بس من الشهور اللي مالوش فيها شغل أصلًا (مساهمته صفر). */
+        foreach (DB::select(
+            'SELECT p.* FROM rd_pilots p
+             WHERE p.archived_at IS NULL
+                OR EXISTS (SELECT 1 FROM rd_entries e WHERE e.pilot_id = p.id AND e.month = ?)
+             ORDER BY p.id',
+            [$ym]
+        ) as $p) {
             $ctx['pilots'][] = DamascusWire::pilot($p);
         }
 

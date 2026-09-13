@@ -372,10 +372,11 @@ function start() {
        ركلة واحدة مجمّعة (400ms) لكل المستطلعات — رخيصة لأن كل بولر بيسأل
        بـ?since والفاضي بيرد changed:false. حدث الأوردرات بياخد نفس الركلة
        (البورد هنا بيتحدّث منها برضه). الاشتراك بيتزامن مع قايمة الفروع. */
-    let _rtKick = null;
+    /* ركلة موجّهة: الشاشة دي كلها طلبات وطيارين، فمافيش لازمة لـpokeAll
+       (اللي بتجرّ /api/branches كاملة كمان). التجميع جوّه pokePaths. */
     function _rtPoke() {
-      clearTimeout(_rtKick);
-      _rtKick = setTimeout(() => { try { API.pokeAll(); } catch (_) {} }, 400);
+      try { API.pokePaths(["/api/leave-requests", "/api/shift-requests", "/api/return-requests",
+           "/api/pilot-transfers", "/api/join-requests", "/api/shifts", "/api/pilots"]); } catch (_) {}
     }
     function _rtSync() {
       const RT = window.REALTIME;
@@ -384,8 +385,16 @@ function start() {
       if (!ids.length) return;
       try { RT.syncBranches(ids, _rtPoke, _rtPoke); } catch (_) {}
     }
-  new API.Poller("/api/pilots", { interval: 10000, onChange: d => {
+  /* 🔴 بصمة الطيارين من غير الموقع والأثر والسرعة (قياس 2026-09-12): الطيار
+     اللي بيتحرك بيغيّر `location/trail/heading/speed` كل ١٥ ثانية، وكل
+     التبويبات ماعدا الخريطة مالهاش دعوة بده — كانت بتتعاد على الفاضي.
+     نفس `pilotsSig` في لوحة الفرع. الخريطة بترسم دايمًا لأنها هي اللي محتاجة. */
+  const _pilotsSig = list => { try { return JSON.stringify(list.map(({ location, trail, locationUpdatedAt, heading, speed, updatedAt, lastSeen, ...rest }) => rest)); } catch (e) { return null; } };
+  new API.Poller("/api/pilots", { interval: 15000, onChange: d => {
     S.pilots = (d.items || []).sort((a,b) => (a.name||"").localeCompare(b.name||"", "ar"));
+    const sig = _pilotsSig(S.pilots);
+    if (S.tab !== "map" && sig !== null && sig === S._pilotsSig) return;
+    S._pilotsSig = sig;
     paint();
   }});
   new API.Poller("/api/branches", { interval: 60000, useSince: false, onChange: d => {
@@ -395,24 +404,26 @@ function start() {
     if (!S.boardBranch && S.branches[0]) S.boardBranch = String(S.branches[0].id);
     paint();
   }});
-  new API.Poller("/api/leave-requests",  { interval: 10000, onChange: d => { S.leave    = d.items || []; paint(); }});
-  new API.Poller("/api/shift-requests",  { interval: 10000, onChange: d => { S.shiftReq = d.items || []; paint(); }});
-  new API.Poller("/api/return-requests", { interval: 10000, onChange: d => { S.returnReq= d.items || []; paint(); }});
-  new API.Poller("/api/join-requests",   { interval: 20000, onChange: d => { S.join     = d.items || []; paint(); }});
-  new API.Poller("/api/pilot-transfers", { interval: 20000, onChange: d => { S.transfers= d.items || []; paint(); }});
-  new API.Poller("/api/support-requests",{ interval: 15000, onChange: d => { S.support  = d.items || []; paint(); }});
+  new API.Poller("/api/leave-requests",  { interval: 15000, onChange: d => { S.leave    = d.items || []; paint(); }});
+  new API.Poller("/api/shift-requests",  { interval: 30000, onChange: d => { S.shiftReq = d.items || []; paint(); }});
+  new API.Poller("/api/return-requests", { interval: 15000, onChange: d => { S.returnReq= d.items || []; paint(); }});
+  new API.Poller("/api/join-requests",   { interval: 60000, onChange: d => { S.join     = d.items || []; paint(); }});
+  new API.Poller("/api/pilot-transfers", { interval: 15000, onChange: d => { S.transfers= d.items || []; paint(); }});
+  new API.Poller("/api/support-requests",{ interval: 60000, onChange: d => { S.support  = d.items || []; paint(); }});
   /* الورديات من غير ?status — شاشة الورديات محتاجة الجارية **والمنتهية**
      (المسار بيرجّع آخر ٥٠٠ وردية)، والفلترة بتتعمل عندنا. تحذير للي بعدي:
      رد الوردية شايل bonus/deduction/advance — **متعرضهاش**، دي فلوس
      والشاشة دي مالهاش فلوس. بنستخدم منها الوقت والفرع والحالة بس. */
-  new API.Poller("/api/shifts", { interval: 20000, onChange: d => {
+  new API.Poller("/api/shifts", { interval: 60000, onChange: d => {
     S.shifts = d.items || []; paint();
   }});
 
   /* اللوحة مسار مركّب مش قايمة (رد بمفاتيح ثابتة مش items) و**بيطلب فرع
      صريح** — الإدارة ومشرف الطيارين الاتنين مالهمش فرع مربوط، فمن غير
      ?branch= الرد 400. فبولر لوحده بيتحرّك مع الاختيار. */
-  setInterval(pollBoard, 8000);
+  /* ٢٠ث بدل ٨ (مراجعة التقل 2026-09-10): اللوحة مركّبة وبتترسم كاملة مع كل رد،
+     والبثّ بيوصّل تغيير الأوردرات فورًا — الدورة دي شبكة أمان. */
+  setInterval(pollBoard, 20000);
   setTimeout(pollBoard, 400);
 }
 
@@ -506,7 +517,11 @@ function renderPilots() {
           <b>${esc(p.name)}</b>${statusTag(p)}
         </div>
         <div class="kv"><span class="k">الموبايل</span><span class="v ltr">${esc(p.phone1||"—")}</span></div>
-        <div class="kv"><span class="k">الفرع</span><span class="v">${esc(p.assignedBranchName||"—")}</span></div>
+        <div class="kv"><span class="k">الفرع</span><span class="v">${
+          (p.homeBranchId ?? p.assignedBranchId)
+            ? esc(p.assignedBranchName || p.homeBranchName || "—")
+            : '<span class="tag t-warn">🃏 جوكر — بلا فرع ثابت</span>'
+        }</span></div>
         <div class="kv"><span class="k">رقم العربية</span><span class="v ltr">${esc(p.vehicleNo||"—")}</span></div>
         <div class="kv"><span class="k">أوردرات جارية</span><span class="v">${p.activeOrders||0}</span></div>
         <div class="kv"><span class="k">الدور</span><span class="v">${p.queueNo ?? "—"}</span></div>
@@ -538,7 +553,8 @@ window.openPilotForm = function (id) {
     <label>الرقم القومي</label><input id="f_card" dir="ltr" value="${esc(p?.cardNum||"")}" />
     <label>رقم العربية</label><input id="f_veh" dir="ltr" value="${esc(p?.vehicleNo||"")}" />
     <label>العنوان</label><input id="f_addr" value="${esc(p?.address||"")}" />
-    <label>الفرع</label><select id="f_branch">${branchOptions(p?.assignedBranchId, true)}</select>
+    <label>الفرع الثابت</label><select id="f_branch">${branchOptions(p?.homeBranchId ?? p?.assignedBranchId, true)}</select>
+    <div class="note" style="margin-top:6px;font-size:12px">🃏 سيبها «كل الفروع» = <b>جوكر</b>: مالوش فرع ثابت، والإدارة بتختار الفرع وقت فتح الوردية.</div>
     <label>ملاحظات</label><textarea id="f_notes" rows="2">${esc(p?.notes||"")}</textarea>
     <div class="note" style="margin-top:14px">
       العمولة والمرتب مش من هنا — بيتحطّوا من الإدارة أو الحسابات.
@@ -552,28 +568,38 @@ window.savePilot = async function (id) {
     phone2: $("f_p2").value.trim(), cardNum: $("f_card").value.trim(),
     vehicleNo: $("f_veh").value.trim(), address: $("f_addr").value.trim(),
     notes: $("f_notes").value.trim(),
-    assignedBranchId: $("f_branch").value ? Number($("f_branch").value) : null,
+    // الفرع من المودال ده هو **الثابت** (السيرفر بيقبل الاسمين — شوف pilotsUpdate)
+    homeBranchId: $("f_branch").value ? Number($("f_branch").value) : null,
   };
   if (!body.name) { toast("اسم الطيار مطلوب"); return; }
   try {
     if (id) await API.put("/api/pilots/" + id, body);
     else    await API.post("/api/pilots", body);
-    toast(id ? "اتحفظ ✓" : "الطيار اتضاف ✓"); closeModal(); API.pokeAll();
+    toast(id ? "اتحفظ ✓" : "الطيار اتضاف ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
 window.doShiftOpen = async function (pilotId) {
   const p = S.pilots.find(x => x.id === pilotId);
-  const branchId = p?.assignedBranchId || Number(S.boardBranch) || null;
-  if (!branchId) { toast("الطيار مش تابع لفرع — حدّد فرعه الأول"); return; }
-  try { await API.post("/api/shifts/open", { pilotId, branchId }); toast("الوردية اتفتحت ✓"); API.pokeAll(); }
+  /* 🃏 الجوكر (2026-09-10): طيار بلا فرع ثابت — الإدارة بتختار الفرع وقت
+     فتح الوردية، وبعد القفل بيرجع حرّ. قبل كده الشاشة كانت بترفض خالص. */
+  let branchId = (p?.homeBranchId ?? p?.assignedBranchId) || Number(S.boardBranch) || null;
+  if (!branchId) {
+    const names = (S.branches || []).map((b, i) => `${i + 1}) ${b.name}`).join("\n");
+    const pick = prompt("🃏 «" + (p?.name || "الطيار") + "» جوكر بلا فرع ثابت — هينزل أنهي فرع؟\n\n" + names + "\n\nاكتب رقم الفرع:");
+    if (pick === null) return;
+    const b = (S.branches || [])[parseInt(pick, 10) - 1];
+    if (!b) { toast("رقم فرع غير صحيح"); return; }
+    branchId = b.id;
+  }
+  try { await API.post("/api/shifts/open", { pilotId, branchId }); toast("الوردية اتفتحت ✓"); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */ }
   catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 window.doQueue = async function (op, pilotId) {
   const p = S.pilots.find(x => x.id === pilotId);
   const body = op === "enter" ? { pilotId, branchId: p?.assignedBranchId || undefined } : { pilotId };
   try { await API.post("/api/queue/" + op, body);
-    toast(op === "enter" ? "دخل الدور ✓" : "خرج من الدور ✓"); API.pokeAll(); }
+    toast(op === "enter" ? "دخل الدور ✓" : "خرج من الدور ✓"); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */ }
   catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 window.openForceLeave = function (pilotId) {
@@ -589,7 +615,7 @@ window.doForceLeave = async function (pilotId) {
   try {
     await API.post(`/api/pilots/${pilotId}/force-leave`,
       { type: $("f_type").value, reason: $("f_reason").value.trim() });
-    toast("الطيار اتوقف بإذن ✓"); closeModal(); API.pokeAll();
+    toast("الطيار اتوقف بإذن ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
@@ -648,8 +674,12 @@ function renderShifts() {
 
   /* طيار له فرع ومفيش وردية مفتوحة — ده أهم صف في الشاشة عمليًا:
      الفرع مستنيه والدور ناقص. الزرار جنبه بيفتح الوردية على طول. */
-  const noShift = S.pilots.filter(p => p.assignedBranchId && !activeShift(p.id) &&
-    (!S.shBranch || String(p.assignedBranchId) === String(S.shBranch)));
+  /* 🃏 الجوكر داخل القايمة دي (2026-09-10): هو بالظبط اللي الإدارة بتدوّر
+     عليه لما فرع ينقص — وفلتر الفرع مابيستبعدهوش لأنه ينفع ينزل أي فرع. */
+  const noShift = S.pilots.filter(p => !activeShift(p.id) && (
+    (p.assignedBranchId && (!S.shBranch || String(p.assignedBranchId) === String(S.shBranch)))
+    || (!(p.homeBranchId ?? p.assignedBranchId) && !p.archivedAt)
+  ));
 
   $("shifts-body").innerHTML = `
     <div class="kpis">
@@ -660,7 +690,9 @@ function renderShifts() {
     ${noShift.length ? `<div class="card">
       <div class="card-h"><b>🔔 طيارون لسه مافتحوش وردية</b><span class="tag t-warn">${noShift.length}</span></div>
       ${noShift.slice(0, 40).map(p => `<div class="qrow">
-        <b>${esc(p.name)}<span style="color:var(--muted);font-weight:400"> · ${esc(p.assignedBranchName || "—")}
+        <b>${esc(p.name)}<span style="color:var(--muted);font-weight:400"> · ${
+          (p.homeBranchId ?? p.assignedBranchId) ? esc(p.assignedBranchName || p.homeBranchName || "—") : "🃏 جوكر"
+        }
           · <span dir="ltr">${esc(p.phone1 || "—")}</span></span></b>
         <button class="btn ok" onclick="doShiftOpen(${p.id})">▶️ فتح وردية</button>
       </div>`).join("")}
@@ -706,7 +738,7 @@ window.doShiftTransfer = async function (shiftId) {
   if (!branchId) { toast("اختار الفرع"); return; }
   try {
     await API.post(`/api/shifts/${shiftId}/transfer`, { branchId });
-    toast("الوردية اتنقلت ✓"); closeModal(); API.pokeAll();
+    toast("الوردية اتنقلت ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
@@ -779,7 +811,7 @@ function renderRequests() {
     </div>`;
 }
 window.act = async function (url, okMsg, body) {
-  try { await API.post(url, body || {}); toast(okMsg + " ✓"); API.pokeAll(); pollBoard(); }
+  try { await API.post(url, body || {}); toast(okMsg + " ✓"); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */ pollBoard(); }
   catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
@@ -830,7 +862,7 @@ window.saveJoin = async function () {
       vehicleNo: $("j_veh").value.trim(), address: $("j_addr").value.trim(),
       branchId: $("j_branch").value ? Number($("j_branch").value) : null,
     });
-    toast("الطلب اتسجّل ✓"); closeModal(); API.pokeAll();
+    toast("الطلب اتسجّل ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 /* الاسم بيتجاب من الحالة مش بيتبعت في الـonclick: esc() بتهرّب لـHTML،
@@ -851,7 +883,7 @@ window.doJoinApprove = async function (id) {
   if (!username || password.length < 4) { toast("اسم المستخدم وكلمة مرور ٤ حروف على الأقل"); return; }
   try {
     await API.post(`/api/join-requests/${id}/approve`, { username, password });
-    toast("الطيار اتقبل واتعمله حساب ✓"); closeModal(); API.pokeAll();
+    toast("الطيار اتقبل واتعمله حساب ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
@@ -902,7 +934,7 @@ window.saveTransfer = async function () {
       fromBranchId: $("t_from").value ? Number($("t_from").value) : null,
       type: $("t_type").value,
     });
-    toast("طلب النقل اتسجّل ✓"); closeModal(); API.pokeAll();
+    toast("طلب النقل اتسجّل ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
@@ -945,7 +977,7 @@ window.saveSupport = async function () {
       fromBranchId: $("s_from").value ? Number($("s_from").value) : null,
       notes: $("s_notes").value.trim(),
     });
-    toast("طلب الدعم اتبعت ✓"); closeModal(); API.pokeAll();
+    toast("طلب الدعم اتبعت ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 window.openSendPilot = function (id) {
@@ -964,7 +996,7 @@ window.doSendPilot = async function (id) {
       branchId: Number($("p_branch").value), fromBranchId: Number($("p_branch").value),
       pilotId: Number($("p_pilot").value),
     });
-    toast("الطيار اتبعت ✓"); closeModal(); API.pokeAll();
+    toast("الطيار اتبعت ✓"); closeModal(); /* التحديث تلقائي بعد الكتابة (API.pokeFor) */
   } catch (e) { toast("خطأ: " + (e.message || e)); }
 };
 
@@ -1012,5 +1044,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   });
 }
 </script>
+<!-- قوائم ٣٠ عنصر + جدول/كروت + فورم تفاصيل — طبقة مشتركة (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>
