@@ -51,6 +51,11 @@ use Throwable;
  * `BoardWire` بيقراها بالاسم ده بالظبط، ونفس السقوف (500 للورديات، 300
  * للطلبات، 200 لطلبات الدعم).
  */
+/* 🔴 كل `DB::transaction(..., 3)` في الملف ده: إعادة محاولة على الـdeadlock
+   (2026-09-10). MariaDB بترمي 1213 لما حركتين على نفس صف الطيار/الخزنة
+   يتقابلوا — والمسارات هنا فلوس (تقفيلة وردية · عهدة · عمولة · نقل وردية).
+   `FinanceController` عنده `tx()` بيعمل ده من 2026-09-08؛ الملف ده كان
+   لسه بمحاولة واحدة فالموظف بيشوف خطأ والعملية بترجع. */
 class BoardController
 {
     use BroadcastsOrders;
@@ -580,7 +585,7 @@ class BoardController
                 $now = WireTime::nowDb();
 
                 return $this->enterQueue($pilotId, $branchId, $now);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -638,7 +643,7 @@ class BoardController
                         $no++;
                     }
                 }
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -670,7 +675,7 @@ class BoardController
                     throw new ApiException('الطيار جارٍ التوصيل — سوّي أوردراته الأول');
                 }
                 $this->releasePilot($pilot);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -736,7 +741,7 @@ class BoardController
                 $this->enterQueue($pilotId, $branchId, $now);
 
                 return $this->openOrTransferShift($pilotId, $branchId, $actor, true, $now);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -785,8 +790,12 @@ class BoardController
                         'INSERT INTO shift_branch_history (shift_id, branch_id, moved_at, created_at) VALUES (?,?,?,?)',
                         [$shiftId, $toBranchId, $now, $now]
                     );
+                    /* 🔴 والفلوس تمشي مع الطيار: التقفيلة بتطلب منه أوردراته
+                       بـ`pilot_id` وبتختم الكاش بفرع الوردية، فلو الأوردرات
+                       فضلت ورا بيطلع أوفر هنا وعجز هناك. */
+                    $this->moveUnsettledOrdersToBranch((int) $shift['pilot_id'], $toBranchId);
                 }
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -886,7 +895,7 @@ class BoardController
                 $shiftId, $pilot, (int) $shift['branch_id'] ?: null, $actor, WireTime::nowDb(),
                 $storeIn ? $this->intId($storeIn) : null
             );
-        });
+        }, 3);
 
         return ApiResponse::out(['ok' => true, 'commissionPaid' => $payout]);
     }
@@ -1126,6 +1135,15 @@ class BoardController
                         ]
                     );
 
+                    /* 2.5) ⏸️ أي إذن لسه مفتوح بيتقفل مع الوردية (طلب صاحب
+                       النظام 2026-09-10). الطيار مشي خلاص، والإذن اللي
+                       بيفضل مفتوح بياكل باقي يومه من ساعاته. */
+                    $leavesClosed = $this->closeOpenLeaves((int) $pilot['id'], $now, $actor->username);
+                    if ($leavesClosed > 0) {
+                        // اللوحات وتطبيق الطيار يشوفوا إن الإذن خلص
+                        $this->broadcastPilotRequest('leave', $branchId, (int) $pilot['id']);
+                    }
+
                     // 3) تحرير الطيار بالكامل (زي إزالة الطيار من اللوحة) + إزاحة الدور
                     $this->releasePilot($pilot);
 
@@ -1288,7 +1306,7 @@ class BoardController
                 $this->broadcastPilotRequest('leave', $branchId, $pilotId);
 
                 return (int) DB::getPdo()->lastInsertId();
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -1374,7 +1392,7 @@ class BoardController
                     'UPDATE pilots SET monthly_salary = ?, required_daily_hours = ? WHERE id = ?',
                     [$salary, $reqHours ?: null, $pilotId]
                 );
-            });
+            }, 3);
 
             // القراءة **بعد** الـcommit زي الأصل — الرد هو اللقطة المخزّنة فعلًا
             $saved = DB::select(
@@ -1424,15 +1442,36 @@ class BoardController
         $branchIn = $request->input('branchId');
         $branchId = $this->branchScope($actor, $branchIn ? $this->intId($branchIn) : null);
 
+        /* 📋 نفس بيانات المتقدّم الاختيارية بتاعة فورم الموقع — المشرف
+           ممكن يسألها وهو بيسجّل الطلب. فاضية = NULL. */
+        $optIn = static fn (string $k, int $max): ?string
+            => mb_substr(trim((string) ($request->input($k) ?? '')), 0, $max) ?: null;
+        $numIn = function (string $k, float $max) use ($request): ?float {
+            $v = $request->input($k);
+            if ($v === null || $v === '' || ! is_numeric($v)) {
+                return null;
+            }
+
+            return min(max(0.0, (float) $v), $max) ?: null;
+        };
+
         DB::insert(
-            "INSERT INTO pilot_join_requests (name, phones, card_num, vehicle_no, address, branch_id, requested_by, status, source, created_at)
-             VALUES (?,?,?,?,?,?,?,'pending',?,?)",
+            "INSERT INTO pilot_join_requests
+               (name, phones, card_num, vehicle_no, address,
+                prev_employer, leave_reason, last_salary, experience_years, applicant_note,
+                branch_id, requested_by, status, source, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)",
             [
                 $name,
                 $phone2 !== '' ? $phone1 . ',' . $phone2 : $phone1,
                 trim((string) ($request->input('cardNum') ?? '')) ?: null,
                 trim((string) ($request->input('vehicleNo') ?? '')) ?: null,
                 trim((string) ($request->input('address') ?? '')) ?: null,
+                $optIn('prevEmployer', 255),
+                $optIn('leaveReason', 255),
+                $numIn('lastSalary', 999999),
+                $numIn('experienceYears', 60),
+                $optIn('applicantNote', 2000),
                 $branchId,
                 $actor->username,
                 $actor->role === 'admin' ? 'admin' : 'branch',
@@ -1518,7 +1557,7 @@ class BoardController
                 DB::update("UPDATE pilot_join_requests SET status = 'approved', pilot_id = ? WHERE id = ?", [$pilotId, $reqId]);
 
                 return $pilotId;
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -1664,7 +1703,7 @@ class BoardController
                     $pilot['assigned_branch_id'] !== null ? (int) $pilot['assigned_branch_id'] : (int) $req['branch_id'],
                     (int) $req['pilot_id']
                 );
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -1765,7 +1804,7 @@ class BoardController
 
                 // بثّ إنهاء الإذن — اللوحات والتطبيق يشوفوه فورًا
                 $this->broadcastPilotRequest('leave', $branchId, (int) $req['pilot_id']);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -1863,7 +1902,7 @@ class BoardController
                 // بثّ الموافقة (afterCommit فبيتأجل لما المعاملة تنجح)
                 $this->broadcastPilotRequest('shift', $branchId, (int) $req['pilot_id']);
                 return $this->openOrTransferShift((int) $req['pilot_id'], $branchId, $actor, false, $now);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -1957,7 +1996,7 @@ class BoardController
                 $this->broadcastOrder($orderId);
 
                 return (int) DB::getPdo()->lastInsertId();
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2018,7 +2057,7 @@ class BoardController
                 $this->broadcastOrder((int) $req['order_id']);
                 // تحرير الطيار للانتظار لو ده كان آخر أوردر جاري معاه
                 $this->pilotBackToWaitingIfFree((int) $req['pilot_id'], (int) $req['order_id'], $now);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2057,7 +2096,7 @@ class BoardController
                 DB::update("UPDATE orders SET return_status = 'rejected' WHERE id = ?", [(int) $req['order_id']]);
                 // علامة الإرجاع على الأوردر اتغيّرت — نفس منطق `returnRequestCreate`
                 $this->broadcastOrder((int) $req['order_id']);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2204,7 +2243,7 @@ class BoardController
                     "UPDATE pilot_transfers SET status = 'approved', resolved_at = ?, resolved_by = ? WHERE id = ?",
                     [$now, $actor->username, $reqId]
                 );
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2380,7 +2419,7 @@ class BoardController
                 if ($response === 'rejected' && $req['from_branch_id'] !== null && $req['status'] === 'pending') {
                     DB::update("UPDATE pilot_support_requests SET status = 'rejected' WHERE id = ?", [$reqId]);
                 }
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2478,7 +2517,7 @@ class BoardController
                     $this->completePilotTransfer($pilotId, (int) $req['requesting_branch_id'], $actor, $now);
                     DB::update("UPDATE pilot_support_requests SET status = 'ended' WHERE id = ?", [$reqId]);
                 }
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2532,7 +2571,7 @@ class BoardController
                 );
 
                 DB::update("UPDATE pilot_support_requests SET status = 'ended' WHERE id = ?", [$reqId]);
-            });
+            }, 3);
         } catch (ApiException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -2988,7 +3027,7 @@ class BoardController
             }
 
             return $rowId;
-        });
+        }, 3);
 
         $row = DB::selectOne(
             'SELECT a.*, p.name AS pilot_name, o.order_num, b.name AS branch_name
@@ -3056,7 +3095,7 @@ class BoardController
             DB::delete('DELETE FROM pilot_commission_adjustments WHERE id = ?', [(int) $id]);
 
             return $paid;
-        });
+        }, 3);
 
         return ApiResponse::out(['ok' => true, 'refunded' => round($refunded, 2)]);
     }
@@ -3259,10 +3298,53 @@ class BoardController
 
         $this->openOrTransferShift($pilotId, $toBranch, $actor, true, $now);
 
-        DB::update(
+        /* نفس الدالة اللي `shiftTransfer` بتستخدمها — كانت هنا استعلام
+           ناقص بيسيب المسلَّم غير المسوّى ورا. */
+        $this->moveUnsettledOrdersToBranch($pilotId, $toBranch);
+    }
+
+    /**
+     * 💰 الأوردرات اللي **لسه مالهاش تسوية** بتروح مع الطيار لفرعه الجديد.
+     *
+     * ═══ الباج اللي الدالة دي اتعملت عشانه (بلاغ صاحب النظام 2026-09-10) ═══
+     * طيار من «المدير» اتنقل «حي شرق» يدعمهم، حمّل أوردرات هناك، ورجع.
+     * `shiftTransfer` كانت بتحرّك `shifts.branch_id` **بس** — والأوردرات
+     * بتفضل على فرعها القديم. وفي التقفيلة:
+     *
+     *   • `settlePilotMoney` بتلمّ الأوردرات بـ**`orders.pilot_id`** — يعني
+     *     بتطلب من الطيار فلوس أوردرات الفرع التاني كمان.
+     *   • والكاش بيتختم بـ**فرع الوردية** (`shifts.branch_id`).
+     *
+     * فالنتيجة: أوفر على الفرع اللي استلم الكاش، وعجز على الفرع اللي
+     * دفتره فيه الأوردر. اتأكّد على الإنتاج: وردية #252 كانت هتودّي ٦٠ ج.م
+     * لـ«المدير» ودفترها في «حي شرق».
+     *
+     * 🔴 المجموعة هنا لازم تفضل **نفس** اللي `settlePilotMoney` بتطلبها
+     *    بالظبط — دي الحتة اللي بتخلّي الدفتر والكاش يقعوا في نفس الفرع:
+     *      • اللي في إيده (`processing`/`delivering`/`postponed`)
+     *      • المسلَّمة اللي لسه `money_settled = 0`
+     *      • المرتجعة اللي التوصيل مدفوع عليها ولسه مش مسوّاة
+     *
+     *    الأوردر اللي **اتسوّى خلاص** (`money_settled = 1`) مابيتحركش —
+     *    فلوسه دخلت خزنة فرعها فعلًا، ونقله بعد كده بيكسر دفتر مقفول.
+     *
+     * ⚠️ `completePilotTransfer` كانت بتحرّك التلات حالات الأولى بس —
+     *    فالأوردر اللي اتسلّم ولسه مااتسوّاش كان بيفضل ورا. بقت بتنده الدالة
+     *    دي عشان المسارين يفضلوا متطابقين.
+     *
+     * ⚠️ `origin_branch_id` مابيتلمسش — ده تاريخ مين عمل الأوردر.
+     */
+    private function moveUnsettledOrdersToBranch(int $pilotId, int $toBranch): int
+    {
+        return DB::update(
             "UPDATE orders SET branch_id = ?
-              WHERE pilot_id = ? AND status IN ('processing','delivering','postponed')",
-            [$toBranch, $pilotId]
+              WHERE pilot_id = ? AND branch_id <> ? AND (
+                    status IN ('processing','delivering','postponed')
+                 OR (status = 'delivered'   AND money_settled = 0)
+                 OR (status = 'undelivered' AND money_settled = 0
+                     AND undelivered_fare_by IN ('receiver','sender'))
+              )",
+            [$toBranch, $pilotId, $toBranch]
         );
     }
 
@@ -3334,6 +3416,37 @@ class BoardController
      * كل حقول الحالة بتتصفّر، والإزاحة بتحصل **بس** لو كان منتظر — الطيار
      * اللي في إذن مالوش رقم دور أصلًا.
      */
+    /**
+     * ⏸️ أي إذن لسه مفتوح للطيار بيتقفل — بيتنده مع **قفل الوردية**.
+     *
+     * ═══ ليه (طلب صاحب النظام 2026-09-10) ═══
+     * الإذن بيتقفل يدوي: الطيار يضغط «عدت للعمل» أو الفرع ينهيه. ولو
+     * محدش عمل كده، الصف بيفضل `approved` بـ`ended_at` فاضي **للأبد**.
+     *
+     * وبعد إصلاح خصم وقت الإذن (نفس اليوم)، الإذن المفتوح بيتحسب لحد آخر
+     * يومه التجاري — يعني الطيار بيخسر باقي اليوم كله من ساعاته لأن الفرع
+     * نسي يقفل الإذن. اتشاف على الإنتاج: الطيار ١٦٨ يوم ١٠ طلع **صفر
+     * ساعات** ومعاه وردية ١٠ ساعات.
+     *
+     * وقفل الوردية هو أنسب لحظة: الطيار خلاص مشي، فمفيش إذن ساري بعدها.
+     * و`ended_at` بياخد **وقت قفل الوردية** — فالساعات بتتحسب على المدى
+     * الحقيقي اللي كان بره الشغل، مش لآخر اليوم.
+     *
+     * 🔴 `approved` بس — الـ`pending` مش إذن ساري (لسه مااتوافقش عليه)
+     *    و`rejected` مرفوض، والاتنين مالهمش `ended_at` أصلًا.
+     *
+     * بيرجّع عدد اللي اتقفل — صفر في الحالة الطبيعية.
+     */
+    private function closeOpenLeaves(int $pilotId, string $now, string $by): int
+    {
+        return DB::update(
+            "UPDATE pilot_leave_requests
+                SET status = 'ended', ended_at = ?, ended_by = ?
+              WHERE pilot_id = ? AND status = 'approved' AND ended_at IS NULL",
+            [$now, $by, $pilotId]
+        );
+    }
+
     private function releasePilot(array $pilotRow): void
     {
         DB::update(

@@ -397,7 +397,7 @@ class CustomersController
      *    وممكن يتمسح (فاضي = NULL).
      *  • الدبوس بيتحفظ **بس لو المفتاحين `lat` و`lng` الاتنين مبعوتين** —
      *    نص دبوس مالوش معنى. وأي واحد فيهم فاضي/null = مسح الاتنين.
-     *  • العنوان بيتقص على 190 حرف (طول العمود) والفاضي بيبقى NULL.
+     *  • العنوان بيتقص على 500 حرف (طول العمود بعد التوسيع 2026-09-10) والفاضي بيبقى NULL.
      *
      * 🆕 `shopName` (2026-08-31): الشركة بتفتح الحساب والمحل بيكمّل بياناته
      * بنفسه — والاسم ده بالذات **بيتبعت كاسم المُرسِل في كل شحنة**
@@ -465,7 +465,7 @@ class CustomersController
 
         if (array_key_exists('address', $b)) {
             $sets[] = 'shop_address = ?';
-            $args[] = mb_substr(trim((string) $b['address']), 0, 190) ?: null;
+            $args[] = mb_substr(trim((string) $b['address']), 0, 500) ?: null;
         }
         if (array_key_exists('zoneId', $b)) {
             $zid = $b['zoneId'] !== null && $b['zoneId'] !== '' ? (int) $b['zoneId'] : null;

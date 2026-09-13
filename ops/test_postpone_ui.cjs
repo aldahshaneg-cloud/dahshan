@@ -61,6 +61,7 @@ function runBranch() {
   let out = '';
   const doc = { getElementById: id => (id === 'ordersBody' ? { id } : null) };
   const helpers = {
+    _lvPage: () => ({ start: 0, slice: a => a, mark: () => {} }),   // ترقيم LISTVIEW (2026-09-12) — الحارس بيعرض كل الصفوف
     document: doc,
     setHtml: (el, html) => { out = html; },
     esc: s => String(s == null ? '' : s),
@@ -138,6 +139,7 @@ console.log('\n══ 4) 🔴 الإدارة: نفس الاختبار السلو
   });
   const doc = { getElementById: node, querySelectorAll: () => [], querySelector: () => null };
   const helpers = {
+    _lvPage: () => ({ start: 0, slice: a => a, mark: () => {} }),   // ترقيم LISTVIEW (2026-09-12) — الحارس بيعرض كل الصفوف
     document: doc, window: { _ordersData: [], _ordersUiSig: null },
     esc: s => String(s == null ? '' : s), escJs: s => String(s == null ? '' : s),
     fmt: n => String(Number(n) || 0), fmt0: n => String(Number(n) || 0),

@@ -324,6 +324,110 @@
     return out;
   }
 
+  /* ═══════════════════════════════════════════════════════════
+     6) تعارض الاسم — الرقم مسجّل باسم غير اللي المستخدم كتبه
+  ═══════════════════════════════════════════════════════════ */
+
+  /**
+   * ═══ الباج اللي المودال ده اتعمل عشانه (بلاغ صاحب النظام 2026-09-12) ═══
+   * «لو كتبت اسم عميل جديد فوق، وتحت كتبت رقم كان مسجّل باسم قديم، بيمسح
+   *  الجديد ويسجّل القديم تلقائي».
+   *
+   * وكان بيحصل فعلًا: السطر كان `nameEl.value = res.name` من غير أي سؤال.
+   * وأثره باين في بيانات الإنتاج — أوردرات اسمها «محل سري تون» والمحفوظ
+   * «محل سويت هوم»، وتصحيحات إملائية («هيبر» → «هايبر») ضاعت.
+   *
+   * 🔴 القاعدة دلوقتي: **اللي المستخدم كتبه مايتمسحش من غير ما يوافق**.
+   *    الخانة الفاضية بتتملى لوحدها زي الأول (مفيش حاجة بتضيع)، والتعارض
+   *    بس هو اللي بيفتح المودال.
+   *
+   * opts: { typed, stored, source, phone, canFix, onUseStored(), onKeepTyped(), onFixed() }
+   *
+   * `canFix` بيظهر زرار تالت بيصحّح **الاسم المحفوظ نفسه** لكل الشركة
+   * (`PUT /api/trust/{phone}/identity`). السيرفر بيرفضه لو المحل
+   * مااتعاملش مع الرقم، أو لو الاسم متأكّد منه موظف — والرسالة بتتعرض
+   * جوه المودال زي ما هي مش toast، عشان المستخدم يفهم ليه اترفض.
+   */
+  var SRC_AR = {
+    verified        : "اسم متأكّد منه موظف",
+    customer        : "حساب عميل مسجّل",
+    delivered_orders: "أوردرات اتسلّمت قبل كده",
+    receiver_book   : "دفتر المستلمين",
+    shop            : "حساب محل"
+  };
+
+  function askNameConflict(opts) {
+    opts = opts || {};
+    var typed = String(opts.typed || "").trim();
+    var stored = String(opts.stored || "").trim();
+
+    var back = document.createElement("div");
+    back.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);" +
+      "display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto";
+    var why = SRC_AR[opts.source] ? "<div style='font-size:.76rem;opacity:.7;margin-top:4px'>المصدر: " +
+      esc(SRC_AR[opts.source]) + "</div>" : "";
+
+    back.innerHTML =
+      "<div style='background:#fff;color:#111;border-radius:16px;max-width:420px;width:100%;" +
+      "padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.35)'>" +
+        "<div style='font-weight:800;font-size:1.05rem;margin-bottom:6px'>⚠️ الرقم ده مسجّل باسم تاني</div>" +
+        "<div style='font-size:.86rem;line-height:1.7;opacity:.85'>الرقم ده عندنا باسم:</div>" +
+        "<div style='background:#f1f5f9;border-radius:10px;padding:10px 13px;margin:7px 0;font-weight:700'>" +
+          esc(stored) + why + "</div>" +
+        "<div style='font-size:.86rem;line-height:1.7;opacity:.85'>وإنت كتبت:</div>" +
+        "<div style='background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px 13px;margin:7px 0 16px;font-weight:700'>" +
+          esc(typed) + "</div>" +
+        "<button id='_ncKeep' style='width:100%;background:#f97316;color:#fff;border:0;padding:12px;" +
+          "border-radius:10px;font-weight:800;font-size:.92rem;cursor:pointer;margin-bottom:9px'>" +
+          "✏️ كمّل بالاسم اللي كتبته</button>" +
+        "<button id='_ncUse' style='width:100%;background:#fff;color:#111;border:1px solid #cbd5e1;" +
+          "padding:12px;border-radius:10px;font-weight:700;font-size:.92rem;cursor:pointer'>" +
+          "استخدم الاسم المحفوظ</button>" +
+        (opts.canFix ?
+          "<button id='_ncFix' style='width:100%;background:#fff;color:#0f766e;border:1px solid #5eead4;" +
+            "padding:12px;border-radius:10px;font-weight:700;font-size:.92rem;cursor:pointer;margin-top:9px'>" +
+            "✅ صحّح الاسم المحفوظ لـ«" + esc(typed) + "»</button>" : "") +
+        "<div id='_ncErr' style='display:none;font-size:.8rem;color:#b91c1c;background:#fef2f2;" +
+          "border:1px solid #fecaca;border-radius:9px;padding:9px 11px;margin-top:10px;line-height:1.6'></div>" +
+        "<div style='font-size:.73rem;opacity:.6;margin-top:12px;line-height:1.6'>" +
+          (opts.canFix
+            ? "أول زرارين بيأثّروا على الشحنة دي بس. «صحّح الاسم المحفوظ» بيغيّره لكل الشركة."
+            : "الاسم اللي هتختاره بيتسجّل على الشحنة دي. البيانات المحفوظة مابتتغيّرش من هنا.") + "</div>" +
+      "</div>";
+
+    function close() { if (back.parentNode) { back.parentNode.removeChild(back); } }
+    /* 🔴 مفيش قفل بالضغط برّه ولا Esc: لازم يختار. القفل من غير اختيار
+       كان هيرجّعنا لنفس السؤال — مين كسب، اللي اتكتب ولا المحفوظ؟ */
+    back.querySelector("#_ncKeep").onclick = function () { close(); if (opts.onKeepTyped) { opts.onKeepTyped(); } };
+    back.querySelector("#_ncUse").onclick  = function () { close(); if (opts.onUseStored) { opts.onUseStored(); } };
+    var fixBtn = back.querySelector("#_ncFix");
+    if (fixBtn) {
+      fixBtn.onclick = function () {
+        var errBox = back.querySelector("#_ncErr");
+        fixBtn.disabled = true;
+        fixBtn.textContent = "⏳ بنصحّح…";
+        errBox.style.display = "none";
+        api().put("/api/trust/" + encodeURIComponent(normPhone(opts.phone || "")) + "/identity", { name: typed })
+          .then(function () {
+            /* الكاش لازم يتمسح وإلا الفحص الجاي هيرجّع الاسم القديم */
+            forget(opts.phone);
+            close();
+            if (opts.onFixed) { opts.onFixed(); }
+          })
+          .catch(function (e) {
+            /* 🔴 الرسالة جوه المودال مش toast: الرفض هنا ليه سبب محدد
+               (مااتعاملتش مع الرقم / الاسم متأكّد منه موظف) والمستخدم
+               لازم يقراه وهو شايف الاختيارين التانيين. */
+            errBox.textContent = (e && e.message) || "تعذّر التصحيح";
+            errBox.style.display = "";
+            fixBtn.disabled = false;
+            fixBtn.textContent = "✅ صحّح الاسم المحفوظ لـ«" + typed + "»";
+          });
+      };
+    }
+    document.body.appendChild(back);
+  }
+
   global.Trust = {
     normPhone: normPhone,
     lookup: lookup,
@@ -333,6 +437,7 @@
     shipmentsText: shipmentsText,
     resultHtml: resultHtml,
     bindPhoneField: bindPhoneField,
+    askNameConflict: askNameConflict,
     rateReceiver: rateReceiver,
     ratingModal: ratingModal,
     starsView: starsView,

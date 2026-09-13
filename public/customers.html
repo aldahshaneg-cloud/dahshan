@@ -321,7 +321,7 @@ function start() {
      ما نحمّل 1.85 ميجا كل 10 ثواني (~665 ميجا/ساعة على 32 ألف عميل) بنحمّل
      الرد الكامل بس لما يكون فيه تغيير فعلي. الرد لما بيتغيّر بيرجع كامل
      (مش delta) فالاستبدال تحت لسه صح. */
-  new API.Poller("/api/customers", { interval: 15000, onChange: d => {
+  new API.Poller("/api/customers", { interval: 60000, onChange: d => {
     S.readErr = null;
     S.customers = (d.items || []).map(v => {
       const o = { ...v };
@@ -337,7 +337,7 @@ function start() {
     S.readErr = e?.message || String(e);
     renderList();
   }});
-  new API.Poller("/api/wallets", { interval: 15000, useSince: false,
+  new API.Poller("/api/wallets", { interval: 60000, useSince: false,
     params: { ownerType: "customer" }, onChange: d => {
     S.wallets = {};
     (d.items || []).forEach(w => { S.wallets[w.ownerId] = w.balance; });
@@ -354,7 +354,7 @@ function start() {
      كاش بالمعرّف بدل ما نستبدل S.orders (الاستبدال كان هيمسح باقي التاريخ).
      الدمج آمن هنا لأن الأوردرات مافيش عليها حذف فعلي في الـAPI. */
   const _ordersById = new Map();
-  new API.Poller("/api/orders", { interval: 8000, params: { limit: 1000 }, onChange: d => {
+  new API.Poller("/api/orders", { interval: 30000, params: { limit: 1000 }, onChange: d => {
     (d.items || []).forEach(o => {
       // else = الأوردر اتفكّ من العميل بعد ما كان مربوط، فيتشال من الكاش
       if (o.customerId || o.source === "customer") _ordersById.set(o.id, o);
@@ -1035,5 +1035,7 @@ function askDelete(c) {
     });
   }
   </script>
+<!-- قوائم ٣٠ عنصر + جدول/كروت + فورم تفاصيل — طبقة مشتركة (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>

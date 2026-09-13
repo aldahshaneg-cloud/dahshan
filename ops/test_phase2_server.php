@@ -3,7 +3,7 @@
  * 🛠️ حارس: المرحلة 2 من علاج المراجعة (2026-09-08) — السيرفر.
  *
  * ═══ العقود المثبتة ═══
- * • حدود الطول في إنشاء/تعديل الأوردر: عنوان > 190 أو تليفون > 20 = 400 برسالة عربية (كان 500 «Data too long»).
+ * • حدود الطول في إنشاء/تعديل الأوردر: عنوان > 500 (كان 190 لحد 2026-09-10) أو تليفون > 20 = 400 برسالة عربية (كان 500 «Data too long»).
  * • الحضور: النبضة والانصراف بيلاقوا آخر جلسة مفتوحة حتى لو تاريخها امبارح (الدخول قبل ٩ الصبح).
  * • ?since على /api/zones و/api/order-notifications: changed:false لو مفيش تعديل، وحذف منطقة بيبان.
  * • طلب بتوكن مابيعملش جلسة ملف ولا Set-Cookie.
@@ -92,12 +92,12 @@ try {
         'zoneId' => (int) $zone->id, 'zoneName' => (string) $zone->area_name, 'zonePrice' => 15, 'orderPrice' => 0, 'address' => 'عنوان',
     ], $over);
     $body = fn (array $p, array $over = []) => array_merge(['senderName' => 'محل الفحص', 'senderPhone' => '01000000001', 'senderAddress' => 'شارع', 'deliveries' => [$p], 'source' => 'branch'], $over);
-    [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(['address' => str_repeat('ع', 191)])));
-    ok('🔴 عنوان 191 حرف = 400 برسالة عربية مش 500', $c === 400 && str_contains((string) ($j['error'] ?? ''), 'أطول من المسموح'), $c . ' ' . json_encode($j, JSON_UNESCAPED_UNICODE));
+    [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(['address' => str_repeat('ع', 501)])));
+    ok('🔴 عنوان 501 حرف = 400 برسالة عربية مش 500 (الحد بقى 500 من 2026-09-10)', $c === 400 && str_contains((string) ($j['error'] ?? ''), 'أطول من المسموح'), $c . ' ' . json_encode($j, JSON_UNESCAPED_UNICODE));
     [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(['receiverPhone' => str_repeat('1', 21)])));
     ok('🔴 تليفون مستلم 21 رقم = 400', $c === 400 && str_contains((string) ($j['error'] ?? ''), 'رقم هاتف المستلم'), $c . ' ' . ($j['error'] ?? ''));
-    [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(), ['senderAddress' => str_repeat('س', 191)]));
-    ok('عنوان مرسل جديد 191 حرف = 400', $c === 400 && str_contains((string) ($j['error'] ?? ''), 'عنوان المرسل'), $c . ' ' . ($j['error'] ?? ''));
+    [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(), ['senderAddress' => str_repeat('س', 501)]));
+    ok('عنوان مرسل جديد 501 حرف = 400', $c === 400 && str_contains((string) ($j['error'] ?? ''), 'عنوان المرسل'), $c . ' ' . ($j['error'] ?? ''));
     [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(['address' => str_repeat('ع', 190)])));
     ok('عنوان 190 حرف بيعدّي', $c === 200 && ! empty($j['orders']), $c . ' ' . mb_substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 120));
 

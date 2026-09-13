@@ -82,9 +82,11 @@
     }
     if (!res.ok) throw new Error(GENERIC_ERR);
 
-    // أي كتابة ناجحة → تحديث فوري لكل القوايم المستطلعة
+    /* أي كتابة ناجحة → تحديث فوري للقوايم **اللي الكتابة دي بتخصّها**
+       (pokeFor) — مش كل بولر في الصفحة. شوف تعليق pokeFor تحت: ده كان
+       سبب ٨٥٧ طلب في الدقيقة من جهاز واحد. */
     if (method !== "GET" && !opts.noPoke) {
-      setTimeout(pokeAll, 60);
+      pokeFor(url, opts.poke);
     }
     return data;
   }
@@ -127,6 +129,16 @@
      بيقف تلقائيًا والتاب مخفي (visibilitychange) ويرجع فورًا عند الظهور. */
   var _pollers = [];
 
+  /* بصمة رد الاستطلاع من غير `serverNow` — لو اتعذّرت بترجّع null (= ارسم) */
+  function _payloadSig(d) {
+    try {
+      if (!d || typeof d !== 'object') return null;
+      var c = {};
+      for (var k in d) if (k !== 'serverNow') c[k] = d[k];
+      return JSON.stringify(c);
+    } catch (e) { return null; }
+  }
+
   function Poller(path, options) {
     options = options || {};
     this.path = path;
@@ -141,6 +153,20 @@
        ورا — من غيره لو الويبسوكت وقع، المشرف على تاب تاني مايسمعش أي
        حاجة خالص. الافتراضي false فباقي البولرات بتوفّر زي ما هي. */
     this.hiddenTick = !!options.hiddenTick;
+    /* 🔴 بصمة آخر رد (بلاغ صاحب النظام 2026-09-12: «السيستم بيرسم نفسه
+       كل شوية لوحده ويمسح اللي بكتبه»).
+
+       البولر بـ`useSince:false` (المناطق · الفروع · الإعدادات · المحفظة)
+       السيرفر عمره ما بيرجّعله `changed:false` — فكان بينده `onChange`
+       **كل دورة** والرد هو هو، وكل معالج بيعيد رسم منطقته من الأول:
+       صفوف الطرود بترجع لسعر المنطقة، الخانات بتتمسح، والصفحة ترفّ.
+
+       دلوقتي: نفس الرد بالحرف = مفيش نداء. الرسم بيحصل لما فيه تغيير
+       فعلًا. `serverNow` مستبعد من البصمة لأنه بيتغيّر كل ثانية.
+       `force` (poke بعد كتابة) بينادي دايمًا — المستدعي عايز رسمة أكيدة.
+       `alwaysFire:true` لمعالج محتاج يشتغل كل دورة مهما كان (نادر). */
+    this.alwaysFire = !!options.alwaysFire;
+    this._lastSig = null;
     this._since = 0;
     this._timer = null;
     this._stopped = false;
@@ -190,6 +216,11 @@
       this._lastOk = Date.now();
       _paintRefreshBtn();
       if (d.changed === false) return;
+      if (!force && !this.alwaysFire) {
+        var sig = _payloadSig(d);
+        if (sig !== null && sig === this._lastSig) return;   // نفس الرد — مفيش رسم
+        this._lastSig = sig;
+      }
       this.onChange(d);
     } catch (e) {
       // 403 مش تأخير شبكة — ده رفض صلاحية بيتكرر للأبد (دور اللوحة مش
@@ -228,6 +259,86 @@
     _paintRefreshBtn();
   }
   API.pokeAll = pokeAll;
+
+  /* ── pokeFor: تحديث اللي الكتابة بتخصّه بس ─────────────────────────
+     🔴 الواقعة (2026-09-10): «السيستم بقى تقيل». سجل الأباتشي ورّى جهاز
+     إدارة واحد بيبعت **٨٥٧ طلب في دقيقة واحدة** (١٤ في الثانية)، والسيرفر
+     نفسه فاضي (load 0.09). السبب هنا: كل كتابة كانت بتنده pokeAll →
+     ٢٥ بولر في لوحة الإدارة بيتحدّثوا **كلهم** — الفروع والمناطق
+     والمستخدمين والمصاريف ودفتر العملاء… — عشان مشرف عمل «تسكين» لأوردر.
+     ٣٠ تسكينة ورا بعض = ٧٥٠ طلب و٧٥٠ إعادة رسم في المتصفح. ده اللي
+     الناس بتحسّه «تقل».
+
+     القاعدة بقت:
+       • بولر مساره **يبدأ بيه** عنوان الكتابة (كتابة على /api/orders/5/assign
+         بتحدّث بولر /api/orders — وكذلك /api/shifts، /api/cash-stores…)
+       • + البولرات «الساخنة» (فترتها ≤ ١٥ ثانية: الطيارين، الإجازات،
+         المرتجعات، النقل) لأن أغلب الكتابات بتمسّهم وهم اللي الناس بتبصّ
+         عليهم لحظيًا
+       • + بولر /api/orders دايمًا — كل حاجة تقريبًا بتلمس الأوردرات
+       • + أي مسارات المنادي طلبها صراحةً في opts.poke (مصفوفة بادئات)
+     الباقي (فترة ٦٠ ثانية) بيتحدّث في دورته أو بالبثّ — دي «شبكة أمان» مش
+     مسار التحديث الأساسي (docs/REALTIME.md §6 خطوة 5).
+
+     والتجميع: كتابات كتير في نص ثانية (تسكين جماعي، إعادة ترتيب طابور)
+     بتطلّع نداء واحد لكل بولر مش نداء لكل كتابة. pokeAll نفسها (زرار
+     التحديث، رجوع التاب، رجوع الاتصال) سايبينها كاملة — دي نادرة ومقصودة. */
+  var POKE_HOT_MS = 15000, POKE_COALESCE_MS = 400;
+  var _pokeQueue = null, _pokeTimer = null;
+  function _pokePath(url) {
+    var u = String(url || "").split("?")[0];
+    return u;
+  }
+  function pokeFor(url, extra) {
+    if (!_pokeQueue) _pokeQueue = { urls: [], extra: [] };
+    _pokeQueue.urls.push(_pokePath(url));
+    if (extra && extra.length) _pokeQueue.extra = _pokeQueue.extra.concat(extra);
+    if (_pokeTimer) return;                 // فيه دفعة متجدولة — اتجمّع معاها
+    _pokeTimer = setTimeout(function () {
+      var q = _pokeQueue; _pokeQueue = null; _pokeTimer = null;
+      _pollers.forEach(function (p) {
+        if (p._dead || p._stopped) return;
+        var path = _pokePath(p.path);
+        var hit = p.interval <= POKE_HOT_MS || path === "/api/orders";
+        if (!hit) {
+          for (var i = 0; i < q.urls.length && !hit; i++) hit = q.urls[i].indexOf(path) === 0;
+          for (var j = 0; j < q.extra.length && !hit; j++) hit = path.indexOf(_pokePath(q.extra[j])) === 0;
+        }
+        if (hit) { try { p.tick(); } catch (_) {} }
+      });
+      _paintRefreshBtn();
+    }, POKE_COALESCE_MS);
+  }
+  API.pokeFor = pokeFor;
+
+  /* ── pokePaths: ركلة **للمسارات دي وبس** ───────────────────────────
+     🔴 أحداث البثّ (مراجعة التقل 2026-09-10): حدث «طلب طيار» (إذن/وردية)
+     من أي فرع كان بينده `pokeAll()` — يعني ٢٤ بولر في لوحة الإدارة
+     يتحدّثوا كلهم، سبعة منهم بيرجّعوا القايمة كاملة كل مرة (المناطق
+     ١٧٨ كيلو · العملاء ٣٢ · المستلمين ٣٠ · المستخدمين · المصاريف ·
+     الموظفين · الخزن). إذن واحد لطيار = ربع ميجا تتنزّل وتتعاد رسمها في
+     كل تاب مفتوح، ومالوش أي علاقة بالطلب.
+     الحدث بيخص قوايم الطلبات، فبنركل اللي يخصّه بس — بنفس تجميع pokeFor.
+     (pokeAll فضلت لرجوع الاتصال ورجوع التاب وزرار التحديث: هناك إحنا
+     فعلًا عايزين كل حاجة.) */
+  var _pathQueue = null, _pathTimer = null;
+  function pokePaths(paths) {
+    if (!paths || !paths.length) return;
+    _pathQueue = (_pathQueue || []).concat(paths);
+    if (_pathTimer) return;
+    _pathTimer = setTimeout(function () {
+      var want = _pathQueue; _pathQueue = null; _pathTimer = null;
+      _pollers.forEach(function (p) {
+        if (p._dead || p._stopped) return;
+        var path = _pokePath(p.path);
+        for (var i = 0; i < want.length; i++) {
+          if (path.indexOf(_pokePath(want[i])) === 0) { try { p.tick(); } catch (_) {} return; }
+        }
+      });
+      _paintRefreshBtn();
+    }, POKE_COALESCE_MS);
+  }
+  API.pokePaths = pokePaths;
   API.Poller = Poller;
 
   /* ── زرار «تحديث» ─────────────────────────────────────────────────

@@ -345,12 +345,31 @@ class TrustController
     ═══════════════════════════════════════════════════════════ */
 
     /**
-     * 🔒 `role:admin,branch,callcenter` — الموظفين بس.
+     * 🔒 `role:admin,branch,callcenter` **و`store` و`customer`** (طلب صاحب
+     *    النظام 2026-09-12: «عايز المحل يقدر يصحّح الاسم المحفوظ» وبعدها
+     *    «العميل كمان»). نفس أدوار `GET /api/lookup` — اللي بيشوف الاسم
+     *    الكامل هو اللي بيقدر يصحّحه.
      *
      * الصف ده **بيغلب كل مصادر الاسم التانية** في `TrustWire::identityInfo`
      * (أولوية 0 قبل حساب العميل وقبل أسماء الطرود). يعني اللي بيكتب هنا
-     * بيحسم اسم وعنوان الرقم في كل ردود `/api/lookup` بعد كده — عشان كده
-     * مقصور على الموظفين ومسجّل عليه `verified_by`/`verified_at`.
+     * بيحسم اسم وعنوان الرقم في كل ردود `/api/lookup` بعد كده — لكل
+     * المحلات والفروع مش لصاحب التعديل بس.
+     *
+     * ═══ عشان كده اللي مش موظف عليه بوابتين مش بوابة ═══
+     *  ① **رقم اتعامل معاه فعلًا** (`hasDealtWith`) — نفس البوابة اللي
+     *     بتخلّيه يشوف الاسم الكامل أصلًا. المحل: أوردر من إنشائه فيه طرد
+     *     للرقم ده. العميل: بعت للرقم ده بنفسه. من غيرها أي واحد كان يقدر
+     *     يعيد تسمية أي رقم في الشركة من غير ما يتعامل معاه.
+     *  ② **تصحيح الموظف مايتدوسش** — لو الصف الموجود متكتب بـ`staff`
+     *     غير الموظف مايقدرش يغيّره. الموظف بيغلب دايمًا ويقدر يدوس على
+     *     أي تصحيح.
+     *
+     * ⚠️ والمحل والعميل **متساويين** بينهم: كل واحد فيهم يقدر يصحّح فوق
+     *    تصحيح التاني. الاتنين اتعاملوا مع الرقم فعلًا، ومفيش سبب نقدّم
+     *    واحد على التاني — الموظف هو الحكم لو حصل خلاف.
+     *
+     * و`verified_role` بيسجّل مين النوع اللي كتب — عشان الفرق ده يفضل
+     * معروف بعد كده مش متخمّن من `verified_by`.
      *
      * جملة واحدة (upsert) فمفيش معاملة — القيد الفريد على `subject_phone`
      * هو اللي بيمتص كتابتين متزامنتين على نفس الرقم.
@@ -368,17 +387,34 @@ class TrustController
         }
         $address = trim((string) ($b['address'] ?? $b['canonicalAddress'] ?? '')) ?: null;
 
-        $by  = $actor->name !== '' ? $actor->name : $actor->username;
-        $now = WireTime::nowDb();
+        /* 🔒 البوابتين بتوع غير الموظف (المحل والعميل) */
+        $staff = $actor->isStaff();
+        if (! $staff) {
+            if (! TrustWire::hasDealtWith($p, $actor)) {
+                throw ApiException::forbidden('تقدر تصحّح أسماء الأرقام اللي اتعاملت معاها بس');
+            }
+            $cur = DB::select(
+                'SELECT verified_role FROM party_identities WHERE subject_phone = ? LIMIT 1',
+                [$p]
+            )[0] ?? null;
+            if ($cur !== null && ($cur->verified_role ?? '') === 'staff') {
+                throw ApiException::forbidden('الاسم ده متأكّد منه موظف — كلّم الإدارة لو محتاج تغييره');
+            }
+        }
+
+        $by   = $actor->name !== '' ? $actor->name : $actor->username;
+        $role = $staff ? 'staff' : $actor->role;
+        $now  = WireTime::nowDb();
 
         DB::insert(
-            'INSERT INTO party_identities (subject_phone, canonical_name, canonical_address, verified_by, verified_at)
-             VALUES (?,?,?,?,?)
+            'INSERT INTO party_identities (subject_phone, canonical_name, canonical_address, verified_by, verified_role, verified_at)
+             VALUES (?,?,?,?,?,?)
              ON DUPLICATE KEY UPDATE canonical_name = VALUES(canonical_name),
                                      canonical_address = VALUES(canonical_address),
                                      verified_by = VALUES(verified_by),
+                                     verified_role = VALUES(verified_role),
                                      verified_at = VALUES(verified_at)',
-            [$p, $name, $address, $by, $now]
+            [$p, $name, $address, $by, $role, $now]
         );
 
         // بنعيد القراءة من identityInfo مش من اللي كتبناه — عشان الرد يعكس

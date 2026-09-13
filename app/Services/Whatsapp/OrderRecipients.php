@@ -79,7 +79,7 @@ final class OrderRecipients
     public static function forOrder(int $orderId, string $orderNum): array
     {
         $rows = DB::select(
-            'SELECT parcel_no, receiver_phone, zone_name
+            'SELECT parcel_no, receiver_phone, receiver_name, zone_name
                FROM order_deliveries
               WHERE order_id = ?
               ORDER BY parcel_no',
@@ -90,6 +90,12 @@ final class OrderRecipients
         if ($total === 0) {
             return [];
         }
+        /* اسم المُرسِل لسطر «من :» — من صف الأوردر نفسه (نسخته المتجمّدة
+           وقت الإنشاء، مش من دفتر العملاء اللي ممكن يكون اتعدّل بعدين). */
+        $senderName = trim((string) (DB::selectOne(
+            'SELECT sender_name FROM orders WHERE id = ?',
+            [$orderId]
+        )->sender_name ?? ''));
 
         /* التجميع: المفتاح هو الرقم المطبّع. الطرد اللي مالوش رقم خالص
            بياخد مفتاح فاضي — وكلهم بيتجمّعوا في صف skipped واحد، وده
@@ -106,6 +112,7 @@ final class OrderRecipients
                     'raw'        => trim($raw),
                     'parcelNos'  => [],
                     'zones'      => [],
+                    'names'      => [],
                 ];
             }
 
@@ -115,11 +122,15 @@ final class OrderRecipients
             if ($zone !== '') {
                 $groups[$key]['zones'][$zone] = true;
             }
+            $rName = trim((string) ($row->receiver_name ?? ''));
+            if ($rName !== '') {
+                $groups[$key]['names'][$rName] = true;
+            }
         }
 
         $out = [];
         foreach ($groups as $key => $g) {
-            $out[] = self::build($orderId, $orderNum, (string) $key, $g, $total);
+            $out[] = self::build($orderId, $orderNum, (string) $key, $g, $total, $senderName);
         }
 
         return $out;
@@ -142,10 +153,16 @@ final class OrderRecipients
     }
 
     /**
-     * @param  array{normalized:string,raw:string,parcelNos:int[],zones:array<string,bool>}  $g
+     * @param  array{normalized:string,raw:string,parcelNos:int[],zones:array<string,bool>,names:array<string,bool>}  $g
      */
-    private static function build(int $orderId, string $orderNum, string $key, array $g, int $total): Recipient
-    {
+    private static function build(
+        int $orderId,
+        string $orderNum,
+        string $key,
+        array $g,
+        int $total,
+        string $senderName = ''
+    ): Recipient {
         $code     = self::codeFor($orderNum, $g['parcelNos'], $total);
         $trackUrl = self::trackUrl($code);
 
@@ -165,6 +182,13 @@ final class OrderRecipients
            بس، و`OrdersController` سطر 418 بياخد `zoneName` من جسم الطلب
            زي ما هو. نفس الكاست معمول في سطر 122 لمفتاح التليفون لنفس السبب. */
         $zone      = count($zoneNames) === 1 ? (string) $zoneNames[0] : null;
+        /* اسم المستلم لسطر «الي :» — نفس قاعدة الزون بالظبط: بيطلع لما
+           يكون اسم واحد. الرقم الواحد ممكن يشيل أكتر من طرد بأسماء مختلفة
+           (المحل بيبعت لنفس الرقم باسمين)، وساعتها بنسكت بدل ما نختار
+           واحد ونسكت عن التاني. والكاست لنفس سبب الزون فوق: مفتاح
+           المصفوفة اللي نصّه رقم صحيح PHP بيحوّله int بصمت. */
+        $nameKeys  = array_keys($g['names'] ?? []);
+        $toName    = count($nameKeys) === 1 ? (string) $nameKeys[0] : null;
 
         $message = new OutgoingMessage(
             orderId:  $orderId,
@@ -173,7 +197,7 @@ final class OrderRecipients
             phone:    $g['normalized'],
             zone:     $zone,
             trackUrl: $trackUrl,
-            body:     self::body($code, $zone, $trackUrl),
+            body:     self::body($code, $zone, $trackUrl, $senderName, $toName),
         );
 
         return new Recipient($key, $message, self::skipReason($g));
@@ -242,18 +266,40 @@ final class OrderRecipients
     }
 
     /**
-     * النص. نقل حرفي لـ`_codeMsg()` — بما فيه السطر الفاضي قبل «تابع
-     * شحنتك» وإن سطر المنطقة بيختفي خالص لما الزون يبقى فاضي.
+     * النص. الشكل اتغيّر بطلب صاحب النظام (2026-09-10): بدل سطر «المنطقة»
+     * بقى فيه **من / إلى** — المستلم بيعرف الشحنة جاية من مين ورايحة لمين،
+     * والمنطقة بقت جنب اسم المستلم بدل سطر لوحدها.
+     *
+     *     📦 شحنتك مع الدهشان
+     *     رقم الطلب: GISH-260910-025
+     *     من : اسم المُرسِل
+     *     الي : اسم المستلم — المنطقة
+     *
+     *     تابع شحنتك من هنا:
+     *     https://aldahshan.cloud/?track=…
+     *
+     * أي سطر بياناته فاضية بيختفي خالص (زي ما سطر المنطقة كان بيعمل).
      *
      * ⚠️ `\n` مش `PHP_EOL` — الأخيرة بتطلع `\r\n` على ويندوز، وده بيدخل
      * محرف زيادة في نص الرسالة المتخزّن ويخلّيه مختلف عن اللي بيتبعت من
      * المتصفح.
      */
-    private static function body(string $code, ?string $zone, string $trackUrl): string
-    {
+    private static function body(
+        string $code,
+        ?string $zone,
+        string $trackUrl,
+        ?string $from = null,
+        ?string $to = null
+    ): string {
+        $from = trim((string) $from);
+        $to   = trim((string) $to);
+        $zone = trim((string) $zone);
+        $toLine = $to !== '' ? $to . ($zone !== '' ? ' — ' . $zone : '') : $zone;
+
         return "📦 شحنتك مع الدهشان\n"
             . 'رقم الطلب: ' . $code . "\n"
-            . ($zone !== null && $zone !== '' ? 'المنطقة: ' . $zone . "\n" : '')
+            . ($from !== '' ? 'من : ' . $from . "\n" : '')
+            . ($toLine !== '' ? 'الي : ' . $toLine . "\n" : '')
             . "\nتابع شحنتك من هنا:\n"
             . $trackUrl;
     }

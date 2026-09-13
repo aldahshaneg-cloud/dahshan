@@ -934,7 +934,18 @@
     setInterval(() => {
       try {
         if (!window._currentUser?.username) return;
-        api.post("/api/attendance/heartbeat", {}, { noPoke: true }).catch(() => {});
+        /* 🔴 الرد مش بيتتجاهل (2026-09-10): السيرفر بيقفل جلسة اليوم
+           التجاري الفات ويرجّع `open:false, rolled:true` — والتاب اللي
+           بايت مفتوح لازم يفتح جلسة اليوم الجديد، وإلا شغل النهارده كله
+           مش هيتسجّل خالص. */
+        api.post("/api/attendance/heartbeat", {}, { noPoke: true })
+          .then(r => {
+            if (r && r.open === false) {
+              const u = window._currentUser;
+              if (u?.username) recordCheckIn(u.username, u.role || "");
+            }
+          })
+          .catch(() => {});
       } catch(e) {}
     }, 60000);
 
@@ -4033,6 +4044,18 @@
       window._pageMul[key] = (window._pageMul[key] || 1) + 1;
       try { if (window._pageRender[key]) window._pageRender[key](); } catch (e) { console.error(e); }
     };
+
+    /* ── ترقيم من المصدر (2026-09-10) ──────────────────────────────
+       الطبقة listview.js بتدير الصفحة (٣٠ صف) والشريط ‹ ›، والدالة دي
+       بتجيب منها النافذة الحالية فنرسم الـ٣٠ بس بدل ما نبني ٢٠٠٠ صف
+       ونخفيهم. لو الطبقة مش متحمّلة (صفحة قديمة في الكاش) بنرسم الكل. */
+    function _lvPage(key, total, rerender, tbody) {
+      if (!window.LISTVIEW || !window.LISTVIEW.paged) return { start: 0, slice: a => a };
+      const pg = window.LISTVIEW.paged(key, total, rerender);
+      pg.mark(tbody && tbody.closest ? tbody.closest("table") : null);
+      return pg;
+    }
+
     function rowsCapNote(shown, total, cols) {
       if (shown >= total) return "";
       return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
@@ -4054,6 +4077,19 @@
       const list = Array.isArray(data) ? data
         : (data ? Object.entries(data).map(([id,v]) => ({id,...v})) : []);
       window._ordersData = list;
+      /* 🔴 مربعات الاختيار (.row-chk) كانت بتتمسح مع كل إعادة رسم للجداول
+         والشريط يفضل بيقول «٣ مختارين» والزرار مايعملش حاجة — نفس الباج
+         اللي اتصلح في branch.html (setHtml). الرسم هنا بيكتب خمس جداول
+         في أماكن متفرقة، فبنلمّ المختار قبلها ونرجّعه بعد ما الدالة تخلص. */
+      const __chk = new Set([...document.querySelectorAll(".row-chk:checked")].map(c => c.dataset.id));
+      if (__chk.size) setTimeout(() => {
+        let hit = 0;
+        document.querySelectorAll(".row-chk").forEach(c => { if (__chk.has(c.dataset.id)) { c.checked = true; hit++; } });
+        // الاسترجاع مش بيطلّق onchange — الشريط لازم يتحدّث بنفسه
+        if (hit) { try { window.onOrderCheckChange && window.onOrderCheckChange(); } catch (e) {} }
+      }, 0);
+      // ‹ › من شريط listview بينده إعادة الرسم دي بنفس البيانات (وبيتخطّى بصمة «مافيش تغيير»)
+      const __rerender = () => { window._ordersUiSig = null; _renderOrdersUI(data); };
       const active    = list.filter(o => o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل");
       /* 🔴 «مؤجل» جوه جدول قيد التنفيذ عن قصد: من غير كده الأوردر المؤجل
          مكانش بيظهر في **أي** جدول (مش pending ولا delivering ولا الملغاة)
@@ -4083,7 +4119,8 @@
       const tbody = document.getElementById("ordersBody");
       if (!pending.length) { tbody.innerHTML = `<tr><td colspan="12" class="empty-row">لا توجد طلبات قيد التنفيذ</td></tr>`; }
       else {
-        tbody.innerHTML = pending.map((o, i) => {
+        const __pgP = _lvPage("callcenter:ordersBody", pending.length, __rerender, tbody);
+        tbody.innerHTML = __pgP.slice(pending).map((o, i) => {
           const delivSummary = (o.deliveries || []).map((d,di) => `
             <div style="padding:4px 0;${di>0?'border-top:1px solid var(--border);margin-top:4px':''}">
               <div style="font-weight:700;font-size:.83rem;color:var(--text)">${ esc(d.receiverName || "—") }</div>
@@ -4094,7 +4131,7 @@
             </div>`).join("");
           return `<tr id="row-${ esc(o.id) }">
             <td><input type="checkbox" class="order-chk row-chk" data-id="${ esc(o.id) }" onchange="onOrderCheckChange()"  /></td>
-            <td class="idx">${i+1}</td>
+            <td class="idx">${__pgP.start + i + 1}</td>
             <td><b style="color:var(--sky);font-size:.9rem">${ esc(o.orderNum || "—") }</b></td>
             <td>
               <div style="font-weight:700;font-size:.85rem">${ esc(o.senderName) }</div>
@@ -4125,7 +4162,8 @@
       if (dvtbody) {
         if (!delivering.length) { dvtbody.innerHTML = `<tr><td colspan="12" class="empty-row">لا توجد طلبات قيد التوصيل حالياً</td></tr>`; }
         else {
-          dvtbody.innerHTML = delivering.map((o, i) => {
+          const __pgV = _lvPage("callcenter:deliveringOrdersBody", delivering.length, __rerender, dvtbody);
+          dvtbody.innerHTML = __pgV.slice(delivering).map((o, i) => {
             const delivSummary = (o.deliveries || []).map((d,di) => `
               <div style="padding:4px 0;${di>0?'border-top:1px solid var(--border);margin-top:4px':''}">
                 <div style="font-weight:700;font-size:.83rem;color:var(--text)">${ esc(d.receiverName || "—") }</div>
@@ -4135,7 +4173,7 @@
                 <div style="font-size:.75rem;color:var(--green);font-weight:700;margin-top:1px">${ esc(d.zonePrice || 0) } ج.م</div>
               </div>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgV.start + i + 1}</td>
               <td><b style="color:var(--sky);font-size:.9rem">${ esc(o.orderNum || "—") }</b></td>
               <td>
                 <div style="font-weight:700;font-size:.85rem">${ esc(o.senderName) }</div>
@@ -4183,11 +4221,12 @@
         window._renderDeliveredTable = function(ordersArr) {
           if (!ordersArr.length) { dtbody.innerHTML = `<tr><td colspan="11" class="empty-row">لا توجد طلبات مسلَّمة بعد</td></tr>`; return; }
           const _total = ordersArr.length;
-          const _shown = capNewest(ordersArr, FINISHED_ROWS_LIMIT);
-          dtbody.innerHTML = rowsCapNote(_shown.length, _total, 11) + _shown.map((o, i) => {
+          const __pgD = _lvPage("callcenter:deliveredOrdersBody", _total, __rerender, dtbody);
+          const _shown = __pgD.slice(capNewest(ordersArr, _total)); // الأحدث أولًا، والصفحة الحالية بس
+          dtbody.innerHTML = _shown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName) } — ${ esc(d.zoneName) }</span>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgD.start + i + 1}</td>
               <td><b style="color:var(--green)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName) }</span></td>
               <td>${delivSummary}</td>
@@ -4219,11 +4258,12 @@
       if (ctbody) {
         if (!cancelled.length) { ctbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات ملغاة</td></tr>`; }
         else {
-          const _cShown = capNewest(cancelled, FINISHED_ROWS_LIMIT);
-          ctbody.innerHTML = rowsCapNote(_cShown.length, cancelled.length, 9) + _cShown.map((o, i) => {
+          const __pgC = _lvPage("callcenter:cancelledOrdersBody", cancelled.length, __rerender, ctbody);
+          const _cShown = __pgC.slice(capNewest(cancelled, cancelled.length)); // الأحدث أولًا، والصفحة الحالية بس
+          ctbody.innerHTML = _cShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName || "—") } — ${ esc(d.zoneName || "") }</span>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgC.start + i + 1}</td>
               <td><b style="color:var(--red)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName || "—") }</span></td>
               <td>${delivSummary}</td>
@@ -4248,11 +4288,12 @@
       if (utbody) {
         if (!undelivered.length) { utbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات غير مسلَّمة</td></tr>`; }
         else {
-          const _uShown = capNewest(undelivered, FINISHED_ROWS_LIMIT);
-          utbody.innerHTML = rowsCapNote(_uShown.length, undelivered.length, 9) + _uShown.map((o, i) => {
+          const __pgU = _lvPage("callcenter:undeliveredOrdersBody", undelivered.length, __rerender, utbody);
+          const _uShown = __pgU.slice(capNewest(undelivered, undelivered.length)); // الأحدث أولًا، والصفحة الحالية بس
+          utbody.innerHTML = _uShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName || "—") } — ${ esc(d.zoneName || "—") }</span>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgU.start + i + 1}</td>
               <td><b style="color:var(--orange)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName || "—") }</span></td>
               <td>${delivSummary}</td>
@@ -4806,8 +4847,14 @@
       const sel = document.getElementById("manualRegEmployee");
       if (!sel) return;
       const list = window._manualEmployees || [];
+      /* 🔴 القايمة بتتعاد كل دورة — والموظف اللي اتختار كان بيرجع «— اختر
+         موظف —» والمستخدم لسه بيكتب الوقت جنبها (فحص 2026-09-12). القايمة
+         المفتوحة دلوقتي مانلمسهاش خالص. */
+      if (document.activeElement === sel) return;
+      const cur = sel.value;
       sel.innerHTML = `<option value="">— اختر موظف —</option>` +
         list.map(e => `<option value="manual_${ esc(e.id) }">${ esc(e.name) } ${ esc(e.jobTitle ? "(" + e.jobTitle + ")" : "") } — خارج النظام</option>`).join("");
+      if (cur) sel.value = cur;
     }
 
     /* ══════════════════════════════════════════════════════════════
@@ -4932,13 +4979,23 @@
        الخزن كل الفروع من GET /api/cash-stores، وحركات كل خزنة من
        GET /api/cash-stores/{id}/transactions (مفيش endpoint مجمّع). */
     let _ccCashBusy = false;
-    window.refreshCashData = async function() {
+
+    /* 🔴 حركات الخزن (مراجعة التقل 2026-09-10): كانت بتتجاب **نداء لكل
+       خزنة** (لحد ٥٠٠ حركة لكل واحدة) كل ٣٠ ثانية من كل تاب — حتى وصفحة
+       الخزنة مقفولة ومحدش بيبصّ. قايمة الخزن نفسها رخيصة (نداء واحد،
+       والمودالات محتاجاها) فسايبينها كل دورة؛ الحركات بقت لما الصفحة
+       مفتوحة بس، أو لما المنادي يطلبها صراحةً `(true)` (فتح الصفحة،
+       أدوات التنظيف/الحسابات). */
+    const _cashPageOpen = () => ["page-treasury", "page-accounting"]
+      .some(id => document.getElementById(id)?.classList.contains("active"));
+    window.refreshCashData = async function(force) {
       if (_ccCashBusy || !window._currentUser) return;
       _ccCashBusy = true;
       try {
         const d = await api.get("/api/cash-stores");
         const stores = window._nrmList(d.items || d.stores || []);
         window._cashStoresData = stores;
+        if (!force && !_cashPageOpen()) return;   // الحركات بس لما الصفحة مفتوحة
         const txns = [];
         for (const s of stores) {
           try {
@@ -5363,9 +5420,23 @@
           <div id="directMovePilotInfo" style="font-size:.82rem;color:var(--muted);margin-bottom:12px;min-height:20px"></div>
         </div>`;
 
+      /* 🔴 الفورم جوه الحتة اللي بتتعاد رسمها — الطيار والفرع اللي المشرف
+         اختارهم كانوا بيتمسحوا مع كل دورة استطلاع (فحص 2026-09-12). بنقراهم
+         **قبل** الرسم ونرجّعهم بعده. الطيار الأول (onchange بتاعه بيملا الفرع
+         تلقائيًا) وبعدين الفرع عشان اختيار المشرف يغلب. */
+      const _keepPilot  = document.getElementById("directMovePilot")?.value  || "";
+      const _keepBranch = document.getElementById("directMoveBranch")?.value || "";
       container.innerHTML = html || `<div style="text-align:center;color:var(--muted);padding:50px">لا توجد طلبات</div>`;
       // Populate direct move selects
       populateDirectMoveSelects();
+      if (_keepPilot) {
+        const ps = document.getElementById("directMovePilot");
+        if (ps) { ps.value = _keepPilot; try { ps.onchange && ps.onchange.call(ps); } catch (e) {} }
+      }
+      if (_keepBranch) {
+        const bs = document.getElementById("directMoveBranch");
+        if (bs) bs.value = _keepBranch;
+      }
     }
 
     function populateDirectMoveSelects() {
@@ -5380,8 +5451,10 @@
           return `<option value="${ esc(p.id) }" data-branch="${ esc(p.assignedBranchId||'') }">${ esc(p.name) }${bLabel}</option>`;
         }).join("");
       if (cur) pilotSel.value = cur;
+      const curB = branchSel.value;   // نفس حماية الطيار — الفرع كان بيتمسح
       branchSel.innerHTML = `<option value="">— اختر الفرع —</option>` +
         (window._branchesList || []).map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) }</option>`).join("");
+      if (curB) branchSel.value = curB;
       pilotSel.onchange = function() {
         const opt = this.options[this.selectedIndex];
         const bId = opt?.dataset?.branch;
@@ -5603,6 +5676,10 @@
        endpoint حذف بالجملة مع أرشفة (زي أداة التنظيف المركزية) — مفيش
        حاليًا، فالمعاينة بتشتغل على الأوردرات المتاحة للعرض بس والحذف معطّل */
     async function gatherCleanupTargets(cutoff) {
+      // الحركات مابقتش بتتجاب كل ٣٠ث (شوف refreshCashData) — نجيبها هنا صراحةً
+      if (document.getElementById("cln-cashtxn")?.checked && window.refreshCashData) {
+        try { await window.refreshCashData(true); } catch (_) {}
+      }
       const targets = {};
       if (document.getElementById("cln-orders").checked) {
         targets.orders = (window._ordersData || []).filter(o =>
@@ -8078,7 +8155,8 @@
     }
     if (page === "pilotmap") {
       if (window.initPilotMap) window.initPilotMap();
-    }
+    } else if (window.stopPilotMap) window.stopPilotMap();   // سيبت الخريطة → وقّف مؤقّتاتها
+    if ((page === "treasury" || page === "accounting") && window.refreshCashData) window.refreshCashData(true);
     if (page === "pilotleave" && window.renderPilotLeavePage) renderPilotLeavePage();
     // ── شاشات الكول سنتر ──
     if (page === "ccsearch"    && window.renderCCSearch)   renderCCSearch();
@@ -9499,6 +9577,11 @@
 
   /* ── شريط الحالة ─────────────────────────────────────────────────── */
   function _startMapTick() {
+    /* 🔴 مؤقّتات الخريطة (مراجعة التقل 2026-09-10): شريط الحالة كل ثانية
+       والاستطلاع كل ٣ ثواني كانوا بيفضلوا شغّالين **طول اليوم** بعد ما
+       الموظف يسيب صفحة الخريطة — كل ٣ ثواني إعادة بناء كل الماركرات
+       والبانل الجانبي على صفحة مش ظاهرة أصلًا. */
+    if (!document.getElementById("page-pilotmap")?.classList.contains("active")) return;
     if (_mapStatusInterval) clearInterval(_mapStatusInterval);
     _mapStatusInterval = setInterval(() => {
       const el = document.getElementById("pilot-map-status");
@@ -9536,6 +9619,12 @@
   }
 
   /* ── تهيئة الخريطة ──────────────────────────────────────────────── */
+  /* بيتنده من التنقّل أول ما الموظف يسيب صفحة الخريطة */
+  window.stopPilotMap = function () {
+    if (_mapStatusInterval) { clearInterval(_mapStatusInterval); _mapStatusInterval = null; }
+    if (_mapFbUnsub) { try { _mapFbUnsub(); } catch (_) {} _mapFbUnsub = null; }
+  };
+
   window.initPilotMap = function() {
     const mapEl = document.getElementById("pilot-map");
     if (!mapEl) return;
@@ -10259,5 +10348,7 @@
     });
   }
   </script>
+<!-- قوائم ٣٠ صف + كروت + فورم تفاصيل — طبقة مشتركة لكل الجداول (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>

@@ -62,6 +62,11 @@ FILE="$FILE.gz"
 # ومفضّل كمان وجهة تانية بنظام السحب (الجهاز اللي في المكتب هو اللي بيجيب
 # الملف بـ rsync) — كده لو السيرفر اتخرق، المخترق مش هيقدر يمسح الأرشيف
 # لأن السيرفر أصلًا مش شايل مفاتيح الوجهة دي.
+# الوجهة الافتراضية اتظبطت 2026-09-10: جوجل درايف (aldahshaneg@gmail.com)
+# بصلاحية drive.file — يعني rclone بيشوف الملفات اللي هو رفعها بس، مش
+# الدرايف كله. الافتراضي هنا مش في الكرون بس، عشان أي تشغيل يدوي
+# (نسخة قبل رفعة مثلًا) يرفع كمان. المتغيّر من برّه لسه بيغلب.
+: "${RCLONE_REMOTE:=gdrive:aldahshan-backups}"
 if command -v rclone >/dev/null 2>&1 && [ -n "${RCLONE_REMOTE:-}" ]; then
   rclone copy "$FILE" "$RCLONE_REMOTE" --quiet
   echo "UPLOADED: $RCLONE_REMOTE"

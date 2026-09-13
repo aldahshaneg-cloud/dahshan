@@ -958,7 +958,7 @@ class CustomerAppController
         if ($sPhone2 !== '' && ! self::validPhone($sPhone2)) {
             throw new ApiException('الرقم الاحتياطي للمُرسِل غير صحيح');
         }
-        $sAddr = mb_substr(trim((string) ($b['senderAddress'] ?? '')), 0, 190);
+        $sAddr = mb_substr(trim((string) ($b['senderAddress'] ?? '')), 0, 500);
         $sLat  = self::coord($b['senderLat'] ?? null);
         $sLng  = self::coord($b['senderLng'] ?? null);
         $geoSrc = trim((string) ($b['geoSrc'] ?? '')) ?: null;

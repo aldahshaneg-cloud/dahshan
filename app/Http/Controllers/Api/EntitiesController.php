@@ -29,8 +29,13 @@ use stdClass;
 class EntitiesController
 {
     /* «كل الطيارين» لمشرف الفرع (2026-09-09): اللي بيوصله عن طيار من فرع تاني —
-       اسم وحالة وفرع ومكان بس. مفيش تليفونات ولا عناوين ولا فلوس ولا مرتبات. */
-    private const PILOT_MAP_KEYS = ['id', 'name', 'vehicleNo', 'pilotStatus', 'queueNo', 'statusSince',
+       اسم وحالة وفرع ومكان. مفيش عناوين ولا فلوس ولا مرتبات.
+
+       📱 `phone1` اتضاف 2026-09-12 (طلب صاحب النظام: «مشرف الفرع لما يدوس على
+       طيار في الخريطة يظهرله رقمه»). السبب العملي: من 2026-09-10 المشرف بقى
+       يحمّل أوردرات على طيار الفرع التاني من الخريطة نفسها — فلازم يعرف
+       يكلّمه. الرقم التاني والعنوان والفلوس لسه مقصوصين. */
+    private const PILOT_MAP_KEYS = ['id', 'name', 'phone1', 'vehicleNo', 'pilotStatus', 'queueNo', 'statusSince',
         'assignedBranchId', 'assignedBranchName', 'homeBranchId', 'homeBranchName', 'activeOrders',
         'leaveType', 'location', 'heading', 'speed', 'trail', 'updatedAt'];
 
@@ -1543,6 +1548,48 @@ class EntitiesController
      * ملاحظة: مفيش معاملة هنا — الأصل جملة كتابة واحدة (INSERT) وبعدها قراءة
      * رجوع. لفّها في معاملة كان هيبقى تغيير مش نقل.
      */
+    /**
+     * تطبيع تليفون دفتر العملاء/المستلمين.
+     *
+     * 🔴 الواقعة (2026-09-09، ١٤ خطأ في يوم): الكول سنتر لزق «عمر عماد
+     * 01099357911» في خانة التليفون — الاسم والرقم مع بعض — فالـINSERT
+     * وقع بـ«Data too long for column phone1» (العمود ٢٠ حرف) ورجع 500
+     * من غير أي رسالة مفهومة. الرقم نفسه كان صح، الزيادة كانت الاسم.
+     *
+     * بنسيب الأرقام بس (وعلامة + لو في الأول): «عمر عماد 0109…» → 0109…
+     * ونتأكد إن اللي فضل رقم حقيقي (٧–٢٠ رقم). لو مفيش أرقام كفاية
+     * بنرجّع 400 برسالة واضحة بدل 500 صامت. وبما إن phone1 هو مفتاح
+     * البحث (WHERE phone1 = ?) فالتطبيع قبل البحث بيمنع تكرار نفس
+     * الشخص بمسافة أو شرطة زيادة.
+     */
+    private static function partyPhone(string $raw, string $label): string
+    {
+        // نفس قاعدة CustomersController::update وCustomerAppController::validPhone: ٨–١٥ رقم
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+        if ($digits === '') {
+            throw new ApiException("{$label} لازم يكون رقم — اللي اتكتب مافيهوش أرقام");
+        }
+        if (strlen($digits) < 8 || strlen($digits) > 15) {
+            throw new ApiException("{$label} غير صحيح — لازم من ٨ لـ ١٥ رقم (اتكتب " . strlen($digits) . ' رقم)');
+        }
+
+        return $digits;
+    }
+
+    /** العنوان: العمود ٥٠٠ حرف — الأطول بيترفض برسالة بدل ما يقع 500 */
+    private static function partyAddress(mixed $v): ?string
+    {
+        $a = trim((string) ($v ?? ''));
+        if ($a === '') {
+            return null;
+        }
+        if (mb_strlen($a) > 500) {
+            throw new ApiException('العنوان أطول من المسموح (500 حرف) — اختصره وجرّب تاني');
+        }
+
+        return $a;
+    }
+
     private function partyCreate(Request $request, string $table): JsonResponse
     {
         $actor = $request->actorOrFail();
@@ -1554,6 +1601,13 @@ class EntitiesController
         if ($name === '' || $phone === '') {
             throw new ApiException('الاسم ورقم التليفون مطلوبين');
         }
+        if (mb_strlen($name) > 190) {
+            throw new ApiException('الاسم أطول من المسموح (190 حرف)');
+        }
+        // تطبيع قبل البحث والإدراج — شوف partyPhone فوق (واقعة «الاسم في خانة التليفون»)
+        $phone   = self::partyPhone($phone, 'رقم التليفون');
+        $phone2  = trim((string) ($b['phone2'] ?? '')) !== '' ? self::partyPhone((string) $b['phone2'], 'الرقم الإضافي') : null;
+        $address = self::partyAddress($b['address'] ?? null);
 
         $existing = DB::select("SELECT * FROM {$table} WHERE phone1 = ? LIMIT 1", [$phone])[0] ?? null;
         if ($existing) {
@@ -1577,8 +1631,8 @@ class EntitiesController
             [
                 $name,
                 $phone,
-                trim((string) ($b['phone2'] ?? '')) ?: null,
-                trim((string) ($b['address'] ?? '')) ?: null,
+                $phone2,
+                $address,
                 $actor->username,
                 $source,
                 WireTime::nowDb(),
@@ -1616,14 +1670,21 @@ class EntitiesController
         if ($name === '' || $phone === '') {
             throw new ApiException('الاسم ورقم التليفون مطلوبين');
         }
+        if (mb_strlen($name) > 190) {
+            throw new ApiException('الاسم أطول من المسموح (190 حرف)');
+        }
+        // نفس تطبيع الإنشاء (partyPhone/partyAddress) — 400 برسالة بدل 500 صامت
+        $phone   = self::partyPhone($phone, 'رقم التليفون');
+        $phone2  = trim((string) ($b['phone2'] ?? '')) !== '' ? self::partyPhone((string) $b['phone2'], 'الرقم الإضافي') : null;
+        $address = self::partyAddress($b['address'] ?? null);
 
         DB::update(
             "UPDATE {$table} SET name = ?, phone1 = ?, phone2 = ?, address = ? WHERE id = ?",
             [
                 $name,
                 $phone,
-                trim((string) ($b['phone2'] ?? '')) ?: null,
-                trim((string) ($b['address'] ?? '')) ?: null,
+                $phone2,
+                $address,
                 $id,
             ]
         );
@@ -1702,7 +1763,9 @@ class EntitiesController
                 $name,
                 $phone,
                 trim((string) ($b['phone2'] ?? '')) ?: null,
-                trim((string) ($b['address'] ?? '')) ?: null,
+                /* حد الطول (2026-09-10): العمود varchar(500) بعد التوسيع —
+                   من غير الفحص ده العنوان الطويل بيرمي 500 «Data too long». */
+                self::partyAddress($b['address'] ?? null),
                 ((int) ($b['zoneId'] ?? 0)) ?: null,
                 WireTime::nowDb(),
             ]

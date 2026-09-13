@@ -383,13 +383,17 @@
        ومحسوس صفر، لكن لو الفروع بقت عشرات دي بتبقى عشرات النداءات في
        نفس اللحظة — عندها الحل قناة `company` واحدة مش تحسين هنا
        (نفس ملاحظة docs/REALTIME.md §6). */
-      /* حدث طلب طيار (إذن/وردية) — ركلة واحدة مجمّعة لكل المستطلعات.
-         `pokeAll` رخيصة (كل بولر بيسأل بـ?since فالفاضي بيرد changed:false)،
-         والتجميع 400ms عشان دفعة قرارات ورا بعض = ركلة واحدة. */
-      let _rtReqKick = null;
+      /* حدث طلب طيار (إذن/وردية) — ركلة موجّهة لقوايم الطلبات بس.
+         🔴 كانت `pokeAll()` (مراجعة التقل 2026-09-10): ٢٤ بولر يتحدّثوا مع
+         كل إذن من أي فرع، سبعة منهم بيرجّعوا القايمة كاملة (المناطق ١٧٨
+         كيلو والعملاء ٣٢ والمستلمين ٣٠…) — ربع ميجا في كل تاب إدارة مفتوح
+         على حدث مالوش علاقة بيهم. `pokePaths` بتركل السبعة اللي تخصّه
+         وبتجمّع لوحدها (api.js). */
       function _rtOnPilotRequest() {
-        clearTimeout(_rtReqKick);
-        _rtReqKick = setTimeout(() => { try { window.API.pokeAll(); } catch (_) {} }, 400);
+        try {
+          window.API.pokePaths(["/api/leave-requests", "/api/shift-requests", "/api/return-requests",
+           "/api/pilot-transfers", "/api/join-requests", "/api/shifts", "/api/pilots"]);
+        } catch (_) {}
       }
     function _rtSyncBranches() {
       const RT = window.REALTIME;
@@ -1149,7 +1153,18 @@
     setInterval(() => {
       try {
         if (!window._currentUser?.username) return;
-        api.post("/api/attendance/heartbeat", {}, { noPoke: true }).catch(() => {});
+        /* 🔴 الرد مش بيتتجاهل (2026-09-10): السيرفر بيقفل جلسة اليوم
+           التجاري الفات ويرجّع `open:false, rolled:true` — والتاب اللي
+           بايت مفتوح لازم يفتح جلسة اليوم الجديد، وإلا شغل النهارده كله
+           مش هيتسجّل خالص. */
+        api.post("/api/attendance/heartbeat", {}, { noPoke: true })
+          .then(r => {
+            if (r && r.open === false) {
+              const u = window._currentUser;
+              if (u?.username) recordCheckIn(u.username, u.role || "");
+            }
+          })
+          .catch(() => {});
       } catch(e) {}
     }, 60000);
 
@@ -1285,10 +1300,17 @@
          الصامت لو حصل أي فشل تعبئة تاني في المستقبل. */
       const _branchSel   = document.getElementById("pilotBranch");
       const homeBranchId = _branchSel.value || null;
+      /* 🃏 الجوكر (2026-09-10): «بلا فرع ثابت» بقى **اختيار مقصود** —
+         الإدارة بتنزّل الطيار ده أي فرع وقت ما تحتاج. الحارس القديم كان
+         بيمنع الحفظ خالص عشان باج المسح الصامت (2026-09-01)، فبقى تأكيد
+         بدل منع: المسح غير المقصود لسه بيتمسك (المستخدم لازم يوافق صراحةً)
+         والجوكر بقى ممكن. */
       if (!homeBranchId && window._editState.active && window._editState.type === 'pilot') {
         const _old = window._pilotsData?.find(x => x.id === window._editState.id);
-        if (_old && (_old.homeBranchId ?? _old.assignedBranchId)) {
-          showToast("اختار فرع الطيار — سيبها فاضية هيمسح فرعه الحالي", "error");
+        if (_old && (_old.homeBranchId ?? _old.assignedBranchId)
+            && !confirm("هتشيل فرع «" + (_old.name || "الطيار") + "» الثابت وتخلّيه 🃏 جوكر؟\n\n"
+                      + "الجوكر مالوش فرع ثابت — الإدارة هي اللي بتختار الفرع وقت فتح الوردية،\n"
+                      + "وبعد ما الوردية تتقفل بيرجع حرّ من غير فرع تاني.")) {
           _branchSel.focus();
 
           return;
@@ -2412,10 +2434,11 @@
 
     /* ── Pilots Panel (in orders page) ────────────────────────────────── */
     function renderPilotsPanel(pilots) {
-      // تقسيم الطيارين: في فرع (ثابت أو مُعيّن — الثابت هو الحاكم في
-      // shifts/open) — دول اللي ينفع يتضافوا للوحة، والحرّ (بدون أي فرع)
-      // اتشال لأنه مالوش فرع يتفتح فيه
-      const inBranch   = pilots.filter(p => (p.homeBranchId ?? p.assignedBranchId));
+      /* تقسيم الطيارين: في فرع (ثابت أو مُعيّن — الثابت هو الحاكم في
+         shifts/open). 🃏 والجوكر (بلا أي فرع) بقى **داخل** القايمة كمان
+         (2026-09-10): `addPilotToPanel` بتسأل الإدارة يختار له فرع وقت
+         الإضافة، فمابقاش مالوش باب. */
+      const inBranch   = pilots.filter(p => (p.homeBranchId ?? p.assignedBranchId) || !p.pilotStatus);
       const waiting    = pilots.filter(p => p.pilotStatus === "waiting")
         .sort((a,b) => (a.queueNo||999) - (b.queueNo||999));
       const delivering = pilots.filter(p => p.pilotStatus === "delivering");
@@ -2510,8 +2533,19 @@
       try {
         const p = window._pilotsData.find(x => x.id === pilotId);
         if (!p) { showToast("تعذّر العثور على الطيار", "error"); return; }
+        /* 🃏 الجوكر مالوش فرع ثابت — بنسأل الإدارة تختار قبل الفتح.
+           مودال «فتح وردية مباشرة» فيه نفس الاختيار، بس ده مسار أسرع. */
+        let _bId = (p.homeBranchId ?? p.assignedBranchId) || null;
+        if (!_bId) {
+          const _names = (window._branchesList || []).map((b, i) => `${i + 1}) ${b.name}`).join("\n");
+          const _pick = prompt("🃏 «" + p.name + "» جوكر بلا فرع ثابت — هينزل أنهي فرع النهارده؟\n\n" + _names + "\n\nاكتب رقم الفرع:");
+          if (_pick === null) return;
+          const _b = (window._branchesList || [])[parseInt(_pick, 10) - 1];
+          if (!_b) { showToast("رقم فرع غير صحيح", "error"); return; }
+          _bId = _b.id;
+        }
         // دخول الدور + فتح/نقل الوردية — POST /api/shifts/open في معاملة واحدة
-        await api.post("/api/shifts/open", { pilotId, branchId: (p.homeBranchId ?? p.assignedBranchId) || null });
+        await api.post("/api/shifts/open", { pilotId, branchId: _bId });
         showToast("تمّ إضافة الطيار للوحة وفتح ورديته ✓", "success");
         sel.value = "";
       } catch(e) { showToast("خطأ: " + e.message, "error"); }
@@ -5071,6 +5105,18 @@
       window._pageMul[key] = (window._pageMul[key] || 1) + 1;
       try { if (window._pageRender[key]) window._pageRender[key](); } catch (e) { console.error(e); }
     };
+
+    /* ── ترقيم من المصدر (2026-09-10) ──────────────────────────────
+       الطبقة listview.js بتدير الصفحة (٣٠ صف) والشريط ‹ ›، والدالة دي
+       بتجيب منها النافذة الحالية فنرسم الـ٣٠ بس بدل ما نبني ٢٠٠٠ صف
+       ونخفيهم. لو الطبقة مش متحمّلة (صفحة قديمة في الكاش) بنرسم الكل. */
+    function _lvPage(key, total, rerender, tbody) {
+      if (!window.LISTVIEW || !window.LISTVIEW.paged) return { start: 0, slice: a => a };
+      const pg = window.LISTVIEW.paged(key, total, rerender);
+      pg.mark(tbody && tbody.closest ? tbody.closest("table") : null);
+      return pg;
+    }
+
     function rowsCapNote(shown, total, cols) {
       if (shown >= total) return "";
       return `<tr><td colspan="${cols}" style="background:rgba(56,189,248,.08);color:var(--sky);
@@ -5088,6 +5134,8 @@
     function _renderOrdersUI(data) {
       const list = data ? Object.entries(data).map(([id,v]) => ({id,...v})) : [];
       window._ordersData = list;
+      // ‹ › من شريط listview بينده إعادة الرسم دي بنفس البيانات (وبيتخطّى بصمة «مافيش تغيير»)
+      const __rerender = () => { window._ordersUiSig = null; _renderOrdersUI(data); };
 
       /* الدالة دي بتعيد بناء خمس جداول بالكامل (~550 كيلو HTML)، وأربعة منهم
          على صفحات مش مفتوحة. وبتتنده مع كل دلتا حتى لو اللي اتغيّر مالوش
@@ -5105,6 +5153,17 @@
       ).join('~');
       if (sig === window._ordersUiSig) return;
       window._ordersUiSig = sig;
+      /* 🔴 مربعات الاختيار (.row-chk) كانت بتتمسح مع كل إعادة رسم للجداول
+         والشريط يفضل بيقول «٣ مختارين» والزرار مايعملش حاجة — نفس الباج
+         اللي اتصلح في branch.html (setHtml). الرسم هنا بيكتب خمس جداول
+         في أماكن متفرقة، فبنلمّ المختار قبلها ونرجّعه بعد ما الدالة تخلص. */
+      const __chk = new Set([...document.querySelectorAll(".row-chk:checked")].map(c => c.dataset.id));
+      if (__chk.size) setTimeout(() => {
+        let hit = 0;
+        document.querySelectorAll(".row-chk").forEach(c => { if (__chk.has(c.dataset.id)) { c.checked = true; hit++; } });
+        // الاسترجاع مش بيطلّق onchange — الشريط لازم يتحدّث بنفسه
+        if (hit) { try { window.onOrderCheckChange && window.onOrderCheckChange(); } catch (e) {} }
+      }, 0);
 
       const active    = list.filter(o => o.status !== "تم التسليم" && o.status !== "ملغي" && o.status !== "لم يتم التوصيل");
       /* «مؤجل» بيتعرض مع «قيد التنفيذ»: نفس المرحلة بس متوقّفة مؤقتًا.
@@ -5134,7 +5193,8 @@
       const tbody = document.getElementById("ordersBody");
       if (!pending.length) { tbody.innerHTML = `<tr><td colspan="12" class="empty-row">لا توجد طلبات قيد التنفيذ</td></tr>`; }
       else {
-        tbody.innerHTML = pending.map((o, i) => {
+        const __pgP = _lvPage("tiar:ordersBody", pending.length, __rerender, tbody);
+        tbody.innerHTML = __pgP.slice(pending).map((o, i) => {
           const delivSummary = (o.deliveries || []).map((d,di) => `
             <div style="padding:4px 0;${di>0?'border-top:1px solid var(--border);margin-top:4px':''}">
               <div style="font-weight:700;font-size:.83rem;color:var(--text)">${ esc(d.receiverName || "—") }</div>
@@ -5145,7 +5205,7 @@
             </div>`).join("");
           return `<tr id="row-${ esc(o.id) }">
             <td><input type="checkbox" class="order-chk row-chk" data-id="${ esc(o.id) }" onchange="onOrderCheckChange()"  /></td>
-            <td class="idx">${i+1}</td>
+            <td class="idx">${__pgP.start + i + 1}</td>
             <td><b style="color:var(--sky);font-size:.9rem">${ esc(o.orderNum || "—") }</b></td>
             <td>
               <div style="font-weight:700;font-size:.85rem">${ esc(o.senderName) }</div>
@@ -5185,7 +5245,8 @@
       if (dvtbody) {
         if (!delivering.length) { dvtbody.innerHTML = `<tr><td colspan="12" class="empty-row">لا توجد طلبات قيد التوصيل حالياً</td></tr>`; }
         else {
-          dvtbody.innerHTML = delivering.map((o, i) => {
+          const __pgV = _lvPage("tiar:deliveringOrdersBody", delivering.length, __rerender, dvtbody);
+          dvtbody.innerHTML = __pgV.slice(delivering).map((o, i) => {
             const delivSummary = (o.deliveries || []).map((d,di) => `
               <div style="padding:4px 0;${di>0?'border-top:1px solid var(--border);margin-top:4px':''}">
                 <div style="font-weight:700;font-size:.83rem;color:var(--text)">${ esc(d.receiverName || "—") }</div>
@@ -5195,7 +5256,7 @@
                 <div style="font-size:.75rem;color:var(--green);font-weight:700;margin-top:1px">${ esc(d.zonePrice || 0) } ج.م</div>
               </div>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgV.start + i + 1}</td>
               <td><b style="color:var(--sky);font-size:.9rem">${ esc(o.orderNum || "—") }</b></td>
               <td>
                 <div style="font-weight:700;font-size:.85rem">${ esc(o.senderName) }</div>
@@ -5242,11 +5303,12 @@
              أوردر — ودي أكبر حاجة بتتقل مع الوقت. بنعرض الأحدث، ومين
              عايز أقدم من كده يستخدم الفلاتر فوق. */
           const _total = ordersArr.length;
-          const _shown = capNewest(ordersArr, FINISHED_ROWS_LIMIT);
-          dtbody.innerHTML = rowsCapNote(_shown.length, _total, 11) + _shown.map((o, i) => {
+          const __pgD = _lvPage("tiar:deliveredOrdersBody", _total, __rerender, dtbody);
+          const _shown = __pgD.slice(capNewest(ordersArr, _total)); // الأحدث أولًا، والصفحة الحالية بس
+          dtbody.innerHTML = _shown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName) } — ${ esc(d.zoneName) }</span>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgD.start + i + 1}</td>
               <td><b style="color:var(--green)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName) }</span></td>
               <td>${delivSummary}</td>
@@ -5278,11 +5340,12 @@
       if (ctbody) {
         if (!cancelled.length) { ctbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات ملغاة</td></tr>`; }
         else {
-          const _cShown = capNewest(cancelled, FINISHED_ROWS_LIMIT);
-          ctbody.innerHTML = rowsCapNote(_cShown.length, cancelled.length, 9) + _cShown.map((o, i) => {
+          const __pgC = _lvPage("tiar:cancelledOrdersBody", cancelled.length, __rerender, ctbody);
+          const _cShown = __pgC.slice(capNewest(cancelled, cancelled.length)); // الأحدث أولًا، والصفحة الحالية بس
+          ctbody.innerHTML = _cShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName || "—") } — ${ esc(d.zoneName || "") }</span>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgC.start + i + 1}</td>
               <td><b style="color:var(--red)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName || "—") }</span></td>
               <td>${delivSummary}</td>
@@ -5309,11 +5372,12 @@
       if (utbody) {
         if (!undelivered.length) { utbody.innerHTML = `<tr><td colspan="9" class="empty-row">لا توجد طلبات غير مسلَّمة</td></tr>`; }
         else {
-          const _uShown = capNewest(undelivered, FINISHED_ROWS_LIMIT);
-          utbody.innerHTML = rowsCapNote(_uShown.length, undelivered.length, 9) + _uShown.map((o, i) => {
+          const __pgU = _lvPage("tiar:undeliveredOrdersBody", undelivered.length, __rerender, utbody);
+          const _uShown = __pgU.slice(capNewest(undelivered, undelivered.length)); // الأحدث أولًا، والصفحة الحالية بس
+          utbody.innerHTML = _uShown.map((o, i) => {
             const delivSummary = (o.deliveries || []).map(d => `<span style="display:block;font-size:.74rem;color:var(--muted)">${ esc(d.receiverName || "—") } — ${ esc(d.zoneName || "—") }</span>`).join("");
             return `<tr>
-              <td class="idx">${i+1}</td>
+              <td class="idx">${__pgU.start + i + 1}</td>
               <td><b style="color:var(--orange)">${ esc(o.orderNum || "—") }</b></td>
               <td><span class="name-badge">${ esc(o.senderName || "—") }</span></td>
               <td>${delivSummary}</td>
@@ -5548,9 +5612,17 @@
     window._hrTodayData = {};
     // كانت onValue(attendance/{اليوم}) — GET /api/attendance بيرجّع days بنفس شكل VOCAB بند 12
     _regCustomListener(() => {
+      /* 🔴 بصمة الحضور من غير `lastSeen` (قياس 2026-09-12): كل موظف أونلاين
+         بيبعت نبضة كل دقيقة بتغيّر `lastSeen` بس — وصفحة الحضور **مش بتعرضه**
+         أصلًا (بتقرا checkIn/checkOut). فكانت بتتعاد بالكامل كل ١٥ ثانية على
+         الفاضي، والموظف اللي واقف عليها شايفها بترفّ. */
+      const _attSig = days => { try { return JSON.stringify(days, (k, v) => k === "lastSeen" ? undefined : v); } catch (e) { return null; } };
       const p = new api.Poller("/api/attendance", { interval: 15000, useSince: false, onChange: (d) => {
         window._attendanceDays = d.days || {};
         window._hrTodayData = (d.days || {})[todayKeyHR()] || {};
+        const sig = _attSig(d.days || {});
+        if (sig !== null && sig === window._attSig) return;   // نبضة بس — مفيش رسم
+        window._attSig = sig;
         window.renderHRPage();
       }});
       return () => p.stop();
@@ -5791,8 +5863,14 @@
       const sel = document.getElementById("manualRegEmployee");
       if (!sel) return;
       const list = window._manualEmployees || [];
+      /* 🔴 القايمة بتتعاد كل دورة — والموظف اللي اتختار كان بيرجع «— اختر
+         موظف —» والمستخدم لسه بيكتب الوقت جنبها (فحص 2026-09-12). القايمة
+         المفتوحة دلوقتي مانلمسهاش خالص. */
+      if (document.activeElement === sel) return;
+      const cur = sel.value;
       sel.innerHTML = `<option value="">— اختر موظف —</option>` +
         list.map(e => `<option value="manual_${ esc(e.id) }">${ esc(e.name) } ${ esc(e.jobTitle ? "(" + e.jobTitle + ")" : "") } — خارج النظام</option>`).join("");
+      if (cur) sel.value = cur;
     }
 
     /* ══════════════════════════════════════════════════════════════
@@ -5917,13 +5995,23 @@
        الخزن كل الفروع من GET /api/cash-stores، وحركات كل خزنة من
        GET /api/cash-stores/{id}/transactions (مفيش endpoint مجمّع). */
     let _cashBusy = false;
-    window.refreshCashTxns = async function() {
+
+    /* 🔴 حركات الخزن (مراجعة التقل 2026-09-10): كانت بتتجاب **نداء لكل
+       خزنة** (لحد ٥٠٠ حركة لكل واحدة) كل ٣٠ ثانية من كل تاب — حتى وصفحة
+       الخزنة مقفولة ومحدش بيبصّ. قايمة الخزن نفسها رخيصة (نداء واحد،
+       والمودالات محتاجاها) فسايبينها كل دورة؛ الحركات بقت لما الصفحة
+       مفتوحة بس، أو لما المنادي يطلبها صراحةً `(true)` (فتح الصفحة،
+       أدوات التنظيف/الحسابات). */
+    const _cashPageOpen = () => ["page-treasury", "page-accounting"]
+      .some(id => document.getElementById(id)?.classList.contains("active"));
+    window.refreshCashTxns = async function(force) {
       if (_cashBusy || !window._currentUser) return;
       _cashBusy = true;
       try {
         const d = await api.get("/api/cash-stores");
         const stores = nrmList(d.items || d.stores || []);
         window._cashStoresData = stores;
+        if (!force && !_cashPageOpen()) return;   // الحركات بس لما الصفحة مفتوحة
         const txns = [];
         for (const s of stores) {
           try {
@@ -7151,6 +7239,12 @@
       }
       const data = buildShiftReportData(shift, pilot);
       window._lastShiftReportData = data;
+      /* مدى الوردية للحسبة اللي تحت — الوردية المفتوحة بتنتهي «دلوقتي» */
+      window._srShiftWindow = {
+        s: Date.parse(shift.startedAt),
+        e: shift.endedAt ? Date.parse(shift.endedAt) : Date.now(),
+        durationMs: data.durationMs,
+      };
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_shiftReportBox";
@@ -7169,6 +7263,9 @@
             <div class="od-info-block"><span class="od-info-label">بداية الوردية</span><span class="od-info-val">${fmtShiftDT(shift.startedAt)}</span></div>
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">نهاية الوردية</span><span class="od-info-val">${fmtShiftDT(shift.endedAt)}</span></div>
             <div class="od-info-block" style="margin-top:8px"><span class="od-info-label">مدة الوردية</span><span class="od-info-val" style="color:var(--sky);font-weight:700">${fmtShiftDuration(data.durationMs)}</span></div>
+            <!-- ⏸️ وقت الإذن وصافي الشغل — بيتحسبوا لما تفاصيل التقفيلة توصل (طلب 2026-09-11) -->
+            <div class="od-info-block" id="_srPermRow" style="margin-top:8px;display:none"><span class="od-info-label">وقت الإذن</span><span class="od-info-val" id="_srPermVal" style="color:var(--orange);font-weight:700">—</span></div>
+            <div class="od-info-block" id="_srNetRow" style="margin-top:8px;display:none"><span class="od-info-label">صافي ساعات العمل</span><span class="od-info-val" id="_srNetVal" style="color:var(--green);font-weight:800">—</span></div>
           </div>
           <!-- 📊 تفاصيل العهدة والأذونات — بتتحقن بعد فتح المودال -->
           <div id="_srCloseoutDetails"><div style="font-size:.76rem;color:var(--muted);padding:4px 0">جاري تحميل تفاصيل العهدة والأذونات…</div></div>
@@ -7300,6 +7397,43 @@
           <b style="white-space:nowrap">${ esc(fromT) } → ${ esc(toT) }${ mins !== null ? " (" + mins + " د)" : "" }</b>
         </div>`;
       }).join("");
+
+      /* ⏸️ وقت الإذن جوه الوردية + صافي الشغل (طلب صاحب النظام 2026-09-11).
+
+         🔴 الفترات بتتدمج قبل الجمع — إذنين متداخلين (واحد جوه التاني)
+            لو اتجمعوا بالجمع العادي بيطلعوا أطول من الحقيقة والصافي يقلّ.
+         🔴 وبتتقصّ على مدة الوردية — إذن بدأ قبلها أو سايب مفتوح بعدها
+            مايخصمش وقت الطيار ماكانش فيه شغّال أصلًا.
+         الإذن اللي لسه ساري بيتحسب لحد دلوقتي (أو لحد قفل الوردية). */
+      const _w = window._srShiftWindow || null;
+      if (_w) {
+        const iv = (d.leaves || []).map(lv => {
+          const a = lv.from ? Date.parse(lv.from) : NaN;
+          const b = lv.to ? Date.parse(lv.to) : _w.e;
+          if (!isFinite(a) || !isFinite(b)) return null;
+          const x = Math.max(a, _w.s), y = Math.min(b, _w.e);
+          return y > x ? [x, y] : null;
+        }).filter(Boolean).sort((p, q) => p[0] - q[0]);
+        const merged = [];
+        for (const [a, b] of iv) {
+          const last = merged[merged.length - 1];
+          if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+          else merged.push([a, b]);
+        }
+        const permMs = merged.reduce((s, [a, b]) => s + (b - a), 0);
+        const netMs  = Math.max(0, (Number(_w.durationMs) || 0) - permMs);
+        const pRow = document.getElementById("_srPermRow");
+        const nRow = document.getElementById("_srNetRow");
+        if (pRow && permMs > 0) {
+          pRow.style.display = "";
+          document.getElementById("_srPermVal").textContent =
+            fmtShiftDuration(permMs) + " · " + merged.length + (merged.length === 1 ? " إذن" : " أذونات");
+        }
+        if (nRow) {
+          nRow.style.display = "";
+          document.getElementById("_srNetVal").textContent = fmtShiftDuration(netMs);
+        }
+      }
 
       const comm = d.commissions || {};
       slot.innerHTML = `
@@ -8009,9 +8143,23 @@
           </button>
         </div>`;
 
+      /* 🔴 الفورم جوه الحتة اللي بتتعاد رسمها — الطيار والفرع اللي المشرف
+         اختارهم كانوا بيتمسحوا مع كل دورة استطلاع (فحص 2026-09-12). بنقراهم
+         **قبل** الرسم ونرجّعهم بعده. الطيار الأول (onchange بتاعه بيملا الفرع
+         تلقائيًا) وبعدين الفرع عشان اختيار المشرف يغلب. */
+      const _keepPilot  = document.getElementById("directMovePilot")?.value  || "";
+      const _keepBranch = document.getElementById("directMoveBranch")?.value || "";
       container.innerHTML = html || `<div style="text-align:center;color:var(--muted);padding:50px">لا توجد طلبات</div>`;
       // Populate direct move selects
       populateDirectMoveSelects();
+      if (_keepPilot) {
+        const ps = document.getElementById("directMovePilot");
+        if (ps) { ps.value = _keepPilot; try { ps.onchange && ps.onchange.call(ps); } catch (e) {} }
+      }
+      if (_keepBranch) {
+        const bs = document.getElementById("directMoveBranch");
+        if (bs) bs.value = _keepBranch;
+      }
     }
 
     function populateDirectMoveSelects() {
@@ -8026,8 +8174,10 @@
           return `<option value="${ esc(p.id) }" data-branch="${ esc(p.assignedBranchId||'') }">${ esc(p.name) }${bLabel}</option>`;
         }).join("");
       if (cur) pilotSel.value = cur;
+      const curB = branchSel.value;   // نفس حماية الطيار — الفرع كان بيتمسح
       branchSel.innerHTML = `<option value="">— اختر الفرع —</option>` +
         (window._branchesList || []).map(b => `<option value="${ esc(b.id) }" data-name="${ esc(b.name) }">${ esc(b.name) }</option>`).join("");
+      if (curB) branchSel.value = curB;
       pilotSel.onchange = function() {
         const opt = this.options[this.selectedIndex];
         const bId = opt?.dataset?.branch;
@@ -8088,6 +8238,38 @@
     };
 
     function renderJoinRequests(list) {
+    /* 🏷️ مصدر الطلب — الإدارة كانت بتشوف الطلب من غير ما تعرف جه منين
+       (طلب صاحب النظام 2026-09-12). «الموقع» يعني حد من برّه قدّم بنفسه
+       ومحدش شافه، و«فرع» يعني مشرف سجّله بإيده وغالبًا قابله. */
+    function joinSourceBadge(r) {
+      const S = {
+        home  : ['🌐 من الموقع',   'rgba(59,130,246,.15)', '#3b82f6'],
+        branch: ['🏢 من الفرع',     'rgba(139,92,246,.15)', '#8b5cf6'],
+        admin : ['👑 من الإدارة',   'rgba(249,115,22,.15)', 'var(--orange)'],
+      };
+      const [txt, bg, fg] = S[r.source] || ['❔ مصدر غير معروف', 'rgba(148,163,184,.15)', 'var(--muted)'];
+      const by = r.requestedBy ? ` · ${ esc(r.requestedBy) }` : '';
+
+      return `<span style="background:${bg};color:${fg};padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:700">${txt}${by}</span>`;
+    }
+
+    /* بيانات الخبرة الاختيارية — القسم كله بيختفي لو المتقدّم مملاش حاجة */
+    function joinExtraHtml(r) {
+      const rows = [
+        ['💼 اشتغل قبل كده في', r.prevEmployer],
+        ['🚪 سابها ليه', r.leaveReason],
+        ['💰 آخر راتب', r.lastSalary != null ? r.lastSalary + ' ج.م' : ''],
+        ['📅 سنين الخبرة', r.experienceYears != null ? r.experienceYears + ' سنة' : ''],
+        ['📝 ملاحظاته', r.applicantNote],
+      ].filter(([, v]) => v !== '' && v != null);
+      if (!rows.length) return '';
+
+      return `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
+        <div style="font-size:.78rem;font-weight:700;color:var(--muted);margin-bottom:6px">📋 بيانات كتبها المتقدّم</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;font-size:.83rem">
+          ${ rows.map(([k, v]) => `<div><span style="color:var(--muted)">${k}:</span> ${ esc(v) }</div>`).join('') }
+        </div></div>`;
+    }
       const container = document.getElementById("joinRequestsList");
       if (!container) return;
       if (!list.length) {
@@ -8128,7 +8310,7 @@
                 🏢 ${ esc(r.branchName || "—") } &nbsp;|&nbsp; 📅 ${ esc(r.createdAt ? new Date(r.createdAt).toLocaleString("ar-EG") : "—") }
               </div>
             </div>
-            ${statusHtml}
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${ joinSourceBadge(r) }${statusHtml}</div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;font-size:.83rem">
             <div><span style="color:var(--muted)">📱 هاتف 1:</span> <span dir="ltr">${ esc(r.phone1 || "—") }</span></div>
@@ -8137,6 +8319,7 @@
             <div><span style="color:var(--muted)">🚗 المركبة:</span> ${ esc(r.vehicleNo || "—") }</div>
             <div style="grid-column:1/-1"><span style="color:var(--muted)">📍 العنوان:</span> ${ esc(r.address || "—") }</div>
           </div>
+          ${ joinExtraHtml(r) }
           ${actionsHtml}
         </div>`;
       }).join("");
@@ -11712,7 +11895,9 @@
     }
     if (page === "pilotmap") {
       if (window.initPilotMap) window.initPilotMap();
-    }
+    } else if (window.stopPilotMap) window.stopPilotMap();   // سيبت الخريطة → وقّف مؤقّتاتها
+    // فتح صفحة خزنة/حسابات → هات الحركات فورًا (الدورة بتجيب القايمة بس)
+    if ((page === "treasury" || page === "accounting") && window.refreshCashTxns) window.refreshCashTxns(true);
     if (page === "shifts" && window.onShiftsPeriodChange) window.onShiftsPeriodChange();
     if (page === "pilotleave" && window.renderPilotLeavePage) renderPilotLeavePage();
     /* رسايل العملاء: بولرها دورته دقيقة، فاللي على الشاشة ممكن يكون بقاله
@@ -13288,6 +13473,11 @@
 
   /* ── شريط الحالة ─────────────────────────────────────────────────── */
   function _startMapTick() {
+    /* 🔴 مؤقّتات الخريطة (مراجعة التقل 2026-09-10): شريط الحالة كل ثانية
+       والاستطلاع كل ٣ ثواني كانوا بيفضلوا شغّالين **طول اليوم** بعد ما
+       الموظف يسيب صفحة الخريطة — كل ٣ ثواني إعادة بناء كل الماركرات
+       والبانل الجانبي على صفحة مش ظاهرة أصلًا. */
+    if (!document.getElementById("page-pilotmap")?.classList.contains("active")) return;
     if (_mapStatusInterval) clearInterval(_mapStatusInterval);
     _mapStatusInterval = setInterval(() => {
       const el = document.getElementById("pilot-map-status");
@@ -13325,6 +13515,12 @@
   }
 
   /* ── تهيئة الخريطة ──────────────────────────────────────────────── */
+  /* بيتنده من التنقّل أول ما الموظف يسيب صفحة الخريطة */
+  window.stopPilotMap = function () {
+    if (_mapStatusInterval) { clearInterval(_mapStatusInterval); _mapStatusInterval = null; }
+    if (_mapFbUnsub) { try { _mapFbUnsub(); } catch (_) {} _mapFbUnsub = null; }
+  };
+
   window.initPilotMap = function() {
     const mapEl = document.getElementById("pilot-map");
     if (!mapEl) return;
@@ -13426,5 +13622,7 @@
     });
   }
   </script>
+<!-- قوائم ٣٠ صف + كروت + فورم تفاصيل — طبقة مشتركة لكل الجداول (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>

@@ -1724,7 +1724,7 @@ async function bootAccounts() {
     const has = k => t[k] !== undefined && t[k] !== null;
     const owes = Number(t.netDue) < 0;
     const lines = [];
-    if (has("hourPay")) lines.push(`<div class="sum-row calc"><div class="sl">عدد ساعات العمل × ${ paMoney(t.hourRate) }<div class="sh">${ paMoney(t.hours) } ساعة${ Number(p.ownHourRate) > 0 ? " · سعر خاص بالطيار ده" : "" }</div></div><div class="sv" style="color:var(--green)">${ paMoney(t.hourPay) }</div></div>`);
+    if (has("hourPay")) lines.push(`<div class="sum-row calc"><div class="sl">عدد ساعات العمل × ${ paMoney(t.hourRate) }<div class="sh">${ paMoney(t.hours) } ساعة${ Number(t.overtimeHours) > 0 ? ` · منها <b>${ paMoney(t.overtimeHours) }</b> ساعة إضافية × ١.٥ ⇐ ${ paMoney(t.payHours) } ساعة مدفوعة (الوردية ${ paMoney(t.requiredDailyHours) } ساعة)` : "" }${ Number(p.ownHourRate) > 0 ? " · سعر خاص بالطيار ده" : "" }</div></div><div class="sv" style="color:var(--green)">${ paMoney(t.hourPay) }</div></div>`);
     if (has("commission")) lines.push(`<div class="sum-row calc"><div class="sl">العمولة المستحقة<div class="sh">خدمة الطيار من الأوردرات — المرحّلة للشهر بس${ Number(t.settledDaily?.psvc) > 0.005 ? ` · اتصفّى كاش يوم بيوم ${ paMoney(t.settledDaily.psvc) }` : "" }</div></div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.commission) }</div></div>`);
     if (has("salaryShare") && Number(t.monthlySalary) > 0) lines.push(`<div class="sum-row calc"><div class="sl">نصيب الراتب الشهري<div class="sh">${ paMoney(t.monthlySalary) } ÷ ${ paNum(t.countedDays) } يوم × ${ paNum(t.worked) } يوم شغل</div></div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.salaryShare) }</div></div>`);
     if (has("leavePay") && Number(t.leaveCap) > 0) lines.push(`<div class="sum-row calc"><div class="sl">إجازة مدفوعة<div class="sh">${ paNum(t.leaveDays) } يوم × ${ paMoney(t.shiftHours) } ساعة × ${ paMoney(t.hourRate) } · غاب ${ paNum(t.absent) } يوم من ${ paNum(t.countedDays) }، ورصيده ${ paNum(t.leaveCap) } يوم${ Number(t.absent) > Number(t.leaveCap) ? " (الزيادة بدون أجر)" : "" }${ Number(t.leaveLeft) > 0 ? ` · باقي ${ paNum(t.leaveLeft) } يوم` : "" }</div></div><div class="sv" style="color:var(--green)">+ ${ paMoney(t.leavePay) }</div></div>`);
@@ -1766,7 +1766,7 @@ async function bootAccounts() {
         <td class="idx">${i + 1}</td>
         <td><b>${ esc(p.name) }</b> ${ paCan('page.pilot') ? `<button class="btn-ghost btn-xs no-print" onclick="openPilotSheet('${ escJs(p.pilotId) }')">كشف</button>` : "" }${ payoutCell(d, "pilot", p.pilotId, t.netDue) }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(p.branchName || "—") }</td>
-        <td class="num">${ paMoney(t.hours) }</td>
+        <td class="num">${ paMoney(t.hours) }${ Number(t.overtimeHours) > 0 ? `<div class="pa-sub" style="color:var(--orange)">+${ paMoney(t.overtimeHours) } إضافي</div>` : "" }</td>
         <td class="num">${ paNum(t.worked) }</td>
         <td class="num">${ paNum(t.orders) }</td>
         <td class="num">${ paMoney(t.hourPay) }</td>
@@ -2310,7 +2310,7 @@ async function bootAccounts() {
         <td><b>${ esc(u.name || u.username) }</b>${ payoutCell(d, "staff", u.userId, t.netDue) }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(paRole(u.role)) }</td>
         <td style="font-size:.8rem;color:var(--muted)">${ esc(u.branchName || "—") }</td>
-        <td class="num">${ paMoney(t.hours) }</td>
+        <td class="num">${ paMoney(t.hours) }${ Number(t.overtimeHours) > 0 ? `<div class="pa-sub" style="color:var(--orange)">+${ paMoney(t.overtimeHours) } إضافي</div>` : "" }</td>
         <td class="num">${ paNum(t.worked) }</td>
         <td class="num">${ paMoney(t.hourPay) }</td>
         <td class="num">${ paMoney(t.salaryShare) }</td>
@@ -3565,5 +3565,7 @@ async function bootAccounts() {
     if (e.key === "Escape") closeHelp();
   });
 </script>
+<!-- قوائم ٣٠ صف + كروت + فورم تفاصيل — طبقة مشتركة لكل الجداول (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>

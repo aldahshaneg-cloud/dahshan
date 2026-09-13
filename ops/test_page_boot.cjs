@@ -30,7 +30,10 @@ const vm = require('vm');
 const PAGES = process.argv.length > 2
   ? process.argv.slice(2)
   : ['public/callcenter.html', 'public/branch.html', 'public/tiar.html',
-     'public/store.html', 'public/customer.html'];
+     'public/store.html', 'public/customer.html',
+     /* دمشق اتضافت 2026-09-12: شاشة أرشيف الطيارين وزرار الترحيل بيضيفوا
+        جافاسكريبت جديد، وهي شاشة فلوس زي الباقي فتستاهل نفس الحارس. */
+     'public/damascus.html'];
 
 /* ── دمية متسامحة: أي خاصية بترجع دمية، أي نداء بيرجع دمية ── */
 function tol() {

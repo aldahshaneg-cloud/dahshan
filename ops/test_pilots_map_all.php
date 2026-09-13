@@ -10,7 +10,7 @@
  * ═══ العقد ═══
  * • مشرف الفرع بلا `?all=1` → طياري فرعه بس (النطاق زي ما هو).
  * • `?all=1` → الروستر كله، وطيار الفرع التاني **مقصوص**: اسم وحالة وفرع ومكان بس —
- *   من غير تليفونات ولا عناوين ولا فلوس. طيار فرعه بكامل بياناته.
+ *   بالتليفون الأول بس (من 2026-09-12) — من غير رقم تاني ولا عناوين ولا فلوس. طيار فرعه بكامل بياناته.
  * • الأدمن مش بيتأثر. لوحة الفرع بتطلب `all: 1` مع `trail: 1`.
  *
  * التشغيل: php ops/test_pilots_map_all.php
@@ -81,7 +81,11 @@ try {
     foreach ($j['items'] ?? [] as $p) { $by[(int) $p['id']] = $p; }
     ok('🔴 طيار الفرع التاني والطيار الحرّ ظهروا', $c === 200 && isset($by[$otherPid], $by[$freePid], $by[$minePid]), $c . ' ' . count($by));
     $o = $by[$otherPid] ?? [];
-    ok('🔴 طيار الفرع التاني مقصوص: مفيش تليفون ولا عنوان ولا فلوس', $o && ! array_key_exists('phone1', $o) && ! array_key_exists('address', $o) && ! array_key_exists('custody', $o) && ! array_key_exists('hourRate', $o) && ! array_key_exists('cardNum', $o), json_encode(array_keys($o)));
+    /* 📱 من 2026-09-12 التليفون الأول **بيوصل** (المشرف بقى يحمّل على طيار الفرع
+       التاني من الخريطة ولازم يعرف يكلّمه) — والرقم التاني والعنوان والفلوس
+       والبطاقة لسه مقصوصين. */
+    ok('🔴 طيار الفرع التاني: التليفون الأول موجود عشان المشرف يكلّمه', $o && ($o['phone1'] ?? '') === '01055555555', json_encode($o['phone1'] ?? null));
+    ok('🔴 وباقي الخصوصية لسه مقصوصة: مفيش رقم تاني ولا عنوان ولا فلوس ولا بطاقة', $o && ! array_key_exists('phone2', $o) && ! array_key_exists('address', $o) && ! array_key_exists('custody', $o) && ! array_key_exists('hourRate', $o) && ! array_key_exists('cardNum', $o), json_encode(array_keys($o)));
     ok('وفيه اسم وحالة وفرع ومكان', $o && ($o['name'] ?? '') === 'طيار فرع تاني — فحص' && array_key_exists('pilotStatus', $o) && (int) ($o['assignedBranchId'] ?? 0) === $other && array_key_exists('location', $o));
     $m = $by[$minePid] ?? [];
     ok('طيار فرعه بكامل بياناته', $m && ($m['phone1'] ?? '') === '01033333333' && array_key_exists('custody', $m) || ($m && ($m['phone1'] ?? '') === '01033333333'), json_encode(array_keys($m)));

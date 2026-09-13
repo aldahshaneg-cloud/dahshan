@@ -111,6 +111,19 @@ final class BoardWire
             'branchId'   => $r['branch_id'] !== null ? (int) $r['branch_id'] : null,
             'branchName' => $r['branch_name'] ?? null,
             'requestedBy' => $r['requested_by'] ?? null,
+            /* 🔴 مصدر الطلب — الإدارة لازم تفرّق بين اللي جه من الموقع
+               (مجهول، محدش شافه) واللي مشرف فرع سجّله بنفسه. العمود موجود
+               في القاعدة من الأصل بس ماكانش بيطلع على السلك خالص، فالشاشة
+               ماكانش قدّامها أي طريقة تعرف (طلب صاحب النظام 2026-09-12). */
+            'source'     => $r['source'] ?? null,
+
+            /* بيانات المتقدّم — كلها اختيارية، والفاضي بيرجع فاضي مش null
+               عشان الواجهة تتعامل معاها زي باقي الحقول من غير فحص زيادة. */
+            'prevEmployer'    => $r['prev_employer'] ?? '',
+            'leaveReason'     => $r['leave_reason'] ?? '',
+            'lastSalary'      => $r['last_salary'] !== null ? (float) $r['last_salary'] : null,
+            'experienceYears' => $r['experience_years'] !== null ? (float) $r['experience_years'] : null,
+            'applicantNote'   => $r['applicant_note'] ?? '',
             'status'     => $r['status'],
             'createdAt'  => WireTime::toWire($r['created_at']),
             // مش متخزنين في السكيمة — الحقول موجودة حفاظًا على الشكل القديم

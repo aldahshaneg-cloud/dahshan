@@ -292,14 +292,14 @@ let _listSig = "", _paneSig = "";
 
 function start() {
   if (_started) return; _started = true;
-  new API.Poller("/api/users", { interval: 15000, useSince: false, onChange: d => {
+  new API.Poller("/api/users", { interval: 60000, useSince: false, onChange: d => {
     S.stores = (d.items || [])
       .filter(u => (u.role || "").trim() === "صاحب محل")
       .map(u => ({ ...u, wallet: { balance: (S.wallets[u.id] || 0) } }))
       .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "ar"));
     refresh();
   }});
-  new API.Poller("/api/wallets", { interval: 15000, useSince: false, params: { ownerType: "store" }, onChange: d => {
+  new API.Poller("/api/wallets", { interval: 60000, useSince: false, params: { ownerType: "store" }, onChange: d => {
     S.wallets = {};
     (d.items || []).forEach(w => { S.wallets[w.ownerId] = w.balance; });
     S.stores = S.stores.map(s => ({ ...s, wallet: { balance: (S.wallets[s.id] || 0) } }));
@@ -324,7 +324,7 @@ function start() {
      مافيش عليها حذف فعلي في الـAPI، وبنخزّن أوردرات المحلات بس عشان
      الكاش مايكبرش على الفاضي. */
   const _ordersById = new Map();
-  new API.Poller("/api/orders", { interval: 8000, params: { limit: 1000 }, onChange: d => {
+  new API.Poller("/api/orders", { interval: 30000, params: { limit: 1000 }, onChange: d => {
     (d.items || []).forEach(o => { if (o.source === "store") _ordersById.set(o.id, o); });
     S.orders = [..._ordersById.values()];
     refresh();
@@ -890,5 +890,7 @@ window.refresh = function () {
     });
   }
   </script>
+<!-- قوائم ٣٠ عنصر + جدول/كروت + فورم تفاصيل — طبقة مشتركة (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>

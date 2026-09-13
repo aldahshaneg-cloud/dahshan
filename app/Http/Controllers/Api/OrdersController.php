@@ -441,20 +441,43 @@ class OrdersController
                 if (! $senderId && $senderName !== '') {
                     $sPhone = trim((string) ($request->input('senderPhone') ?? ''));
                     $sAddr  = trim((string) ($request->input('senderAddress') ?? ''));
-                    if (mb_strlen($sPhone) > 20 || mb_strlen($sAddr) > 190) {
-                        throw new ApiException(mb_strlen($sPhone) > 20 ? 'رقم هاتف المرسل أطول من المسموح (20 حرف)' : 'عنوان المرسل أطول من المسموح (190 حرف) — اختصره وجرّب تاني');
+                    if (mb_strlen($sPhone) > 20 || mb_strlen($sAddr) > 500) {
+                        throw new ApiException(mb_strlen($sPhone) > 20 ? 'رقم هاتف المرسل أطول من المسموح (20 حرف)' : 'عنوان المرسل أطول من المسموح (500 حرف) — اختصره وجرّب تاني');
                     }
                     if ($sPhone !== '' && $sAddr !== '') {
-                        DB::insert(
-                            'INSERT INTO senders (name, phone1, phone2, address, created_by, source, created_at)
-                             VALUES (?,?,?,?,?,?,?)',
-                            [
-                                $senderName, $sPhone,
-                                self::strMax($request->input('senderPhone2'), 20, 'رقم الهاتف الثاني للمرسل'),
-                                $sAddr, $actor->username, $source, $now,
-                            ]
-                        );
-                        $senderId = (int) DB::getPdo()->lastInsertId();
+                        /* 🔴 دوّر على الموجود الأول (بلاغ صاحب النظام 2026-09-10):
+                           المسار ده كان بيعمل **صف مُرسِل جديد مع كل أوردر** لما
+                           الموظف يكتب الاسم بدل ما يختار من الدفتر — من غير أي
+                           بحث. النتيجة: «روح دمشق» بقى ٣٧ صف بنفس الرقم و٣١١
+                           أوردر موزّعين عليهم، والقايمة بقت مكررة بشكل غير منطقي.
+                           مسار POST /api/senders (partyCreate) بيعمل upsert صح
+                           من الأول — المسار ده كان بيتخطّاه.
+
+                           التليفون هو المفتاح، **مطبّع** (أرقام بس) عشان
+                           «0100 123» و«0100123» يبقوا واحد — نفس قاعدة
+                           EntitiesController::partyPhone. وفيه فهرس فريد على
+                           senders.phone1 كحزام تاني. */
+                        $sKey = preg_replace('/\D+/', '', $sPhone) ?? '';
+                        $existing = $sKey !== ''
+                            ? (DB::select('SELECT id FROM senders WHERE phone1 = ? LIMIT 1', [$sKey])[0] ?? null)
+                            : null;
+                        if ($existing) {
+                            /* الصف الموجود بيتساب زي ما هو — الاسم والعنوان بتوعه
+                               ملك اللي أنشأه، والأوردر شايل نسخته الخاصة في
+                               sender_name/sender_address أصلًا. */
+                            $senderId = (int) $existing->id;
+                        } else {
+                            DB::insert(
+                                'INSERT INTO senders (name, phone1, phone2, address, created_by, source, created_at)
+                                 VALUES (?,?,?,?,?,?,?)',
+                                [
+                                    $senderName, $sKey !== '' ? $sKey : $sPhone,
+                                    self::strMax($request->input('senderPhone2'), 20, 'رقم الهاتف الثاني للمرسل'),
+                                    $sAddr, $actor->username, $source, $now,
+                                ]
+                            );
+                            $senderId = (int) DB::getPdo()->lastInsertId();
+                        }
                     }
                 }
 
@@ -547,7 +570,7 @@ class OrdersController
                         'zone_name'       => (string) ($d['zoneName'] ?? $zone['area_name']),
                         'zone_price'      => self::deliveryPrice($actor, $d, $zone, $no),
                         'order_price'     => (float) ($d['orderPrice'] ?? 0),   // عهدة الطرد — جوّاه عشان تتنقل معاه لو اتفرّق
-                        'address'         => self::strMax($d['address'] ?? null, 190, "عنوان التسليم — طرد #{$no}"),
+                        'address'         => self::strMax($d['address'] ?? null, 500, "عنوان التسليم — طرد #{$no}"),
                         'note'            => self::trimOrNull($d['note'] ?? null),
                         'lat'             => self::floatOrNull($d['lat'] ?? null),
                         'lng'             => self::floatOrNull($d['lng'] ?? null),
@@ -624,7 +647,7 @@ class OrdersController
                             $senderName !== '' ? $senderName : null,
                             self::strMax($request->input('senderPhone'), 20, 'رقم هاتف المرسل'),
                             self::strMax($request->input('senderPhone2'), 20, 'رقم الهاتف الثاني للمرسل'),
-                            self::strMax($request->input('senderAddress'), 190, 'عنوان المرسل'),
+                            self::strMax($request->input('senderAddress'), 500, 'عنوان المرسل'),
                             self::intOrNull($request->input('senderZoneId')),
                             self::floatOrNull($request->input('senderLat')),
                             self::floatOrNull($request->input('senderLng')),
@@ -965,7 +988,7 @@ class OrdersController
                         self::strMax($request->input('senderName') ?? $order['sender_name'] ?? '', 190, 'اسم المرسل'),
                         self::strMax($request->input('senderPhone') ?? $order['sender_phone'] ?? '', 20, 'رقم هاتف المرسل'),
                         self::strMax($request->input('senderPhone2') ?? $order['sender_phone2'] ?? '', 20, 'رقم الهاتف الثاني للمرسل'),
-                        self::strMax($request->input('senderAddress') ?? $order['sender_address'] ?? '', 190, 'عنوان المرسل'),
+                        self::strMax($request->input('senderAddress') ?? $order['sender_address'] ?? '', 500, 'عنوان المرسل'),
                         $orderId,
                     ]
                 );
@@ -994,10 +1017,14 @@ class OrdersController
                             . ' WHERE id = ? AND order_id = ?',
                             array_merge(
                                 [
-                                    self::trimOrNull($d['receiverName'] ?? null),
-                                    self::trimOrNull($d['receiverPhone'] ?? null),
-                                    self::trimOrNull($d['receiverPhone2'] ?? null),
-                                    self::trimOrNull($d['address'] ?? null),
+                                    /* 🔴 حدود الطول زي `store()` بالظبط (2026-09-10):
+                                       من غيرها تعديل باسم/رقم أطول من العمود بيرمي
+                                       «Data too long» 500 و**التعديل كله بيضيع** —
+                                       المعاملة بتترجع والمشرف بيشوف خطأ مبهم. */
+                                    self::strMax($d['receiverName'] ?? null, 190, 'اسم المستلم'),
+                                    self::strMax($d['receiverPhone'] ?? null, 20, 'رقم هاتف المستلم'),
+                                    self::strMax($d['receiverPhone2'] ?? null, 20, 'رقم الهاتف الثاني للمستلم'),
+                                    self::strMax($d['address'] ?? null, 500, 'عنوان التسليم'),
                                 ],
                                 $hasGeo ? [$lat, $lng, $lat !== null ? 'branch' : null] : [],
                                 [(int) $d['id'], $orderId]
@@ -1161,7 +1188,12 @@ class OrdersController
         $this->broadcastOrder($res['orderId']);
 
         // TODO (مرحلة 4): إشعار FCM للطيار بأوردر متحمّل عليه
-        return self::orderOut($res['orderId'], ['warning' => $res['warning']]);
+        return self::orderOut($res['orderId'], [
+            'warning'      => $res['warning'],
+            'movedBranch'  => $res['movedBranch'],
+            'fromBranchId' => $res['fromBranchId'],
+            'toBranchId'   => $res['toBranchId'],
+        ]);
     }
 
     /**
@@ -1190,6 +1222,8 @@ class OrdersController
         $loaded = [];
         $failed = [];
         $warning = null;
+        $movedBranch = false;
+        $toBranchId  = null;
 
         foreach ($ids as $id) {
             try {
@@ -1207,6 +1241,10 @@ class OrdersController
                 $this->broadcastOrder($res['orderId']);
                 // `?? $warning` مش `=` — التحذير الفاضي مايمسحش تحذير سابق
                 $warning = $res['warning'] ?? $warning;
+                if ($res['movedBranch']) {
+                    $movedBranch = true;
+                    $toBranchId  = $res['toBranchId'];
+                }
             } catch (ApiException $e) {
                 // 403 حارس الفرع = خروج فوري زي fail() في الأصل
                 if ($e->status() !== 409) {
@@ -1225,6 +1263,9 @@ class OrdersController
             'loaded'  => $loaded,
             'failed'  => $failed,
             'warning' => $warning,
+            // لو أي أوردر خرج لفرع الطيار — الشاشة بتقول للمشرف
+            'movedBranch'  => $movedBranch,
+            'toBranchId'   => $toBranchId,
         ]);
     }
 
@@ -2109,11 +2150,46 @@ class OrdersController
             throw new ApiException('الطيار غير موجود', 409);
         }
         $pilot = (array) $pilotRow[0];
+        /* 🗄️ الطيار المؤرشف مايتحملش عليه — نفس فحص `transfer()` بالحرف.
+           كان ناقص هنا: الأرشفة بتشيل الطيار من القوايم بس التحميل بياخد
+           `id` مباشرة، وبقى ليه باب تاني من الخريطة (طيار فرع تاني)، فالفحص
+           بقى لازم. */
+        if (($pilot['archived_at'] ?? null) !== null) {
+            throw new ApiException('الطيار مؤرشف — مايتحملش عليه أوردرات', 409);
+        }
         if (! in_array($pilot['status'], ['waiting', 'delivering'], true)) {
             throw new ApiException('الطيار غير متاح للتحميل حاليًا', 409);
         }
 
+
         $shiftId = self::activeShiftId($pilotId);
+
+        /* 🔴 الأوردر بينتقل **لفرع الطيار** مع التحميل (طلب صاحب النظام
+           2026-09-10) — نفس قاعدة `transfer()` بالظبط (قاعدة ٤، 2026-09-06)،
+           بس على أول تحميل مش على النقل.
+
+           السبب من صاحب النظام بالحرف: مدير الفرع بيشوف طيارين الفروع
+           التانية على الخريطة وبقى يقدر يحمّل عليهم من هناك — «وفي آخر
+           اليوم هيتم محاسبة الطيار في الفرع التابع له». فلو الأوردر فضل
+           على فرعنا، الطيار يوصّله وتقفيلته في فرعه ماتشوفهوش: العهدة
+           والعمولة والتحصيل كلهم بيتحسبوا بفرع الأوردر.
+
+           فرع الطيار = فرع **ورديته المفتوحة** (هو ده فرعه النهارده
+           فعلًا — الجوكر بينزل أي فرع)، وإلا فرعه الحالي. لو مالوش
+           لا دي ولا دي، الأوردر بيفضل مكانه.
+
+           ⚠️ `origin_branch_id` **مابيتلمسش** — ده تاريخ الإنشاء، ومنه
+           بيتعرف مين عمل الأوردر أصلًا. */
+        $fromBranchId = (int) $order['branch_id'];
+        $toBranchId   = $fromBranchId;
+        if ($shiftId !== null) {
+            $sb = DB::select('SELECT branch_id FROM shifts WHERE id = ?', [$shiftId])[0]->branch_id ?? null;
+            if ($sb !== null) {
+                $toBranchId = (int) $sb;
+            }
+        } elseif ($pilot['assigned_branch_id'] !== null) {
+            $toBranchId = (int) $pilot['assigned_branch_id'];
+        }
 
         // الحجز الذري: UPDATE مشروط بالحالة — لو صف تاني كسبنا هيرجع 0 صف
         /* 🔴 طوابع الرحلة بتترجع لـNULL مع كل إسناد — والسبب مش تجميلي:
@@ -2135,12 +2211,12 @@ class OrdersController
            الشحنة فعلًا ماشية والتتبّع المفروض يفضل شغّال. */
         $affected = DB::update(
             "UPDATE orders
-             SET pilot_id = ?, pilot_name = ?, shift_id = ?,
+             SET pilot_id = ?, pilot_name = ?, shift_id = ?, branch_id = ?,
                  status = 'delivering', status_since = ?, current_pilot_since = ?,
                  received_at = NULL, trip_started_at = NULL,
                  handed_over_at = NULL, handed_over_by = NULL
              WHERE id = ? AND status IN ('processing','undelivered')",
-            [$pilotId, $pilot['name'], $shiftId, $now, $now, (int) $order['id']]
+            [$pilotId, $pilot['name'], $shiftId, $toBranchId, $now, $now, (int) $order['id']]
         );
         if ($affected === 0) {
             $cur = self::lockOrderRow((int) $order['id']);
@@ -2166,6 +2242,10 @@ class OrdersController
         return [
             'ok'      => true,
             'orderId' => (int) $order['id'],
+            // الشاشة بتقول للمشرف إن الأوردر خرج من لوحته لفرع الطيار
+            'movedBranch'  => $toBranchId !== $fromBranchId,
+            'fromBranchId' => $fromBranchId,
+            'toBranchId'   => $toBranchId,
             'warning' => $shiftId === null
                 ? '⚠️ ' . $pilot['name'] . ' مالوش وردية مفتوحة — الأوردر مش هيتحسب في تقفيلة وردية'
                 : null,

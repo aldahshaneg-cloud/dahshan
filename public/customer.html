@@ -21,7 +21,7 @@
        regex يدوّر عليها — والـregex ده بيبقى مكتوب **جوه نفس الملف** فبيطابق
        نفسه. الـmeta بيتقرا بـquerySelector من غير أي لبس.
        ⚠️ زوّدها مع كل رفعة فيها تغيير محسوس للعميل. -->
-  <meta name="app-version" content="1.7.3" />
+  <meta name="app-version" content="1.7.7" />
   <link rel="manifest" href="customer-manifest.json" />
   <script src="install.js" defer></script>
   <link rel="icon" href="assets/icon-192.png" />
@@ -3792,11 +3792,27 @@ function bindTrustToReceiver(i) {
       let noted = "";
       if (nameEl && res.name) {
         const typed = nameEl.value.trim();
-        if (typed !== res.name) {
-          nameEl.value = res.name;             // الاسم الرسمي المعتمد
-          if (S.draft?.receivers?.[i]) S.draft.receivers[i].name = res.name;
-          noted = typed ? "✓ الاسم اتصحّح من سجلاتنا — تقدر تعدّله"
-                        : "✓ الاسم اتملى من سجلاتنا — تقدر تعدّله";
+        const _setName = v => {
+          nameEl.value = v;
+          /* ⚠️ المسوّدة بتتحفظ — لازم تتحدّث مع الخانة وإلا الاختيار
+             بيضيع مع أول إعادة رسم (شوف مشكلة إعادة الرسم في الفورم). */
+          if (S.draft?.receivers?.[i]) S.draft.receivers[i].name = v;
+        };
+        if (!typed) {
+          _setName(res.name);
+          noted = "✓ الاسم اتملى من سجلاتنا — تقدر تعدّله";
+        } else if (typed !== res.name) {
+          /* 🔴 اللي العميل كتبه مايتمسحش من غير ما يوافق (بلاغ 2026-09-12) */
+          Trust.askNameConflict({
+            typed: typed, stored: res.name, source: res.nameSource,
+            phone: $("rcvPhone-" + i)?.value || "",
+            /* العميل يقدر يصحّح الاسم المحفوظ — والسيرفر هو اللي بيحكم:
+               لازم يكون بعت للرقم ده بنفسه، والاسم مايكونش متأكّد منه موظف. */
+            canFix: true,
+            onUseStored: () => { _setName(res.name); trustNote(i, "✓ اتسجّل بالاسم المحفوظ"); },
+            onKeepTyped: () => { _setName(typed); trustNote(i, "✏️ الشحنة دي بالاسم اللي كتبته", "warn"); },
+            onFixed:     () => { _setName(typed); trustNote(i, "✅ الاسم المحفوظ اتصحّح"); }
+          });
         }
       }
       if (res.address) {
@@ -4559,7 +4575,9 @@ function showDone(num, deliveries) {
     code: parcelCodeOf(num, d, list.length),
     phone: d.receiverPhone || "",
     name: d.receiverName || "",
-    zone: d.zoneName || ""
+    zone: d.zoneName || "",
+    // سطر «من :» في رسالة الواتساب — اسم المُرسِل زي ما اتكتب في الأوردر
+    from: ($("sndName")?.value || "").trim() || S.profile?.displayNameAr || ""
   }));
 
   list.forEach((d, i) => {
@@ -4575,10 +4593,16 @@ function showDone(num, deliveries) {
   confetti();
 }
 
+/* الشكل اتغيّر بطلب صاحب النظام (2026-09-10): بدل سطر «المنطقة» بقى
+   **من / إلى** — والمنطقة بقت جنب اسم المستلم. لازم يفضل مطابق للنص
+   السيرفري في app/Services/Whatsapp/OrderRecipients::body — الحارس
+   ops/test_wa_message.cjs بيثبّت ده. أي سطر بياناته فاضية بيختفي. */
 function _codeMsg(c) {
+  const to = [c.name, c.zone].filter(Boolean).join(" — ");
   return `📦 شحنتك مع الدهشان\n`
        + `رقم الطلب: ${c.code}\n`
-       + (c.zone ? `المنطقة: ${c.zone}\n` : "")
+       + (c.from ? `من : ${c.from}\n` : "")
+       + (to ? `الي : ${to}\n` : "")
        + `\nتابع شحنتك من هنا:\n${trackUrlOf(c.code)}`;
 }
 

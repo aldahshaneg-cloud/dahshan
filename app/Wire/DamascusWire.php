@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Wire;
 
+use App\Support\WireTime;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -67,6 +68,7 @@ final class DamascusWire
                 ['page.month', 'تقفيل الشهر'],
                 ['page.deferred', 'السلف المؤجلة'],
                 ['page.setup', 'الفروع والطيارين'],
+                ['page.archive', 'أرشيف الطيارين (اللي خرجوا من الشغل)'],
                 ['page.settings', 'الإعدادات'],
             ]],
             ['title' => 'أعمدة الجدول', 'items' => [
@@ -115,6 +117,7 @@ final class DamascusWire
                 ['act.export', 'تصدير إكسل'],
                 ['act.print', 'طباعة'],
                 ['act.pilots', 'إضافة وتعديل الطيارين'],
+                ['act.archive', 'ترحيل الطيار للأرشيف وإرجاعه منه'],
                 ['act.branches', 'إضافة وتعديل وحذف الفروع (للإدارة عادةً)'],
                 ['act.deferred', 'تسجيل وتعديل السلف المؤجلة'],
             ]],
@@ -439,6 +442,15 @@ final class DamascusWire
         ];
     }
 
+    /**
+     * ⚠️ `archived` مفتاح **مضاف بعد الترحيل** (أرشيف الطيارين، 2026-09-12) —
+     * مش موجود في النظام القديم، فأي مقارنة تفاضلية مع damascus.php بتتوقّعه
+     * كفرق مقصود. القيمة بتيجي من `archived_at`: مُرحَّل = خرج من الشغل.
+     *
+     * الأرشفة **مابتغيّرش ولا رقم**: الأعمدة اللي بتدخل في الحساب
+     * (`active`/الأسعار/أيام الإجازة) ماتتلمسش، والخانات القديمة بتفضل
+     * مكانها — الفرق بس إنه بيختفي من شهور مافيهاش شغل ليه.
+     */
     public static function pilot(array|object $row): array
     {
         $r = self::row($row);
@@ -453,6 +465,19 @@ final class DamascusWire
             'hourRate'  => (float) $r['hour_rate'],
             'orderRate' => (float) $r['order_rate'],
             'leaveDays' => (int) $r['leave_days'],
+            'archived'  => self::has($r['archived_at'] ?? null),
+        ];
+    }
+
+    /** كارت الطيار المُرحَّل — بيانات الترحيل نفسها زيادة على كارت الطيار العادي */
+    public static function pilotArchived(array|object $row): array
+    {
+        $r = self::row($row);
+
+        return self::pilot($row) + [
+            'archivedAt'   => WireTime::toWire($r['archived_at'] ?? null),
+            'archivedBy'   => self::has($r['archived_by'] ?? null) ? (string) $r['archived_by'] : '',
+            'archiveNote'  => self::has($r['archive_note'] ?? null) ? (string) $r['archive_note'] : '',
         ];
     }
 

@@ -375,6 +375,7 @@
 
       <div class="sidebar-section-label" id="navSectionSetup">الإعداد</div>
       <button class="nav-item" onclick="navigateTo('setup')">👥 الفروع والطيارين</button>
+      <button class="nav-item" onclick="navigateTo('archive')">🗄️ أرشيف الطيارين</button>
       <button class="nav-item" onclick="navigateTo('settings')">⚙️ الإعدادات</button>
       <button class="nav-item" onclick="navigateTo('perms')">🔐 الصلاحيات</button>
     </nav>
@@ -403,6 +404,15 @@
     </div>
 
     <!-- ═══ 1) التقفيل اليومي ═══ -->
+    <style>
+      /* زرار الترحيل جوه صف التقفيل اليومي — باهت لحد ما تعدّي على الصف،
+         عشان مايشتّتش عن إدخال الأرقام وهو الشغل الأساسي في الشاشة دي. */
+      .row-arch { background:none; border:0; cursor:pointer; font-size:.92rem; opacity:.28;
+                  padding:0 4px; margin-right:4px; line-height:1; transition:opacity .12s, transform .12s }
+      tr:hover .row-arch { opacity:.75 }
+      .row-arch:hover { opacity:1; transform:scale(1.18) }
+      .row-arch:focus-visible { opacity:1; outline:2px solid var(--red); border-radius:4px }
+    </style>
     <div class="page active" id="page-daily">
       <div class="sec-header no-print sticky-bar">
         <div>
@@ -485,6 +495,21 @@
         </div>
       </div>
       <div id="setupBody"></div>
+    </div>
+
+    <!-- ═══ 4ب) أرشيف الطيارين ═══ -->
+    <div class="page" id="page-archive">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">🗄️ أرشيف الطيارين</div>
+          <div class="sec-sub">اللي خرجوا من الشغل — بيتشالوا من القوايم وحساباتهم القديمة زي ما هي</div>
+        </div>
+        <div class="toolbar">
+          <select class="field" id="arcBranch" onchange="renderArchive()"></select>
+          <input type="search" class="field" id="arcSearch" placeholder="دوّر باسم الطيار…" oninput="renderArchive()" />
+        </div>
+      </div>
+      <div id="archiveBody"></div>
     </div>
 
     <!-- ═══ 6) الصلاحيات ═══ -->
@@ -590,7 +615,7 @@
           <label>الحالة</label>
           <select id="pmActive">
             <option value="1">على رأس العمل</option>
-            <option value="0">موقوف / خرج</option>
+            <option value="0">موقوف مؤقتًا</option>
           </select>
         </div>
       </div>
@@ -599,12 +624,51 @@
         بتتحسب لوحدها = عدد أوردراته × السعر ده.<br>
         سيبه فاضي هو وسعر الساعة لو الطيار على الافتراضي (<b id="pmDefaultRates">—</b>).
       </div>
+      <div class="info-box" style="margin-bottom:10px;font-size:.79rem;
+                  background:rgba(249,115,22,.08);border-color:rgba(249,115,22,.28)">
+        ⚠️ <b>موقوف مؤقتًا</b> للغياب أو الإجازة الطويلة — وده <b>بيشيل أيامه من
+        تقفيلة الفرع</b> في الشهر المفتوح، فمتستخدمهوش لحد خرج من الشغل.<br>
+        اللي خرج خالص: <b>🗄️ ترحيل للأرشيف</b> — بيشيله من القوايم
+        و<b>مايغيّرش ولا رقم</b> في أي شهر.
+      </div>
       <div id="pmError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
     </div>
     <div class="modal-foot">
       <button class="add-btn" onclick="savePilot()">حفظ</button>
+      <button class="btn-ghost" id="pmArchive" onclick="openArchiveModal()" style="display:none"
+              title="بينقله لشاشة الأرشيف — الحسابات القديمة ماتتغيّرش">🗄️ ترحيل للأرشيف</button>
       <button class="btn-red" id="pmDelete" onclick="deletePilot()" style="display:none">🗑️ حذف</button>
       <button class="btn-ghost" onclick="closeModal('pilot')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-archive">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-head">
+      <div class="modal-title">🗄️ ترحيل للأرشيف</div>
+      <button class="modal-close" onclick="closeModal('archive')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box" style="margin-bottom:15px">
+        هترحّل <b id="amName">—</b> للأرشيف. ده <b>مش حذف</b>:
+        <ul style="margin:8px 0 0;padding-inline-start:18px;line-height:2">
+          <li>كل خاناته وتقفيلات الشهور اللي فاتت <b>ماتتغيّرش ولا رقم</b>.</li>
+          <li>هيتشال من التقفيل اليومي والفروع والطيارين وقوايم الاختيار.</li>
+          <li>الشهور اللي اشتغلها هتفضل بتوريه، وكشفه هيفضل مفتوح من الأرشيف.</li>
+          <li>تقدر ترجّعه للشغل في أي وقت من شاشة الأرشيف.</li>
+        </ul>
+      </div>
+      <div class="form-group full">
+        <label>سبب الترحيل (اختياري)</label>
+        <input type="text" id="amNote" placeholder="مثال: استقال في 10/9"
+               onkeydown="if(event.key==='Enter')confirmArchive()" />
+      </div>
+      <div id="amError" style="color:var(--red);font-size:.82rem;min-height:18px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="add-btn" id="amSave" onclick="confirmArchive()">🗄️ رحّله للأرشيف</button>
+      <button class="btn-ghost" onclick="closeModal('archive')">إلغاء</button>
     </div>
   </div>
 </div>
@@ -851,7 +915,9 @@ const S = {
   user       : null,          // { username, name, role, isAdmin }
   settings   : { ...DEFAULT_SETTINGS },
   branches   : [],            // فروعي المصرّح لي بيها (السيرفر بيفلترها)
-  pilots     : [],            // طيارين فروعي
+  pilots     : [],            // طيارين فروعي (المُرحَّلين للأرشيف مش هنا إلا لو ليهم شغل في الشهر المفتوح)
+  archive    : [],            // الطيارين المُرحَّلين (شاشة الأرشيف — نداء منفصل)
+  archiveLoaded: false,
   entries    : {},            // { "YYYY-MM": { pilotId: { day: {...} } } } — كاش للخانات الخام
   deferred   : [],            // السلف المؤجلة (الشهر المعروض)
   users      : [],            // مستخدمي النظام (شاشة الصلاحيات)
@@ -1088,6 +1154,7 @@ const PAGE_RENDERERS = {
   month   : () => renderMonth(),
   deferred: () => renderDeferred(),
   setup   : () => renderSetup(),
+  archive : () => renderArchive(),
   settings: () => renderSettings(),
   perms   : () => renderPerms()
 };
@@ -1095,7 +1162,7 @@ const PAGE_RENDERERS = {
 /** أول شاشة مسموحة للمستخدم */
 function firstAllowedPage() {
   if (isAdmin()) return "daily";
-  for (const p of ["daily", "pilot", "month", "deferred", "setup", "settings"])
+  for (const p of ["daily", "pilot", "month", "deferred", "setup", "archive", "settings"])
     if (can("page." + p)) return p;
   return "";
 }
@@ -1110,7 +1177,7 @@ function applyNavPerms() {
     btn.style.display = ok ? "" : "none";
   });
   // عنوان قسم «الإعداد» يختفي لو مفيش حاجة تحته
-  const setupVisible = ["setup", "settings"].some(p => can("page." + p)) || isAdmin();
+  const setupVisible = ["setup", "archive", "settings"].some(p => can("page." + p)) || isAdmin();
   const lbl = $("navSectionSetup");
   if (lbl) lbl.style.display = setupVisible ? "" : "none";
   // أزرار التصدير والطباعة
@@ -1179,9 +1246,28 @@ window.navigateTo = function(page) {
     .find(b => (b.getAttribute("onclick") || "").includes(`'${page}'`));
   btn?.classList.add("active");
   window.scrollTo(0, 0);
-  renderCurrentPage();
+  /* 🔁 الرسمة الفورية **لو فيه بيانات** بس — عشان الشاشة ماتفضلش فاضية لما
+     المستخدم يرجع لشاشة شافها قبل كده. أول مرة (البيانات null) بنستنى
+     السيرفر ونرسم مرة واحدة؛ رسم placeholder وبعده البيانات = رفة مزدوجة
+     (اتقاست على الإنتاج 2026-09-12). والرسمة بتسجّل بصمتها بنفسها فـ
+     `reloadCurrentPage` بعدها بترسم بس لو السيرفر رجّع حاجة مختلفة. */
+  if (pageHasData(page)) renderCurrentPage();
   reloadCurrentPage();
 };
+
+/* هل شاشة معيّنة عندها بيانات محمّلة تنفع تترسم فورًا؟ (مصدر كل شاشة زي pageSig) */
+function pageHasData(page) {
+  switch (page) {
+    case "daily":    return !!S.day;
+    case "pilot":    return !!S.sheet;
+    case "month":    return !!S.month;
+    case "deferred": return S.deferred.length > 0;
+    case "setup":    return S.branches.length > 0;
+    case "archive":  return !!S.archiveLoaded;
+    case "perms":    return !!S.permsLoaded;
+    default:          return true;   // settings وما شابه — بتترسم من الحالة المحلية
+  }
+}
 
 function currentPage() {
   return (document.querySelector(".page.active")?.id || "page-daily").replace("page-", "");
@@ -1212,6 +1298,12 @@ function typingInCell() {
 function renderCurrentPage() {
   try { PAGE_RENDERERS[currentPage()]?.(); } catch (e) { console.error("render", e); }
   updateStickyOffsets();
+  /* 🔁 بصمة اللي اترسم دلوقتي — أيًا كان مين نده الرسم. كده `reloadCurrentPage`
+     بعد ما البيانات توصل تقدر تعرف إن اللي على الشاشة هو هو وماترسمش تاني.
+     قبل كده البصمة كانت بتتسجّل في الاستطلاع بس، فالرسمة اللي بتحصل في
+     `navigateTo` مكانتش محسوبة والرسمة التانية بتيجي دايمًا = رفة عند كل
+     فتح وكل ريفريش (اتقاست على الإنتاج 2026-09-12). */
+  try { _lastSig = pageSig(); } catch (e) {}
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1242,11 +1334,55 @@ const PAGE_LOADERS = {
   month   : loadMonth,
   deferred: loadDeferred,
   setup   : loadSetup,
+  archive : loadArchive,
   settings: loadSettings,
   perms   : loadPermsScreen
 };
 
 let _reloading = false, _reloadAgain = false;
+
+/* 🔄 بصمة بيانات الشاشة المفتوحة — للاستطلاع بس.
+
+   ═══ الشكوى (صاحب النظام 2026-09-12) ═══
+   «الصفحات زي ما تكون بتعمل رفريش لوحدها كل شويه». وهي فعلًا كده:
+   الاستطلاع كل ١٨ ثانية كان بينده `renderCurrentPage()` **دايمًا**،
+   حتى لما الرد يرجع نفس البيانات بالحرف. وإعادة الرسم بتبني الجدول من
+   الأول، فبيحصل رفة، والصفحة بترجع لفوق، وأي حاجة مفتوحة في الصف
+   بتتقفل — كل ١٨ ثانية طول اليوم.
+
+   🔴 الحل **مش** إبطاء الاستطلاع ولا إيقافه — البيانات لازم تفضل طازة
+      (أكتر من مشرف بيسجّلوا في نفس الورقة). الحل إننا نرسم لما يبقى فيه
+      **حاجة اتغيّرت فعلًا**. نفس فكرة `pilotsSig` في لوحة الفروع.
+
+   ⚠️ البصمة على البيانات اللي بتترسم بس — لو ضفت مصدر جديد للشاشة
+      لازم يدخل هنا، وإلا تغييره مايظهرش غير مع أول رسمة تانية. */
+/* ⚠️ ردود السيرفر شايلة `serverNow` (بيتغيّر كل ثانية) — لو دخل البصمة
+   المقارنة بتفشل دايمًا والرسم يرجع كل ١٨ ث زي ما كان. اتشاف بالقياس
+   على الإنتاج 2026-09-12: `S.day.serverNow` موجود. بنشيله قبل التبصيم. */
+function stripVolatile(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
+  const c = Object.assign({}, o);
+  delete c.serverNow; delete c.changed;
+  return c;
+}
+function pageSig() {
+  const page = currentPage();
+  const part = {
+    daily   : () => [stripVolatile(S.day), S.entries, S.locked, S.pilots],
+    pilot   : () => [stripVolatile(S.sheet), S.entries, S.locked],
+    month   : () => [stripVolatile(S.month), S.locked],
+    deferred: () => [S.deferred, S.pilots],
+    setup   : () => [S.branches, S.pilots],
+    archive : () => [S.archive],
+    settings: () => [S.settings],
+    perms   : () => [S.permsAll, S.users, S.permGroups],
+  }[page];
+  if (!part) return null;
+  try { return JSON.stringify(part()); } catch (e) { return null; }   // بصمة متعذّرة = ارسم
+}
+let _lastSig = null;
+/* أي كتابة أو تنقّل بيبطّل البصمة — عشان الرسمة الجاية تتم أكيد */
+window.invalidatePageSig = () => { _lastSig = null; };
 /** يجيب بيانات الشاشة المفتوحة من السيرفر ويعيد رسمها.
     لو فيه تحميل شغّال، الطلب الجديد بيتأجّل ومابيضيعش — المستخدم ممكن
     يغيّر التاريخ والفرع ورا بعض بسرعة فمينفعش نبلع الطلب في صمت.
@@ -1263,6 +1399,15 @@ async function reloadCurrentPage(silent, force) {
     if (currentPage() !== page) return;          // المستخدم غيّر الشاشة أثناء التحميل
     if (anyModalOpen()) return;
     if (!force && silent && typingInCell()) return;
+
+    /* 🔴 مابنرسمش تاني لو اللي وصل هو نفس اللي على الشاشة — استطلاع أو فتح.
+       `navigateTo` بترسم الحالة الموجودة فورًا (عشان الشاشة ماتفضلش فاضية)
+       وبعدين بتجيب البيانات؛ لو رجعت زي ما هي مفيش داعي لرسمة تانية — دي
+       كانت الرفة المزدوجة. تغيير التاريخ/الفرع بيغيّر البيانات فبيرسم عادي،
+       و`force` (بعد كتابة) بيرسم دايمًا. */
+    const sig = pageSig();
+    if (!force && sig !== null && sig === _lastSig) return;
+    _lastSig = sig;
     renderCurrentPage();
   } catch (e) {
     if (!silent) showToast(e.message || "تعذّر تحميل البيانات", "error");
@@ -1632,6 +1777,21 @@ function pilotSheetHidden(p) {
 
 /* حارس صلاحية: حتى لو الزرار ظهر بالغلط أو اتنده من مكان تاني،
    العملية بتترفض برسالة واضحة (والسيرفر بيرفضها برضه) */
+/* 🗄️ زرار ترحيل الطيار للأرشيف جوه صف التقفيل اليومي.
+
+   طلب صاحب النظام (2026-09-12): «مشرف الفرع مالوش إنه يشوف صفحة الفروع
+   والطيارين، فاعمله في التقفيل اليومي زرار يعمل الأرشفة».
+
+   🔴 بيظهر بـ`act.archive` بس — نفس المفتاح اللي السيرفر بيفرضه. فمشرف
+      عنده الترحيل من غير `page.setup` بقى يقدر يرحّل، واللي مالوش
+      الصلاحية مايشوفش الزرار أصلًا (والسيرفر بيرفضه برضه لو حاول). */
+function archiveBtn(pilotId) {
+  if (!can("act.archive") || pilotId == null || pilotId === "") return "";
+
+  return `<button type="button" class="row-arch" onclick="openArchiveModal('${String(pilotId).replace(/'/g, "\\'")}')"
+     title="ترحيل للأرشيف — خرج من الشغل. حساباته القديمة ماتتغيّرش">🗄️</button>`;
+}
+
 function permGuard(key, what) {
   if (can(key)) return true;
   showToast(`مالكش صلاحية ${what} — كلّم الإدارة`, "error");
@@ -1654,7 +1814,12 @@ function mixedRates(branchId) {
   return pilotsOfBranch(branchId).some(p => rateOf(p).h !== base);
 }
 function pilotsOfBranch(branchId) {
-  return S.pilots.filter(p => sameId(p.branchId, branchId) && p.active !== false);
+  return S.pilots.filter(p => sameId(p.branchId, branchId) && p.active !== false && !p.archived);
+}
+/* المُرحَّل للأرشيف بيوصل مع طيارين الشهر لو له شغل فيه (عشان الأرقام
+   ماتتغيّرش) — بس مايتعرضش كأنه من طاقم الفرع. */
+function activeRoster(branchId) {
+  return S.pilots.filter(p => sameId(p.branchId, branchId) && !p.archived);
 }
 function branchName(id) {
   return S.branches.find(b => sameId(b.id, id))?.name
@@ -1687,7 +1852,7 @@ window.fillPilotSelect = function() {
     && !pilotSheetHidden(p));
   const prev = sel.value;
   sel.innerHTML = list.map(p =>
-    `<option value="${esc(p.id)}">${esc(p.name)}${p.active === false ? " (موقوف)" : ""}</option>`).join("")
+    `<option value="${esc(p.id)}">${esc(p.name)}${p.archived ? " (مُرحَّل)" : p.active === false ? " (موقوف)" : ""}</option>`).join("")
     || `<option value="">— مفيش طيارين —</option>`;
   if (prev && list.some(p => sameId(p.id, prev))) sel.value = prev;
   if (currentPage() === "pilot") reloadCurrentPage();
@@ -1733,7 +1898,7 @@ window.renderDaily = function() {
     const p = S.pilots.find(x => sameId(x.id, r.pilotId));
     return `<tr>
       <td class="lbl idx" style="width:38px">${i + 1}</td>
-      <td class="lbl" style="min-width:150px;font-weight:600">${esc(r.name)}</td>
+      <td class="lbl" style="min-width:150px;font-weight:600">${esc(r.name)}${archiveBtn(r.pilotId)}</td>
       ${gridRow(cols, r.pilotId, day, e, ym, "dailyDot", p, r)}
     </tr>`;
   }).join("") : `<tr><td colspan="${cols.length + 2}" class="empty-row">مفيش طيارين في الفرع ده</td></tr>`;
@@ -2238,7 +2403,8 @@ window.renderMonth = function() {
     const owes = num(t.salary) < 0;
     return `<tr>
       <td class="idx">${i + 1}</td>
-      <td style="font-weight:600">${esc(t.name)}${t.active === false ? ` <span class="badge bg-muted">موقوف</span>` : ""}</td>
+      <td style="font-weight:600">${esc(t.name)}${t.archived ? ` <span class="badge bg-muted">مُرحَّل</span>`
+        : t.active === false ? ` <span class="badge bg-muted">موقوف</span>` : ""}</td>
       <td style="font-size:.8rem;color:var(--muted)">${esc(t.branchName)}</td>
       <td class="num">${fmt(t.h)}</td>
       <td class="num">${fmt(t.worked)}</td>
@@ -2508,7 +2674,7 @@ window.renderSetup = function() {
   // المشرف بيشوف فروعه المصرّح له بيها بس — مش كل فروع الشركة
   const myBranches = allowedBranches();
   const branchCards = myBranches.map(b => {
-    const all = S.pilots.filter(p => sameId(p.branchId, b.id));
+    const all = activeRoster(b.id);
     const act = all.filter(p => p.active !== false).length;
     const rows = all.length ? all.map((p, i) => {
       const R = rateOf(p);
@@ -2616,6 +2782,9 @@ window.openPilotModal = function(id) {
   $("pmDefaultRates").textContent =
     `${fmt(S.settings.hourRate)} للساعة · ${fmt(S.settings.pilotOrderRate ?? 0)} للأوردر`;
   $("pmDelete").style.display = id ? "" : "none";
+  /* الترحيل للأرشيف هو الطريق الصح للي خرج من الشغل — الحذف بيفضل
+     للأسماء الغلط اللي لسه مالهاش أي خانة (السيرفر بيرفضه غير كده). */
+  $("pmArchive").style.display = (id && can("act.archive") && !p?.archived) ? "" : "none";
   $("pmError").textContent = "";
   openModal("pilot");
   setTimeout(() => $("pmName").focus(), 80);
@@ -2669,7 +2838,7 @@ window.deletePilot = async function() {
     btn.textContent = "⚠️ اضغط تاني للتأكيد";
     err.innerHTML = `هتحذف «<b>${esc(pilotName(id))}</b>» — بياناته في الشهور
       هتفضل في قاعدة البيانات بس مش هتظهر.<br />
-      لو خرج من الشغل الأحسن تخليه <b>موقوف</b> بدل الحذف.`;
+      لو خرج من الشغل الأحسن <b>ترحّله للأرشيف</b> بدل الحذف.`;
     clearTimeout(window._delT);
     window._delT = setTimeout(() => {
       if (_delArm === id) { _delArm = null; btn.textContent = "🗑️ حذف"; err.textContent = ""; }
@@ -2702,7 +2871,7 @@ window.saveBulk = async function() {
   const names = $("bkNames").value.split("\n").map(s => s.trim()).filter(Boolean);
   if (!branchId) { $("bkError").textContent = "اختار الفرع"; return; }
   if (!names.length) { $("bkError").textContent = "اكتب اسم واحد على الأقل"; return; }
-  const existing = new Set(S.pilots.filter(p => sameId(p.branchId, branchId)).map(p => p.name));
+  const existing = new Set(activeRoster(branchId).map(p => p.name));
   const fresh = names.filter(n => !existing.has(n));
   if (!fresh.length) { $("bkError").textContent = "كل الأسماء دي موجودة في الفرع بالفعل"; return; }
   try {
@@ -2713,6 +2882,170 @@ window.saveBulk = async function() {
     showToast(`تم إضافة ${fresh.length} طيار${names.length > fresh.length ? ` (${names.length - fresh.length} كانوا موجودين)` : ""}`, "success");
     await refreshEntities();
   } catch (e) { $("bkError").textContent = "تعذّر الحفظ: " + e.message; }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   4ب) أرشيف الطيارين
+   ──────────────────────────────────────────────────────────────
+   الطيار اللي خرج من الشغل بيترحّل هنا بدل ما يتحذف. الفرق مهم:
+   الحذف بيشيل الاسم من قدّام كل خانة قديمة وبيغيّر تقفيلات شهور
+   فاتت (وأصلًا السيرفر بيرفضه لو الطيار له خانات)، والترحيل
+   **مابيغيّرش ولا رقم** — بيشيله من القوايم وبس.
+
+   السيرفر بيخفيه من الشهور اللي مالوش فيها شغل، وبيسيبه في الشهور
+   اللي اشتغلها بالكامل — فتقفيلة أي شهر قديم تفضل زي ما هي بالحرف.
+══════════════════════════════════════════════════════════════ */
+async function loadArchive() {
+  const d = await api.get("/api/rd/archive");
+  S.archive = d.items || [];
+  S.archiveLoaded = true;
+}
+
+window.renderArchive = function() {
+  const box = $("archiveBody");
+  if (!box) return;
+  if (!S.archiveLoaded) { box.innerHTML = `<div class="info-box">جاري التحميل…</div>`; return; }
+
+  // فلتر الفروع بيتملى من فروعي — مرة واحدة وبيحافظ على اللي مختار
+  const sel = $("arcBranch");
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">كل الفروع</option>` +
+      allowedBranches().map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
+    if (prev) sel.value = prev;
+  }
+
+  const bf = sel?.value || "";
+  const q  = ($("arcSearch")?.value || "").trim();
+  const list = S.archive.filter(p =>
+    (!bf || sameId(p.branchId, bf)) && (!q || String(p.name || "").includes(q)));
+
+  if (!list.length) {
+    box.innerHTML = S.archive.length
+      ? `<div class="info-box">مفيش نتايج للبحث ده.</div>`
+      : `<div class="info-box">مفيش طيارين في الأرشيف.<br />
+           لما طيار يخرج من الشغل: افتح <b>الفروع والطيارين</b> ← <b>تعديل</b> ←
+           <b>🗄️ ترحيل للأرشيف</b> — ساعتها بيتشال من القوايم وحساباته القديمة تفضل زي ما هي.</div>`;
+    return;
+  }
+
+  const canAct = can("act.archive");
+  const rows = list.map((p, i) => {
+    const R = rateOf(p);
+    const when = p.archivedAt ? new Date(p.archivedAt).toLocaleDateString("ar-EG") : "—";
+    const span = p.firstMonth
+      ? (p.firstMonth === p.lastMonth ? monthLabel(p.lastMonth)
+                                      : `${monthLabel(p.firstMonth)} ← ${monthLabel(p.lastMonth)}`)
+      : "مفيش بيانات";
+    return `<tr>
+      <td class="idx" style="width:38px">${i + 1}</td>
+      <td style="font-weight:600">${esc(p.name)}
+        ${p.active === false ? `<span class="badge bg-muted">كان موقوف</span>` : ""}</td>
+      <td><span class="badge ${p.job === "مالك" ? "bg-orange" : p.job === "مشرف" ? "bg-purple" : "bg-blue"}">${esc(p.job || "طيار")}</span></td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(p.branchName)}</td>
+      <td class="num" style="font-size:.8rem">${fmt(R.h)} / ${fmt(R.o)}</td>
+      <td style="font-size:.8rem">${when}${p.archivedBy ? `<div style="font-size:.68rem;color:var(--muted)">${esc(p.archivedBy)}</div>` : ""}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(span)}
+        ${p.daysCount ? `<div style="font-size:.68rem">${fmt(p.daysCount)} يوم مسجّل</div>` : ""}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${esc(p.archiveNote || "—")}</td>
+      <td style="text-align:left;white-space:nowrap">
+        ${can("page.pilot") ? `<button class="btn-ghost btn-xs" onclick="openArchivedSheet('${esc(p.id)}')">🧾 كشفه</button>` : ""}
+        ${canAct ? `<button class="btn-ghost btn-xs" onclick="unarchivePilot('${esc(p.id)}')">↩️ رجّعه للشغل</button>` : ""}
+      </td>
+    </tr>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="info-box" style="margin-bottom:14px">
+      🗄️ دول طيارين خرجوا من الشغل. <b>حساباتهم القديمة زي ما هي بالحرف</b> —
+      كل شهر اشتغلوه لسه بيوريهم وبنفس الأرقام. اللي اتغيّر إنهم اتشالوا من
+      التقفيل اليومي ومن قوايم الاختيار عشان ما يزحموش الشغل الجاري.
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th style="width:38px">#</th><th>الاسم</th><th>الوظيفة</th><th>الفرع</th>
+        <th class="num">سعر الساعة / الأوردر</th><th>اترحّل</th><th>شغل مسجّل</th>
+        <th>السبب</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+};
+
+/** يفتح كشف طيار مُرحَّل — بنحقنه في قايمة الاختيار لأنه مش من طاقم الشغل */
+window.openArchivedSheet = function(id) {
+  const p = S.archive.find(x => sameId(x.id, id));
+  if (!p) return;
+  if (!S.pilots.some(x => sameId(x.id, id))) S.pilots.push(p);
+  const bf = $("pilotBranchFilter");
+  if (bf) bf.value = "";
+  navigateTo("pilot");
+  fillPilotSelect();
+  const sel = $("pilotSelect");
+  if (sel) { sel.value = String(p.id); }
+  reloadCurrentPage();
+};
+
+/* ── ترحيل وإرجاع ──────────────────────────────────────────── */
+
+/* 🗄️ بياخد الطيار كمعامل (زرار التقفيل اليومي) أو من كارت التعديل
+   المفتوح (شاشة الفروع والطيارين) — الاتنين بيوصلوا لنفس المودال.
+
+   🔴 المعرّف بيتخزّن في متغيّر **خاص بالأرشفة** مش في `_editPilot`:
+      لو دُست عليه، قفل مودال الأرشيف كان هيسيب كارت التعديل فاكر طيار
+      تاني، وأي حفظ بعدها يروح للغلط. */
+window.openArchiveModal = function(pilotId) {
+  if (!permGuard("act.archive", "ترحيل الطيارين للأرشيف")) return;
+  const id = pilotId != null && pilotId !== "" ? pilotId : window._editPilot;
+  if (!id) return;
+  window._archivePilot = id;
+  $("amName").textContent = pilotName(id);
+  $("amNote").value = "";
+  $("amError").textContent = "";
+  openModal("archive");
+  setTimeout(() => $("amNote").focus(), 80);
+};
+
+window.confirmArchive = async function() {
+  if (!permGuard("act.archive", "ترحيل الطيارين للأرشيف")) return;
+  const id = window._archivePilot || window._editPilot;
+  if (!id) return;
+  const btn = $("amSave"), err = $("amError");
+  btn.disabled = true; btn.textContent = "⏳ جاري الترحيل…";
+  try {
+    await api.post("/api/rd/pilots/" + id + "/archive", { note: $("amNote").value.trim() });
+    closeModal("archive");
+    closeModal("pilot");   // مالوش لازمة لو اتنده من التقفيل اليومي — وبرضه آمن
+    window._archivePilot = null;
+    showToast("اترحّل للأرشيف — حساباته القديمة زي ما هي ✓", "success");
+    await refreshEntities();
+    /* الصفحة الحالية لازم تترسم تاني أيًا كانت: من التقفيل اليومي الطيار
+       المفروض يختفي من الورقة فورًا، ومن شاشة الأرشيف يظهر فيها. */
+    await reloadCurrentPage();
+  } catch (e) {
+    // رسالة السيرفر الحقيقية: بتقول السلفة المؤجلة المتبقية بكام مثلًا
+    err.textContent = e?.message || "تعذّر الترحيل";
+  } finally { btn.disabled = false; btn.textContent = "🗄️ رحّله للأرشيف"; }
+};
+
+/* التأكيد بضغطتين مش بـ confirm() — كروم بيسمح للمستخدم يوقف مربعات
+   الحوار، وساعتها confirm() بترجّع false على طول وبصمت. */
+let _unArm = null;
+window.unarchivePilot = async function(id) {
+  if (!permGuard("act.archive", "إرجاع الطيارين من الأرشيف")) return;
+  if (_unArm !== id) {
+    _unArm = id;
+    showToast("اضغط «رجّعه» تاني خلال 5 ثواني — هيرجع لقايمة الشغل", "error");
+    clearTimeout(window._unT);
+    window._unT = setTimeout(() => { _unArm = null; }, 5000);
+    return;
+  }
+  _unArm = null; clearTimeout(window._unT);
+  try {
+    await api.post("/api/rd/pilots/" + id + "/unarchive", {});
+    showToast("رجع لقايمة الشغل ✓", "success");
+    await loadSetup();
+    await reloadCurrentPage();
+  } catch (e) {
+    console.error("unarchivePilot:", e);
+    showToast("تعذّر الرجوع: " + (e?.message || e), "error");
+  }
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -3310,8 +3643,47 @@ const HELP = {
       <div class="help-tip">💡 قيمة يوم الإجازة = <b>ساعات الوردية × سعر ساعته</b>.
       ساعات الوردية بتتظبط مرة واحدة من <b>الإعدادات</b>.</div>
       <div class="help-sec">الطيار اللي خرج من الشغل</div>
-      <p>خلّيه <b>موقوف</b> بدل ما تحذفه — كده بياناته القديمة تفضل في تقفيل الشهور اللي فاتت، وبس مش هيظهر في التقفيل اليومي الجديد.</p>
+      <p><b>رحّله للأرشيف</b> بدل ما تحذفه: افتح <b>تعديل</b> جنب اسمه واضغط
+      <b>🗄️ ترحيل للأرشيف</b>. كده بيتشال من القوايم و<b>مافيش ولا رقم بيتغيّر</b>
+      في أي شهر فات — تلاقيه في شاشة <b>أرشيف الطيارين</b> وتقدر ترجّعه في أي وقت.</p>
+      <div class="help-warn">⚠️ خانة <b>موقوف مؤقتًا</b> حاجة تانية خالص — دي للغياب
+      والإجازة الطويلة، و<b>بتشيل أيامه من تقفيلة الفرع</b> في الشهر المفتوح.
+      متستخدمهاش للي خرج من الشغل.</div>
       <div class="help-warn">⚠️ مينفعش تحذف فرع وفيه طيارين — انقلهم لفرع تاني الأول.</div>`
+  },
+  archive: {
+    title: "🗄️ أرشيف الطيارين",
+    what: "مكان الطيارين اللي خرجوا من الشغل — بيتشالوا من قوايم الشغل وحساباتهم القديمة تفضل زي ما هي بالحرف.",
+    body: `
+      <div class="help-sec">ليه مش بنحذفه؟</div>
+      <p>اسم الطيار مبصوم على كل خانة كتبتها في الشهور اللي فاتت. الحذف كان
+      هيفضّي تقفيلات شهور قديمة بأثر رجعي — عشان كده البرنامج <b>بيرفض</b>
+      يحذف أي طيار له بيانات في الشيت أو عليه سلف.</p>
+      <div class="help-sec">والفرق بينه وبين «موقوف»؟</div>
+      <ul>
+        <li><b>موقوف مؤقتًا</b> — للغياب أو الإجازة الطويلة. ⚠️ ده بيشيل أيامه
+            من <b>تقفيلة الفرع</b> في الشهر المفتوح، يعني الأرقام بتتغيّر.</li>
+        <li><b>مُرحَّل للأرشيف</b> — خرج من الشغل خلاص. <b>مافيش ولا رقم بيتغيّر</b>:
+            كل شهر اشتغله لسه بيوريه وبنفس الأرقام، وبيختفي بس من الشهور
+            اللي مالوش فيها شغل أصلًا.</li>
+      </ul>
+      <div class="help-sec">ترحّله إزاي؟</div>
+      <ol class="help-steps">
+        <li>روح <b>الفروع والطيارين</b> واضغط <b>تعديل</b> جنب اسمه.</li>
+        <li>اضغط <b>🗄️ ترحيل للأرشيف</b> واكتب السبب لو حابب.</li>
+        <li>هتلاقيه هنا — ومعاه تاريخ الترحيل ومين رحّله والشهور اللي اشتغلها.</li>
+      </ol>
+      <div class="help-sec">وبعد الترحيل؟</div>
+      <ul>
+        <li><b>🧾 كشفه</b> — بيفتح كشف الطيار عشان تسوّي آخر راتب أو تراجع شهر قديم.</li>
+        <li><b>↩️ رجّعه للشغل</b> — لو رجع تاني، بيرجع لفرعه بكل أسعاره زي ما كان.</li>
+      </ul>
+      <div class="help-warn">⚠️ الطيار اللي عليه <b>سلفة مؤجلة</b> لسه مامتسدّدتش
+      مايتّرحّلش — سوّها أو احذفها من شاشة «السلف المؤجلة» الأول، عشان
+      القسط مايقفش في السكوت.</div>
+      <div class="help-tip">💡 الشاشة دي والترحيل نفسه ليهم صلاحيات لوحدهم في
+      <b>الصلاحيات</b>: «أرشيف الطيارين» للفرجة، و«ترحيل الطيار للأرشيف وإرجاعه منه»
+      للتنفيذ — تقدر تدي مشرف الفرجة من غير التنفيذ.</div>`
   },
   perms: {
     title: "🔐 الصلاحيات",
@@ -3385,5 +3757,7 @@ document.addEventListener("keydown", e => {
 });
 </script>
 
+<!-- قوائم ٣٠ صف + كروت + فورم تفاصيل — طبقة مشتركة لكل الجداول (طلب صاحب النظام 2026-09-10) -->
+<script src="assets/js/listview.js?v=20260910b" defer></script>
 </body>
 </html>

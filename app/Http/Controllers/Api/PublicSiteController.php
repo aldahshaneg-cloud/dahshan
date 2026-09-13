@@ -251,16 +251,40 @@ class PublicSiteController
         }
         $phone2 = (string) preg_replace('/[^\d]/', '', (string) ($b['phone2'] ?? ''));
 
+        /* 📋 بيانات المتقدّم — **كلها اختيارية** (طلب صاحب النظام 2026-09-12:
+           «نضيف حبة معلومات لو حابب يملاها وهو بيقدّم»). فاضية = NULL،
+           والطلب بيتقبل عادي من غيرها — دي بتساعد في القرار مش بتمنعه.
+
+           ⚠️ الأرقام بتتقص عند صفر: الراتب بالسالب أو سنين خبرة بالسالب
+              بيتحفظوا NULL مش قيمة غلط. */
+        $opt = static fn (string $k, int $max): ?string
+            => mb_substr(trim((string) ($b[$k] ?? '')), 0, $max) ?: null;
+        $num = static function (string $k, float $max) use ($b): ?float {
+            $v = $b[$k] ?? null;
+            if ($v === null || $v === '' || ! is_numeric($v)) {
+                return null;
+            }
+
+            return min(max(0.0, (float) $v), $max) ?: null;
+        };
+
         DB::insert(
             "INSERT INTO pilot_join_requests
-               (name, phones, card_num, vehicle_no, address, branch_id, requested_by, status, source, created_at)
-             VALUES (?,?,?,?,?,NULL,'الموقع العام','pending','home',?)",
+               (name, phones, card_num, vehicle_no, address,
+                prev_employer, leave_reason, last_salary, experience_years, applicant_note,
+                branch_id, requested_by, status, source, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,NULL,'الموقع العام','pending','home',?)",
             [
                 mb_substr($name, 0, 60),
                 $phone2 !== '' ? $phone1 . ',' . $phone2 : $phone1,
                 mb_substr(trim((string) ($b['cardNum'] ?? '')), 0, 30) ?: null,
                 mb_substr(trim((string) ($b['vehicleNo'] ?? '')), 0, 30) ?: null,
                 mb_substr(trim((string) ($b['address'] ?? '')), 0, 190) ?: null,
+                $opt('prevEmployer', 255),
+                $opt('leaveReason', 255),
+                $num('lastSalary', 999999),
+                $num('experienceYears', 60),
+                $opt('applicantNote', 2000),
                 WireTime::nowDb(),
             ]
         );

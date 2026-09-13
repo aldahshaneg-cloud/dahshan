@@ -159,7 +159,7 @@ class PilotAccountingController
         // ── الطيارين ──
         $sql = 'SELECT p.id, p.name, p.assigned_branch_id, b.name AS branch_name,
                        p.commission_type, p.commission_value, p.hour_rate,
-                       p.paid_leave_days, p.monthly_salary
+                       p.paid_leave_days, p.monthly_salary, p.required_daily_hours
                   FROM pilots p LEFT JOIN branches b ON b.id = p.assigned_branch_id';
         $where = [];
         $args  = [];
@@ -311,19 +311,39 @@ class PilotAccountingController
            الليلتين كان بيطلع بصفر ساعات يومين ومن غير أي إذن. دلوقتي: الإذن بيتقصّ على
            فترة الوردية نفسها، والوردية الطويلة بتتقسم على أيامها التجارية. */
         $leavesByPilot = [];
+        $openLeaveNow  = time();   // سقف الإذن المفتوح — ثابت للرد كله
         foreach (DB::select(
             "SELECT pilot_id, responded_at, ended_at
                FROM pilot_leave_requests
               WHERE pilot_id IN ({$ph}) AND status IN ('approved','ended')
-                AND responded_at IS NOT NULL AND ended_at IS NOT NULL
-                AND ended_at >= ? AND responded_at < ?",
+                AND responded_at IS NOT NULL
+                AND (ended_at IS NULL OR ended_at >= ?) AND responded_at < ?",
             array_merge($ids, [
                 gmdate('Y-m-d H:i:s', strtotime($from . ' UTC') - 86400),
                 gmdate('Y-m-d H:i:s', strtotime($to . ' UTC') + 86400),
             ])
         ) as $lr) {
             $a = strtotime($lr->responded_at . ' UTC');
-            $b = strtotime($lr->ended_at . ' UTC');
+
+            /* 🔴 الإذن اللي **لسه مفتوح** (`ended_at` فاضي) كان بيتخطّى خالص —
+               الشرط القديم كان `ended_at IS NOT NULL`. يعني طيار قاعد على إذن
+               دلوقتي، أو إذن محدش قفله، وقته بيتدفع **كأنه شغل**. وده بالظبط
+               عكس الأوفرتايم: مادام الزيادة بتتحسب ساعة ونص، الوقت اللي بره
+               الشغل لازم يتخصم (طلب صاحب النظام 2026-09-10).
+
+               بيتحسب لحد **دلوقتي**، وبسقف **آخر يومه التجاري** — من غير
+               السقف ده إذن اتنسي مفتوح من أسبوع كان هيصفّر ورديات أسبوع كامل،
+               لأن الفترة بتتقصّ على كل وردية جوّاها تحت. الضرر محبوس في يومه. */
+            if ($lr->ended_at !== null) {
+                $b = strtotime($lr->ended_at . ' UTC');
+            } else {
+                $b  = $openLeaveNow;
+                $bm = W::bizMoment($lr->responded_at, $ds);
+                if ($bm) {
+                    [, $endUtc] = W::bizWindowUtc($bm['date'], $ds);
+                    $b = min($b, (int) strtotime($endUtc . ' UTC'));
+                }
+            }
             if ($a !== false && $b !== false && $b > $a) {
                 $leavesByPilot[(int) $lr->pilot_id][] = [$a, $b];
             }
@@ -433,15 +453,21 @@ class PilotAccountingController
                         $cell['out']    = $hmOf($w1);
                         $cell['_outTs'] = $w1;
                     }
-                    $h = ($w1 - $w0) / 3600;
+                    /* 🔗 الفترة بتتخزّن زي ما هي وبتتحد في الآخر — الجمع
+                       المباشر كان بيضاعف الورديات المتداخلة (2026-09-11) */
+                    $wEnd = $w1;
                     if ($long) {
                         $cell['longShift'] = true;
-                        $h = min($h, $shiftHours);
+                        $wEnd = min($w1, $w0 + (int) ($shiftHours * 3600));
                     }
-                    $cell['hours'] += max(0, $h);
+                    if ($wEnd > $w0) {
+                        $cell['_spans'][] = [$w0, $wEnd];
+                    }
                 }
-                foreach ($perms as $pm) {
-                    $cell['perms'][] = $pm;
+                foreach ($inner as [$ia, $ib]) {
+                    /* الإذن بيتخزّن بطوابعه (مش HH:MM) عشان الاتحاد يعرف
+                       يقارن — والتحويل للعرض بيحصل بعد الدمج. */
+                    $cell['_permTs'][] = [$ia, $ib];
                 }
 
                 /* السلف والخصومات والبونص على أول يوم من الوردية (مرة واحدة) */
@@ -590,12 +616,33 @@ class PilotAccountingController
            التلقائي هناك). */
         foreach ($m as $pid => $days) {
             foreach ($days as $day => $c) {
-                $m[$pid][$day]['hours'] = round(max(0, $c['hours']), 2);
+                /* 🔗 ساعات اليوم = **اتحاد** فترات الشغل، مش مجموعها.
+                   والإذن = اتحاد فتراته مقصوص على وقت الشغل الفعلي —
+                   فالإذن الواحد بيتعدّ مرة واحدة مهما كان في كام وردية.
+                   الخصم نفسه لسه مكانه `dayRow` (مكان واحد بس). */
+                $spans = W::mergeIntervals($c['_spans'] ?? []);
+                $m[$pid][$day]['hours'] = round(W::spanSeconds($spans) / 3600, 2);
+
+                $clipped = [];
+                foreach (W::mergeIntervals($c['_permTs'] ?? []) as [$pa, $pb]) {
+                    foreach ($spans as [$sa, $sb]) {
+                        $x = max($pa, $sa);
+                        $y = min($pb, $sb);
+                        if ($y - $x >= W::MIN_PERM_MINUTES * 60) {
+                            $clipped[] = [$x, $y];
+                        }
+                    }
+                }
+                $m[$pid][$day]['perms'] = array_map(
+                    static fn (array $p): array => ['out' => $hmOf($p[0]), 'in' => $hmOf($p[1])],
+                    W::mergeIntervals($clipped)
+                );
                 $m[$pid][$day]['svc']       = round($c['svc'], 2);
                 $m[$pid][$day]['psvc']      = round($c['psvc'], 2);
                 $m[$pid][$day]['psvcCarry'] = round($c['psvcCarry'], 2);
                 $m[$pid][$day]['handed']    = round($c['handed'], 2);
-                unset($m[$pid][$day]['_inTs'], $m[$pid][$day]['_outTs']);
+                unset($m[$pid][$day]['_inTs'], $m[$pid][$day]['_outTs'],
+                      $m[$pid][$day]['_spans'], $m[$pid][$day]['_permTs']);
             }
         }
 
@@ -611,7 +658,10 @@ class PilotAccountingController
                 // المرحّل للشهر — منفصل عن المعروض
                 'psvcCarry' => 0.0, 'advCarry' => 0.0, 'dedCarry' => 0.0, 'bonusCarry' => 0.0,
                 'commMonthly' => false,
-                'perms' => [], 'shiftIds' => [], 'openShift' => false, 'longShift' => false];
+                'perms' => [], 'shiftIds' => [], 'openShift' => false, 'longShift' => false,
+                /* 🔗 فترات الشغل والإذن الخام — بتتحد في آخر البناء بدل ما
+                   تتجمع، عشان الورديات المتداخلة ماتتضاعفش (2026-09-11) */
+                '_spans' => [], '_permTs' => []];
     }
 
     /** صفوف التدخّل اليدوي + فترات الاستئذان اليدوية */
@@ -2271,21 +2321,30 @@ class PilotAccountingController
             foreach ($days as $day => $list) {
                 /* مترتبين بـcheck_in من الاستعلام */
                 $first = $list[0]['in'];
+                /* 🔴 العدّ من **أول حضور في اليوم** مش من بداية اليوم التجاري
+                   (2026-09-10): جلسة بتبدأ قبل ٩ص وتخلص بعدها طرفاها في
+                   يومين تجاريين مختلفين — `bizMin("08:00")` = ١٣٨٠ و
+                   `bizMin("10:00")` = ٦٠، فالطرح −١٣٢٠ و`max(0,…)` تحت
+                   بتحوّلها **صفر**. موظف حضر ٨ص ومشي ١٠ص كان بياخد صفر
+                   ساعة في كشف الرواتب. النسبة لأول حضور بتخلّي كل الحسابات
+                   (المدى · الأذونات · آخر انصراف) على نفس المرجع. */
+                $base = $bizMin($first);
+                $rel  = fn (?string $hm): int => ($bizMin($hm) - $base + 1440) % 1440;
                 $last  = $first;
                 $perms = [];
                 foreach ($list as $i => $s) {
-                    if ($bizMin($s['out']) >= $bizMin($last)) {
+                    if ($rel($s['out']) >= $rel($last)) {
                         $last = $s['out'];
                     }
                     if ($i > 0) {
                         $prevOut = $list[$i - 1]['out'];
                         /* فجوة حقيقية بس — دقيقة فأكتر */
-                        if ($bizMin($s['in']) > $bizMin($prevOut)) {
+                        if ($rel($s['in']) > $rel($prevOut)) {
                             $perms[] = ['out' => $prevOut, 'in' => $s['in']];
                         }
                     }
                 }
-                $span = ($bizMin($last) - $bizMin($first)) / 60;
+                $span = $rel($last) / 60;
                 $matrix[$uname][$day] = [
                     'in'    => $first,
                     'out'   => $last,

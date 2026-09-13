@@ -87,14 +87,27 @@ try {
     );
     $oid = (int) DB::getPdo()->lastInsertId();
 
-    // أوردر متسلّم قديم — المفروض ما يتحركش
+    /* أوردر متسلّم و**فلوسه لسه مع الطيار** (`money_settled = 0`) — لازم
+       يتحرك معاه. التقفيلة بتطلبه بـ`pilot_id` وبتودّي الكاش لفرع الوردية،
+       فلو فضل ورا بيطلع أوفر على الفرع الجديد وعجز على القديم (بلاغ
+       صاحب النظام 2026-09-10). الحارس كان مثبّت العكس. */
     DB::insert(
         "INSERT INTO orders (order_num, branch_id, origin_branch_id, sender_name, sender_phone, status, status_since,
-                             created_at, total_delivery_price, pilot_id, pilot_name)
-         VALUES ('TST-TRANS-2', ?, ?, 'محل الاختبار', '01000000000', 'delivered', ?, ?, 20, ?, 'اختبار')",
+                             created_at, total_delivery_price, money_settled, pilot_id, pilot_name)
+         VALUES ('TST-TRANS-2', ?, ?, 'محل الاختبار', '01000000000', 'delivered', ?, ?, 20, 0, ?, 'اختبار')",
         [$bA, $bA, $now, $now, $pilotId]
     );
     $oidDone = (int) DB::getPdo()->lastInsertId();
+
+    /* وأوردر متسلّم **واتسوّى خلاص** — ده مايتحركش: فلوسه دخلت خزنة فرعه
+       فعلًا، ونقله بعد كده بيكسر دفتر مقفول. */
+    DB::insert(
+        "INSERT INTO orders (order_num, branch_id, origin_branch_id, sender_name, sender_phone, status, status_since,
+                             created_at, total_delivery_price, money_settled, pilot_id, pilot_name)
+         VALUES ('TST-TRANS-3', ?, ?, 'محل الاختبار', '01000000000', 'delivered', ?, ?, 20, 1, ?, 'اختبار')",
+        [$bA, $bA, $now, $now, $pilotId]
+    );
+    $oidSettled = (int) DB::getPdo()->lastInsertId();
 
     $actorB = Actor::staff(901, 'branchB', 'branch', $bB, 'مشرف الفرع الطالب');
     $actorA = Actor::staff(902, 'branchA', 'branch', $bA, 'مشرف فرع الطيار');
@@ -165,7 +178,13 @@ try {
     ok('الفرع الأصلي فضل زي ما هو', (int) $o['origin_branch_id'] === $bA, var_export($o['origin_branch_id'], true));
 
     $od = (array) DB::select('SELECT * FROM orders WHERE id = ?', [$oidDone])[0];
-    ok('الأوردر المتسلّم ماتحركش', (int) $od['branch_id'] === $bA, var_export($od['branch_id'], true));
+    ok(
+        '🔴 والمتسلّم اللي فلوسه لسه مع الطيار اتحرك معاه',
+        (int) $od['branch_id'] === $bB,
+        var_export($od['branch_id'], true) . ' — لو فضل ورا بيطلع أوفر هنا وعجز هناك'
+    );
+    $os = (array) DB::select('SELECT * FROM orders WHERE id = ?', [$oidSettled])[0];
+    ok('⚠️ والمتسلّم المسوّى ماتحركش (دفتره اتقفل)', (int) $os['branch_id'] === $bA, var_export($os['branch_id'], true));
 
     $sh = (array) DB::select("SELECT * FROM shifts WHERE pilot_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1", [$pilotId])[0];
     ok('الوردية في الفرع الجديد', (int) $sh['branch_id'] === $bB, var_export($sh['branch_id'], true));

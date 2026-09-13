@@ -512,6 +512,10 @@ Route::post('public/join-request', [PublicSiteController::class, 'joinRequest'])
    منظومة rd_perms جوّه الكنترولر بتفضل شغّالة فوق القيد ده.
    ⚠️ المسارات متداخلة مع غيرها في الملف فمينفعش تتلفّ في group — القيد
    على كل واحد لوحده، والحارس بيعدّهم. */
+/* 🗄️ أرشيف طيارين روح دمشق (طلب صاحب النظام 2026-09-12: «مكان أرحّل فيه
+   الطيارين اللي مابقوش شغالين — مسحهم بيأثر على الحسابات») — نفس نموذج
+   أرشفة طياري الدهشان، بس الفرض هنا بمفاتيح rd_perms مش بدور المستخدم. */
+Route::get('rd/archive', [DamascusController::class, 'archiveList'])->middleware('role:admin,accountant,branch');   // 💰
 Route::get('rd/bootstrap', [DamascusController::class, 'bootstrap'])->middleware('role:admin,accountant,branch');   // 💰
 Route::get('rd/branches', [DamascusController::class, 'branchesList'])->middleware('role:admin,accountant,branch');
 Route::post('rd/branches', [DamascusController::class, 'branchesCreate'])->middleware('role:admin,accountant,branch');
@@ -625,6 +629,8 @@ Route::put('rd/deferred/{id}', [DamascusController::class, 'deferredUpdate'])->m
 Route::delete('rd/deferred/{id}', [DamascusController::class, 'deferredDelete'])->middleware('role:admin,accountant,branch');   // 💰
 Route::put('rd/pilots/{id}', [DamascusController::class, 'pilotsUpdate'])->middleware('role:admin,accountant,branch');   // 💰
 Route::delete('rd/pilots/{id}', [DamascusController::class, 'pilotsDelete'])->middleware('role:admin,accountant,branch');
+Route::post('rd/pilots/{id}/archive', [DamascusController::class, 'pilotsArchive'])->middleware('role:admin,accountant,branch');   // 💰
+Route::post('rd/pilots/{id}/unarchive', [DamascusController::class, 'pilotsUnarchive'])->middleware('role:admin,accountant,branch');   // 💰
 Route::post('return-requests/{id}/approve', [BoardController::class, 'returnRequestApprove'])
     ->middleware('role:admin,branch');   // 💰
 Route::post('return-requests/{id}/reject', [BoardController::class, 'returnRequestReject'])
@@ -641,8 +647,12 @@ Route::post('support-requests/{id}/respond', [BoardController::class, 'supportRe
     ->middleware('role:admin,branch,pilot_supervisor');
 Route::post('support-requests/{id}/send-pilot', [BoardController::class, 'supportSendPilot'])
     ->middleware('role:admin,branch,pilot_supervisor');
+/* 🏪👤 `store` و`customer` داخلين هنا من 2026-09-12 — والاتنين مقفولين جوه
+   الدالة على الأرقام اللي اتعاملوا معاها، ومايقدروش يدوسوا على تصحيح موظف.
+   نفس أدوار `GET /api/lookup` بالظبط: اللي بيشوف الاسم الكامل هو اللي
+   بيقدر يصحّحه. شوف identitySave. */
 Route::put('trust/{phone}/identity', [TrustController::class, 'identitySave'])
-    ->middleware('role:admin,branch,callcenter');
+    ->middleware('role:admin,branch,callcenter,store,customer');
 Route::post('zone-requests/{id}/mark-added', [SupportController::class, 'zoneRequestsMarkAdded'])
     ->middleware('role:admin,callcenter');
 Route::post('customer/orders/{id}/cancel', [CustomerAppController::class, 'orderCancel']);   // 💰

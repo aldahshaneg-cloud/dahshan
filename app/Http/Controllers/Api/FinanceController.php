@@ -1215,11 +1215,26 @@ class FinanceController
         $sessionId = $this->tx(function () use ($day, $username, $role, $entryType, $now): int {
             // قفل جلسات اليوم للمستخدم ده — منع فتح جلستين متوازيتين
             $open = DB::select(
-                'SELECT id FROM attendance_sessions
+                'SELECT id, session_date FROM attendance_sessions
                  WHERE username = ? AND check_out IS NULL
                  ORDER BY id DESC LIMIT 1 FOR UPDATE',
                 [$username]
             )[0] ?? null;
+            /* 🔴 قلبة اليوم التجاري (2026-09-10): التاب المفتوح بينبض كل
+               دقيقة، فالجلسة بتفضل مفتوحة و`session_date` بتاعها يوم امبارح
+               — شغل النهارده كله كان بيتسجّل على اليوم اللي فات (ومعاه
+               ساعات مستحيلة في كشف الرواتب). لو اليوم اتغيّر بنقفل القديمة
+               على آخر نبضة معروفة (نفس قاعدة `attendance:autoclose`) ونفتح
+               واحدة جديدة لليوم الجديد. */
+            if ($open && (string) $open->session_date !== $day) {
+                DB::update(
+                    'UPDATE attendance_sessions
+                        SET check_out = COALESCE(last_seen, check_in), auto_check_out = 1
+                      WHERE id = ? AND check_out IS NULL',
+                    [(int) $open->id]
+                );
+                $open = null;
+            }
             if ($open) {
                 // جلسة مفتوحة بالفعل — نحدث النبض ونرجعها (idempotent)
                 DB::update('UPDATE attendance_sessions SET last_seen = ? WHERE id = ?', [$now, (int) $open->id]);
@@ -1263,7 +1278,7 @@ class FinanceController
         $now = WireTime::nowDb();
 
         $open = DB::select(
-            'SELECT id FROM attendance_sessions
+            'SELECT id, session_date FROM attendance_sessions
              WHERE username = ? AND check_out IS NULL
              ORDER BY id DESC LIMIT 1',
             [$user->username]
@@ -1272,6 +1287,21 @@ class FinanceController
         if (! $open) {
             // مفيش جلسة مفتوحة النهارده — الواجهة المفروض تعمل check-in
             return ApiResponse::out(['ok' => true, 'open' => false]);
+        }
+
+        /* 🔴 نفس قاعدة check-in: النبضة **مابتمدّش** جلسة يوم فات. بنقفلها
+           على آخر نبضة ونرجّع open:false — والواجهة بتعمل check-in لليوم
+           الجديد. من غير كده التاب اللي بايت مفتوح بيخلّي يوم كامل يتسجّل
+           على يوم امبارح. */
+        if ((string) $open->session_date !== $day) {
+            DB::update(
+                'UPDATE attendance_sessions
+                    SET check_out = COALESCE(last_seen, check_in), auto_check_out = 1
+                  WHERE id = ? AND check_out IS NULL',
+                [(int) $open->id]
+            );
+
+            return ApiResponse::out(['ok' => true, 'open' => false, 'rolled' => true]);
         }
 
         DB::update('UPDATE attendance_sessions SET last_seen = ? WHERE id = ?', [$now, (int) $open->id]);
