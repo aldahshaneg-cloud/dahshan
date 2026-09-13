@@ -1108,12 +1108,31 @@ class BoardController
                         $commissionPaid = $this->payShiftCommission($shiftId, $pilot, $branchId, $actor, $now, $commStore);
                     }
 
+                    /* 1.8) 💵 السلفة (طلب صاحب النظام 2026-09-13: «السلف لازم تتخصم من الخزنة»):
+                       الطيار خد الكاش فعلًا — «في نفس اليوم» (بتتنقص من مستحقّه النهارده) أو
+                       «على الشهر» (بتتخصم من مرتبه) — في الحالتين الفلوس خرجت من الخزنة،
+                       فبتتسجّل حركة منصرف **مرة واحدة** (advance_txn_id بيمنع التكرار).
+                       الخزنة: خزنة السلفة لو اتبعتت، وإلا خزنة العمولة/التحصيل/ردّ العهدة. */
+                    $advAmount    = round((float) $request->input('advanceAmount', $shift['advance_amount']), 2);
+                    $advanceTxnId = ($shift['advance_txn_id'] ?? null) !== null ? (int) $shift['advance_txn_id'] : null;
+                    if ($advAmount > 0 && $advanceTxnId === null) {
+                        $advStoreIn = $request->input('advanceStoreId')
+                            ?: ($request->input('commissionStoreId') ?: ($cashStoreIn ?: null));
+                        $advStore = $advStoreIn ? $this->intId($advStoreIn) : $retStore;
+                        if (! $advStore) {
+                            throw new ApiException('اختر الخزنة اللي اتصرفت منها سلفة الطيار (' . number_format($advAmount, 2) . ' ج.م)');
+                        }
+                        $this->applyCashTxn($advStore, 'out', $advAmount,
+                            'سلفة وردية: ' . $pilot['name'], (int) $pilot['id'], $branchId, $actor->username, $now);
+                        $advanceTxnId = (int) DB::getPdo()->lastInsertId();
+                    }
+
                     // 2) بنود التقفيلة على الوردية (لو اتبعتت) + القفل
                     DB::update(
                         'UPDATE shifts SET bonus_amount = ?, bonus_reason = ?, deduction_amount = ?, deduction_reason = ?,
                     advance_amount = ?, advance_reason = ?,
                     commission_settle = ?, bonus_settle = ?, deduction_settle = ?, advance_settle = ?,
-                    custody_returned = ?, custody_carried = ?,
+                    custody_returned = ?, custody_carried = ?, advance_txn_id = ?,
                     status = \'ended\', ended_at = ?, ended_by = ?
               WHERE id = ?',
                         [
@@ -1129,6 +1148,7 @@ class BoardController
                             $settle($request->input('advanceSettle'), $shift['advance_settle']),
                             $retAmount,
                             $balNow,
+                            $advanceTxnId,
                             $now,
                             $actor->username,
                             $shiftId,

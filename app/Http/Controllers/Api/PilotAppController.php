@@ -11,6 +11,7 @@ use App\Support\Money;
 use App\Support\PollableList;
 use App\Support\WireTime;
 use App\Wire\BoardWire;
+use App\Wire\PilotAccountingWire as W;
 use App\Wire\CoreWire;
 use App\Wire\OrderWire;
 use DateTimeImmutable;
@@ -651,6 +652,154 @@ class PilotAppController
      * لبند 5 في CONVENTIONS.md بس العقد مجمّد — استعمال PollableList هنا
      * كان هيضيف مفتاحين ويكسّر المقارنة الحرفية.
      */
+    /**
+     * GET /api/pilot/finance?month=YYYY-MM — صفحة «المالية» في التطبيق (طلب صاحب النظام 2026-09-13):
+     * «كل شيء متعلق بالمالية الخاصة به: السلف والخصومات والمكافآت وعدد الأوردرات في الشهر
+     * والعمولات وعدد ساعات كل يوم اشتغله».
+     *
+     * الأرقام من **نفس** تقفيلة الطيارين (PilotAccountingController::month بعين الإدارة
+     * ومقصورة على الطيار ده) — مش معادلة تانية تختلف عن اللي المحاسب شايفه.
+     */
+    public function finance(Request $request): JsonResponse
+    {
+        $pilot = $this->pilotCtx($request);
+        $pid   = (int) $pilot['id'];
+        $ym    = (string) $request->query('month', '');
+        if (! preg_match('/^\d{4}-\d{2}$/', $ym)) {
+            $ym = substr(BizDay::key(), 0, 7);
+        }
+        /** @var \App\Http\Controllers\Api\PilotAccountingController $acct */
+        $acct = app(PilotAccountingController::class);
+        $data = $acct->monthDataFor($ym, $pid);
+        $row  = null;
+        foreach ($data['pilots'] ?? [] as $r) {
+            if ((int) ($r['pilotId'] ?? 0) === $pid) {
+                $row = $r;
+                break;
+            }
+        }
+        $totals = $row['totals'] ?? [];
+        $days   = [];
+        foreach ($row['days'] ?? [] as $d) {
+            $days[] = [
+                'day'    => (int) ($d['day'] ?? 0),
+                'in'     => $d['in'] ?? null,
+                'out'    => $d['out'] ?? null,
+                'hours'  => round((float) ($d['hours'] ?? 0), 2),
+                'orders' => (int) ($d['orders'] ?? 0),
+                'commission' => round((float) ($d['psvc'] ?? 0), 2),
+                'advance'    => round((float) ($d['adv'] ?? 0), 2),
+                'deduction'  => round((float) ($d['ded'] ?? 0), 2),
+                'bonus'      => round((float) ($d['bonus'] ?? 0), 2),
+                'perms'      => array_values(array_map(fn ($p) => is_array($p) ? [
+                    'from' => $p['from'] ?? null, 'to' => $p['to'] ?? null, 'type' => $p['type'] ?? null,
+                ] : $p, $d['perms'] ?? [])),
+                'note'   => (string) ($d['note'] ?? ''),
+                'open'   => (bool) ($d['openShift'] ?? false),
+            ];
+        }
+        $payouts = array_values(array_filter($data['payouts'] ?? [], fn ($p) => (int) ($p['refId'] ?? $p['ref_id'] ?? 0) === $pid));
+        $paid    = round(array_sum(array_map(fn ($p) => (float) ($p['amount'] ?? 0), $payouts)), 2);
+        $netDue  = round((float) ($totals['netDue'] ?? 0), 2);
+        $advances = array_values(array_filter($data['deferred'] ?? [], fn ($a) => (int) ($a['pilotId'] ?? 0) === $pid));
+
+        // ── البنود بأسبابها في نافذة الشهر التجاري ──
+        $ds = (int) ($data['settings']['dayStartHour'] ?? W::DEFAULT_DAY_START);
+        $nd = (int) ($data['daysInMonth'] ?? W::daysInMonth($ym));
+        [$winFrom]  = W::bizWindowUtc($ym . '-01', $ds);
+        [, $winTo]  = W::bizWindowUtc($ym . '-' . sprintf('%02d', $nd), $ds);
+        $ops = [];
+        foreach (DB::select(
+            "SELECT id, started_at, ended_at, bonus_amount, bonus_reason, deduction_amount, deduction_reason,
+                    advance_amount, advance_reason, bonus_settle, deduction_settle, advance_settle
+               FROM shifts WHERE pilot_id = ? AND started_at >= ? AND started_at < ?
+                AND (bonus_amount > 0 OR deduction_amount > 0 OR advance_amount > 0)
+              ORDER BY started_at",
+            [$pid, $winFrom, $winTo]
+        ) as $s) {
+            $at = W::bizMoment((string) ($s->ended_at ?? $s->started_at), $ds);
+            foreach ([['bonus', 'bonus_amount', 'bonus_reason', 'bonus_settle'],
+                      ['deduction', 'deduction_amount', 'deduction_reason', 'deduction_settle'],
+                      ['advance', 'advance_amount', 'advance_reason', 'advance_settle']] as [$t, $ac, $rc, $sc]) {
+                if ((float) $s->{$ac} > 0) {
+                    $ops[] = ['type' => $t, 'source' => 'shift', 'date' => $at['date'] ?? null,
+                              'amount' => round((float) $s->{$ac}, 2), 'reason' => (string) ($s->{$rc} ?? ''),
+                              'settle' => $s->{$sc} ?: 'monthly'];
+                }
+            }
+        }
+        foreach (DB::select(
+            'SELECT day, advance_extra, deduction_extra, bonus_extra, note FROM pilot_day_entries
+              WHERE month = ? AND pilot_id = ? AND (advance_extra <> 0 OR deduction_extra <> 0 OR bonus_extra <> 0) ORDER BY day',
+            [$ym, $pid]
+        ) as $e) {
+            $date = $ym . '-' . sprintf('%02d', (int) $e->day);
+            foreach ([['advance', 'advance_extra'], ['deduction', 'deduction_extra'], ['bonus', 'bonus_extra']] as [$t, $c]) {
+                if ((float) $e->{$c} != 0.0) {
+                    $ops[] = ['type' => $t, 'source' => 'sheet', 'date' => $date,
+                              'amount' => round((float) $e->{$c}, 2), 'reason' => (string) ($e->note ?? ''), 'settle' => 'monthly'];
+                }
+            }
+        }
+        foreach (DB::select(
+            "SELECT amount, reason, effective_date FROM pilot_commission_adjustments
+              WHERE pilot_id = ? AND kind = 'extra' AND effective_date >= ? AND effective_date <= ? ORDER BY effective_date",
+            [$pid, substr($winFrom, 0, 10), substr($winTo, 0, 10)]
+        ) as $x) {
+            $ops[] = ['type' => 'extra', 'source' => 'commission', 'date' => $x->effective_date,
+                      'amount' => round((float) $x->amount, 2), 'reason' => (string) ($x->reason ?? ''), 'settle' => 'monthly'];
+        }
+        foreach ($advances as $a) {
+            $ops[] = ['type' => 'advance', 'source' => 'store', 'date' => $a['advanceDate'] ?? null,
+                      'amount' => round((float) ($a['amount'] ?? 0), 2),
+                      'reason' => trim(($a['storeName'] ? 'من خزنة ' . $a['storeName'] : '') . ' ' . ($a['note'] ?? '')),
+                      'settle' => 'monthly', 'monthDue' => $a['monthDue'] ?? null, 'remaining' => $a['remaining'] ?? null];
+        }
+        usort($ops, fn ($x, $y) => strcmp((string) ($y['date'] ?? ''), (string) ($x['date'] ?? '')));
+
+        // ── الشهور المتاحة: من أول وردية للطيار لحد الشهر الحالي ──
+        $first = DB::selectOne('SELECT MIN(started_at) m FROM shifts WHERE pilot_id = ?', [$pid]);
+        $months = [];
+        $cur = substr(BizDay::key(), 0, 7);
+        $m = $first && $first->m ? substr((string) (W::bizMoment((string) $first->m, $ds)['date'] ?? $first->m), 0, 7) : $cur;
+        $guard = 0;
+        while ($m <= $cur && $guard++ < 36) {
+            $months[] = $m;
+            $m = W::nextMonth($m);
+        }
+        if (! in_array($ym, $months, true)) {
+            $months[] = $ym;
+        }
+
+        return ApiResponse::out([
+            'ok'        => true,
+            'serverNow' => WireTime::toWire(WireTime::nowDb()),
+            'month'     => $ym,
+            'months'    => array_values(array_unique($months)),
+            'locked'    => (bool) ($data['locked'] ?? false),
+            'pilot'     => ['id' => $pid, 'name' => $pilot['name'],
+                            'commissionType' => $pilot['commission_type'] ?: 'percent',
+                            'commissionValue' => round((float) $pilot['commission_value'], 2),
+                            'hourRate' => round((float) ($row['hourRate'] ?? 0), 2),
+                            'monthlySalary' => round((float) ($pilot['monthly_salary'] ?? 0), 2)],
+            'days'      => $days,
+            'totals'    => $totals,
+            'paid'      => $paid,
+            'remaining' => round($netDue - $paid, 2),
+            'payouts'   => array_map(fn ($p) => [
+                'id' => (int) ($p['id'] ?? 0), 'amount' => round((float) ($p['amount'] ?? 0), 2),
+                'paidAt' => $p['paidAt'] ?? null, 'storeName' => $p['storeName'] ?? null, 'note' => (string) ($p['note'] ?? ''),
+            ], $payouts),
+            'advances'  => array_map(fn ($a) => [
+                'id' => (int) ($a['id'] ?? 0), 'date' => $a['advanceDate'] ?? null, 'amount' => round((float) ($a['amount'] ?? 0), 2),
+                'monthly' => round((float) ($a['monthly'] ?? 0), 2), 'startMonth' => $a['startMonth'] ?? null,
+                'monthDue' => round((float) ($a['monthDue'] ?? 0), 2), 'remaining' => round((float) ($a['remaining'] ?? 0), 2),
+                'storeName' => $a['storeName'] ?? null, 'note' => (string) ($a['note'] ?? ''), 'done' => (bool) ($a['done'] ?? false),
+            ], $advances),
+            'ops'       => $ops,
+        ]);
+    }
+
     public function closeouts(Request $request): JsonResponse
     {
         $pilot = $this->pilotCtx($request);

@@ -2041,6 +2041,7 @@ CREATE TABLE `shifts` (
   `bonus_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية الحافز: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
   `deduction_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية الخصم: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
   `advance_settle` varchar(10) NOT NULL DEFAULT 'monthly' COMMENT 'تسوية السلفة: daily/monthly — الافتراضي monthly زي fallback الكود (توحيد 2026-09-03)',
+  `advance_txn_id` bigint(20) unsigned DEFAULT NULL COMMENT 'حركة الخزنة لسلفة الوردية (cash_transactions.id) — وجودها بيمنع صرفها مرتين (2026-09-13)',
   `commission_paid_amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'عمولة الوردية اللي اتصرفت كاش من الخزنة (طلب 2026-09-03: الفلوس تدخل كاملة والعمولة تخرج بحركة منفصلة)',
   `commission_paid_at` datetime DEFAULT NULL COMMENT 'وقت صرف العمولة من الخزنة — وجوده بيمنع الصرف مرتين وبيقفل الرجوع لتسوية شهرية',
   `custody_returned` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'العهدة اللي رجعت للخزنة عند تقفيل الوردية — إثبات إخلاء الطرف',

@@ -19,7 +19,7 @@ const X = fs.readFileSync(path.join(APP, 'android', 'app', 'src', 'main', 'Andro
 const count = (s, n) => s.split(n).length - 1;
 
 console.log('══ الإصدار ══');
-ok('pubspec 2.5.8+32 وkAppVersion 2.5.8', P.includes('version: 2.5.8+32') && M.includes("const String kAppVersion = '2.5.8';"));
+ok('pubspec 2.5.9+33 وkAppVersion 2.5.9', P.includes('version: 2.5.9+33') && M.includes("const String kAppVersion = '2.5.9';"));
 
 console.log('\n══ الصوت والتنبيهات ══');
 ok('🔴 المشغّل الثابت مابيتقفلش مع الشاشة الرئيسية', count(M, 'NotificationService.dispose();') === 0);

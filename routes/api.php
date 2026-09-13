@@ -188,6 +188,8 @@ Route::middleware('role:pilot')->group(function (): void {
     Route::get('pilot/shift-requests', [PilotAppController::class, 'shiftRequests']);
     Route::get('pilot/finished-orders', [PilotAppController::class, 'finishedOrders']);
     Route::get('pilot/closeouts', [PilotAppController::class, 'closeouts']);
+    /* 💰 صفحة «المالية» — تقفيلة الطيار بعينه من نفس حساب المحاسب (2026-09-13) */
+    Route::get('pilot/finance', [PilotAppController::class, 'finance']);
 });
 
 /* ═══ منظومة الثقة ════════════════════════════════════════════ */
@@ -381,6 +383,14 @@ Route::post('pilot-accounting/perms', [PilotAccountingController::class, 'permsS
    بياخد `defaultPermKeys()` اللي التلاتة دول مقصوصين منها بالظبط،
    فبيترفض بـ403 زي ما المسار كان بيرفضه. اللي بيتغيّر هو إن الأدمن
    بقى يقدر يمنحهم لحد بعينه من الشاشة. */
+/* 💵 سلف ومرتبات الطيارين من خزنة الفرع (2026-09-13) — مشرف الفرع مقفول على خزنة
+   فرعه وطياري فرعه جوّه الكنترولر، والإلغاء على اللي سجّله هو بس */
+Route::get('pilot-accounting/pilot-cash', [PilotAccountingController::class, 'pilotCashList'])
+    ->middleware('role:admin,branch,accountant');
+Route::post('pilot-accounting/pilot-cash', [PilotAccountingController::class, 'pilotCashSave'])
+    ->middleware('role:admin,branch,accountant');
+Route::delete('pilot-accounting/pilot-cash/{kind}/{id}', [PilotAccountingController::class, 'pilotCashDelete'])
+    ->middleware('role:admin,branch,accountant');
 Route::post('pilot-accounting/deferred', [PilotAccountingController::class, 'deferredSave'])
     ->middleware('role:admin,branch,accountant');
 Route::delete('pilot-accounting/deferred/{id}', [PilotAccountingController::class, 'deferredDelete'])

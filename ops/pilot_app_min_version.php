@@ -19,6 +19,7 @@ declare(strict_types=1);
      php ops/pilot_app_min_version.php 2.5.8 --auto     → للكرون: ساكت لو مش منشور/متطبّق، وبيكتب علامة بعد التطبيق
      php ops/pilot_app_min_version.php 2.5.8 --force    → بيتخطّى فحص الرابط (مش للاستعمال العادي)
      php ops/pilot_app_min_version.php 2.5.8 --refresh  → بيعيد كتابة الرسالة/الرابط حتى لو الحد متطبّق
+     php ops/pilot_app_min_version.php 2.5.9 --latest-only → أحدث إصدار + الرسالة بس (تنبيه ناعم) — minVersion مايتغيّرش
 ═══════════════════════════════════════════════════════════════ */
 
 $root = dirname(__DIR__);
@@ -29,6 +30,7 @@ $dry = in_array('--dry', $flags, true);
 $auto = in_array('--auto', $flags, true);
 $force = in_array('--force', $flags, true);
 $refresh = in_array('--refresh', $flags, true); // إعادة كتابة الرسالة حتى لو الحد متطبّق
+$latestOnly = in_array('--latest-only', $flags, true); // أحدث إصدار + الرسالة بس — الحد الأدنى زي ما هو (تحديث ناعم)
 
 if (! preg_match('/^\d+\.\d+\.\d+$/', $ver)) {
     fwrite(STDERR, "الاستعمال: php ops/pilot_app_min_version.php <x.y.z> [--dry|--auto|--force]\n");
@@ -66,7 +68,7 @@ if (! is_array($cur)) {
     $cur = [];
 }
 $cmp = fn (string $a, string $b): int => version_compare($a, $b);
-if (! $refresh && ($cur['minVersion'] ?? '') === $ver && ($cur['latestVersion'] ?? '') === $ver) {
+if (! $refresh && ! $latestOnly && ($cur['minVersion'] ?? '') === $ver && ($cur['latestVersion'] ?? '') === $ver) {
     if ($auto) {
         touch($marker);
         exit(0);
@@ -80,7 +82,9 @@ if (! $force && $cmp((string) ($cur['minVersion'] ?? '0.0.0'), $ver) > 0) {
 }
 
 $new = $cur;
-$new['minVersion'] = $ver;
+if (! $latestOnly) {
+    $new['minVersion'] = $ver;
+}
 $new['latestVersion'] = $ver;
 $new['updateUrl'] = $cur['updateUrl'] ?? 'https://aldahshan.cloud/downloads/dahshan-pilot-latest.apk';
 /* 2.5.8 اتبنت بمفتاح توقيع جديد (المفتاح القديم كان على جهاز hp ومش موجود) — أندرويد مابيركّبش نسخة بمفتاح
@@ -110,5 +114,7 @@ if ($row) {
 if ($auto) {
     touch($marker);
 }
-echo "✅ اتطبّق: minVersion = latestVersion = {$ver} ({$now} UTC)\n";
+echo $latestOnly ? "✅ اتطبّق: latestVersion = {$ver} (minVersion لسه {$new['minVersion']}) ({$now} UTC)
+" : "✅ اتطبّق: minVersion = latestVersion = {$ver} ({$now} UTC)
+";
 exit(0);

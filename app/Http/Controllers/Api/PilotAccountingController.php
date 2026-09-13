@@ -920,8 +920,21 @@ class PilotAccountingController
             if (! $rec) {
                 throw ApiException::notFound('السلفة غير موجودة');
             }
-            /* السلفة اللي خرجت من الخزنة مابتتمسحش في صمت — الفلوس بترجع بحركة وارد
-               مكتوب عليها إنها إلغاء، فسجل الخزنة بيحكي القصة كاملة. */
+            $this->reverseDeferred($rec, $actor);
+        });
+
+        return ApiResponse::ok();
+    }
+
+    /**
+     * عكس سلفة (مؤجلة أو من الخزنة) وحذفها — جوه معاملة مفتوحة والصف مقفول.
+     * السلفة اللي خرجت من الخزنة مابتتمسحش في صمت: الفلوس بترجع بحركة وارد
+     * مكتوب عليها إنها إلغاء، فسجل الخزنة بيحكي القصة كاملة.
+     */
+    private function reverseDeferred(object $rec, Actor $actor): void
+    {
+        $aid = (int) $rec->id;
+        {
             if ($rec->txn_id !== null && $rec->store_id !== null) {
                 DB::select('SELECT id FROM cash_stores WHERE id = ? FOR UPDATE', [(int) $rec->store_id]);
                 DB::update('UPDATE cash_stores SET balance = balance + ? WHERE id = ?', [(float) $rec->amount, (int) $rec->store_id]);
@@ -935,9 +948,7 @@ class PilotAccountingController
                 );
             }
             DB::delete('DELETE FROM pilot_deferred_advances WHERE id = ?', [$aid]);
-        });
-
-        return ApiResponse::ok();
+        }
     }
 
     /**
@@ -1661,6 +1672,17 @@ class PilotAccountingController
             if (! $p) {
                 throw ApiException::notFound('الصرفة غير موجودة');
             }
+            $this->reversePayout($p, $actor);
+        });
+
+        return ApiResponse::ok();
+    }
+
+    /** عكس صرفة راتب وحذفها — الفلوس ترجع للخزنة بحركة `in` (جوه معاملة، الصف مقفول) */
+    private function reversePayout(object $p, Actor $actor): void
+    {
+        $pid = (int) $p->id;
+        {
             DB::select('SELECT id FROM cash_stores WHERE id = ? FOR UPDATE', [(int) $p->store_id]);
             DB::update('UPDATE cash_stores SET balance = balance + ? WHERE id = ?', [(float) $p->amount, (int) $p->store_id]);
             $now = WireTime::nowDb();
@@ -1671,14 +1693,398 @@ class PilotAccountingController
                  null, $p->kind === 'pilot' ? (int) $p->ref_id : null, null, $actor->username, $now]
             );
             DB::delete('DELETE FROM pilot_acct_payouts WHERE id = ?', [$pid]);
-        });
-
-        return ApiResponse::ok();
+        }
     }
 
     /* ═══════════════════════════════════════════════════════════
        📸 لقطة الشهر المقفول
     ═══════════════════════════════════════════════════════════ */
+
+    /* ═══════════════════════════════════════════════════════════
+       💵 سلف ومرتبات الطيارين من خزنة الفرع (طلب صاحب النظام 2026-09-13)
+
+       «السلف لازم تتخصم من الخزنة … ولما الفرع يسلّم المرتب للطيار يتخصم من
+       الخزنة … والعمليات دي تبان في تقفيل الطيارين وفي كل مكان له علاقة».
+
+       مفيش جداول جديدة: السلفة = صف في `pilot_deferred_advances` بقسط صفر
+       (تتخصم كلها في شهرها) + حركة منصرف، والمرتب = صف في `pilot_acct_payouts`
+       + حركة منصرف — نفس اللي شاشة الإدارة بتعمله، فالتقفيلة الشهرية بتشوفهم
+       من مسارها الموجود (deferredDue / payoutsOf) من غير أي معادلة جديدة.
+
+       الفرق عن مسارات الإدارة: مشرف الفرع مسموح له من غير مفتاح صلاحية،
+       بس **مقفول على خزنة فرعه وطياري فرعه**، والصرف على شهر مش مقفول بيتحدّد
+       بالصافي الحي (اللقطة بس لو الشهر مقفول). الإلغاء لمشرف الفرع على اللي
+       سجّله هو بس.
+    ═══════════════════════════════════════════════════════════ */
+
+    /** GET /api/pilot-accounting/pilot-cash?from=&to=&branchId= — عمليات الفترة (أيام تجارية) */
+    public function pilotCashList(Request $request): JsonResponse
+    {
+        $actor    = $request->actorOrFail();
+        $branchId = $this->cashBranchScope($actor, $request->query('branchId'));
+        $isDate   = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1;
+        $from = $isDate($request->query('from')) ? (string) $request->query('from') : BizDay::key();
+        $to   = $isDate($request->query('to'))   ? (string) $request->query('to')   : $from;
+        if ($to < $from) {
+            [$from, $to] = [$to, $from];
+        }
+        $ds = $this->settings()['dayStartHour'];
+        [$fromUtc] = W::bizWindowUtc($from, $ds);
+        [, $toUtc] = W::bizWindowUtc($to, $ds);
+
+        return ApiResponse::out([
+            'ok'    => true,
+            'from'  => $from,
+            'to'    => $to,
+            'items' => $this->pilotCashItems($branchId, null, $fromUtc, $toUtc, $actor),
+        ]);
+    }
+
+    /**
+     * POST /api/pilot-accounting/pilot-cash
+     * body: {pilotId, kind: advance|salary, amount, cashStoreId, month?, note?}
+     */
+    public function pilotCashSave(Request $request): JsonResponse
+    {
+        $actor  = $request->actorOrFail();
+        $b      = $request->json()->all();
+        $kind   = (string) ($b['kind'] ?? '');
+        $pid    = (int) ($b['pilotId'] ?? 0);
+        $amount = round((float) ($b['amount'] ?? 0), 2);
+        $store  = $this->cashStoreInScope($actor, (int) ($b['cashStoreId'] ?? 0));
+        $note   = trim((string) ($b['note'] ?? ''));
+        if (! in_array($kind, ['advance', 'salary'], true)) {
+            throw new ApiException('نوع العملية لازم يكون سلفة أو مرتب');
+        }
+        if ($amount <= 0) {
+            throw new ApiException('المبلغ لازم يكون أكبر من صفر');
+        }
+        $pilot = DB::selectOne('SELECT id, name, home_branch_id, assigned_branch_id FROM pilots WHERE id = ? AND archived_at IS NULL', [$pid]);
+        if (! $pilot) {
+            throw ApiException::notFound('الطيار غير موجود');
+        }
+        $pilotBranch = $pilot->home_branch_id !== null ? (int) $pilot->home_branch_id
+            : ($pilot->assigned_branch_id !== null ? (int) $pilot->assigned_branch_id : null);
+        if ($actor->role === 'branch' && $pilotBranch !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('الطيار ده مش من فرعك');
+        }
+        $storeBranch = $store->branch_id !== null ? (int) $store->branch_id : null;
+        $now = WireTime::nowDb();
+
+        if ($kind === 'advance') {
+            $start = $this->monthArg('');
+            $this->assertUnlocked($start, $storeBranch);
+            $date = BizDay::key();
+            $id = DB::transaction(function () use ($store, $amount, $pid, $pilot, $date, $start, $note, $storeBranch, $actor, $now): int {
+                $sRow = DB::select('SELECT id, balance FROM cash_stores WHERE id = ? FOR UPDATE', [(int) $store->id])[0];
+                if ((float) $sRow->balance < $amount) {
+                    throw new ApiException('رصيد الخزنة (' . number_format((float) $sRow->balance, 2) . ') مايكفيش لسلفة ' . number_format($amount, 2));
+                }
+                DB::update('UPDATE cash_stores SET balance = balance - ? WHERE id = ?', [$amount, (int) $store->id]);
+                DB::insert(
+                    'INSERT INTO cash_transactions (store_id, type, amount, reason, notes, related_pilot_id, branch_id, created_by, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?)',
+                    [(int) $store->id, 'out', $amount, mb_substr('سلفة من الخزنة: ' . $pilot->name, 0, 190),
+                     $note !== '' ? mb_substr($note, 0, 500) : null, $pid, $storeBranch, $actor->username, $now]
+                );
+                $txnId = (int) DB::getPdo()->lastInsertId();
+                /* قسط صفر = تتخصم كلها في شهرها (deferredForMonth) — دي «سلفة على المرتب» مش تقسيط */
+                DB::insert(
+                    'INSERT INTO pilot_deferred_advances
+                       (pilot_id, advance_date, amount, monthly, start_month, note, store_id, txn_id, created_by, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?)',
+                    [$pid, $date, $amount, 0, $start, $note ?: null, (int) $store->id, $txnId, $actor->username, $now]
+                );
+
+                return (int) DB::getPdo()->lastInsertId();
+            });
+
+            return ApiResponse::out(['ok' => true, 'kind' => 'advance', 'id' => $id, 'month' => $start]);
+        }
+
+        // ── مرتب: دفعة تحت حساب صافي الشهر ──
+        $ym  = $this->monthArg((string) ($b['month'] ?? ''));
+        $row = null;
+        if ($this->monthLocked($ym, $storeBranch) && ($snap = $this->snapshotFor($ym, null)) !== null) {
+            foreach ($snap['payload']['month']['pilots'] ?? [] as $r) {
+                if ((int) ($r['pilotId'] ?? 0) === $pid) {
+                    $row = $r;
+                    break;
+                }
+            }
+        } else {
+            $row = $this->monthRowFor($ym, $pid);
+        }
+        if (! $row) {
+            throw ApiException::notFound('الطيار مش في تقفيلة الشهر ده');
+        }
+        $netDue = round((float) ($row['totals']['netDue'] ?? 0), 2);
+        $paid   = (float) (DB::select('SELECT COALESCE(SUM(amount),0) s FROM pilot_acct_payouts WHERE month = ? AND kind = ? AND ref_id = ?', [$ym, 'pilot', $pid])[0]->s ?? 0);
+        $remaining = round($netDue - $paid, 2);
+        if ($remaining <= 0.004) {
+            throw new ApiException('مرتب ' . $ym . ' اتصرف بالكامل (الصافي ' . number_format($netDue, 2) . ' ج.م)');
+        }
+        if ($amount > $remaining + 0.004) {
+            throw new ApiException('المبلغ أكبر من الباقي من صافي ' . $ym . ' (' . number_format($remaining, 2) . ' ج.م)');
+        }
+        $id = DB::transaction(function () use ($store, $amount, $ym, $pid, $pilot, $note, $storeBranch, $actor, $now): int {
+            $sRow = DB::select('SELECT id, balance FROM cash_stores WHERE id = ? FOR UPDATE', [(int) $store->id])[0];
+            if ((float) $sRow->balance < $amount) {
+                throw new ApiException('رصيد الخزنة (' . number_format((float) $sRow->balance, 2) . ') مايكفيش لصرف ' . number_format($amount, 2));
+            }
+            DB::update('UPDATE cash_stores SET balance = balance - ? WHERE id = ?', [$amount, (int) $store->id]);
+            DB::insert(
+                'INSERT INTO cash_transactions (store_id, type, amount, reason, notes, related_pilot_id, branch_id, created_by, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [(int) $store->id, 'out', $amount, mb_substr('صرف راتب ' . $ym . ': ' . $pilot->name, 0, 190),
+                 $note !== '' ? mb_substr($note, 0, 500) : null, $pid, $storeBranch, $actor->username, $now]
+            );
+            $txnId = (int) DB::getPdo()->lastInsertId();
+            DB::insert(
+                'INSERT INTO pilot_acct_payouts (month, kind, ref_id, amount, store_id, txn_id, note, paid_by, paid_at, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)',
+                [$ym, 'pilot', $pid, $amount, (int) $store->id, $txnId, $note !== '' ? $note : null, $actor->username, $now, $now]
+            );
+
+            return (int) DB::getPdo()->lastInsertId();
+        });
+
+        return ApiResponse::out([
+            'ok' => true, 'kind' => 'salary', 'id' => $id, 'month' => $ym,
+            'netDue' => $netDue, 'paid' => round($paid + $amount, 2), 'remaining' => round($remaining - $amount, 2),
+        ]);
+    }
+
+    /** DELETE /api/pilot-accounting/pilot-cash/{kind}/{id} — الإلغاء بيرجّع الفلوس للخزنة بحركة وارد */
+    public function pilotCashDelete(Request $request, string $kind, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $rid   = (int) $id;
+        if ($kind === 'advance') {
+            DB::transaction(function () use ($rid, $actor): void {
+                $rec = DB::select('SELECT a.*, p.name AS pilot_name, p.assigned_branch_id, s.branch_id AS store_branch_id
+                                     FROM pilot_deferred_advances a
+                                     LEFT JOIN pilots p ON p.id = a.pilot_id
+                                     LEFT JOIN cash_stores s ON s.id = a.store_id
+                                    WHERE a.id = ? FOR UPDATE', [$rid])[0] ?? null;
+                if (! $rec) {
+                    throw ApiException::notFound('السلفة غير موجودة');
+                }
+                $this->assertCashOwner($actor, $rec->store_branch_id, (string) ($rec->created_by ?? ''));
+                $this->assertUnlocked((string) $rec->start_month, $rec->store_branch_id !== null ? (int) $rec->store_branch_id : null);
+                $this->reverseDeferred($rec, $actor);
+            });
+        } elseif ($kind === 'salary') {
+            DB::transaction(function () use ($rid, $actor): void {
+                $p = DB::select('SELECT po.*, s.branch_id AS store_branch_id FROM pilot_acct_payouts po
+                                   LEFT JOIN cash_stores s ON s.id = po.store_id
+                                  WHERE po.id = ? FOR UPDATE', [$rid])[0] ?? null;
+                if (! $p || $p->kind !== 'pilot') {
+                    throw ApiException::notFound('الصرفة غير موجودة');
+                }
+                $this->assertCashOwner($actor, $p->store_branch_id, (string) ($p->paid_by ?? ''));
+                $this->reversePayout($p, $actor);
+            });
+        } else {
+            throw new ApiException('نوع العملية لازم يكون سلفة أو مرتب');
+        }
+
+        return ApiResponse::ok();
+    }
+
+    /**
+     * صف الطيار في تقفيلة الشهر بالحساب الحي وبعين الإدارة (كل الأعمدة) — للحد الأقصى
+     * للصرف ولصفحة «المالية» في تطبيق الطيار. مافيش قصّ صلاحيات لأن اللي بينده
+     * السيرفر نفسه، والطيار مابيشوفش غير صفه هو.
+     */
+    public function monthDataFor(string $ym, int $pilotId): array
+    {
+        $req = Request::create('/api/pilot-accounting/month', 'GET', ['month' => $ym, 'pilotId' => (string) $pilotId]);
+        $req->attributes->set(ResolveApiActor::ATTRIBUTE, new Actor(
+            userId: null, customerId: null, username: 'system', role: 'admin', branchId: null, name: 'النظام'
+        ));
+
+        return json_decode($this->month($req)->getContent(), true) ?: [];
+    }
+
+    public function monthRowFor(string $ym, int $pilotId): ?array
+    {
+        foreach ($this->monthDataFor($ym, $pilotId)['pilots'] ?? [] as $r) {
+            if ((int) ($r['pilotId'] ?? 0) === $pilotId) {
+                return $r;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * عمليات الطيارين النقدية في نافذة UTC: سلف من الخزنة (deferred بحركة) + سلف
+     * الورديات (shifts.advance_txn_id) + صرف المرتبات. `$branchId` = فرع الخزنة،
+     * `$pilotId` = طيار واحد (التطبيق). بتاعة القراءة بس.
+     */
+    public function pilotCashItems(?int $branchId, ?int $pilotId, string $fromUtc, string $toUtc, ?Actor $actor): array
+    {
+        $scope = function (string $storeAlias, string $pilotCol) use ($branchId, $pilotId): array {
+            $w = [];
+            $a = [];
+            if ($branchId !== null) {
+                $w[] = "{$storeAlias}.branch_id = ?";
+                $a[] = $branchId;
+            }
+            if ($pilotId !== null) {
+                $w[] = "{$pilotCol} = ?";
+                $a[] = $pilotId;
+            }
+
+            return [$w ? ' AND ' . implode(' AND ', $w) : '', $a];
+        };
+        $canDel = function (?string $by, $storeBranch) use ($actor): bool {
+            if ($actor === null) {
+                return false;
+            }
+            if ($actor->role === 'branch') {
+                return $by === $actor->username && $storeBranch !== null && (int) $storeBranch === (int) ($actor->branchId ?? 0);
+            }
+
+            return true;
+        };
+        $items = [];
+
+        [$w, $a] = $scope('s', 'a.pilot_id');
+        foreach (DB::select(
+            "SELECT a.*, p.name AS pilot_name, s.name AS store_name, s.branch_id AS store_branch_id
+               FROM pilot_deferred_advances a
+               JOIN pilots p ON p.id = a.pilot_id
+               LEFT JOIN cash_stores s ON s.id = a.store_id
+              WHERE a.txn_id IS NOT NULL AND a.created_at >= ? AND a.created_at < ?{$w}",
+            array_merge([$fromUtc, $toUtc], $a)
+        ) as $r) {
+            $items[] = [
+                'kind'      => 'advance',
+                'id'        => (int) $r->id,
+                'pilotId'   => (int) $r->pilot_id,
+                'pilotName' => $r->pilot_name,
+                'amount'    => round((float) $r->amount, 2),
+                'date'      => WireTime::toWire($r->created_at),
+                'month'     => $r->start_month,
+                'storeId'   => $r->store_id !== null ? (int) $r->store_id : null,
+                'storeName' => $r->store_name,
+                'note'      => (string) ($r->note ?? ''),
+                'by'        => $r->created_by,
+                'canDelete' => $canDel($r->created_by, $r->store_branch_id),
+            ];
+        }
+
+        [$w, $a] = $scope('s', 'sh.pilot_id');
+        foreach (DB::select(
+            "SELECT sh.id, sh.pilot_id, sh.advance_amount, sh.advance_reason, sh.advance_settle, sh.ended_at,
+                    p.name AS pilot_name, t.store_id, t.created_at, t.created_by, s.name AS store_name
+               FROM shifts sh
+               JOIN cash_transactions t ON t.id = sh.advance_txn_id
+               JOIN pilots p ON p.id = sh.pilot_id
+               LEFT JOIN cash_stores s ON s.id = t.store_id
+              WHERE t.created_at >= ? AND t.created_at < ?{$w}",
+            array_merge([$fromUtc, $toUtc], $a)
+        ) as $r) {
+            $items[] = [
+                'kind'      => 'shiftAdvance',
+                'id'        => (int) $r->id,
+                'pilotId'   => (int) $r->pilot_id,
+                'pilotName' => $r->pilot_name,
+                'amount'    => round((float) $r->advance_amount, 2),
+                'date'      => WireTime::toWire($r->created_at),
+                'month'     => null,
+                'settle'    => $r->advance_settle ?: 'monthly',
+                'storeId'   => $r->store_id !== null ? (int) $r->store_id : null,
+                'storeName' => $r->store_name,
+                'note'      => (string) ($r->advance_reason ?? ''),
+                'by'        => $r->created_by,
+                'canDelete' => false,
+            ];
+        }
+
+        [$w, $a] = $scope('s', 'po.ref_id');
+        foreach (DB::select(
+            "SELECT po.*, p.name AS pilot_name, s.name AS store_name, s.branch_id AS store_branch_id
+               FROM pilot_acct_payouts po
+               JOIN pilots p ON p.id = po.ref_id
+               LEFT JOIN cash_stores s ON s.id = po.store_id
+              WHERE po.kind = 'pilot' AND po.paid_at >= ? AND po.paid_at < ?{$w}",
+            array_merge([$fromUtc, $toUtc], $a)
+        ) as $r) {
+            $items[] = [
+                'kind'      => 'salary',
+                'id'        => (int) $r->id,
+                'pilotId'   => (int) $r->ref_id,
+                'pilotName' => $r->pilot_name,
+                'amount'    => round((float) $r->amount, 2),
+                'date'      => WireTime::toWire($r->paid_at),
+                'month'     => $r->month,
+                'storeId'   => $r->store_id !== null ? (int) $r->store_id : null,
+                'storeName' => $r->store_name,
+                'note'      => (string) ($r->note ?? ''),
+                'by'        => $r->paid_by,
+                'canDelete' => $canDel($r->paid_by, $r->store_branch_id),
+            ];
+        }
+        usort($items, fn ($x, $y) => strcmp((string) $y['date'], (string) $x['date']));
+
+        return $items;
+    }
+
+    /** فرع الخزنة اللي المستخدم مسموح له يشوفه: مشرف الفرع على فرعه، والباقي حسب الطلب/الصلاحيات */
+    private function cashBranchScope(Actor $actor, mixed $requested): ?int
+    {
+        if ($actor->role === 'branch') {
+            return (int) ($actor->branchId ?? 0);
+        }
+        $bid = $requested !== null && $requested !== '' ? (int) $requested : null;
+        $acl = $this->aclOf($actor);
+        if ($acl['branches']) {
+            if ($bid !== null && ! in_array($bid, $acl['branches'], true)) {
+                throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+            }
+        }
+
+        return $bid;
+    }
+
+    private function cashStoreInScope(Actor $actor, int $storeId): object
+    {
+        $store = $storeId > 0 ? DB::selectOne('SELECT id, name, branch_id, balance FROM cash_stores WHERE id = ?', [$storeId]) : null;
+        if (! $store) {
+            throw new ApiException('اختر الخزنة');
+        }
+        if ($actor->role === 'branch' && (int) ($store->branch_id ?? 0) !== (int) ($actor->branchId ?? 0)) {
+            throw ApiException::forbidden('الخزنة دي مش على فرعك');
+        }
+        $acl = $this->aclOf($actor);
+        if ($acl['branches'] && ! in_array((int) ($store->branch_id ?? 0), $acl['branches'], true)) {
+            throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+        }
+
+        return $store;
+    }
+
+    /** مشرف الفرع بيلغي اللي سجّله هو على خزنة فرعه بس؛ الإدارة والمحاسب أي حاجة في نطاقهم */
+    private function assertCashOwner(Actor $actor, mixed $storeBranch, string $by): void
+    {
+        if ($actor->role === 'branch') {
+            if ($storeBranch === null || (int) $storeBranch !== (int) ($actor->branchId ?? 0)) {
+                throw ApiException::forbidden('العملية دي مش على خزنة فرعك');
+            }
+            if ($by !== $actor->username) {
+                throw ApiException::forbidden('مينفعش تلغي عملية سجّلها حد تاني — كلّم الإدارة');
+            }
+
+            return;
+        }
+        $acl = $this->aclOf($actor);
+        if ($acl['branches'] && ($storeBranch === null || ! in_array((int) $storeBranch, $acl['branches'], true))) {
+            throw ApiException::forbidden('الفرع ده مش مسموحلك بيه');
+        }
+    }
 
     /** نداء داخلي على مسار في نفس الكنترولر بنفس الفاعل — عشان اللقطة تبقى نفس الرد حرفيًا */
     private function internalGet(Request $orig, string $path, array $query): array

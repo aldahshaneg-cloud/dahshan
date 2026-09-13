@@ -8653,6 +8653,38 @@
         </div>
       </div>
 
+      <!-- 💵 سلف ومرتبات الطيارين من الخزنة (طلب صاحب النظام 2026-09-13): السلفة = صف في
+           السلف المؤجلة بقسط صفر (تتخصم كلها من صافي شهرها) + حركة منصرف، ودفعة المرتب =
+           صرفة على صافي الشهر + حركة منصرف — نفس مسارات تقفيل الطيارين، فبتبان هناك تلقائيًا. -->
+      <div class="sec-header" style="margin-bottom:10px"><span class="sec-title">💵 سلف ومرتبات الطيارين من الخزنة</span></div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end">
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الطيار</label>
+            <select id="pcPilot" style="width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"><option value="">— اختر الطيار —</option></select></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">النوع</label>
+            <select id="pcKind" onchange="pcKindChanged()" style="width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+              <option value="advance">سلفة — تتخصم من مرتب الشهر</option>
+              <option value="salary">دفعة مرتب</option>
+            </select></div>
+          <div id="pcMonthWrap" style="display:none"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">شهر المرتب</label>
+            <input type="month" id="pcMonth" style="width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">المبلغ (ج.م)</label>
+            <input type="number" id="pcAmount" min="0" step="0.01" placeholder="0" style="width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">الخزنة</label>
+            <select id="pcStore" style="width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text)"><option value="">— اختر الخزنة —</option></select></div>
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">ملاحظة</label>
+            <input type="text" id="pcNote" maxlength="200" placeholder="اختياري" style="width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+          <div><button id="pcSaveBtn" onclick="pcSave()" style="width:100%;background:var(--red);color:#fff;border:none;padding:9px 14px;border-radius:8px;cursor:pointer;font-weight:700">💵 تسجيل وخصم من الخزنة</button></div>
+        </div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.7">السلفة بتتسجّل على شهر النهارده وبتتخصم كلها من صافي الطيار في تقفيل الطيارين. دفعة المرتب محدودة بالباقي من صافي الشهر المختار. الاتنين بيخصموا من الخزنة فورًا وبيظهروا في سجل العمليات تحت وفي تقفيل الطيارين. سلفة الوردية (اللي بتتكتب وقت التقفيلة) بتتخصم من الخزنة كمان لحظة إنهاء الوردية.</div>
+      </div>
+      <div class="table-wrap" style="margin-bottom:22px">
+        <table>
+          <thead><tr><th>#</th><th>التاريخ</th><th>الطيار</th><th>النوع</th><th>المبلغ</th><th>الخزنة</th><th>البيان</th><th>بواسطة</th><th></th></tr></thead>
+          <tbody id="pc-body"><tr><td colspan="9" class="empty-row">اختر الفترة واضغط عرض</td></tr></tbody>
+        </table>
+      </div>
+
       <!-- جدول الطيارين -->
       <div class="sec-header" style="margin-bottom:10px"><span class="sec-title">👨‍✈️ حسابات الطيارين</span></div>
       <div class="table-wrap">
@@ -9658,6 +9690,7 @@
       .map(o => o.pilotId))];
     const _ov = await _loadAccCommOverrides(_pids, _r.from, _r.to);
     const data = buildAccountingData(_ov);
+    renderPilotCash();   // 💵 سلف ومرتبات الفترة — نداء خفيف لوحده
 
     document.getElementById("acc-revenue").textContent    = data.totalRevenue + " ج.م";
     document.getElementById("acc-prepaid").textContent    = data.totalStorePrepaid + " ج.م";
@@ -9693,6 +9726,118 @@
         <td style="font-size:.8rem">${desc}</td>
       </tr>`;
     }).join("") : `<tr><td colspan="6" class="empty-row">لا توجد عمليات في هذه الفترة</td></tr>`;
+  };
+
+  /* ─── 💵 سلف ومرتبات الطيارين من الخزنة (2026-09-13) ─────────────────
+     السيرفر هو اللي بيحاسب: /api/pilot-accounting/pilot-cash. الفرع مقفول
+     على خزنة فرعه وطياري فرعه، والإلغاء على اللي سجّله هو بس (canDelete). */
+  const PC_KIND = { advance: "سلفة", shiftAdvance: "سلفة وردية", salary: "دفعة مرتب" };
+  function pcRange() {
+    const bizToday = window.bizDayKey(new Date());
+    return {
+      from: document.getElementById("accFrom").value || bizToday.slice(0, 8) + "01",
+      to:   document.getElementById("accTo").value   || bizToday,
+    };
+  }
+  window.pcKindChanged = function () {
+    const salary = document.getElementById("pcKind").value === "salary";
+    document.getElementById("pcMonthWrap").style.display = salary ? "block" : "none";
+    const m = document.getElementById("pcMonth");
+    if (salary && !m.value) m.value = window.bizDayKey(new Date()).slice(0, 7);
+  };
+  function pcFillSelects() {
+    const myBranchId = String(window._currentUser?.branchId ?? "");
+    const pilotSel = document.getElementById("pcPilot");
+    const storeSel = document.getElementById("pcStore");
+    if (!pilotSel || !storeSel) return;
+    /* طياري الفرع: الثابت أو المعيّن = فرعي. الغريب بييجي مقصوص (من غير فرع) فمابيظهرش. */
+    const pilots = (window._pilotsData || [])
+      .filter(p => !p.archivedAt && String(p.homeBranchId ?? p.assignedBranchId ?? "") === myBranchId)
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ar"));
+    const curP = pilotSel.value;
+    pilotSel.innerHTML = `<option value="">— اختر الطيار —</option>` + pilots.map(p => `<option value="${ esc(p.id) }">${ esc(p.name) }</option>`).join("");
+    if (curP) pilotSel.value = curP;
+    const curS = storeSel.value;
+    const stores = window._cashStoresData || [];
+    storeSel.innerHTML = `<option value="">— اختر الخزنة —</option>` + stores.map(st => `<option value="${ esc(st.id) }">${ esc(st.name) } (${ esc((Number(st.balance) || 0).toFixed(2)) } ج.م)</option>`).join("");
+    if (curS) storeSel.value = curS; else if (stores.length === 1) storeSel.value = String(stores[0].id);
+  }
+  window.renderPilotCash = async function () {
+    const body = document.getElementById("pc-body");
+    if (!body) return;
+    pcFillSelects();
+    const r = pcRange();
+    try {
+      const d = await api.get("/api/pilot-accounting/pilot-cash", { from: r.from, to: r.to });
+      const items = d.items || [];
+      body.innerHTML = items.length ? items.map((it, i) => {
+        const kind = PC_KIND[it.kind] || it.kind;
+        const color = it.kind === "salary" ? "var(--sky)" : "var(--orange)";
+        const extra = it.kind === "salary" ? ` — شهر ${ esc(it.month || "") }`
+                    : it.kind === "shiftAdvance" ? (it.settle === "daily" ? " — في نفس اليوم" : " — من مرتب الشهر")
+                    : ` — من مرتب ${ esc(it.month || "") }`;
+        const del = it.canDelete
+          ? `<button onclick="pcDelete('${ esc(it.kind) }', '${ esc(it.id) }')" title="إلغاء — الفلوس ترجع للخزنة" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);padding:4px 10px;border-radius:7px;cursor:pointer;font-size:.75rem">إلغاء</button>`
+          : "";
+        return `<tr>
+          <td class="idx">${ i + 1 }</td>
+          <td style="font-size:.75rem;color:var(--muted)">${ esc(it.date ? new Date(it.date).toLocaleString("ar-EG") : "—") }</td>
+          <td><b>${ esc(it.pilotName || "") }</b></td>
+          <td style="color:${color};font-weight:700">${ esc(kind) }<span style="color:var(--muted);font-weight:400;font-size:.72rem">${extra}</span></td>
+          <td style="font-weight:700">${ esc((Number(it.amount) || 0).toFixed(2)) } ج.م</td>
+          <td>${ esc(it.storeName || "—") }</td>
+          <td style="font-size:.8rem">${ esc(it.note || "") }</td>
+          <td style="font-size:.75rem;color:var(--muted)">${ esc(it.by || "") }</td>
+          <td>${del}</td>
+        </tr>`;
+      }).join("") : `<tr><td colspan="9" class="empty-row">لا توجد سلف أو مرتبات في هذه الفترة</td></tr>`;
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="9" class="empty-row">تعذّر التحميل: ${ esc(e.message || "") }</td></tr>`;
+    }
+  };
+  window.pcSave = async function () {
+    const btn = document.getElementById("pcSaveBtn");
+    const pilotId = document.getElementById("pcPilot").value;
+    const kind    = document.getElementById("pcKind").value;
+    const amount  = Number(document.getElementById("pcAmount").value) || 0;
+    const storeId = document.getElementById("pcStore").value;
+    const month   = document.getElementById("pcMonth").value;
+    const note    = (document.getElementById("pcNote").value || "").trim();
+    if (!pilotId) { showToast("اختر الطيار", "error"); return; }
+    if (!(amount > 0)) { showToast("اكتب المبلغ", "error"); return; }
+    if (!storeId) { showToast("اختر الخزنة اللي هتتصرف منها", "error"); return; }
+    const pName = document.getElementById("pcPilot").selectedOptions[0]?.textContent || "";
+    const what = kind === "salary" ? `دفعة مرتب ${month} للطيار ${pName}` : `سلفة للطيار ${pName} تتخصم من مرتب الشهر`;
+    if (!confirm(`تسجيل ${what} بمبلغ ${amount.toFixed(2)} ج.م وخصمه من الخزنة؟`)) return;
+    btn.disabled = true;
+    try {
+      const r = await api.post("/api/pilot-accounting/pilot-cash", { pilotId, kind, amount, cashStoreId: storeId, month: kind === "salary" ? month : undefined, note });
+      showToast(kind === "salary"
+        ? `اتصرفت ${amount.toFixed(2)} ج.م — الباقي من صافي ${r.month}: ${(Number(r.remaining) || 0).toFixed(2)} ج.م`
+        : `اتسجّلت السلفة وهتتخصم من مرتب ${r.month} ✓`, "success");
+      document.getElementById("pcAmount").value = "";
+      document.getElementById("pcNote").value = "";
+      renderPilotCash();
+      /* الخزنة اتغيّرت — نجدّد رصيدها في البطاقات فورًا */
+      try { await window.refreshCashData?.(true); } catch (_) {}
+      renderAccountingPage();
+    } catch (e) {
+      showToast(e.message || "تعذّر التسجيل", "error");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  window.pcDelete = async function (kind, id) {
+    if (!confirm("إلغاء العملية؟ الفلوس هترجع للخزنة بحركة وارد.")) return;
+    try {
+      await api.del(`/api/pilot-accounting/pilot-cash/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
+      showToast("اتلغت ورجعت الفلوس للخزنة ✓", "success");
+      renderPilotCash();
+      try { await window.refreshCashData?.(true); } catch (_) {}
+      renderAccountingPage();
+    } catch (e) {
+      showToast(e.message || "تعذّر الإلغاء", "error");
+    }
   };
 
   /* ──────────────────────────────────────────────────────────────
