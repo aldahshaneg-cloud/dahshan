@@ -4044,7 +4044,18 @@
     function renderPilotsPanel() {
       const waiting    = window._pilotsData.filter(p => p.pilotStatus === "waiting")
         .sort((a,b) => (a.queueNo||999) - (b.queueNo||999));
-      const delivering = window._pilotsData.filter(p => p.pilotStatus === "delivering");
+      const deliveringMine = window._pilotsData.filter(p => p.pilotStatus === "delivering");
+      /* 🔴 طيار من فرع تاني شايل أوردر بتاعنا (بلاغ 2026-09-14: «الفرع بيظهر الطيار متاح ومفيش
+         أوردر والإدارة شايفاه في التوصيل»): الطيار بيتنقل بين الفروع وسط ورديته (shift_branch_history)
+         أو أوردر فرعنا بيتحمّل على طيار فرع تاني — الأوردر عندنا «جاري التوصيل» بس الطيار مش في
+         روستر الفرع (assignedBranchId ≠ فرعنا) فكان بيختفي من العمود خالص. بنضيفه من روستر الشركة
+         (?all=1 — الغريب بييجي مقصوص لكن فيه الاسم والحالة وفرعه) بعلامة فرعه. */
+      const _mineIds = new Set(window._pilotsData.map(p => p.id));
+      const _ourCarriers = new Set(window._ordersData.filter(o => o.status === "جاري التوصيل" && o.pilotId).map(o => o.pilotId));
+      const foreign = (window._allPilotsData || [])
+        .filter(p => _ourCarriers.has(p.id) && !_mineIds.has(p.id))
+        .map(p => ({ ...p, _foreign: true }));
+      const delivering = [...deliveringMine, ...foreign];
       const wEl = document.getElementById("pilotsPanelWaiting");
       const dEl = document.getElementById("pilotsPanelDelivering");
       if (!wEl || !dEl) return;
@@ -4074,6 +4085,14 @@
         const ordersDetail = pilotOrders.map(o =>
           `<div style="font-size:.73rem;color:var(--muted);margin-top:2px">• ${ esc(o.orderNum) } (${ esc((o.deliveries||[]).length) } طرد)</div>`
         ).join("");
+        /* أوردرات الطيار اللي مش في قايمة فرعنا (لفرع تاني) — السيرفر بيقول العدد الكلي activeOrders */
+        const elsewhere = Math.max(0, (Number(p.activeOrders) || 0) - pilotOrders.length);
+        const elsewhereBadge = elsewhere > 0
+          ? `<div style="font-size:.73rem;color:var(--muted);margin-top:2px">🏢 ${elsewhere} أوردر لفرع تاني</div>`
+          : "";
+        const foreignBadge = p._foreign
+          ? `<div style="background:rgba(14,165,233,.12);color:var(--sky);border-radius:6px;padding:3px 8px;font-size:.73rem;font-weight:700;margin-top:4px">🏢 من فرع ${ esc(p.assignedBranchName || p.homeBranchName || "تاني") }</div>`
+          : "";
         const hasOverdue = pilotOrders.some(o => isOrderOverdue(o));
         const overdueBadge = hasOverdue
           ? `<div style="background:rgba(239,68,68,.15);color:var(--red);border-radius:6px;padding:3px 8px;font-size:.75rem;font-weight:700;margin-top:4px;animation:pulseOverdue 1.5s infinite">⚠️ متأخر أكتر من 30 دقيقة — اطمئن عليه</div>`
@@ -4084,7 +4103,7 @@
             <button onclick="event.stopPropagation(); viewPilotDetails('${ escJs(p.id) }')" style="float:left;background:rgba(14,165,233,.12);color:var(--sky);border:1px solid var(--sky);border-radius:6px;padding:2px 8px;font-size:.7rem;cursor:pointer">ℹ️ تفاصيل</button>
           </div>
           <div class="pilot-card-meta">${ esc(p.vehicleNo || "") }</div>
-          ${ordersBadge}${ordersDetail}${overdueBadge}
+          ${foreignBadge}${ordersBadge}${ordersDetail}${elsewhereBadge}${overdueBadge}
           <div class="pilot-card-timer" id="ptimer-${ esc(p.id) }">${formatElapsed(p.statusSince)}</div>
           <div class="pilot-card-hint">اضغط عند العودة</div>
         </div>`;

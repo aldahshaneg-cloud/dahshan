@@ -35,6 +35,14 @@ for (const p of PAGES) {
   ok('المتأخرين: رسم بس لو المجموعة اتغيّرت', s.includes('const _okey = [...nowOverdue].sort().join(",");') && s.includes('if (_okey === window._overdueKey) return;'));
   ok('التوست المزدوج اتشال من تنبيه التأخر', !/showToast\(msg, "error"\);\s*\n\s*setTimeout\(\(\) => showToast\(msg, "error"\), 400\);/.test(s));
   ok('🔴 لوحة الطيارين بتتعاد مع تغيّر الأوردرات (مش مع رد الطيارين بس)', /window\._ordersData = [^\n]*\n[^\n]*(\n[^\n]*){0,4}try \{ renderPilotsPanel\((window\._pilotsData \|\| \[\])?\); \} catch\(e\) \{\}/.test(s));
+  if (p === 'branch') {
+    /* بلاغ 2026-09-14: طيار من فرع تاني شايل أوردر الفرع كان بيختفي من عمود «في التوصيل» */
+    ok('🔴 عمود التوصيل بيضم طيار فرع تاني شايل أوردر بتاعنا (من روستر الشركة)',
+       s.includes('const _ourCarriers = new Set(window._ordersData.filter(o => o.status === "جاري التوصيل" && o.pilotId).map(o => o.pilotId));')
+       && s.includes('.filter(p => _ourCarriers.has(p.id) && !_mineIds.has(p.id))') && s.includes('const delivering = [...deliveringMine, ...foreign];'));
+    ok('  وبعلامة فرعه + عدد أوردراته اللي لفرع تاني (activeOrders)',
+       s.includes('const elsewhere = Math.max(0, (Number(p.activeOrders) || 0) - pilotOrders.length);') && s.includes('من فرع ${ esc(p.assignedBranchName || p.homeBranchName || "تاني") }'));
+  }
   ok('🔴 50 صف + «عرض المزيد»: الدالة والزرار والـCSS', s.includes('window.PAGE_ROWS = 50;') && s.includes('function pagedRows(key, list, rowFn, cols, rerender)') && s.includes('window.showMoreRows = function (key)') && s.includes('.more-rows-btn {'));
 }
 
