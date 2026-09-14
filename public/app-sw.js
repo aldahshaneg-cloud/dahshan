@@ -28,7 +28,7 @@ const CDN = [
   "unpkg.com/leaflet", "cdnjs.cloudflare.com/ajax/libs/qrcodejs"
 ];
 
-const OURS = ["/customer.html", "/store.html", "/install.js", "/customer-manifest.json"];
+const OURS = ["/customer.html", "/store.html", "/install.js", "/customer-manifest.json", "/store-manifest.json"];
 
 const isOurs = url =>
   OURS.some(p => url.pathname.endsWith(p)) ||
@@ -68,7 +68,8 @@ self.addEventListener("fetch", e => {
           caches.open(CACHE).then(c => c.put(e.request, res.clone()));
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match("./customer.html")))
+      /* الاحتياطي وقت انقطاع النت = صفحة التطبيق نفسه — المحلات كانت بترجع لصفحة العملاء (2026-09-14) */
+      .catch(() => caches.match(e.request).then(r => r || caches.match(url.pathname.includes("store") ? "./store.html" : "./customer.html")))
   );
 });
 

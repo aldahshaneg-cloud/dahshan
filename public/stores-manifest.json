@@ -5,14 +5,40 @@
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./stores.html",
-  "scope": "./",
+  "id": "./stores.html",
+  "scope": "./stores.html",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://aldahshan.cloud/stores-manifest.json"
+    }
+  ],
+  "prefer_related_applications": false,
   "display": "standalone",
   "background_color": "#0b141a",
   "theme_color": "#0b141a",
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "icons": [
-    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

@@ -5,16 +5,13 @@
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./store.html",
-  "scope": "./",
+  "id": "./store.html",
+  "scope": "./store.html",
   "related_applications": [
-    { "platform": "webapp", "url": "https://aldahshan.cloud/store-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/customer-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/customers-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/stores-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/tiar-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/pilots-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/branch-manifest.json" },
-    { "platform": "webapp", "url": "https://aldahshan.cloud/callcenter-manifest.json" }
+    {
+      "platform": "webapp",
+      "url": "https://aldahshan.cloud/store-manifest.json"
+    }
   ],
   "prefer_related_applications": false,
   "display": "standalone",

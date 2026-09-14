@@ -200,26 +200,34 @@ ok('ومهلة الانتظار التلقائي ٢٠ ثانية',
    /waitForPrompt\(auto \? 20000 :/.test(JC),
    'رجعت قصيرة — بتوقع على التعليمات قبل ما كروم يقرّر');
 
-console.log('\n══ 9) كشف تطبيقات الدهشان التانية الحاجزة للتثبيت ══');
-/* 🔴 الاكتشاف الجذري: الـ٦ تطبيقات كلهم scope: "./" — نطاقات متداخلة
-   بالكامل. كروم بيمنع حدث التثبيت عن أي صفحة جوه نطاق تطبيق **متثبّت**،
-   فتطبيق قديم واحد (زي «إدارة العملاء») بيقفل التثبيت على النطاق كله
-   والمستخدم بيشوف evt0 رغم إن كل الشروط خضراء. عشان كده كل manifest
-   لازم يسمّي **كل** التطبيقات في related_applications — من غيرها
-   getInstalledRelatedApps بيشوف التطبيق الحالي بس والحاجز بيفضل مخفي. */
-const CM = JSON.parse(fs.readFileSync('public/customer-manifest.json', 'utf8'));
-const SM = JSON.parse(fs.readFileSync('public/store-manifest.json', 'utf8'));
-for (const [label, m] of [['العميل', CM], ['المحلات', SM]]) {
-  ok('manifest ' + label + ' بيسمّي كل التطبيقات (٨)',
-     Array.isArray(m.related_applications) && m.related_applications.length >= 8,
-     'رجع يسمّي نفسه بس — الحاجز القديم بيبقى مخفي');
-  ok('  وكلهم platform webapp على نفس النطاق',
-     (m.related_applications || []).every(a =>
-       a.platform === 'webapp' && /^https:\/\/aldahshan\.cloud\//.test(a.url || '')));
+console.log('\n══ 9) 🔴 نطاق مستقل لكل تطبيق — «تنزيل المحلات بيفتح العملاء» (2026-09-14) ══');
+/* البلاغ: تثبيت بوابة المحلات على الموبايل بيفتح تطبيق العملاء. السبب: كل الـmanifests
+   كانت scope: "./" (نطاق الموقع كله) + كل واحد بيسمّي الباقي في related_applications
+   (حل 2026-09-01 لكشف الحاجز) — فكروم بيعتبر تطبيق العملاء المتثبّت هو نفسه تطبيق
+   المحلات ويفتحه بداله. الحل: لكل تطبيق id وscope = صفحته بس، وrelated = نفسه بس. */
+const MANS = fs.readdirSync('public').filter(f => /-manifest\.json$/.test(f));
+ok('فيه ٨ manifests', MANS.length === 8, String(MANS.length));
+const ids = new Set();
+for (const f of MANS) {
+  const m = JSON.parse(fs.readFileSync('public/' + f, 'utf8'));
+  const page = String(m.start_url).replace(/^\.\//, '').split(/[?#]/)[0];
+  ok(f + ': id وscope = صفحته بس (' + page + ')',
+     m.id === './' + page && m.scope === './' + page,
+     'id=' + m.id + ' scope=' + m.scope + ' — نطاق متداخل = تطبيق بيفتح مكان التاني');
+  ids.add(m.id);
+  ok('  وrelated_applications بتسمّي نفسه بس',
+     Array.isArray(m.related_applications) && m.related_applications.length === 1
+       && m.related_applications[0].platform === 'webapp'
+       && m.related_applications[0].url === 'https://aldahshan.cloud/' + f,
+     JSON.stringify(m.related_applications));
   /* prefer=true بيوقف عرض تثبيت الـPWA خالص — باج كروم موثّق */
-  ok('  و prefer_related_applications لسه false',
-     m.prefer_related_applications === false);
+  ok('  و prefer_related_applications = false', m.prefer_related_applications === false);
+  ok('  والاختصارات جوه النطاق', (m.shortcuts || []).every(sc => String(sc.url).startsWith('./' + page)));
 }
+ok('🔴 الـ٨ ids مختلفة', ids.size === MANS.length);
+const SW = fs.readFileSync('public/app-sw.js', 'utf8');
+ok('app-sw: الاحتياطي وقت انقطاع النت = صفحة التطبيق نفسه',
+   SW.includes('url.pathname.includes("store") ? "./store.html" : "./customer.html"') && SW.includes('"/store-manifest.json"'));
 ok('install.js بيجمع أسماء التطبيقات الحاجزة', /var blockers = \[\]/.test(JC) &&
    /blockers\.push\(APP_NAMES\[file\]/.test(JC),
    'blockers اتشالت — الرسالة رجعت «متثبّت بالفعل» الكاذبة');
