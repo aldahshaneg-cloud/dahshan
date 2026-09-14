@@ -101,17 +101,32 @@ try {
     [$c, $j] = hit($kernel, $sup, 'POST', '/api/orders', $body($parcel(['address' => str_repeat('ع', 190)])));
     ok('عنوان 190 حرف بيعدّي', $c === 200 && ! empty($j['orders']), $c . ' ' . mb_substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 120));
 
-    echo "\n══ 3) الحضور — جلسة مفتوحة بتاريخ امبارح ══\n";
-    $y = gmdate('Y-m-d', time() - 86400);
+    /* الجلسة المفتوحة بتتلاقى **بغضّ النظر عن تاريخ اليوم** (المرحلة 2) — بس من 2026-09-10 (الجهاز
+       التاني) النبضة والحضور مابيمدّوش جلسة يوم تجاري فات: بيقفلوها على آخر نبضة (`rolled`).
+       الحارس كان بيزرع session_date = امبارح فكان بيعدّي قبل 9 صباحًا بالقاهرة بس (اليوم التجاري
+       لسه امبارح) ويقع بعدها — دلوقتي حالتين صريحتين. */
+    echo "\n══ 3) الحضور — جلسة مفتوحة من اليوم التجاري الحالي ══\n";
+    $bizToday = App\Support\BizDay::key();
     DB::insert('INSERT INTO attendance_sessions (session_date, username, role, check_in, last_seen, entry_type, created_at) VALUES (?,?,?,?,?,?,NOW())',
-        [$y, $admin['username'], $admin['role'], gmdate('Y-m-d H:i:s', time() - 3600), gmdate('Y-m-d H:i:s', time() - 600), 'auto']);
+        [$bizToday, $admin['username'], $admin['role'], gmdate('Y-m-d H:i:s', time() - 3600), gmdate('Y-m-d H:i:s', time() - 600), 'auto']);
     $sid = (int) DB::getPdo()->lastInsertId();
     [$c, $j] = hit($kernel, $admin, 'POST', '/api/attendance/heartbeat');
     $row = DB::selectOne('SELECT last_seen, check_out FROM attendance_sessions WHERE id = ?', [$sid]);
-    ok('🔴 النبضة لاقت الجلسة وحدّثت last_seen', $c === 200 && ($j['open'] ?? null) !== false && strtotime($row->last_seen . ' UTC') > time() - 120, $c . ' ' . json_encode($j) . ' ' . $row->last_seen);
+    ok('🔴 النبضة لاقت الجلسة وحدّثت last_seen', $c === 200 && ($j['open'] ?? null) === true && strtotime($row->last_seen . ' UTC') > time() - 120, $c . ' ' . json_encode($j) . ' ' . $row->last_seen);
     [$c, $j] = hit($kernel, $admin, 'POST', '/api/attendance/check-out');
     $row = DB::selectOne('SELECT check_out FROM attendance_sessions WHERE id = ?', [$sid]);
     ok('🔴 الانصراف قفل نفس الجلسة', $c === 200 && $row->check_out !== null, $c . ' ' . json_encode($j, JSON_UNESCAPED_UNICODE));
+
+    echo "\n══ 3ب) جلسة مفتوحة من يوم تجاري فات → النبضة بتقفلها (rolled) مش بتمدّها ══\n";
+    $bizPrev = date('Y-m-d', strtotime($bizToday . ' -1 day'));
+    DB::insert('INSERT INTO attendance_sessions (session_date, username, role, check_in, last_seen, entry_type, created_at) VALUES (?,?,?,?,?,?,NOW())',
+        [$bizPrev, $admin['username'], $admin['role'], gmdate('Y-m-d H:i:s', time() - 86400), gmdate('Y-m-d H:i:s', time() - 80000), 'auto']);
+    $sidOld = (int) DB::getPdo()->lastInsertId();
+    [$c, $j] = hit($kernel, $admin, 'POST', '/api/attendance/heartbeat');
+    $row = DB::selectOne('SELECT last_seen, check_out, auto_check_out FROM attendance_sessions WHERE id = ?', [$sidOld]);
+    ok('🔴 النبضة رجّعت open:false + rolled:true', $c === 200 && ($j['open'] ?? null) === false && ($j['rolled'] ?? null) === true, $c . ' ' . json_encode($j));
+    ok('  والجلسة القديمة اتقفلت على آخر نبضة كانصراف تلقائي', $row->check_out !== null && (int) $row->auto_check_out === 1
+        && $row->check_out === $row->last_seen, json_encode($row));
 
     echo "\n══ 4) ?since — المناطق ورسايل العملاء ══\n";
     [$c, $j] = hit($kernel, $admin, 'GET', '/api/zones?since=' . ($nowMs + 5000));
