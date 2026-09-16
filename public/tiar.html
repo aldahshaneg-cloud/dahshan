@@ -13078,9 +13078,12 @@
           <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">رقم الهاتف 2</label><input id="edit-recv-phone2-${i}" value="${ esc(d.receiverPhone2||'') }" dir="ltr" style="width:100%;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
           <div style="grid-column:1/-1"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">العنوان</label><div id="edit-recv-addrWidget-${i}"></div></div>
           ${ GeoLoc.fieldHtml(`edit-recv-loc-${i}`, (d.lat && d.lng) ? GeoLoc.fmt(d.lat, d.lng) : "") }
+          <div><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">💵 عهدة الطرد (يدفعها الطيار للمحل)</label><input id="edit-recv-price-${i}" type="number" min="0" step="0.01" value="${ esc(Number(d.orderPrice) || 0) }" ${ _editPrepaidLocked(o) ? 'disabled title="الأوردر اتسلّم وفلوسه اتسوّت"' : '' } style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" /></div>
         </div>
       </div>`;
     });
+    /* 💵 عهدة الطرد بقت تتعدّل من هنا (بلاغ 2026-09-16) — التطبيق بيعرض المجموع للطيار فورًا */
+    html += `<div style="margin-bottom:6px"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px">📝 ملاحظة العهدة</label><input id="edit-prepaid-note" value="${ esc(o.storePrepaidNote || "") }" placeholder="اختياري — مثال: العميل هيدفع الفرق للطيار" style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);box-sizing:border-box" /></div>`;
     document.getElementById("edit-order-data-content").innerHTML = html;
     // تهيئة widgets بعد إدراج الـ HTML
     window.renderAddressWidget('edit-sender-addrWidget', { edit: true, required: true, value: o.senderAddress || '' });
@@ -13089,6 +13092,9 @@
     });
     document.getElementById("modal-edit-order-data").style.display = "flex";
   };
+
+  /* العهدة مقفولة بعد التسليم/تسوية الفلوس — نفس قاعدة السيرفر */
+  function _editPrepaidLocked(o) { return !!(o && (o.status === "تم التسليم" || o.moneySettled)); }
 
   window.closeEditOrderData = function() {
     document.getElementById("modal-edit-order-data").style.display = "none";
@@ -13122,7 +13128,10 @@
           /* 📍 فاضي = مسح اللوكيشن، مكتوب = لازم يكون مفهوم (اتفحص قبل النداء) */
           lat           : GeoLoc.read("edit-recv-loc-"+i).geo?.lat ?? null,
           lng           : GeoLoc.read("edit-recv-loc-"+i).geo?.lng ?? null,
+          /* 💵 عهدة الطرد — بتتبعت بس لو الأوردر لسه قابل للتعديل (السيرفر بيرفضها بعد التسوية) */
+          ...(_editPrepaidLocked(o) ? {} : { orderPrice: Number(document.getElementById("edit-recv-price-"+i)?.value) || 0 }),
         })),
+        ...(_editPrepaidLocked(o) ? {} : { storePrepaidNote: (document.getElementById("edit-prepaid-note")?.value || "").trim() }),
       });
       showToast("تم تحديث البيانات بنجاح ✓", "success");
       closeEditOrderData();

@@ -993,11 +993,31 @@ class OrdersController
                     ]
                 );
 
+                /* 💵 عهدة الطرد بعد الإنشاء (بلاغ 2026-09-16: «لو العميل قال السعر أعلى من العهدة
+                   اللي مع الطيار وضفتها في خانة المبلغ المدفوع مش بتسمع في السيستم ولا مع المندوب»):
+                   التعديل كان بيكتب بيانات المرسل والمستلم بس، وorder_price بيتجاهل، وstore_prepaid
+                   (اللي التطبيق بيعرضه للطيار) مابيتحسبش تاني. دلوقتي `orderPrice` المبعوت بيتكتب على
+                   الطرد وstore_prepaid = مجموع عهد الطرود — نفس قاعدة الإنشاء. ممنوع بعد التسليم أو
+                   تسوية الفلوس (الأرقام دخلت الخزنة). */
+                $prepaidTouched = false;
+                $prepaidNote = $request->input('storePrepaidNote');
                 $deliveries = $request->input('deliveries');
                 if (is_array($deliveries)) {
                     foreach ($deliveries as $d) {
                         if (! is_array($d) || empty($d['id'])) {
                             continue;
+                        }
+                        if (array_key_exists('orderPrice', $d)) {
+                            if ($order['status'] === 'delivered' || (int) ($order['money_settled'] ?? 0) === 1) {
+                                throw new ApiException('الأوردر اتسلّم وفلوسه اتسوّت — مينفعش تغيير العهدة دلوقتي', 409);
+                            }
+                            $price = round((float) ($d['orderPrice'] ?? 0), 2);
+                            if ($price < 0) {
+                                throw new ApiException('عهدة الطرد مينفعش تكون بالسالب');
+                            }
+                            DB::update('UPDATE order_deliveries SET order_price = ? WHERE id = ? AND order_id = ?',
+                                [$price, (int) $d['id'], $orderId]);
+                            $prepaidTouched = true;
                         }
                         // ⚠️ الحقول اللي مش مبعوتة بتتكتب null — مفيش fallback
                         // للقيمة القديمة هنا (على عكس حقول المُرسِل فوق). ده
@@ -1031,6 +1051,15 @@ class OrdersController
                             )
                         );
                     }
+                }
+
+                if ($prepaidTouched || ($prepaidNote !== null && ($order['status'] !== 'delivered' && (int) ($order['money_settled'] ?? 0) !== 1))) {
+                    $sum = (float) (DB::selectOne('SELECT COALESCE(SUM(order_price), 0) s FROM order_deliveries WHERE order_id = ?', [$orderId])->s ?? 0);
+                    DB::update('UPDATE orders SET store_prepaid = ?, store_prepaid_note = ? WHERE id = ?', [
+                        $prepaidTouched ? $sum : (float) ($order['store_prepaid'] ?? 0),
+                        $prepaidNote !== null ? self::trimOrNull($prepaidNote) : ($order['store_prepaid_note'] ?? null),
+                        $orderId,
+                    ]);
                 }
 
                 // لمسة updated_at عشان delta polling يشوف التغيير حتى لو الطرود بس اتعدلت
