@@ -2216,6 +2216,7 @@ CREATE TABLE `users` (
   `shop_lat` decimal(10,7) DEFAULT NULL COMMENT 'إحداثيات المحل',
   `shop_lng` decimal(10,7) DEFAULT NULL,
   `can_edit_price` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'للمحل (role=store): مفتوح له تعديل سعر التوصيل من البوابة زيادة أو نقصان — بيتفتح من إدارة المحلات (طلب 2026-09-03). الافتراضي مقفول والسعر سعر المنطقة',
+  `can_track_pilot` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'للمحل (role=store): مفتوح له تتبّع الطيار على الخريطة وهو جاي يستلم — بيتفتح من إدارة المحلات (طلب 2026-09-16)',
   `blocked` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'الحساب موقوف',
   `hour_rate` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'سعر ساعة الموظف — 0 = مافيش أجر بالساعة',
   `monthly_salary` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'الراتب الشهري — بيتقسم على أيام الشغل في التقفيلة',

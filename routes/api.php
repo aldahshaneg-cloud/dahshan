@@ -169,6 +169,9 @@ Route::get('customers', [CustomersController::class, 'index'])
     ->middleware('role:admin,callcenter');
 Route::get('store/pickup-profile', [CustomersController::class, 'pickupProfile'])
     ->middleware('role:store');
+// 🛵 موقع الطيار اللي جاي يستلم — للمحل المفتوح له التتبّع بس (طلب 2026-09-16)
+Route::get('store/orders/{id}/pickup-track', [CustomersController::class, 'pickupTrack'])
+    ->middleware('role:store');
 // دفتر عناوين بوابة المحلات — «عناويني» زي تطبيق العملاء (طلب 2026-09-02)
 Route::get('store/addresses', [CustomersController::class, 'storeAddressesList'])
     ->middleware('role:store');
@@ -232,6 +235,8 @@ Route::post('users', [EntitiesController::class, 'usersCreate'])->middleware('ro
 Route::post('users/{id}/block', [EntitiesController::class, 'usersBlock'])->middleware('role:admin');
 /* 🏪 فتح/قفل تعديل سعر التوصيل لمحل بعينه (طلب 2026-09-03) — إدارة المحلات */
 Route::post('users/{id}/price-edit', [EntitiesController::class, 'usersPriceEdit'])->middleware('role:admin');
+// 🛵 تتبّع الطيار من بوابة المحل — خاصية تتفتح وتتقفل لكل محل (طلب 2026-09-16)
+Route::post('users/{id}/track-pilot', [EntitiesController::class, 'usersTrackPilot'])->middleware('role:admin');
 Route::put('users/{id}', [EntitiesController::class, 'usersUpdate'])->middleware('role:admin');
 Route::delete('users/{id}', [EntitiesController::class, 'usersDelete'])->middleware('role:admin');
 

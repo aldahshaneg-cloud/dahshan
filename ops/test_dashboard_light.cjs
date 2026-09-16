@@ -55,6 +55,9 @@ for (const p of ['tiar', 'callcenter']) {
 }
 const T = S.tiar, C = S.callcenter, B = S.branch;
 ok('tiar: since على قوايم الطلبات والورديات', ['shifts', 'pilotJoinRequests', 'pilotLeaveRequests', 'pilotShiftRequests', 'pilotReturnRequests', 'pilotTransfers'].every(k => new RegExp(k + ':\\s*\\{ path: "[^"]+",\\s*interval: \\d+, since: true \\}').test(T)) && T.includes('useSince: !!(cfg.merge || cfg.since),'));
+ok('tiar: 🔔 الجرس بيتحدّث مع كل تحديث من المستمعين وكل دقيقة (بلاغ 2026-09-16: «الإشعارات ثابتة»)',
+   T.includes('try { if (typeof window.renderNotifBell === "function") window.renderNotifBell(); } catch (_) {}')
+   && T.includes('setInterval(() => { try { if (window._currentUser && typeof window.renderNotifBell === "function") window.renderNotifBell(); } catch (_) {} }, 60000);'));
 ok('tiar: users كل 60 ثانية', /users:\s*\{ path: "\/api\/users",\s*interval: 60000 \}/.test(T));
 ok('tiar: 🔴 senders/receivers مسجّلين مرة واحدة', count(T, '_regListener("senders"') === 1 && count(T, '_regListener("receivers"') === 1 && T.includes('window._sendersList = list;') && T.includes('window._receiversList = list;'));
 ok('tiar: الورديات بـ 50 صف', T.includes('pagedRows("shifts", filtered, (s, i) => {') && T.includes('}, 8, () => window.renderShiftsPage());'));

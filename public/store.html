@@ -107,6 +107,22 @@
       return window.bizDayKey(t) === window.bizDayKey(new Date());
     };
 
+    /* 📞 تنظيف رقم التليفون قبل الإرسال (بلاغ 2026-09-16): المنسوخ من واتساب
+       بييجي بمسافات وعلامات اتجاه مخفية وأرقام عربية — نسيب الأرقام بس
+       (والـ+ لرقم أجنبي). نفس قاعدة السيرفر OrdersController::cleanPhone. */
+    window.cleanPhone = function (raw) {
+      let s = String(raw ?? "").replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x660))
+                                .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x6F0))
+                                .replace(/[^0-9+]/g, "");
+      if (!s) return "";
+      let plus = s[0] === "+";
+      s = s.replace(/\+/g, "");
+      if (s.startsWith("00")) { plus = true; s = s.slice(2); }
+      if (!s) return "";
+      if (s.startsWith("20") && s.length > 10) { const r = s.slice(2); return r.startsWith("0") ? r : "0" + r; }
+      return plus && !s.startsWith("0") ? "+" + s : s;
+    };
+
     window.escJs = function (v) {
       return window.esc(String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     };
@@ -848,7 +864,7 @@
           const el = document.getElementById(id);
           return el && getComputedStyle(el).display !== "none";
         };
-        return on("storeGateOverlay") || on("pinMapOverlay") ||
+        return on("storeGateOverlay") || on("pinMapOverlay") || on("pilotTrackOverlay") ||
                on("login-screen")     || window._welcomeOn;
       };
 
@@ -3665,8 +3681,8 @@
       for (const row of rows) {
         const n       = row.id.replace("row-", "");
         const name    = document.getElementById(`rName-${n}`)?.value.trim();
-        const phone   = document.getElementById(`rPhone-${n}`)?.value.trim();
-        const phone2  = document.getElementById(`rPhone2-${n}`)?.value.trim() || "";
+        const phone   = window.cleanPhone(document.getElementById(`rPhone-${n}`)?.value);
+        const phone2  = window.cleanPhone(document.getElementById(`rPhone2-${n}`)?.value);
         const zoneSel = document.getElementById(`rZone-${n}`);
         const zoneId  = zoneSel?.value;
         const zoneTxt = zoneSel?.options[zoneSel.selectedIndex]?.text || "";
@@ -3697,6 +3713,10 @@
         if (!isRcpt) {
           if (!name)   { _jumpToParcel(n, `rName-${n}`, `يرجى إدخال اسم المستلِم — طرد #${window.parcelDisplayNo(n)}`); await _storeDiag({ step: "no-name", parcel: n }); return; }
           if (!phone)  { _jumpToParcel(n, `rPhone-${n}`, `يرجى إدخال هاتف المستلِم — طرد #${window.parcelDisplayNo(n)}`); await _storeDiag({ step: "no-phone", parcel: n }); return; }
+          /* 🔴 الرسالة الملزوقة كلها في خانة الاسم (بلاغ 2026-09-16: 3 محاولات
+             مرفوضة «اسم جهة التسليم أطول من المسموح») — نقولها بوضوح قبل الإرسال. */
+          if (name.length > 190) { _jumpToParcel(n, `rName-${n}`, `اسم المستلِم طويل جدًا — يبدو إنك لزقت الرسالة كلها، اكتب الاسم بس (طرد #${window.parcelDisplayNo(n)})`); await _storeDiag({ step: "name-too-long", parcel: n, len: name.length }); return; }
+          if (phone.length > 20) { _jumpToParcel(n, `rPhone-${n}`, `رقم الهاتف مش مظبوط — اكتب رقم واحد بس (طرد #${window.parcelDisplayNo(n)})`); await _storeDiag({ step: "phone-too-long", parcel: n, len: phone.length }); return; }
         }
         /* 🏪 المفتوح له تعديل السعر يزوّد أو ينقّص (طلب 2026-09-03) — بس مش
            بالسالب. المقفول الخانة readonly بسعر المنطقة، والسيرفر بيتجاهل
@@ -3764,8 +3784,8 @@
       const _snd = _elsewhere
         ? {
             name  : (document.getElementById("senderNameIn")?.value   || "").trim(),
-            phone : (document.getElementById("senderPhoneIn")?.value  || "").trim(),
-            phone2: (document.getElementById("senderPhone2In")?.value || "").trim(),
+            phone : window.cleanPhone(document.getElementById("senderPhoneIn")?.value),
+            phone2: window.cleanPhone(document.getElementById("senderPhone2In")?.value),
           }
         : {
             name  : _prof.shopName   || u.shopName   || "",
@@ -4297,6 +4317,92 @@
     return ["قيد التنفيذ", "جاري التوصيل", "مؤجل"].includes(o.status);
   }
 
+  /* 🛵 «فين الطيار؟» — خاصية بتتفتح لكل محل من الإدارة (طلب 2026-09-16).
+     بتظهر بس والأوردر مستني الاستلام (اتعيّن له طيار ولسه ما اتسلّمش). */
+  window.trackBtnHtml = function(o) {
+    if (!awaitingPickup(o)) return "";
+    if (!(window._pickupProfile && window._pickupProfile.canTrackPilot)) return "";
+    return `<button class="ho-btn tr-btn" onclick="openPilotTrack('${ escJs(o.id) }')">🛵 فين الطيار؟</button>`;
+  };
+
+  let _trkMap = null, _trkPilot = null, _trkStore = null, _trkLine = null, _trkTimer = null, _trkOrder = null, _trkFirst = true;
+  function _trkDist(a, b) {
+    const R = 6371e3, r = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  window.openPilotTrack = function(orderId) {
+    _trkOrder = orderId; _trkFirst = true;
+    const ov = document.getElementById("pilotTrackOverlay");
+    ov.style.display = "flex";
+    document.getElementById("trkInfo").textContent = "جاري تحديد مكان الطيار…";
+    setTimeout(() => {
+      const host = document.getElementById("trkMapHost");
+      host.innerHTML = ""; host._leaflet_id = null;
+      if (_trkMap) { try { _trkMap.remove(); } catch (_) {} }
+      _trkMap = L.map(host, { attributionControl: false }).setView([30.0444, 31.2357], 11);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(_trkMap);
+      _trkPilot = _trkStore = _trkLine = null;
+      _trkMap.invalidateSize();
+      _trkTick();
+      if (_trkTimer) clearInterval(_trkTimer);
+      _trkTimer = setInterval(_trkTick, 8000);
+    }, 120);
+  };
+  async function _trkTick() {
+    if (!_trkOrder || !_trkMap) return;
+    let t;
+    try {
+      const r = await api.get(`/api/store/orders/${_trkOrder}/pickup-track`);
+      t = r.track;
+    } catch (e) {
+      /* 409 = الأوردر خرج (اتسلّم للطيار) — نقفل بهدوء */
+      document.getElementById("trkInfo").textContent = String((e && e.message) || "تعذّر تحديد مكان الطيار");
+      if (e && (e.status === 409 || e.status === 403)) { setTimeout(closePilotTrack, 1800); }
+      return;
+    }
+    const p = t.pilot || {};
+    const info = document.getElementById("trkInfo");
+    const nameHtml = `🛵 <b>${ esc(p.name || "الطيار") }</b>${ p.phone ? ` · <a href="tel:${ esc(p.phone) }" dir="ltr" style="color:inherit">${ esc(p.phone) }</a>` : "" }`;
+    if (p.lat == null || p.lng == null) {
+      info.innerHTML = nameHtml + " — لسه مفيش موقع من تطبيق الطيار";
+      return;
+    }
+    const pl = [p.lat, p.lng];
+    const icon = L.divIcon({ className: "", iconSize: [1, 1], iconAnchor: [16, 16],
+      html: `<div style="position:relative;width:32px;height:32px"><div style="font-size:26px;line-height:32px;text-align:center;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))">🛵</div>
+             <div style="position:absolute;top:32px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#111;color:#fff;font-size:11px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none">${ esc((p.name || "").split(" ").slice(0, 2).join(" ")) }</div></div>` });
+    if (!_trkPilot) _trkPilot = L.marker(pl, { icon }).addTo(_trkMap); else _trkPilot.setLatLng(pl);
+    const s = t.store || {};
+    let distTxt = "";
+    if (s.lat != null && s.lng != null) {
+      const sl = [s.lat, s.lng];
+      const sIcon = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 30],
+        html: `<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))">🏪</div>` });
+      if (!_trkStore) _trkStore = L.marker(sl, { icon: sIcon }).addTo(_trkMap);
+      if (!_trkLine) _trkLine = L.polyline([pl, sl], { color: "#e8192c", weight: 3, dashArray: "6 6" }).addTo(_trkMap);
+      else _trkLine.setLatLngs([pl, sl]);
+      const d = _trkDist({ lat: p.lat, lng: p.lng }, { lat: s.lat, lng: s.lng });
+      distTxt = d < 1000 ? ` — على بعد ${ Math.round(d) } م` : ` — على بعد ${ (d / 1000).toFixed(1) } كم`;
+      if (_trkFirst) _trkMap.fitBounds(L.latLngBounds([pl, sl]).pad(0.25));
+    } else if (_trkFirst) {
+      _trkMap.setView(pl, 15);
+    }
+    _trkFirst = false;
+    let ago = "";
+    if (p.updatedAt) {
+      const m = Math.round((Date.now() - new Date(p.updatedAt).getTime()) / 60000);
+      ago = m <= 1 ? " · آخر تحديث الآن" : ` · آخر تحديث من ${m} دقيقة`;
+    }
+    info.innerHTML = nameHtml + esc(distTxt) + esc(ago);
+  }
+  window.closePilotTrack = function() {
+    if (_trkTimer) { clearInterval(_trkTimer); _trkTimer = null; }
+    _trkOrder = null;
+    document.getElementById("pilotTrackOverlay").style.display = "none";
+  };
+
   window.urgeBtnHtml = function(o) {
     if (!canUrge(o)) return "";
     const left = urgeLeftMs(o.id);
@@ -4460,6 +4566,7 @@
           </div>
           ${o.pilotName ? `<div class="pilot-row">🛵 الطيار: <b>${ esc(o.pilotName) }</b></div>` : ""}
           ${urgeBtnHtml(o)}
+          ${trackBtnHtml(o)}
           ${handoverHtml(o)}
           <div class="order-det${ (window._openDets||new Set()).has(String(o.id)) ? " open" : "" }" id="det-${ esc(o.id) }">
             ${parts.map((d, i) => `
@@ -5615,6 +5722,7 @@ window.renderHome = function () {
       border-radius:10px;background:var(--green,#22c55e);color:#fff;font-family:inherit;
       font-size:.85rem;font-weight:800;cursor:pointer}
     .ho-btn:disabled{opacity:.6;cursor:default}
+    .tr-btn{background:#2563eb}
     .ho-done{margin-top:10px;padding:9px 12px;border-radius:10px;font-size:.78rem;
       font-weight:700;background:rgba(34,197,94,.12);color:var(--green,#22c55e)}
 
@@ -6680,6 +6788,23 @@ window.renderHome = function () {
       اجعله العنوان الافتراضي — يتملي تلقائيًا مع كل شحنة جديدة
     </label>
     <button class="submit-btn" id="addrSaveBtn" onclick="saveStoreAddr()">💾 حفظ العنوان</button>
+  </div>
+</div>
+
+<!-- 🛵 خريطة «فين الطيار؟» — تتبّع حي وقت الاستلام (طلب 2026-09-16) -->
+<div id="pilotTrackOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+     z-index:9000;align-items:center;justify-content:center;padding:12px">
+  <div style="background:var(--card,#0f172a);border:1px solid var(--border,#334155);border-radius:16px;
+       width:100%;max-width:760px;height:86vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border,#334155)">
+      <b style="flex:1;font-size:.95rem">🛵 فين الطيار؟</b>
+      <button type="button" onclick="closePilotTrack()" style="background:none;border:none;color:inherit;
+              font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <div style="flex:1;position:relative">
+      <div id="trkMapHost" style="position:absolute;inset:0"></div>
+    </div>
+    <div id="trkInfo" style="padding:12px 14px;border-top:1px solid var(--border,#334155);font-size:.85rem;line-height:1.7">—</div>
   </div>
 </div>
 

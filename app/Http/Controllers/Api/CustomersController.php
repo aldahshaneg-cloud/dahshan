@@ -352,7 +352,7 @@ class CustomersController
     {
         $row = DB::select(
             'SELECT u.shop_name, u.shop_phone, u.shop_phone2, u.shop_address,
-                    u.shop_zone_id, u.shop_lat, u.shop_lng, u.can_edit_price,
+                    u.shop_zone_id, u.shop_lat, u.shop_lng, u.can_edit_price, u.can_track_pilot,
                     z.area_name AS _zone_name, z.price AS _zone_price, z.delivery_branch_id
                FROM users u LEFT JOIN zones z ON z.id = u.shop_zone_id
               WHERE u.id = ? LIMIT 1',
@@ -380,7 +380,70 @@ class CustomersController
             'lng'         => $r['shop_lng'] !== null ? (float) $r['shop_lng'] : null,
             /* 🏪 خانة سعر التوصيل في البوابة بتتفتح بيه (طلب 2026-09-03) */
             'canEditPrice' => (int) ($r['can_edit_price'] ?? 0) === 1,
+            /* 🛵 زرار «فين الطيار؟» في البوابة بيتفتح بيه (طلب 2026-09-16) */
+            'canTrackPilot' => (int) ($r['can_track_pilot'] ?? 0) === 1,
         ];
+    }
+
+    /**
+     * GET /api/store/orders/{id}/pickup-track — موقع الطيار اللي جاي يستلم.
+     *
+     * 🛵 طلب صاحب النظام 2026-09-16: «تتبّع لبوابة المحلات للمندوب اللي هيجي
+     * يرفع منها وتبقى خاصية تتفتح وتتقفل». 🔒 role:store + users.can_track_pilot
+     * لازم يكون مفتوح (403 لو مقفول) + الأوردر بتاع المحل نفسه (added_by =
+     * اسم المستخدم). التتبّع **وقت الشيل بس**: من تعيين الطيار لحد ما المحل
+     * يسلّمه (handed_over_at) — بعدها 409، عشان المحل مايتابعش الطيار عند
+     * العملاء. الموقع من pilots.lat/lng (آخر نقطة من التطبيق).
+     */
+    public function pickupTrack(Request $request, string $id): JsonResponse
+    {
+        $actor = $request->actorOrFail();
+        $on = (int) (DB::table('users')->where('id', (int) $actor->userId)->value('can_track_pilot') ?? 0) === 1;
+        if (! $on) {
+            throw ApiException::forbidden('تتبّع الطيار مش مفتوح لمحلك — اطلبه من الإدارة');
+        }
+        $oid = (int) $id;
+        $o = $oid > 0 ? DB::selectOne(
+            'SELECT o.id, o.order_num, o.added_by, o.status, o.pilot_id, o.handed_over_at, o.sender_lat, o.sender_lng
+               FROM orders o WHERE o.id = ? LIMIT 1', [$oid]) : null;
+        if (! $o) {
+            throw ApiException::notFound('الأوردر مش موجود');
+        }
+        if ((string) $o->added_by !== $actor->username) {
+            throw ApiException::forbidden('الأوردر ده مش بتاع محلك');
+        }
+        if ($o->pilot_id === null) {
+            throw new ApiException('لسه ما اتعيّنش طيار للأوردر', 409);
+        }
+        if ($o->handed_over_at !== null || ! in_array((string) $o->status, ['processing', 'delivering', 'postponed'], true)) {
+            throw new ApiException('الأوردر خرج من عندك خلاص — التتبّع وقت الاستلام بس', 409);
+        }
+        $p = DB::selectOne('SELECT id, name, lat, lng, location_updated_at, heading, speed FROM pilots WHERE id = ? LIMIT 1', [(int) $o->pilot_id]);
+        if (! $p) {
+            throw ApiException::notFound('الطيار مش موجود');
+        }
+        $shop = DB::selectOne('SELECT shop_lat, shop_lng FROM users WHERE id = ? LIMIT 1', [(int) $actor->userId]);
+        $sLat = $o->sender_lat ?? $shop->shop_lat ?? null;
+        $sLng = $o->sender_lng ?? $shop->shop_lng ?? null;
+
+        return ApiResponse::ok(['track' => [
+            'orderId'  => (int) $o->id,
+            'orderNum' => (string) $o->order_num,
+            'pilot'    => [
+                'id'        => (int) $p->id,
+                'name'      => (string) $p->name,
+                'phone'     => null,   // مفيش عمود تليفون للطيار في المخطط — الاتصال من الفرع
+                'lat'       => $p->lat !== null ? (float) $p->lat : null,
+                'lng'       => $p->lng !== null ? (float) $p->lng : null,
+                'heading'   => $p->heading !== null ? (float) $p->heading : null,
+                'speed'     => $p->speed !== null ? (float) $p->speed : null,
+                'updatedAt' => WireTime::toWire($p->location_updated_at),
+            ],
+            'store' => [
+                'lat' => $sLat !== null ? (float) $sLat : null,
+                'lng' => $sLng !== null ? (float) $sLng : null,
+            ],
+        ]]);
     }
 
     /**

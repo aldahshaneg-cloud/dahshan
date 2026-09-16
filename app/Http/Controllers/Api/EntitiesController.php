@@ -1338,6 +1338,27 @@ class EntitiesController
     }
 
     /**
+     * POST /api/users/{id}/track-pilot — {enabled} — الأدمن بس.
+     *
+     * 🛵 طلب صاحب النظام 2026-09-16: «أفتح تتبّع لبوابة المحلات للمندوب اللي
+     * هيجي يرفع منها وتبقى خاصية تتفتح وتتقفل». المفتاح هنا؛ البوابة الحقيقية
+     * في CustomersController::pickupTrack. لحسابات المحلات فقط.
+     */
+    public function usersTrackPilot(Request $request, string $id): JsonResponse
+    {
+        $actor  = $request->actorOrFail();
+        $id     = $this->intId($id);
+        $target = $this->fetchUserGuarded($id, $actor);
+        if (($target['role'] ?? '') !== 'store') {
+            throw new ApiException('خاصية تتبّع الطيار لحسابات المحلات بس');
+        }
+        $on = ! empty($this->body($request)['enabled']) ? 1 : 0;
+        DB::update('UPDATE users SET can_track_pilot = ? WHERE id = ?', [$on, $id]);
+
+        return ApiResponse::out(['ok' => true, 'canTrackPilot' => (bool) $on]);
+    }
+
+    /**
      * POST /api/users/{id}/price-edit — {enabled} — الأدمن بس.
      *
      * 🏪 طلب صاحب النظام 2026-09-03: تعديل سعر التوصيل في بوابة المحلات

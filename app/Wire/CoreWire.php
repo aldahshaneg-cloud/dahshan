@@ -199,6 +199,8 @@ final class CoreWire
             'shopAddress' => $r['shop_address'] ?? null,
             /* 🏪 خاصية تعديل سعر التوصيل للمحل (طلب 2026-09-03) — INTENTIONAL */
             'canEditPrice' => (int) ($r['can_edit_price'] ?? 0) === 1,
+            /* 🛵 خاصية تتبّع الطيار من بوابة المحل (طلب 2026-09-16) — INTENTIONAL */
+            'canTrackPilot' => (int) ($r['can_track_pilot'] ?? 0) === 1,
             'senderId'    => isset($r['sender_id']) && $r['sender_id'] !== null ? (int) $r['sender_id'] : null,
             'blocked'     => (bool) ($r['blocked'] ?? 0),
             'protected'   => (bool) ($r['protected'] ?? 0),

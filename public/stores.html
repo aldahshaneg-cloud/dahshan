@@ -674,11 +674,16 @@ function renderPane() {
         ${kv("تعديل سعر التوصيل", s.canEditPrice
           ? `<span class="tag t-ok">💰 مفتوح — يزوّد أو ينقّص</span>`
           : `<span class="tag">🔒 مقفول — سعر المنطقة إجباري</span>`)}
+        ${kv("تتبّع الطيار", s.canTrackPilot
+          ? `<span class="tag t-ok">🛵 مفتوح — بيشوف الطيار على الخريطة وهو جاي</span>`
+          : `<span class="tag">🔒 مقفول</span>`)}
         ${kv("اتسجّل", fmtFull(s.createdAt))}
         <div class="acts">
           <button class="btn" data-act="edit">✏️ تعديل البيانات</button>
           <button class="btn ${s.canEditPrice ? "danger" : "ok"}" data-act="price">
             ${s.canEditPrice ? "💰 اقفل تعديل سعر التوصيل" : "💰 افتح تعديل سعر التوصيل"}</button>
+          <button class="btn ${s.canTrackPilot ? "danger" : "ok"}" data-act="track">
+            ${s.canTrackPilot ? "🛵 اقفل تتبّع الطيار" : "🛵 افتح تتبّع الطيار"}</button>
           <button class="btn ${s.blocked ? "ok" : "danger"}" data-act="block">
             ${s.blocked ? "✅ إلغاء الإيقاف" : "🚫 إيقاف المحل"}</button>
           <button class="btn danger" data-act="del">🗑️ حذف المحل</button>
@@ -725,6 +730,7 @@ function act(a, s) {
   if (a === "edit")     return openEdit(s);
   if (a === "block")    return doBlock(s, !s.blocked);
   if (a === "price")    return askPriceEdit(s);
+  if (a === "track")    return askTrackPilot(s);
   if (a === "del")      return askDelete(s);
   if (a === "rate")     return askRate(s);
   if (a === "identity") return askIdentity(s);
@@ -842,6 +848,31 @@ async function doPriceEdit(s, on) {
     s.canEditPrice = !!d.canEditPrice;
     renderPane();
     toast(on ? "اتفتح له تعديل السعر ✓ — خانة السعر بقت مفتوحة في بوابته" : "اتقفل تعديل السعر ✓ — سعر المنطقة إجباري");
+  } catch (e) { toast("تعذّر: " + (e?.message || e)); }
+}
+
+/* ══ فتح/قفل تتبّع الطيار من البوابة (طلب صاحب النظام 2026-09-16) ══
+   المفتوح له بيشوف زرار «فين الطيار؟» على الأوردر اللي اتعيّن له طيار
+   ولسه ما اتسلّمش — خريطة حيّة بموقع الطيار لحد ما يوصل. بعد التسليم
+   للطيار الخريطة بتتقفل (الطيار عند العملاء مش شغل المحل). */
+function askTrackPilot(s) {
+  if (s.canTrackPilot) return doTrackPilot(s, false);
+  openM("فتح تتبّع الطيار", `
+    <p style="font-size:13.5px;line-height:1.9;margin-bottom:16px">
+      هتفتح لـ<b>${esc(nameOf(s))}</b> تتبّع الطيار على الخريطة من البوابة؟<br>
+      <span style="color:var(--muted);font-size:12.5px">هيشوف مكان الطيار الحي <b>وهو جاي يستلم بس</b> —
+      من تعيين الطيار لحد ما المحل يسلّمه الأوردر. بعدها الخريطة بتتقفل لوحدها.</span></p>
+    <div style="display:flex;gap:9px">
+      <button class="btn ok" id="okBtn">🛵 افتح الخاصية</button>
+      <button class="btn" onclick="closeM()">إلغاء</button></div>`);
+  $("okBtn").onclick = () => { closeM(); doTrackPilot(s, true); };
+}
+async function doTrackPilot(s, on) {
+  try {
+    const d = await API.post(`/api/users/${s.id}/track-pilot`, { enabled: on });
+    s.canTrackPilot = !!d.canTrackPilot;
+    renderPane();
+    toast(on ? "اتفتح له تتبّع الطيار ✓ — زرار «فين الطيار؟» بقى في بوابته" : "اتقفل تتبّع الطيار ✓");
   } catch (e) { toast("تعذّر: " + (e?.message || e)); }
 }
 

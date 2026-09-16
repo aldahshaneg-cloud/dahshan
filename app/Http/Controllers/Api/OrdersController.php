@@ -439,7 +439,7 @@ class OrdersController
 
                 // إنشاء مُرسِل جديد لو مش محفوظ (زي saveBranchOrder القديمة)
                 if (! $senderId && $senderName !== '') {
-                    $sPhone = trim((string) ($request->input('senderPhone') ?? ''));
+                    $sPhone = self::cleanPhone((string) ($request->input('senderPhone') ?? ''));
                     $sAddr  = trim((string) ($request->input('senderAddress') ?? ''));
                     if (mb_strlen($sPhone) > 20 || mb_strlen($sAddr) > 500) {
                         throw new ApiException(mb_strlen($sPhone) > 20 ? 'رقم هاتف المرسل أطول من المسموح (20 حرف)' : 'عنوان المرسل أطول من المسموح (500 حرف) — اختصره وجرّب تاني');
@@ -561,8 +561,8 @@ class OrdersController
                         'parcel_no'       => isset($d['parcelNo']) && (int) $d['parcelNo'] > 0 ? (int) $d['parcelNo'] : $no,
                         'receiver_id'     => self::intOrNull($d['receiverId'] ?? null),
                         'receiver_name'   => $recvName,
-                        'receiver_phone'  => self::strMax($d['receiverPhone'] ?? null, 20, "رقم هاتف المستلم — طرد #{$no}"),
-                        'receiver_phone2' => self::strMax($d['receiverPhone2'] ?? null, 20, "رقم الهاتف الثاني للمستلم — طرد #{$no}"),
+                        'receiver_phone'  => self::phoneMax($d['receiverPhone'] ?? null, 20, "رقم هاتف المستلم — طرد #{$no}"),
+                        'receiver_phone2' => self::phoneMax($d['receiverPhone2'] ?? null, 20, "رقم الهاتف الثاني للمستلم — طرد #{$no}"),
                         'from_receipt'    => $fromReceipt ? 1 : 0,
                         'zone_id'         => $zoneId,
                         // snapshot الزون: الاسم والسعر بيتخزّنوا على الطرد نفسه
@@ -663,7 +663,7 @@ class OrdersController
                             $source, $actor->username, $roleCode,
                             self::intOrNull($request->input('customerId')),
                             self::trimOrNull($request->input('customerName')),
-                            self::trimOrNull($request->input('customerPhone')),
+                            self::phoneMax($request->input('customerPhone'), 20, 'رقم هاتف العميل'),
                             self::trimOrNull($request->input('orderKind')),
                             self::trimOrNull($request->input('paymentMethod')),
                             /* عدد القطع بيخص الأوردر الواحد — مع التفريق مافيش
@@ -986,8 +986,8 @@ class OrdersController
                     'UPDATE orders SET sender_name = ?, sender_phone = ?, sender_phone2 = ?, sender_address = ? WHERE id = ?',
                     [
                         self::strMax($request->input('senderName') ?? $order['sender_name'] ?? '', 190, 'اسم المرسل'),
-                        self::strMax($request->input('senderPhone') ?? $order['sender_phone'] ?? '', 20, 'رقم هاتف المرسل'),
-                        self::strMax($request->input('senderPhone2') ?? $order['sender_phone2'] ?? '', 20, 'رقم الهاتف الثاني للمرسل'),
+                        self::phoneMax($request->input('senderPhone') ?? $order['sender_phone'] ?? '', 20, 'رقم هاتف المرسل'),
+                        self::phoneMax($request->input('senderPhone2') ?? $order['sender_phone2'] ?? '', 20, 'رقم الهاتف الثاني للمرسل'),
                         self::strMax($request->input('senderAddress') ?? $order['sender_address'] ?? '', 500, 'عنوان المرسل'),
                         $orderId,
                     ]
@@ -1042,8 +1042,8 @@ class OrdersController
                                        «Data too long» 500 و**التعديل كله بيضيع** —
                                        المعاملة بتترجع والمشرف بيشوف خطأ مبهم. */
                                     self::strMax($d['receiverName'] ?? null, 190, 'اسم المستلم'),
-                                    self::strMax($d['receiverPhone'] ?? null, 20, 'رقم هاتف المستلم'),
-                                    self::strMax($d['receiverPhone2'] ?? null, 20, 'رقم الهاتف الثاني للمستلم'),
+                                    self::phoneMax($d['receiverPhone'] ?? null, 20, 'رقم هاتف المستلم'),
+                                    self::phoneMax($d['receiverPhone2'] ?? null, 20, 'رقم الهاتف الثاني للمستلم'),
                                     self::strMax($d['address'] ?? null, 500, 'عنوان التسليم'),
                                 ],
                                 $hasGeo ? [$lat, $lng, $lat !== null ? 'branch' : null] : [],
@@ -2373,6 +2373,56 @@ class OrdersController
     }
 
     /** المقابل لـ `trim((string)($b[k] ?? '')) ?: null` */
+    /**
+     * 📞 تنظيف رقم التليفون قبل التخزين (بلاغ 2026-09-16 من بوابة المحلات):
+     * الرقم المنسوخ من واتساب/جهات الاتصال بييجي بمسافات وشرط وعلامات اتجاه
+     * مخفية (‎ ‪ ⁦) وأرقام عربية (٠١٠…) — كان بيتخزّن زي ما هو، فبيفشل في
+     * البحث وفي مفتاح الثقة وساعات بيعدّي حد الـ20 حرف ويترفض. هنا بنسيب
+     * الأرقام بس (والـ+ في الأول لرقم أجنبي)، وكود مصر +20/0020 بيبقى 0.
+     */
+    public static function cleanPhone(?string $raw): string
+    {
+        $s = (string) ($raw ?? '');
+        if ($s === '') {
+            return '';
+        }
+        $s = strtr($s, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+        ]);
+        $s = preg_replace('/[^0-9+]/u', '', $s) ?? '';
+        if ($s === '') {
+            return '';
+        }
+        $plus = $s[0] === '+';
+        $s = str_replace('+', '', $s);
+        if (str_starts_with($s, '00')) {
+            $plus = true;
+            $s = substr($s, 2);
+        }
+        if ($s === '') {
+            return '';
+        }
+        if (str_starts_with($s, '20') && strlen($s) > 10) {
+            $rest = substr($s, 2);
+
+            return str_starts_with($rest, '0') ? $rest : ('0' . $rest);
+        }
+        if ($plus && ! str_starts_with($s, '0')) {
+            return '+' . $s;   // رقم أجنبي — الـ+ لازمة للاتصال
+        }
+
+        return $s;
+    }
+
+    /** cleanPhone + حد الطول — null لو فاضي (نفس عقد strMax) */
+    private static function phoneMax(mixed $v, int $max, string $label): ?string
+    {
+        $s = self::cleanPhone(is_string($v) || is_numeric($v) ? (string) $v : null);
+
+        return self::strMax($s, $max, $label);
+    }
+
     private static function trimOrNull(mixed $v): ?string
     {
         $s = trim((string) ($v ?? ''));

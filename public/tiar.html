@@ -239,6 +239,9 @@
           if (cache) { nrmList(d.items).forEach(it => cache.set(it.id, it)); items = [...cache.values()]; }
           else items = nrmList(d.items);
           try { L.handler(_snapOfList(items)); } catch (e) { console.error("listener " + L.node + ":", e); }
+          /* 🔔 الجرس كان بيتحسب عند فتحه بس (بلاغ 2026-09-16 «الإشعارات ثابتة مبتتغيرش») —
+             أي قايمة تتحدّث = نعيد حساب الشارة والقايمة المفتوحة. رخيص: كله من الذاكرة. */
+          try { if (typeof window.renderNotifBell === "function") window.renderNotifBell(); } catch (_) {}
         },
       });
       if (!_pollersByNode.has(L.node)) _pollersByNode.set(L.node, []);
@@ -4957,6 +4960,8 @@
        🔔 جرس الإشعارات الموحّد — يجمع كل التنبيهات من كل الأقسام
        في نافذة عائمة واحدة فوق كل الصفحات
     ═══════════════════════════════════════════════════════════════ */
+    /* دقايق التأخير بتتغيّر مع الوقت من غير أي رد جديد — عدّاد الجرس يتحدّث كل دقيقة */
+    setInterval(() => { try { if (window._currentUser && typeof window.renderNotifBell === "function") window.renderNotifBell(); } catch (_) {} }, 60000);
     window.toggleNotifPanel = function() {
       const panel = document.getElementById("notifPanel");
       if (!panel) return;
