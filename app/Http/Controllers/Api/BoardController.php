@@ -853,12 +853,60 @@ class BoardController
            تاني، وبيقفل الرجوع لـ«على الشهر» بعد الصرف — كانت هتتحسب
            تاني في التقفيلة الشهرية (buildMonthlyData بيستثني daily بس). */
         $commissionSettle = $settle($request->input('commissionSettle', 'monthly'));
-        $payout = DB::transaction(function () use ($request, $actor, $shiftId, $settle, $commissionSettle): float {
+        $advancePaidOut   = 0.0;   // سلفة الوردية اللي خرجت من الخزنة في النداء ده (للواجهة)
+        $payout = DB::transaction(function () use ($request, $actor, $shiftId, $settle, $commissionSettle, &$advancePaidOut): float {
             $row = DB::select('SELECT * FROM shifts WHERE id = ? FOR UPDATE', [$shiftId])[0] ?? null;
             if (! $row) {
                 throw ApiException::notFound('الوردية غير موجودة');
             }
             $shift = (array) $row;
+
+            /* 💵 سلفة الوردية من الخزنة (بلاغ 2026-09-16: «سيف 55 سجّلتهم سلفة عليه في التقفيلة ومنزلوش من
+               الخزنة»): shiftEnd بيصرفها لما تيجي مع الإنهاء، لكن المشرف بيسجّلها غالبًا **بعد** الإنهاء من
+               تقرير التقفيلة (المسار ده) — فكانت رقم على الوردية والدرج ناقص. نفس القاعدة هنا:
+               • سلفة جديدة (> 0 ومفيش advance_txn_id) → حركة منصرف مرة واحدة من خزنة السلفة/العمولة، وإلا
+                 خزنة الفرع الوحيدة، وإلا 400 «اختر الخزنة».
+               • السلفة اتصرفت وتغيّر المبلغ: صفر = إلغاء (حركة وارد + مسح المعرّف)؛ مبلغ تاني = 409 (صفّرها الأول). */
+            $advAmount    = round((float) ($request->input('advanceAmount') ?? 0), 2);
+            $advPrev      = round((float) ($shift['advance_amount'] ?? 0), 2);
+            $advanceTxnId = ($shift['advance_txn_id'] ?? null) !== null ? (int) $shift['advance_txn_id'] : null;
+            $advancePaid  = 0.0;
+            $pilotRow     = (array) DB::selectOne('SELECT id, name FROM pilots WHERE id = ?', [(int) $shift['pilot_id']]);
+            $shiftBranch  = (int) $shift['branch_id'] ?: null;
+            $nowAdv       = WireTime::nowDb();
+            if ($advanceTxnId !== null && abs($advAmount - $advPrev) > 0.004) {
+                if ($advAmount > 0) {
+                    throw new ApiException('سلفة الوردية دي (' . number_format($advPrev, 2) . ' ج.م) خرجت من الخزنة خلاص — عشان تغيّرها صفّرها واحفظ (الفلوس بترجع للخزنة) وبعدين سجّل المبلغ الجديد', 409);
+                }
+                $oldTxn = DB::selectOne('SELECT store_id FROM cash_transactions WHERE id = ?', [$advanceTxnId]);
+                if ($oldTxn && $oldTxn->store_id !== null) {
+                    $this->applyCashTxn((int) $oldTxn->store_id, 'in', $advPrev,
+                        'إلغاء سلفة وردية: ' . ($pilotRow['name'] ?? $shift['pilot_id']), (int) $shift['pilot_id'], $shiftBranch, $actor->username, $nowAdv);
+                }
+                $advanceTxnId = null;
+            }
+            if ($advanceTxnId === null && $advAmount > 0) {
+                $advStoreIn = $request->input('advanceStoreId') ?: ($request->input('cashStoreId') ?: null);
+                $advStore   = $advStoreIn ? $this->intId($advStoreIn) : null;
+                if (! $advStore && $shift['commission_paid_at'] !== null) {
+                    // نفس الخزنة اللي اتصرفت منها عمولة الوردية دي
+                    $ct = DB::selectOne("SELECT store_id FROM cash_transactions WHERE related_pilot_id = ? AND type = 'out' AND reason LIKE 'عمولة وردية%' AND created_at = ? ORDER BY id DESC LIMIT 1",
+                        [(int) $shift['pilot_id'], $shift['commission_paid_at']]);
+                    $advStore = $ct && $ct->store_id !== null ? (int) $ct->store_id : null;
+                }
+                if (! $advStore && $shiftBranch) {
+                    $bs = DB::select('SELECT id FROM cash_stores WHERE branch_id = ?', [$shiftBranch]);
+                    $advStore = count($bs) === 1 ? (int) $bs[0]->id : null;
+                }
+                if (! $advStore) {
+                    throw new ApiException('اختر الخزنة اللي اتصرفت منها سلفة الطيار (' . number_format($advAmount, 2) . ' ج.م)');
+                }
+                $this->applyCashTxn($advStore, 'out', $advAmount,
+                    'سلفة وردية: ' . ($pilotRow['name'] ?? $shift['pilot_id']), (int) $shift['pilot_id'], $shiftBranch, $actor->username, $nowAdv);
+                $advanceTxnId = (int) DB::getPdo()->lastInsertId();
+                $advancePaid  = $advAmount;
+            }
+            $advancePaidOut = $advancePaid;
 
             if ($shift['commission_paid_at'] !== null && $commissionSettle !== 'daily') {
                 throw new ApiException('عمولة الوردية دي اتصرفت من الخزنة خلاص — مينفعش ترجع «على الشهر» عشان ماتتحسبش مرتين');
@@ -867,7 +915,8 @@ class BoardController
             DB::update(
                 'UPDATE shifts SET bonus_amount = ?, bonus_reason = ?, deduction_amount = ?, deduction_reason = ?,
                     advance_amount = ?, advance_reason = ?,
-                    commission_settle = ?, bonus_settle = ?, deduction_settle = ?, advance_settle = ?
+                    commission_settle = ?, bonus_settle = ?, deduction_settle = ?, advance_settle = ?,
+                    advance_txn_id = ?
               WHERE id = ?',
                 [
                     (float) ($request->input('bonusAmount') ?? 0),
@@ -880,6 +929,7 @@ class BoardController
                     $settle($request->input('bonusSettle', 'monthly')),
                     $settle($request->input('deductionSettle', 'monthly')),
                     $settle($request->input('advanceSettle', 'monthly')),
+                    $advanceTxnId,
                     $shiftId,
                 ]
             );
@@ -897,7 +947,7 @@ class BoardController
             );
         }, 3);
 
-        return ApiResponse::out(['ok' => true, 'commissionPaid' => $payout]);
+        return ApiResponse::out(['ok' => true, 'commissionPaid' => $payout, 'advancePaid' => round($advancePaidOut, 2)]);
     }
 
     /**

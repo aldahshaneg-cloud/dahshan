@@ -7503,6 +7503,11 @@
           commissionSettle, bonusSettle, deductionSettle, advanceSettle,
           cashStoreId: commCashStoreId || undefined
         });
+        /* 💵 سلفة الوردية اتصرفت من الخزنة في الحفظ ده (2026-09-16) — نقول للمشرف الدرج نقص */
+        if (Number(res.advancePaid) > 0) {
+          showToast(`💵 سلفة الوردية ${ Number(res.advancePaid).toFixed(2) } ج.م اتخصمت من الخزنة`, "success");
+          if (window.refreshCashData) { try { window.refreshCashData(true); } catch (_) {} }
+        }
         if (Number(res.commissionPaid) > 0) {
           /* الخزنة سجّلت حركة الخروج — بنقفل الاختيار في الواجهة فورًا */
           data.commissionPaidAmount = Number(res.commissionPaid);
