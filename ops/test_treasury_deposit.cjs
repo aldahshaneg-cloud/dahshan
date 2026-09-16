@@ -93,7 +93,7 @@ console.log('\n══ 4) السيرفر ══');
 ok('المسار موجود من الأصل',
    /Route::post\('cash-stores\/\{id\}\/transactions'/.test(RT));
 ok('وأدواره زي ما هي — مافيش توسيع صلاحية',
-   /Route::post\('cash-stores\/\{id\}\/transactions'[\s\S]{0,160}role:admin,branch,accountant/.test(RT));
+   /Route::post\('cash-stores\/\{id\}\/transactions'[\s\S]{0,160}role:admin,accountant/.test(RT));   // الفرع اتشال 2026-09-16
 ok('والنوع «in» مقبول من الأصل',
    /in_array\(\$type, \['in', 'out', 'pending'\], true\)/.test(PHP));
 ok('🔴 والرصيد بيتحدّث على السيرفر بقفل صف — مش من الواجهة',

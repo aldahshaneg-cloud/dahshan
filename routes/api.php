@@ -582,8 +582,11 @@ Route::put('partners/{id}', [SupportController::class, 'partnersUpdate'])
     ->middleware('role:admin');
 Route::delete('partners/{id}', [SupportController::class, 'partnersDelete'])
     ->middleware('role:admin');
+/* 💰 وارد/صادر يدوي = الإدارة (والمحاسب) بس — طلب صاحب النظام 2026-09-16: «وارد وصادر دي عند
+   المديرين بس إنما الفروع لا». حركات الفرع التلقائية (تحصيل، عهدة، عمولة، سلف، مرتبات) بتتكتب من
+   مساراتها (BoardController/PilotAccountingController) ومش بتمرّ من هنا. */
 Route::post('cash-stores/{id}/transactions', [FinanceController::class, 'cashTxnsCreate'])
-    ->middleware('role:admin,branch,accountant');   // 💰
+    ->middleware('role:admin,accountant');   // 💰
 Route::post('cash-transactions/{id}/approve', [FinanceController::class, 'cashTxnsApprove'])
     ->middleware('role:admin,branch,accountant');   // 💰
 Route::post('complaints/{id}/resolve', [SupportController::class, 'complaintsResolve'])
