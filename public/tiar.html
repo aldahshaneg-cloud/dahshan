@@ -10379,7 +10379,7 @@
           </select>
         </div>
         <div>
-          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ</label>
+          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ <span title="يوم العمل من ٩ صباحًا لـ٩ صباحًا اليوم التالي" style="opacity:.8">(بيوم العمل)</span></label>
           <input type="date" id="deliveredFromDate" onchange="applyDeliveredFilters()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem">
         </div>
         <div>
@@ -12744,8 +12744,10 @@
     if (titleEl) titleEl.textContent = `📋 أوردرات الطيار: ${pilotName || "—"}`;
 
     // بناء نطاق التاريخ
-    const from = fromISO ? new Date(fromISO + "T00:00:00") : null;
-    const to   = toISO   ? new Date(toISO   + "T23:59:59") : null;
+    /* 📅 بيوم العمل (٩ صباحًا → ٩ صباحًا) مش بيوم التقويم (بلاغ 2026-09-16) */
+    const _bz = (fromISO || toISO) ? window._bizRangeOf(fromISO || toISO, toISO || fromISO) : null;
+    const from = _bz ? _bz.from : null;
+    const to   = _bz ? _bz.to   : null;
 
     // عرض الفترة
     const periodEl = document.getElementById("pilotOrdersPeriod");
@@ -12994,8 +12996,10 @@
     const toVal     = document.getElementById("deliveredToDate")?.value;
     const searchVal = (document.getElementById("deliveredSearchInput")?.value || "").trim().toLowerCase();
 
-    const from = fromVal ? new Date(fromVal + "T00:00:00") : null;
-    const to   = toVal   ? new Date(toVal   + "T23:59:59") : null;
+    /* 📅 بيوم العمل (٩ صباحًا → ٩ صباحًا) مش بيوم التقويم (بلاغ 2026-09-16) */
+    const _bz = (fromVal || toVal) ? window._bizRangeOf(fromVal || toVal, toVal || fromVal) : null;
+    const from = _bz ? _bz.from : null;
+    const to   = _bz ? _bz.to   : null;
 
     const allOrders = window._ordersData || [];
     let filtered = allOrders.filter(o => {

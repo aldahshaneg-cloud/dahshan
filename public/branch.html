@@ -8284,7 +8284,7 @@
           </select>
         </div>
         <div>
-          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ</label>
+          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">من تاريخ <span title="يوم العمل من ٩ صباحًا لـ٩ صباحًا اليوم التالي" style="opacity:.8">(بيوم العمل)</span></label>
           <input type="date" id="brDeliveredFromDate" onchange="applyBrDeliveredFilters()" style="padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem">
         </div>
         <div>
@@ -10327,8 +10327,11 @@ window.applyBrDeliveredFilters = function() {
   const toVal     = document.getElementById("brDeliveredToDate")?.value;
   const searchVal = (document.getElementById("brDeliveredSearch")?.value || "").trim().toLowerCase();
 
-  const from = fromVal ? new Date(fromVal + "T00:00:00") : null;
-  const to   = toVal   ? new Date(toVal   + "T23:59:59") : null;
+  /* 📅 بيوم العمل (٩ صباحًا → ٩ صباحًا) مش بيوم التقويم (بلاغ 2026-09-16: صفحة المسلّمة في فرع المدير
+     «بقفل على 60 وتاني يوم ألاقيهم 48» — الفرع بيشتغل بالليل وأوردرات بعد نص الليل كانت بتروح لليوم التالي). */
+  const _bz = (fromVal || toVal) ? window._bizRangeOf(fromVal || toVal, toVal || fromVal) : null;
+  const from = _bz ? _bz.from : null;
+  const to   = _bz ? _bz.to   : null;
 
   const allOrders = window._ordersData || [];
   const branchId  = window._currentUser?.branchId;
