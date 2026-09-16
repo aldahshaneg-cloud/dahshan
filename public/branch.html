@@ -10396,6 +10396,14 @@ window.clearBrDeliveredFilters = function() {
   /* الماركر بيقول عمر الموقع من غير دوس — شوف assets/js/locfresh.js للسبب.
      الإطار المتقطّع كان محجوز لـ«طيار فرع تاني»؛ بياتة الموقع بتاخد لون
      الإطار وشفافية أقوى، فالإشارتين بيتقروا مع بعض من غير ما يلغوا بعض. */
+  /* 🏷️ اسم الطيار تحت الدايرة وبيتحرك معاها (طلب صاحب النظام 2026-09-16: «عايزين اسم الطيار هنا
+     ويكون ماشي مع الدايرة عشان لو كتير برّه أعرف من غير ما أدوس على كل دايرة»). أول كلمتين من الاسم،
+     جوه غلاف الأيقونة فبيتزحلق مع الماركر (pilotmotion) من غير أي طبقة زيادة. */
+  function _pilotNameLabel(pilot, muted) {
+    const n = String((pilot && pilot.name) || "").trim().split(/s+/).slice(0, 2).join(" ");
+    if (!n) return "";
+    return `<div class="pm-name" style="position:absolute;top:42px;left:50%;transform:translateX(-50%);background:${muted ? "rgba(100,116,139,.9)" : "rgba(15,23,42,.88)"};color:#fff;font-size:11px;font-weight:700;line-height:1.3;padding:2px 7px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.45);direction:rtl">${ esc(n) }</div>`;
+  }
   function _mkPilotIcon(status, isOtherBranch, pilot) {
     const bg = status==="onLeave" ? "#ef4444" : status==="delivering" ? "#3b82f6" : "#22c55e";
     const st = window.LocFresh ? LocFresh.markerStyle(pilot || {}) : { tier:"ok", opacity:1, ring:"#fff", dashed:false, badge:null };
@@ -10404,7 +10412,7 @@ window.clearBrDeliveredFilters = function() {
     const opacity = Math.min(isOtherBranch ? 0.8 : 1, st.opacity);
     // سهم الاتجاه (pilotmotion.js) جوه الغلاف — بيتلف حوالين مركز الدايرة
     const arrow = window.PilotMotion ? PilotMotion.arrowHtml() : "";
-    return L.divIcon({ className:"", html:`<div style="position:relative;width:40px;height:40px">${ LocFresh.badgeHtml(st) }<div style="background:${bg};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:${border};opacity:${opacity}">🛵</div>${arrow}</div>`, iconSize:[40,40], iconAnchor:[20,20] });
+    return L.divIcon({ className:"", html:`<div style="position:relative;width:40px;height:40px">${ LocFresh.badgeHtml(st) }<div style="background:${bg};color:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 12px rgba(0,0,0,.4);border:${border};opacity:${opacity}">🛵</div>${arrow}${ _pilotNameLabel(pilot, isOtherBranch) }</div>`, iconSize:[40,40], iconAnchor:[20,20] });
   }
   function _mkOrderSenderIcon(status, orderNum) {
     const bg = status==="جاري التوصيل" ? "#f97316" : "#3b82f6";

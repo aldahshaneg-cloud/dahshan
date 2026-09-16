@@ -50,6 +50,13 @@ for (const [name, S] of [['branch.html', BR], ['tiar.html', TI]]) {
   ok('  وطبقة الأثر تحت الماركرات', /window\._layerTrails\s*=\s*L\.layerGroup\(\)\.addTo\(_pilotMap\);[^\n]*\n\s*_layerPilots\s*=/.test(S));
   ok('  وسهم الاتجاه جوه الأيقونة', /PilotMotion\.arrowHtml\(\)/.test(S.slice(S.indexOf('function _mkPilotIcon('), S.indexOf('function _mkPilotIcon(') + 1500)));
 }
+/* 🏷️ اسم الطيار تحت الدايرة (طلب 2026-09-16) — جوه غلاف الأيقونة فبيتحرك معاها، أول كلمتين، ومن غير أحداث ماوس */
+for (const [name, S] of [['branch.html', BR], ['tiar.html', TI], ['callcenter.html', fs.readFileSync('public/callcenter.html', 'utf8')]]) {
+  const icon = S.slice(S.indexOf('function _mkPilotIcon('), S.indexOf('function _mkPilotIcon(') + 2000);
+  ok(name + ': اسم الطيار جوه أيقونة الماركر (_pilotNameLabel)', /\$\{ _pilotNameLabel\(pilot, (isOtherBranch|false)\) \}/.test(icon)
+     && S.includes('function _pilotNameLabel(pilot, muted) {'), 'الاسم مش على الدايرة');
+  ok('  أول كلمتين، pointer-events:none، وبـesc', /slice\(0, 2\)\.join\(" "\)/.test(S) && /class="pm-name"[^`]*pointer-events:none[^`]*\$\{ esc\(n\) \}/.test(S));
+}
 
 console.log('\n══ 3) تطبيق الطيار (LiveTrack) ══');
 const APP = strip(fs.readFileSync('../aldahshan/lib/main.dart', 'utf8'));
