@@ -9839,7 +9839,7 @@ window._hasFormFields = function (el) {
     pcFillSelects();
     const r = pcRange();
     try {
-      const d = await api.get("/api/pilot-accounting/pilot-cash", { from: r.from, to: r.to });
+      const d = await window.API.get("/api/pilot-accounting/pilot-cash", { from: r.from, to: r.to });
       const items = d.items || [];
       body.innerHTML = items.length ? items.map((it, i) => {
         const kind = PC_KIND[it.kind] || it.kind;
@@ -9882,7 +9882,7 @@ window._hasFormFields = function (el) {
     if (!confirm(`تسجيل ${what} بمبلغ ${amount.toFixed(2)} ج.م وخصمه من الخزنة؟`)) return;
     btn.disabled = true;
     try {
-      const r = await api.post("/api/pilot-accounting/pilot-cash", { pilotId, kind, amount, cashStoreId: storeId, month: kind === "salary" ? month : undefined, note });
+      const r = await window.API.post("/api/pilot-accounting/pilot-cash", { pilotId, kind, amount, cashStoreId: storeId, month: kind === "salary" ? month : undefined, note });
       showToast(kind === "salary"
         ? `اتصرفت ${amount.toFixed(2)} ج.م — الباقي من صافي ${r.month}: ${(Number(r.remaining) || 0).toFixed(2)} ج.م`
         : `اتسجّلت السلفة وهتتخصم من مرتب ${r.month} ✓`, "success");
@@ -9901,7 +9901,7 @@ window._hasFormFields = function (el) {
   window.pcDelete = async function (kind, id) {
     if (!confirm("إلغاء العملية؟ الفلوس هترجع للخزنة بحركة وارد.")) return;
     try {
-      await api.del(`/api/pilot-accounting/pilot-cash/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
+      await window.API.del(`/api/pilot-accounting/pilot-cash/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
       showToast("اتلغت ورجعت الفلوس للخزنة ✓", "success");
       renderPilotCash();
       try { await window.refreshCashData?.(true); } catch (_) {}
@@ -10563,7 +10563,7 @@ window.clearBrDeliveredFilters = function() {
       if (!ids.length) { showToast("اختر أوردر واحد على الأقل", "error"); return; }
       this.disabled = true; this.textContent = "جاري التحميل…";
       try {
-        const res = await api.post("/api/orders/assign-bulk", { orderIds: ids, pilotId: p.id });
+        const res = await window.API.post("/api/orders/assign-bulk", { orderIds: ids, pilotId: p.id });
         if (res.warning) showToast(res.warning, "error");
         const okCount = (res.loaded || []).length;
         const bad     = (res.failed || []).length;

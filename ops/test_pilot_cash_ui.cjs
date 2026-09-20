@@ -20,11 +20,11 @@ for (const id of ['pcPilot', 'pcKind', 'pcMonth', 'pcAmount', 'pcStore', 'pcNote
 }
 ok('النوعان: سلفة تتخصم من مرتب الشهر · دفعة مرتب', B.includes('<option value="advance">سلفة — تتخصم من مرتب الشهر</option>') && B.includes('<option value="salary">دفعة مرتب</option>'));
 ok('🔴 التسجيل على POST /api/pilot-accounting/pilot-cash بالطيار والنوع والمبلغ والخزنة',
-   /api\.post\("\/api\/pilot-accounting\/pilot-cash", \{ pilotId, kind, amount, cashStoreId: storeId, month: kind === "salary" \? month : undefined, note \}\)/.test(B));
+   /window.API.post\("\/api\/pilot-accounting\/pilot-cash", \{ pilotId, kind, amount, cashStoreId: storeId, month: kind === "salary" \? month : undefined, note \}\)/.test(B));
 ok('  وبتأكيد قبل الخصم من الخزنة', /if \(!confirm\(`تسجيل \$\{what\} بمبلغ/.test(B));
 ok('  ومن غير خزنة = رسالة مش طلب', B.includes('if (!storeId) { showToast("اختر الخزنة اللي هتتصرف منها", "error"); return; }'));
-ok('🔴 قايمة الفترة من GET pilot-cash بنفس فترة الصفحة', B.includes('api.get("/api/pilot-accounting/pilot-cash", { from: r.from, to: r.to })') && B.includes('document.getElementById("accFrom").value || bizToday.slice(0, 8) + "01"'));
-ok('  والإلغاء DELETE بالنوع والرقم وبتأكيد وبس لما canDelete', B.includes('api.del(`/api/pilot-accounting/pilot-cash/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`)') && B.includes('const del = it.canDelete') && B.includes('if (!confirm("إلغاء العملية؟ الفلوس هترجع للخزنة بحركة وارد.")) return;'));
+ok('🔴 قايمة الفترة من GET pilot-cash بنفس فترة الصفحة', B.includes('window.API.get("/api/pilot-accounting/pilot-cash", { from: r.from, to: r.to })') && B.includes('document.getElementById("accFrom").value || bizToday.slice(0, 8) + "01"'));
+ok('  والإلغاء DELETE بالنوع والرقم وبتأكيد وبس لما canDelete', B.includes('window.API.del(`/api/pilot-accounting/pilot-cash/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`)') && B.includes('const del = it.canDelete') && B.includes('if (!confirm("إلغاء العملية؟ الفلوس هترجع للخزنة بحركة وارد.")) return;'));
 ok('🔴 عرض الصفحة بينده القسم', /const data = buildAccountingData\(_ov\);\s*\n\s*renderPilotCash\(\);/.test(B));
 ok('  وبعد التسجيل/الإلغاء بيجدّد بيانات الخزنة والصفحة', (B.match(/await window\.refreshCashData\?\.\(true\);/g) || []).length === 2 && B.includes('window.refreshCashData = async function(force)'));
 ok('طياري الفرع بس في القايمة (الثابت أو المعيّن = فرعي)', B.includes('String(p.homeBranchId ?? p.assignedBranchId ?? "") === myBranchId'));
