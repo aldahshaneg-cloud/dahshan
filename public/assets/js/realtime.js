@@ -89,7 +89,13 @@
     var over = global.REALTIME_CONFIG || {};
     for (var k in over) if (Object.prototype.hasOwnProperty.call(over, k)) base[k] = over[k];
     /* بعد الدمج عشان يمشي على `forceTLS` النهائي مش الافتراضي. */
-    if (!base.enabledTransports) base.enabledTransports = base.forceTLS ? ["wss"] : ["ws"];
+    /* 🔴 (2026-09-21) الناقل في pusher-js اسمه "ws" **حتى مع TLS** — استراتيجية forceTLS بتبني
+       `ws_loop` من ناقل "ws" وتوصّله على wss://. القيمة القديمة ["wss"] لوحدها كانت بتشيل الناقل
+       الوحيد المستعمل، فالمكتبة تروح `initialized → failed` فورًا من غير أي محاولة اتصال: لوحات الويب
+       **عمرها ما اتصلت بالبثّ على الإنتاج** (كل `/broadcasting/auth` في سجل أباتشي كانت من تطبيق الطيار)
+       وكانت عايشة على الاستطلاع — «الأوردر بيوصل الفرع بعد نص دقيقة/دقيقة». اتأكدت في متصفح حقيقي:
+       ["wss"] → failed · ["ws","wss"] → connected. */
+    if (!base.enabledTransports) base.enabledTransports = base.forceTLS ? ["ws", "wss"] : ["ws"];
     return base;
   }
 
