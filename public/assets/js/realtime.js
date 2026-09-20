@@ -302,15 +302,29 @@
      * غير التجميع دي ٨ نداءات لـ/api/orders، يعني البثّ بيعمل حِمل أكتر
      * من الاستطلاع اللي المفروض يخفّفه.
      */
+    /* 🔴 حافة أمامية (2026-09-21): أول حدث بينفّذ **فورًا من غير مؤقت**، واللي ييجي
+       جوه نافذة التجميع بيتلمّ في نداء واحد بعدها.
+       ليه: بلاغ صاحب النظام «الكول سنتر بيعمل الأوردر والفرع بنص دقيقة أو دقيقة على
+       ما يوصل». الحدث كان بيوصل المتصفح في نص ثانية، بس ردّ الفعل كان
+       `setTimeout(300)` — والمتصفح بيخنق مؤقتات التبويب اللي في الخلفية (المشرف واقف
+       على واتساب) لمرة كل دقيقة، فالأوردر والرنّة بيتأخروا لحد 60 ثانية. رسايل
+       الويبسوكت نفسها مابتتخنقش — فالتنفيذ من جوه الحدث مباشرة هو الحل. */
     coalesce: function (fn, ms) {
-      var t = null;
+      var t = null, last = 0, pending = false;
       var wait = ms || 300;
+      function run() {
+        last = Date.now(); pending = false;
+        try { fn(); } catch (e) { console.error("realtime: coalesced handler", e); }
+      }
       return function () {
-        if (t) return;                       // نداء متجدوَل خلاص
-        t = setTimeout(function () {
-          t = null;
-          try { fn(); } catch (e) { console.error("realtime: coalesced handler", e); }
-        }, wait);
+        if (Date.now() - last >= wait) {       // هادي بقاله فترة → نفّذ حالًا
+          if (t) { clearTimeout(t); t = null; }
+          run();
+          return;
+        }
+        pending = true;                        // جوه النافذة → اتلمّ مع اللي بعده
+        if (t) return;
+        t = setTimeout(function () { t = null; if (pending) run(); }, wait);
       };
     },
 

@@ -47,7 +47,7 @@
        نداءاته تحت متلفوفة بحارس — والصفحة تفضل بالاستطلاع زي ما هي.
   ══════════════════════════════════════════════════════════════ -->
   <script src="assets/js/vendor/pusher.min.js?v=20260908"></script>
-  <script src="assets/js/realtime.js?v=20260829a"></script>
+  <script src="assets/js/realtime.js?v=20260921rt"></script>
 
   <!-- ══════════════════════════════════════════════════════════════
        تهريب النصوص قبل حقنها في HTML
@@ -395,7 +395,7 @@
       function _rtOnPilotRequest() {
         try {
           window.API.pokePaths(["/api/leave-requests", "/api/shift-requests", "/api/return-requests",
-           "/api/pilot-transfers", "/api/join-requests", "/api/shifts", "/api/pilots"]);
+           "/api/pilot-transfers", "/api/join-requests", "/api/shifts", "/api/pilots", "/api/support-requests"]);
         } catch (_) {}
       }
     function _rtSyncBranches() {

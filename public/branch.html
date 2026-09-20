@@ -87,7 +87,7 @@
   </script>
   <script src="assets/js/constants.js?v=20260908"></script>
   <!-- ?v: كسر كاش المتصفح — hiddenTick (رنين التاب المخفي) محتاج النسخة دي -->
-  <script src="assets/js/api.js?v=20260901ring"></script>
+  <script src="assets/js/api.js?v=20260921rt"></script>
   <script src="assets/js/trust-admin.js?v=20260908"></script>
   <script src="assets/js/zonepick.js?v=20260830b"></script>
   <script src="assets/js/commadj.js?v=20260903"></script>
@@ -107,7 +107,7 @@
        `REALTIME.available()` قبل ما يلمس أي حاجة، والصفحة تفضل ماشية
        بالاستطلاع من غير أي خطأ للمستخدم (متجرَّب فعليًا بإخفاء الملف). -->
   <script src="assets/js/vendor/pusher.min.js?v=20260908"></script>
-  <script src="assets/js/realtime.js?v=20260829a"></script>
+  <script src="assets/js/realtime.js?v=20260921rt"></script>
   <script type="module">
     /* ═══ REST بدل فايربيز — كل القراءة والكتابة عبر assets/js/api.js ═══
        التحويل جراحي (CONVENTIONS.md بند «الواجهات المحوّلة»): نفس أشكال
@@ -857,7 +857,9 @@
              الشغّال ده بدأ **قبل** ما التغيير يتسجّل، الرد بتاعه مش هيجيبه
              والحدث يبقى راح عليه. فبنعيد مرة واحدة بعد الرد. مش لوب: محاولة
              إضافية واحدة وخلاص، والدورة العادية (٨ ثواني) هي الضمان الأخير. */
-          if (ordersPoller._inFlight) { setTimeout(() => ordersPoller.tick(), 900); return; }
+          /* tickSoon: لو فيه طلب شغّال بيعيد بعده على طول **من غير مؤقت** — مؤقتات التبويب
+             المخفي مخنوقة لمرة كل دقيقة (بلاغ 2026-09-21: الأوردر بيوصل الفرع بعد نص دقيقة/دقيقة) */
+          if (typeof ordersPoller.tickSoon === "function") { ordersPoller.tickSoon(); return; }
           ordersPoller.tick();
         }, 300);
 
@@ -866,7 +868,7 @@
              كانت `pokeAll()` وبتجرّ معاها المناطق ودفتر العملاء والخزن مع
              كل إذن (مراجعة التقل 2026-09-10). */
           try { window.API.pokePaths(["/api/leave-requests", "/api/shift-requests", "/api/return-requests",
-           "/api/pilot-transfers", "/api/join-requests", "/api/shifts", "/api/pilots"]); } catch (_) {}
+           "/api/pilot-transfers", "/api/join-requests", "/api/shifts", "/api/pilots", "/api/support-requests"]); } catch (_) {}
         }, onOrderUrged));
         /* رجوع الاتصال بعد قطع → `API.pokeAll()` فورًا بـ`?since=` لكل بولر.
            بيغطي كمان رجوع التاب من الخلفية (شوف autoResync). */

@@ -234,7 +234,18 @@
       this.onError(e);
     } finally {
       this._inFlight = false;
+      /* حدث وصل والطلب شغّال (شوف tickSoon) → دورة كمان **من غير مؤقت** */
+      if (this._again) { this._again = false; this.tick(); }
     }
+  };
+
+  /* 🔴 tickSoon (2026-09-21): ركلة البثّ الفوري. لو فيه طلب شغّال، الرد بتاعه ممكن يكون
+     اتبعت **قبل** التغيير — فبنعلّم «دورة كمان» وبتتنفّذ أول ما الطلب يخلص. البديل القديم
+     كان `setTimeout(900)` والمتصفح بيأخّره لحد دقيقة في التبويب المخفي. */
+  Poller.prototype.tickSoon = function () {
+    if (this._stopped || this._dead) return;
+    if (this._inFlight) { this._again = true; return; }
+    return this.tick();
   };
 
   Poller.prototype._markDead = function () {
@@ -322,11 +333,16 @@
      (pokeAll فضلت لرجوع الاتصال ورجوع التاب وزرار التحديث: هناك إحنا
      فعلًا عايزين كل حاجة.) */
   var _pathQueue = null, _pathTimer = null;
+  function _soon(fn, ms) {
+    if (typeof document !== "undefined" && document.hidden) { Promise.resolve().then(fn); return 1; }
+    return setTimeout(fn, ms);
+  }
   function pokePaths(paths) {
     if (!paths || !paths.length) return;
     _pathQueue = (_pathQueue || []).concat(paths);
     if (_pathTimer) return;
-    _pathTimer = setTimeout(function () {
+    /* التبويب المخفي مؤقتاته مخنوقة (مرة/دقيقة) — ننفّذ في microtask بدل المؤقت */
+    _pathTimer = _soon(function () {
       var want = _pathQueue; _pathQueue = null; _pathTimer = null;
       _pollers.forEach(function (p) {
         if (p._dead || p._stopped) return;

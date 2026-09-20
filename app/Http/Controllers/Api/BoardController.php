@@ -479,6 +479,71 @@ class BoardController
         return $this->listOut($request, $items);
     }
 
+    /* ═══════════════════════════════════════════════════════════════
+       📡 بثّ فوري لعمليات اللوحة اللي كانت بتستنى الاستطلاع (مراجعة صاحب النظام 2026-09-21:
+       «السيرفر يبعت على طول أول ما أي حد يعمل أي عملية»). كلها بتطلّع نفس حدث
+       `pilot.request.changed` على قناة الفرع (وقناة الطيار لو معروف)، والواجهات بتردّ عليه
+       بركلة لقوايمها. بتقرا الصف **بعد** العملية بالمعرّف — فمالهاش علاقة بمتغيّرات
+       المعاملة، ومابتكسرش العملية أبدًا (broadcastPilotRequest جواها try/catch).
+    ═══════════════════════════════════════════════════════════════ */
+    private function notifySupport(int $reqId): void
+    {
+        try {
+            $r = DB::selectOne('SELECT requesting_branch_id, from_branch_id, accepted_by_branch_id, pilot_id FROM pilot_support_requests WHERE id = ?', [$reqId]);
+            if (! $r) {
+                return;
+            }
+            $ids = [(int) $r->requesting_branch_id, (int) ($r->from_branch_id ?? 0), (int) ($r->accepted_by_branch_id ?? 0)];
+            if ($r->from_branch_id === null) {
+                // طلب عام = إنذار عند كل الفروع
+                foreach (DB::select('SELECT id FROM branches') as $b) {
+                    $ids[] = (int) $b->id;
+                }
+            }
+            foreach (array_unique(array_filter($ids)) as $bid) {
+                $this->broadcastPilotRequest('support', $bid, $r->pilot_id !== null ? (int) $r->pilot_id : null);
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function notifyTransfer(int $id): void
+    {
+        try {
+            $r = DB::selectOne('SELECT from_branch_id, to_branch_id, pilot_id FROM pilot_transfers WHERE id = ?', [$id]);
+            if (! $r) {
+                return;
+            }
+            foreach (array_unique(array_filter([(int) ($r->from_branch_id ?? 0), (int) ($r->to_branch_id ?? 0)])) as $bid) {
+                $this->broadcastPilotRequest('transfer', $bid, $r->pilot_id !== null ? (int) $r->pilot_id : null);
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function notifyJoin(int $id): void
+    {
+        try {
+            $bid = (int) (DB::table('pilot_join_requests')->where('id', $id)->value('branch_id') ?? 0);
+            $this->broadcastPilotRequest('join', $bid, null);
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    /** دور الانتظار / فتح وردية: فرع الطيار الحالي + قناة الطيار نفسه */
+    private function notifyPilotBoard(int $pilotId): void
+    {
+        try {
+            $bid = (int) (DB::table('pilots')->where('id', $pilotId)->value('assigned_branch_id') ?? 0);
+            $this->broadcastPilotRequest('board', $bid, $pilotId);
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
     /**
      * ⏳ طلب الدعم المعلّق بينتهي لوحده بعد SUPPORT_TTL_HOURS (بلاغ صاحب النظام 2026-09-20).
      *
@@ -618,6 +683,7 @@ class BoardController
             throw new ApiException('تعذّر إدخال الطيار في الدور', 500);
         }
 
+        $this->notifyPilotBoard($pilotId);
         return ApiResponse::out(['ok' => true, 'queueNo' => $queueNo]);
     }
 
@@ -676,6 +742,7 @@ class BoardController
             throw new ApiException('تعذّر إعادة ترتيب الدور', 500);
         }
 
+        $this->broadcastPilotRequest('queue', (int) $branchId, null);
         return ApiResponse::ok();
     }
 
@@ -708,6 +775,7 @@ class BoardController
             throw new ApiException('تعذّر إخراج الطيار من الدور', 500);
         }
 
+        $this->notifyPilotBoard($pilotId);
         return ApiResponse::ok();
     }
 
@@ -774,6 +842,7 @@ class BoardController
             throw new ApiException('تعذّر فتح الوردية', 500);
         }
 
+        $this->notifyPilotBoard($pilotId);
         return ApiResponse::out(['ok' => true, 'shiftId' => $shiftId]);
     }
 
@@ -794,6 +863,7 @@ class BoardController
         $actor       = $request->actorOrFail();
         $shiftId     = $this->intId($id);
         $toBranchId  = $this->intId($request->input('branchId', 0));
+        $oldShift = DB::selectOne('SELECT branch_id, pilot_id FROM shifts WHERE id = ?', [$shiftId]);
 
         try {
             DB::transaction(function () use ($actor, $shiftId, $toBranchId): void {
@@ -828,6 +898,9 @@ class BoardController
             throw new ApiException('تعذّر نقل الوردية', 500);
         }
 
+        foreach (array_unique(array_filter([(int) ($oldShift->branch_id ?? 0), (int) $toBranchId])) as $nb) {
+            $this->broadcastPilotRequest('shift', $nb, isset($oldShift->pilot_id) ? (int) $oldShift->pilot_id : null);
+        }
         return ApiResponse::ok();
     }
 
@@ -1574,7 +1647,9 @@ class BoardController
             ]
         );
 
-        return ApiResponse::out(['ok' => true, 'id' => (int) DB::getPdo()->lastInsertId()]);
+        $newId = (int) DB::getPdo()->lastInsertId();
+        $this->broadcastPilotRequest('join', (int) $branchId, null);
+        return ApiResponse::out(['ok' => true, 'id' => $newId]);
     }
 
     /**
@@ -1660,6 +1735,7 @@ class BoardController
             throw new ApiException('تعذّر قبول طلب الانضمام', 500);
         }
 
+        $this->notifyJoin($reqId);
         return ApiResponse::out(['ok' => true, 'pilotId' => $pilotId]);
     }
 
@@ -1682,6 +1758,7 @@ class BoardController
             throw ApiException::notFound('الطلب غير موجود أو اتبتّ فيه بالفعل');
         }
 
+        $this->notifyJoin($this->intId($id));
         return ApiResponse::ok();
     }
 
@@ -2275,7 +2352,9 @@ class BoardController
             [$pilotId, $fromBranchId, $toBranchId, $type, $now, $now]
         );
 
-        return ApiResponse::out(['ok' => true, 'id' => (int) DB::getPdo()->lastInsertId()]);
+        $newId = (int) DB::getPdo()->lastInsertId();
+        $this->notifyTransfer($newId);
+        return ApiResponse::out(['ok' => true, 'id' => $newId]);
     }
 
     /**
@@ -2346,6 +2425,7 @@ class BoardController
             throw new ApiException('تعذّرت الموافقة على النقل', 500);
         }
 
+        $this->notifyTransfer($reqId);
         return ApiResponse::ok();
     }
 
@@ -2365,6 +2445,7 @@ class BoardController
             throw ApiException::notFound('الطلب غير موجود أو اتبتّ فيه بالفعل');
         }
 
+        $this->notifyTransfer($reqId);
         return ApiResponse::ok();
     }
 
@@ -2388,6 +2469,7 @@ class BoardController
             throw ApiException::notFound('النقل غير موجود أو مش ساري');
         }
 
+        $this->notifyTransfer($this->intId($id));
         return ApiResponse::ok();
     }
 
@@ -2463,7 +2545,9 @@ class BoardController
             ]
         );
 
-        return ApiResponse::out(['ok' => true, 'id' => (int) DB::getPdo()->lastInsertId()]);
+        $newId = (int) DB::getPdo()->lastInsertId();
+        $this->notifySupport($newId);
+        return ApiResponse::out(['ok' => true, 'id' => $newId]);
     }
 
     /**
@@ -2522,6 +2606,7 @@ class BoardController
             throw new ApiException('تعذّر تسجيل الرد', 500);
         }
 
+        $this->notifySupport($reqId);
         return ApiResponse::ok();
     }
 
@@ -2620,6 +2705,7 @@ class BoardController
             throw new ApiException('تعذّر إرسال الطيار', 500);
         }
 
+        $this->notifySupport($reqId);
         return ApiResponse::ok();
     }
 
@@ -2674,6 +2760,7 @@ class BoardController
             throw new ApiException('تعذّر ضم الطيار', 500);
         }
 
+        $this->notifySupport($reqId);
         return ApiResponse::ok();
     }
 
@@ -2696,6 +2783,7 @@ class BoardController
             throw ApiException::notFound('الطلب غير موجود أو اتبتّ فيه بالفعل');
         }
 
+        $this->notifySupport($this->intId($id));
         return ApiResponse::ok();
     }
 
