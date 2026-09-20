@@ -52,6 +52,22 @@ for (const p of ['branch', 'tiar', 'callcenter']) {
   ok(p + ': فورم الأوردر الجديد محمي', S.includes('<div id="modal-order" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal(\'order\')">'));
 }
 
+/* 🪟 تسجيل عميل جديد من جوه فورم الأوردر = فورم عائم مستقل (طلب صاحب النظام 2026-09-20):
+   كان بيترسم جوه قايمة البحث (dropdown) فبيختفي بالمكتوب مع أي ضغطة برّه. */
+console.log('\n══ فورم تسجيل العميل العائم ══');
+for (const p of ['branch', 'tiar', 'callcenter']) {
+  const S = fs.readFileSync('public/' + p + '.html', 'utf8');
+  const a = S.indexOf("      addNewBtn.addEventListener('click', function() {");
+  const blk = a > 0 ? S.slice(a, S.indexOf('      function showDropdown()', a)) : '';
+  ok(p + ': 🔴 الفورم مابيترسمش جوه قايمة البحث', blk !== '' && !blk.includes('dropdown.innerHTML'));
+  ok('  ' + p + ': عائم على body فوق فورم الأوردر', blk.includes('qaBox.id = "_quickAddBox";') && blk.includes('document.body.appendChild(qaBox);') && /z-index:10050/.test(blk));
+  ok('  ' + p + ': 🔴 مفيش أي قفل بالضغط على الخلفية', !/qaBox\.(onclick|addEventListener)/.test(blk));
+  ok('  ' + p + ': القفل من ✕ وإلغاء وبعد الحفظ الناجح بس',
+     blk.includes("-qclose`).addEventListener('click', closeQuickAdd);") && blk.includes("-qcancel`).addEventListener('click', closeQuickAdd);")
+     && /selectItem\([^\n]*\);\n\s+closeQuickAdd\(\);/.test(blk));
+  ok('  ' + p + ': الاسم المكتوب بيتنقل للفورم متأمّن (esc)', blk.includes('value="${ esc(name) }"'));
+}
+
 console.log('\n════════════════════════════════════════');
 console.log('MODAL BACKDROP: ' + pass + ' ناجح · ' + fail + ' فاشل');
 console.log('════════════════════════════════════════');

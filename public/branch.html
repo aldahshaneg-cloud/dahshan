@@ -6320,18 +6320,32 @@
       addNewBtn.addEventListener('click', function() {
         const name = input.value.trim();
         if (!name) return;
-        dropdown.innerHTML = `
-          <div class="smart-search-quickadd">
-            <div class="ssq-title">إضافة ${listType === 'senders' ? 'مُسلِّم' : 'مُستلِم'} جديد</div>
-            <input type="text" class="ssq-field" id="${inputId}-qname" value="${name}" placeholder="الاسم" />
-            <input type="tel"  class="ssq-field" id="${inputId}-qphone1" placeholder="رقم الهاتف 1 *" dir="ltr" />
-            <input type="tel"  class="ssq-field" id="${inputId}-qphone2" placeholder="رقم الهاتف 2" dir="ltr" />
+        /* 🪟 فورم تسجيل العميل عائم ومستقل فوق فورم الأوردر (طلب صاحب النظام 2026-09-20) — كان
+           بيترسم جوه قايمة البحث فبيختفي بالمكتوب مع أي ضغطة برّه. مفيش قفل بالخلفية خالص:
+           ✕ أو «إلغاء» أو الحفظ بس. */
+        hideDropdown();
+        document.getElementById("_quickAddBox")?.remove();
+        const qaBox = document.createElement("div");
+        qaBox.id = "_quickAddBox";
+        qaBox.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:10050;display:flex;align-items:center;justify-content:center;padding:14px";
+        qaBox.innerHTML = `
+          <div class="smart-search-quickadd" style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:22px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.55)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <div class="ssq-title" style="flex:1;margin:0;font-size:1rem">➕ تسجيل عميل ${listType === 'senders' ? 'استلام' : 'تسليم'} جديد</div>
+              <button type="button" id="${inputId}-qclose" aria-label="إغلاق" style="background:none;border:none;color:var(--muted);font-size:1.25rem;cursor:pointer;line-height:1">✕</button>
+            </div>
+            <input type="text" class="ssq-field" id="${inputId}-qname" value="${ esc(name) }" placeholder="الاسم" />
+            <input type="tel" class="ssq-field" id="${inputId}-qphone1" placeholder="رقم الهاتف 1 *" dir="ltr" />
+            <input type="tel" class="ssq-field" id="${inputId}-qphone2" placeholder="رقم الهاتف 2" dir="ltr" />
             <div id="${inputId}-qaddrWidget" style="margin-top:4px"></div>
-            <div class="ssq-actions">
-              <button class="ssq-save"   id="${inputId}-qsave">حفظ</button>
-              <button class="ssq-cancel" id="${inputId}-qcancel">إلغاء</button>
+            <div class="ssq-actions" style="margin-top:14px">
+              <button type="button" class="ssq-save" id="${inputId}-qsave" style="flex:1;padding:10px 16px;font-size:.9rem">حفظ العميل</button>
+              <button type="button" class="ssq-cancel" id="${inputId}-qcancel" style="padding:10px 16px;font-size:.9rem">إلغاء</button>
             </div>
           </div>`;
+        document.body.appendChild(qaBox);
+        const closeQuickAdd = () => qaBox.remove();
+        document.getElementById(`${inputId}-qclose`).addEventListener('click', closeQuickAdd);
         window.renderAddressWidget(`${inputId}-qaddrWidget`, { required: true });
         document.getElementById(`${inputId}-qsave`).addEventListener('click', async function() {
           const qname  = document.getElementById(`${inputId}-qname`).value.trim();
@@ -6346,11 +6360,12 @@
             const list = listType === 'senders' ? (window._sendersList = window._sendersList || []) : (window._receiversList = window._receiversList || []);
             if (!list.find(x => x.id === item.id)) list.push(item);
             selectItem({ id: item.id, name: item.name, phone1: item.phone1, phone2: item.phone2 || "", address: item.address || "" });
+            closeQuickAdd();
             showToast("تمّ إضافة العميل وحفظه ✓", "success");
           } catch(e) { showToast("خطأ: " + e.message, "error"); }
         });
-        document.getElementById(`${inputId}-qcancel`).addEventListener('click', () => hideDropdown());
-        showDropdown();
+        document.getElementById(`${inputId}-qcancel`).addEventListener('click', closeQuickAdd);
+        setTimeout(() => document.getElementById(`${inputId}-qphone1`)?.focus(), 60);
       });
       function showDropdown() { dropdown.style.display = 'block'; }
       function hideDropdown() { dropdown.style.display = 'none'; }
