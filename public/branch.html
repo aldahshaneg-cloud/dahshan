@@ -10530,33 +10530,85 @@ window.clearBrDeliveredFilters = function() {
       !o.pilotId && (o.status === "قيد التنفيذ" || o.status === "لم يتم التوصيل"));
     if (!loadable.length) { showToast("مفيش أوردرات جاهزة للتحميل دلوقتي", "error"); return; }
 
+    /* 🪟 فورم كبير وواضح (طلب صاحب النظام 2026-09-20: «محتاج يكون فورم أكبر علشان الفرع يشوف الأوردر
+       مظبوط») — كارت كامل لكل أوردر: المرسل والمستلم والعنوان والتليفون والعهدة وسعر التوصيل.
+       المربع بحجم ثابت (`input{width:100%}` العام كان بيمدّه ويعصر النص في عمود ضيق). */
+    const _mlMoney = v => (Math.round((Number(v) || 0) * 100) / 100);
+    const _mlCard = o => {
+      const ds = o.deliveries || [];
+      const late = o.status === "لم يتم التوصيل";
+      return `<label class="_mapLoadRow" style="display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer;background:var(--panel,transparent)">
+        <input type="checkbox" class="_mapLoadChk" value="${ esc(o.id) }" style="width:22px;height:22px;min-width:22px;flex:none;margin:2px 0 0;accent-color:#7c3aed;cursor:pointer">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px">
+            <b dir="ltr" style="font-size:.98rem;letter-spacing:.3px">${ esc(o.orderNum || "—") }</b>
+            <span style="font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:20px;background:${ late ? "rgba(239,68,68,.15)" : "rgba(14,165,233,.15)" };color:${ late ? "#ef4444" : "var(--sky,#0ea5e9)" }">${ esc(o.status || "") }</span>
+            <span style="font-size:.74rem;color:var(--muted)">📦 ${ esc(ds.length) } ${ ds.length === 1 ? "طرد" : "طرود" }</span>
+            <span style="margin-inline-start:auto;color:var(--green);font-weight:800;font-size:.95rem;white-space:nowrap">🚚 ${ esc(_mlMoney(o.totalDeliveryPrice)) } ج.م</span>
+          </div>
+          <div style="font-size:.84rem;line-height:1.7">🏪 <b>${ esc(o.senderName || "—") }</b>${ o.senderPhone ? ` · <span dir="ltr">${ esc(o.senderPhone) }</span>` : "" }</div>
+          ${ o.senderAddress ? `<div style="font-size:.76rem;color:var(--muted);line-height:1.6">📍 ${ esc(o.senderAddress) }</div>` : "" }
+          ${ ds.map(d => `<div style="margin-top:7px;padding-top:7px;border-top:1px dashed var(--border);font-size:.84rem;line-height:1.7">
+              📬 <b>${ esc(d.receiverName || "—") }</b>${ d.receiverPhone ? ` · <span dir="ltr">${ esc(d.receiverPhone) }</span>` : "" }
+              <div style="font-size:.76rem;color:var(--muted);line-height:1.6">📍 ${ esc(d.zoneName || "—") }${ d.address ? " — " + esc(d.address) : "" }</div>
+            </div>`).join("") }
+          ${ Number(o.storePrepaid) > 0 ? `<div style="margin-top:7px;font-size:.78rem;font-weight:700;color:#f59e0b">💵 عهدة يدفعها الطيار للمحل: ${ esc(_mlMoney(o.storePrepaid)) } ج.م</div>` : "" }
+          ${ o.notes ? `<div style="margin-top:5px;font-size:.76rem;color:var(--muted)">📝 ${ esc(o.notes) }</div>` : "" }
+        </div>
+      </label>`;
+    };
+
     document.getElementById("_mapLoadBox")?.remove();
     const box = document.createElement("div");
     box.id = "_mapLoadBox";
     box.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px";
     box.innerHTML = `
-      <div style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:14px;max-width:460px;width:100%;max-height:86vh;overflow:auto;padding:18px;direction:rtl;text-align:right">
-        <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">📦 تحميل على ${ esc(p.name || "طيار") }</div>
-        <div style="font-size:.8rem;color:#7c3aed;font-weight:700;margin-bottom:12px">🏢 ${ esc(bName) }</div>
-        <div style="background:rgba(124,58,237,.12);border:2px solid #7c3aed;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:.78rem;line-height:1.6">
+      <div style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:16px;max-width:760px;width:100%;max-height:92vh;display:flex;flex-direction:column;padding:22px;direction:rtl;text-align:right;box-shadow:0 24px 60px rgba(0,0,0,.55)">
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:1.2rem;margin-bottom:4px">📦 تحميل على ${ esc(p.name || "طيار") }</div>
+            <div style="font-size:.88rem;color:#7c3aed;font-weight:700">🏢 ${ esc(bName) }</div>
+          </div>
+          <button type="button" onclick="document.getElementById('_mapLoadBox').remove()" aria-label="إغلاق" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+        </div>
+        <div style="background:rgba(124,58,237,.12);border:2px solid #7c3aed;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:.86rem;line-height:1.7">
           ⚠️ الأوردرات دي هتخرج من لوحة فرعك وتروح لـ<b>${ esc(bName) }</b> —
           لأن الطيار هيتحاسب في فرعه آخر اليوم. التحصيل والعمولة هيتحسبوا هناك.
         </div>
-        <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:6px">اختر الأوردرات:</label>
-        <div style="max-height:38vh;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:6px">
-          ${ loadable.map(o => `<label style="display:flex;gap:8px;align-items:center;padding:7px 6px;border-bottom:1px solid var(--border);cursor:pointer">
-            <input type="checkbox" class="_mapLoadChk" value="${ esc(o.id) }">
-            <span style="flex:1;font-size:.82rem"><b>${ esc(o.orderNum) }</b> — ${ esc(o.senderName || "—") }
-              <span style="color:var(--muted)">· ${ esc((o.deliveries || []).length) } طرد</span></span>
-            <span style="color:var(--green);font-size:.8rem;font-weight:700">${ esc(o.totalDeliveryPrice || 0) } ج</span>
-          </label>`).join("") }
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:.9rem;font-weight:700;flex:1">اختر الأوردرات <span style="color:var(--muted);font-weight:400">(${ esc(loadable.length) } جاهز للتحميل)</span></span>
+          ${ loadable.length > 1 ? `<button type="button" id="_mapLoadAll" style="background:none;border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:8px;font-size:.78rem;cursor:pointer">تحديد الكل</button>` : "" }
+        </div>
+        <div style="flex:1;min-height:120px;overflow:auto;padding-inline-end:2px">
+          ${ loadable.map(_mlCard).join("") }
         </div>
         <div style="display:flex;gap:10px;margin-top:16px">
-          <button id="_mapLoadGo" style="flex:1;background:#7c3aed;color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">✅ حمّل ونقل الأوردرات</button>
-          <button onclick="document.getElementById('_mapLoadBox').remove()" style="flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);padding:11px;border-radius:8px;cursor:pointer">إلغاء</button>
+          <button id="_mapLoadGo" style="flex:2;background:#7c3aed;color:#fff;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:.95rem;cursor:pointer">✅ حمّل ونقل الأوردرات</button>
+          <button onclick="document.getElementById('_mapLoadBox').remove()" style="flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);padding:14px;border-radius:10px;font-size:.95rem;cursor:pointer">إلغاء</button>
         </div>
       </div>`;
     document.body.appendChild(box);
+
+    /* العدّاد على الزرار + إبراز الكارت المختار + «تحديد الكل» */
+    const _mlSync = () => {
+      const chks = [...box.querySelectorAll("._mapLoadChk")];
+      const n = chks.filter(c => c.checked).length;
+      chks.forEach(c => { const r = c.closest("._mapLoadRow"); if (r) { r.style.borderColor = c.checked ? "#7c3aed" : "var(--border)"; r.style.boxShadow = c.checked ? "0 0 0 2px rgba(124,58,237,.25)" : "none"; } });
+      const go = document.getElementById("_mapLoadGo");
+      if (go && !go.disabled) go.textContent = n ? `✅ حمّل ونقل ${n} أوردر` : "✅ حمّل ونقل الأوردرات";
+      const all = document.getElementById("_mapLoadAll");
+      if (all) all.textContent = n === chks.length ? "إلغاء التحديد" : "تحديد الكل";
+    };
+    box.addEventListener("change", _mlSync);
+    document.getElementById("_mapLoadAll")?.addEventListener("click", () => {
+      const chks = [...box.querySelectorAll("._mapLoadChk")];
+      const on = !chks.every(c => c.checked);
+      chks.forEach(c => { c.checked = on; });
+      _mlSync();
+    });
+    /* أوردر واحد بس = متعلّم جاهز (مفيش اختيار يتعمل) */
+    if (loadable.length === 1) { box.querySelector("._mapLoadChk").checked = true; }
+    _mlSync();
 
     document.getElementById("_mapLoadGo").onclick = async function () {
       const ids = [...box.querySelectorAll("._mapLoadChk:checked")].map(c => c.value);

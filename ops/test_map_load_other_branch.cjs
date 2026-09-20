@@ -81,6 +81,17 @@ ok('🔴 والتأكيد بيقول إن الأوردرات هتخرج من ل�
   /هتخرج من لوحة فرعك وتروح لـ/.test(B),
   'من غير كده المشرف يفتكر الأوردر ضاع ويعمله تاني');
 ok('وبيقول اسم الفرع اللي رايحينه', /\$\{ esc\(bName\) \}<\/b>/.test(B));
+/* 🪟 فورم كبير وواضح (طلب صاحب النظام 2026-09-20): «محتاج يكون فورم أكبر علشان الفرع يشوف الأوردر مظبوط» */
+const BF = fs.readFileSync('public/branch.html', 'utf8');
+ok('🔴 النافذة عريضة (760) ومربع الاختيار بحجم ثابت مش ممدود',
+  BF.includes('max-width:760px;width:100%;max-height:92vh')
+  && BF.includes('class="_mapLoadChk" value="${ esc(o.id) }" style="width:22px;height:22px;min-width:22px;flex:none'),
+  'input{width:100%} العام بيمدّ المربع ويعصر بيانات الأوردر في عمود ضيق');
+ok('  وكارت الأوردر فيه المرسل والمستلم والعنوان والتليفون والعهدة وسعر التوصيل',
+  BF.includes('const _mlCard = o => {') && BF.includes('esc(o.senderPhone)') && BF.includes('esc(d.receiverName || "—")')
+  && BF.includes('esc(d.zoneName || "—")') && BF.includes('عهدة يدفعها الطيار للمحل') && BF.includes('_mlMoney(o.totalDeliveryPrice)'));
+ok('  وعدّاد المختار على الزرار + «تحديد الكل» + ✕',
+  BF.includes('go.textContent = n ? `✅ حمّل ونقل ${n} أوردر`') && BF.includes('id="_mapLoadAll"') && BF.includes('aria-label="إغلاق"'));
 ok('والتحميل بيعدّي على assign-bulk (كل أوردر بحجزه الذري)',
   /window.API.post\("\/api\/orders\/assign-bulk", \{ orderIds: ids, pilotId: p\.id \}\)/.test(B));
 
