@@ -5706,8 +5706,12 @@
          من غير الحتة التانية كان طلب النقل بيقعد ساكت في صفحة النقل
          لحد ما حد يفتحها بالصدفة، وصاحب النظام طالب «يحدث إنذار في الفرع
          الآخر». */
+      /* ⏳ طلب عمره أكتر من 3 ساعات مابيصفّرش (بلاغ 2026-09-20: فرع جديد كان بياخد إنذار مع كل F5
+         على طلبات عامة عمرها أيام). نفس مدة السيرفر BoardController::SUPPORT_TTL_HOURS — والفلتر هنا
+         عشان النسخة المتخزّنة في الصفحة (تغيير الحالة مابيكسرش since). */
+      const _supFresh = r => { const t = new Date(r.requestedAt || r.createdAt || 0).getTime(); return !isFinite(t) || !t || (Date.now() - t) < 3 * 3600e3; };
       const pending = (window._supportRequestsData || []).find(r =>
-        r.status === "pending" &&
+        r.status === "pending" && _supFresh(r) &&
         r.requestingBranchId !== myBranchId &&
         !window._alarmDismissedIds[r.id] &&
         (r.broadcast

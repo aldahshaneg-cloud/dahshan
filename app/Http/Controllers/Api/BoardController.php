@@ -98,6 +98,7 @@ class BoardController
             [$branchId]
         );
 
+        $this->expireStaleSupportRequests();
         // أعداد الطلبات المعلقة — COUNTs خفيفة، مش تحميل الطلبات نفسها
         $pending = [
             'shiftRequests'  => $this->countOf("SELECT COUNT(*) FROM pilot_shift_requests WHERE branch_id = ? AND status = 'pending'", [$branchId]),
@@ -479,6 +480,29 @@ class BoardController
     }
 
     /**
+     * ⏳ طلب الدعم المعلّق بينتهي لوحده بعد SUPPORT_TTL_HOURS (بلاغ صاحب النظام 2026-09-20).
+     *
+     * «الفرع التجريبي لما بعمل كنترول F5 بلاقي إنذار طلب الدعم من كل الفروع شغال»: الطلب العام
+     * (broadcast) اللي محدش قبله كان بيفضل `pending` **للأبد** — 4 طلبات من 10/14/17 سبتمبر كانوا
+     * لسه معلّقين، فأي فرع مردّش عليهم (فرع جديد مثلًا) بياخد صفارة إنذار مع كل تحميل للصفحة على
+     * طلب عمره أيام. وطلب الطيار الموجّه المعلّق كان بيقفل أي طلب جديد على نفس الطيار («في طلب
+     * شغّال على الطيار ده»). طلب الدعم استعجال لحظي: بعد 3 ساعات مالوش معنى → `ended`.
+     * بيتنده من قايمة الطلبات وعدّادات اللوحة (UPDATE واحد على فهرس status). مابيرميش أبدًا.
+     */
+    public const SUPPORT_TTL_HOURS = 3;
+
+    private function expireStaleSupportRequests(): void
+    {
+        try {
+            $cut = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
+                ->modify('-' . self::SUPPORT_TTL_HOURS . ' hours')->format('Y-m-d H:i:s');
+            DB::update("UPDATE pilot_support_requests SET status = 'ended' WHERE status = 'pending' AND created_at < ?", [$cut]);
+        } catch (Throwable $e) {
+            // تنضيف مش حرج — القايمة والعدّادات بيكمّلوا عادي
+        }
+    }
+
+    /**
      * GET /api/support-requests?status=&since=
      *
      * الأدوار: admin · branch. ⚠️ **مفيش فلترة بالفرع خالص** — كل فرع
@@ -492,6 +516,7 @@ class BoardController
     public function supportRequestsList(Request $request): JsonResponse
     {
         $request->actorOrFail();
+        $this->expireStaleSupportRequests();
 
         $where = [];
         $args  = [];
