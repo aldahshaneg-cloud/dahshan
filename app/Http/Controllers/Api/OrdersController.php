@@ -1214,7 +1214,7 @@ class OrdersController
         /* بعد المعاملة مش جواها: `claimCore` **ساكنة** (`self::`) فمفيش
            `$this` جواها. المعاملة خلصت بنجاح خلاص، فالبثّ هنا بيحصل على
            صف متأكدين إنه اتكتب — نفس ضمانة ShouldDispatchAfterCommit. */
-        $this->broadcastOrder($res['orderId']);
+        $this->broadcastOrder($res['orderId'], $res['movedBranch'] ? (int) $res['fromBranchId'] : null);
 
         // TODO (مرحلة 4): إشعار FCM للطيار بأوردر متحمّل عليه
         return self::orderOut($res['orderId'], [
@@ -1267,7 +1267,7 @@ class OrdersController
                 $loaded[] = $res['orderId'];
                 // كل أوردر بمعاملته المستقلة، فالبثّ كمان لكل واحد لوحده
                 // بعد ما معاملته تنجح — الفاشل مابيتبثّش
-                $this->broadcastOrder($res['orderId']);
+                $this->broadcastOrder($res['orderId'], $res['movedBranch'] ? (int) $res['fromBranchId'] : null);
                 // `?? $warning` مش `=` — التحذير الفاضي مايمسحش تحذير سابق
                 $warning = $res['warning'] ?? $warning;
                 if ($res['movedBranch']) {
@@ -1403,7 +1403,7 @@ class OrdersController
 
                 // تغيير تعيين: pilot_id/pilot_name/shift_id — والـpilotId جوه
                 // حمولة الحدث نفسها، فاللوحة تقدر تحدّث الصف محليًا
-                $this->broadcastOrder((int) $order['id']);
+                $this->broadcastOrder((int) $order['id'], $fromBranchId);
 
                 return [(int) $order['id'], $newShiftId, (string) $toPilot['name'], $fromBranchId, $toBranchId];
             });
@@ -1469,7 +1469,7 @@ class OrdersController
                    من عنده — بيمسكه بالاستطلاع زي دلوقتي بالظبط. حدث تاني
                    للفرع القديم كان هيحتاج توقيع تاني للدالة المشتركة، وده
                    قرار مرحلة تحويل الواجهة مش دلوقتي. */
-                $this->broadcastOrder((int) $order['id']);
+                $this->broadcastOrder((int) $order['id'], (int) $order['branch_id']);
 
                 return (int) $order['id'];
             });

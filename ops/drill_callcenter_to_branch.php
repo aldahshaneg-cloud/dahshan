@@ -101,4 +101,23 @@ $ms = (int) round((microtime(true) - $t0) * 1000);
 if (! $got) { echo "4) ✗ الحدث موصلش خلال 30 ثانية\n"; exit(1); }
 $pl = json_decode((string) $got['data'], true);
 echo "4) ✅ order.changed وصل للمشترك بعد {$ms} ملّي ثانية من ضغطة الحفظ — " . ($pl['orderNum'] ?? '') . ' · ' . ($pl['status'] ?? '') . "\n";
+
+/* 5) (اختياري: الوسيطة التانية cross) المشرف بيحمّل نفس الأوردر على طيار **فرع تاني** — الفرع القديم
+      لازم يوصله حدث بـbranchId الجديد عشان لوحته تشيل الأوردر فورًا (بلاغ 2026-09-21). */
+if (($argv[2] ?? '') === 'cross') {
+    $other = DB::selectOne("SELECT p.id, p.name, p.assigned_branch_id FROM pilots p JOIN shifts s ON s.pilot_id = p.id AND s.ended_at IS NULL WHERE p.assigned_branch_id <> ? AND p.name LIKE 'طيار تجريبي%' ORDER BY p.id LIMIT 1", [(int) $sup->branch_id]);
+    if (! $other) { echo "5) مفيش طيار تجريبي في فرع تاني
+"; exit(1); }
+    $t1 = microtime(true);
+    [$c, $j] = $hit($sup, 'POST', '/api/orders/assign-bulk', ['orderIds' => [$o['id']], 'pilotId' => (int) $other->id]);
+    echo "5) المشرف حمّل الأوردر على {$other->name} (فرع #{$other->assigned_branch_id}): {$c} movedBranch=" . json_encode($j['movedBranch'] ?? null) . "
+";
+    $left = null;
+    while (($m = $recv(30)) !== null) { if (($m['event'] ?? '') !== 'order.changed') { continue; } $pl = json_decode((string) $m['data'], true); if ((int) ($pl['id'] ?? 0) === (int) $o['id'] && (int) ($pl['branchId'] ?? 0) !== (int) $sup->branch_id) { $left = $pl; break; } }
+    $ms = (int) round((microtime(true) - $t1) * 1000);
+    echo $left ? "6) ✅ قناة الفرع القديم {$channel} وصلها «الأوردر خرج» بعد {$ms} ملّي ثانية — branchId الجديد = {$left['branchId']}
+" : "6) ✗ الفرع القديم موصلوش حاجة خلال 30 ثانية
+";
+    if (! $left) { exit(1); }
+}
 fclose($fp);

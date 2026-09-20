@@ -850,6 +850,20 @@
          بعده بيرمي ReferenceError **جوه** startBranchListeners — يعني
          الاستطلاع نفسه مايتسجّلش والصفحة تفضل فاضية. الميزة الإضافية
          عمرها ما تكسر الأساسي. */
+      /* 🔴 الأوردر خرج من الفرع (اتحمّل على طيار فرع تاني من الخريطة/اتنقل): الدلتا عمرها ما بتقول
+         «ده راح» — فبنشيله من الكاش فورًا بدل ما يفضل «من غير طيار» لحد مصالحة الـ5 دقايق
+         (بلاغ صاحب النظام 2026-09-21 «الفرع مش بيعمل رفريش داخلي»). بتتنده من حدث البث
+         (اللي بييجي بـbranchId الجديد) ومن نجاح التحميل من الخريطة نفسه. */
+      window._brDropOrders = function (ids) {
+        let hit = false;
+        (ids || []).forEach(id => { [id, String(id), Number(id)].forEach(k => { if (window._ordersById.delete(k)) hit = true; }); });
+        if (!hit) return;
+        const all = [...window._ordersById.values()];
+        window._allOrdersData = all;
+        window._ordersData = all.filter(o => o.branchId === branchId);
+        try { renderPilotsPanel(); } catch (e) {}
+        _queueBranchRender();
+      };
       const RT = window.REALTIME;
       if (RT && RT.available()) {
         const pokeOrders = RT.coalesce(() => {
@@ -863,7 +877,11 @@
           ordersPoller.tick();
         }, 300);
 
-        stops.push(RT.subscribeBranch(branchId, pokeOrders, function () {
+        const onOrderEvent = function (p) {
+          try { if (p && p.id != null && p.branchId != null && String(p.branchId) !== String(branchId)) window._brDropOrders([p.id]); } catch (_) {}
+          pokeOrders();
+        };
+        stops.push(RT.subscribeBranch(branchId, onOrderEvent, function () {
           /* طلب إذن/وردية جديد أو اتقرر — ركلة موجّهة لقوايم الطلبات بس.
              كانت `pokeAll()` وبتجرّ معاها المناطق ودفتر العملاء والخزن مع
              كل إذن (مراجعة التقل 2026-09-10). */
@@ -10627,6 +10645,8 @@ window.clearBrDeliveredFilters = function() {
         const bad     = (res.failed || []).length;
         if (bad) showToast(`اتحمّل ${okCount} وفشل ${bad}: ${ res.failed[0]?.error || "" }`, "error");
         else showToast(`اتحمّل ${okCount} أوردر على ${p.name} — وراحوا لـ${bName} ✓`, "success");
+        /* اللي اتحمّل خرج من فرعنا — يتشال من اللوحة حالًا من غير ما نستنى البث */
+        try { if (res.movedBranch && typeof window._brDropOrders === "function") window._brDropOrders(res.loaded || []); } catch (_) {}
         box.remove();
       } catch (e) {
         showToast("خطأ: " + e.message, "error");

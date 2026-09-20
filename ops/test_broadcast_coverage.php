@@ -128,6 +128,42 @@ try {
     } else {
         echo "  (مفيش طيار من غير وردية في الفرع — اتخطّى فحص فتح الوردية)\n";
     }
+    /* ═══ 3) الأوردر اللي خرج من الفرع — الفرع القديم لازم يعرف (بلاغ صاحب النظام 2026-09-21) ═══
+       «لما بحمّل أوردر من الخريطة على طيار تاني بلاقي الفرع اللي أنا فيه مش بيعمل رفريش داخلي».
+       الحدث كان بيروح لقناة الفرع **الجديد** بس، والدلتا عمرها ما بتقول «ده راح». */
+    echo "\n══ 3) تحميل على طيار فرع تاني: حدث للفرع القديم ══\n";
+    $otherPilot = DB::selectOne(
+        'SELECT p.id, p.assigned_branch_id FROM pilots p JOIN shifts s ON s.pilot_id = p.id AND s.ended_at IS NULL
+          WHERE p.assigned_branch_id <> ? AND p.archived_at IS NULL AND p.status IN (\'waiting\', \'delivering\') ORDER BY p.id LIMIT 1', [$b1]);
+    $zone = DB::selectOne('SELECT id, price FROM zones WHERE delivery_branch_id = ? ORDER BY id LIMIT 1', [$b1])
+        ?: DB::selectOne('SELECT id, price FROM zones WHERE price > 0 ORDER BY id LIMIT 1');
+    if ($otherPilot && $zone) {
+        /* البث الحقيقي محتاج Reverb شغّال — محليًا مش موجود، فالحدث بيتزيّف من قبل إنشاء الأوردر */
+        Event::fake();   // كل الأحداث — أي بث حقيقي محليًا بيقع على Reverb المش موجود
+        [$c, $j] = hit($kernel, $s1, 'POST', '/api/orders', ['senderName' => 'حارس البث', 'senderPhone' => '01000000009', 'senderAddress' => 'شارع',
+            'deliveries' => [['parcelNo' => 1, 'receiverName' => 'مستلم', 'receiverPhone' => '01000000010', 'zoneId' => (int) $zone->id, 'zonePrice' => (float) $zone->price, 'orderPrice' => 0, 'address' => 'عنوان']]]);
+        $oid = (int) ($j['orders'][0]['id'] ?? 0);
+        ok('  أوردر الفرع اتعمل', $c === 200 && $oid > 0, $c . ' ' . mb_substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 200));
+        Event::fake();
+        [$c, $j] = hit($kernel, $s1, 'POST', '/api/orders/assign-bulk', ['orderIds' => [$oid], 'pilotId' => (int) $otherPilot->id]);
+        ok('التحميل 200 والأوردر اتنقل', $c === 200 && ! empty($j['movedBranch']), $c . ' ' . json_encode($j, JSON_UNESCAPED_UNICODE));
+        $main = $left = null;
+        foreach (Event::dispatched(App\Events\OrderChanged::class) as [$e]) {
+            if ($e->orderId !== $oid) { continue; }
+            if ($e->notifyBranchId === null) { $main = $e; } else { $left = $e; }
+        }
+        $newBranch = (int) ($j['toBranchId'] ?? 0);
+        ok('  الحدث الأساسي على قناة الفرع الجديد', $main && $main->branchId === $newBranch && $main->broadcastOn()[0]->name === 'private-branch.' . $newBranch);
+        ok('🔴 وحدث «خرج من عندك» على قناة الفرع القديم', $left && $left->notifyBranchId === $b1 && count($left->broadcastOn()) === 1 && $left->broadcastOn()[0]->name === 'private-branch.' . $b1,
+            $left ? $left->broadcastOn()[0]->name : 'مفيش حدث');
+        ok('🔴 وحمولته فيها الفرع **الجديد** (عشان اللوحة تعرف إنه مابقاش بتاعها)', $left && (int) $left->broadcastWith()['branchId'] === $newBranch);
+    } else {
+        echo "  (مفيش طيار فرع تاني بوردية مفتوحة — اتخطّى)\n";
+    }
+    $B = (string) file_get_contents($ROOT . '/public/branch.html');
+    ok('branch: حدث بفرع غير فرعنا = الأوردر بيتشال من الكاش فورًا', str_contains($B, 'String(p.branchId) !== String(branchId)) window._brDropOrders([p.id]);')
+        && str_contains($B, 'stops.push(RT.subscribeBranch(branchId, onOrderEvent, function () {'));
+    ok('branch: ونجاح التحميل من الخريطة بيشيله حالًا من غير ما يستنى البث', str_contains($B, 'if (res.movedBranch && typeof window._brDropOrders === "function") window._brDropOrders(res.loaded || []);'));
 } finally {
     DB::rollBack();
 }

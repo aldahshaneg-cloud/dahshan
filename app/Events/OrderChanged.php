@@ -61,6 +61,11 @@ final class OrderChanged implements ShouldBroadcast, ShouldDispatchAfterCommit
         public readonly int $branchId,
         public readonly ?int $pilotId,
         public readonly ?string $updatedAtDb,
+        /* 🔴 (2026-09-21) الأوردر اللي **خرج من فرع** (اتحمّل على طيار فرع تاني/اتنقل): الحدث ده بيروح
+           لقناة الفرع القديم بدل الجديد — والحمولة فيها branchId **الجديد**، فلوحة الفرع القديم بتعرف
+           إنه مابقاش بتاعها وتشيله فورًا. من غيره الفرع القديم كان بيفضل شايف الأوردر «من غير طيار»
+           لحد مصالحة الـ5 دقايق (بلاغ صاحب النظام: «الفرع مش بيعمل رفريش داخلي»). */
+        public readonly ?int $notifyBranchId = null,
     ) {
     }
 
@@ -101,6 +106,10 @@ final class OrderChanged implements ShouldBroadcast, ShouldDispatchAfterCommit
      */
     public function broadcastOn(): array
     {
+        if ($this->notifyBranchId !== null) {
+            // إشعار «خرج من عندك» للفرع القديم بس — قناة الطيار أخدت الحدث الأساسي
+            return [new PrivateChannel('branch.' . $this->notifyBranchId)];
+        }
         $channels = [new PrivateChannel('branch.' . $this->branchId)];
 
         /* ⚠️ **الطيار القديم مايعرفش إن الأوردر خرج منه.** لما أوردر يتحوّل

@@ -56,7 +56,7 @@ trait BroadcastsOrders
      * الصف الغايب = سكوت. (`orderClearReturnFlag` مثلًا بيقبل id مش موجود
      * وبيرجّع ok — باج موروث؛ مانرميش استثناء جديد بسببه.)
      */
-    protected function broadcastOrder(int $orderId): void
+    protected function broadcastOrder(int $orderId, ?int $leftBranchId = null): void
     {
         if ($orderId <= 0) {
             return;
@@ -74,6 +74,10 @@ trait BroadcastsOrders
             }
 
             event(OrderChanged::fromRow($row));
+            /* الأوردر غيّر فرعه → الفرع القديم لازم يعرف إنه خرج (شوف OrderChanged::$notifyBranchId) */
+            if ($leftBranchId !== null && $leftBranchId > 0 && $leftBranchId !== (int) $row->branch_id) {
+                event(new OrderChanged((int) $row->id, (string) $row->order_num, (string) ($row->status ?? ''), (int) $row->branch_id, null, $row->updated_at ?? null, $leftBranchId));
+            }
 
             /* إشعار ستارة الهاتف للعميل — نفس الموضع عشان أي تغيير أوردر يعدّي
                عليه. `$afterCommit` جوه المهمة بيأجّل الدفع للـcommit زي الحدث
