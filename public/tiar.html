@@ -3317,11 +3317,62 @@
 
     /* ── جدول المناطق ───────────────────────────────────────────────────── */
     window._zonesData = [];
+    /* تطبيع عربي للبحث: همزات وتاء مربوطة وألف مقصورة وتشكيل ومسافات — «الجامعه» تلاقي «الجامعة» */
+    function _zNorm(v) {
+      return String(v == null ? "" : v).toLowerCase()
+        .replace(/[\u064B-\u0652\u0640]/g, "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي")
+        .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x660)).replace(/\s+/g, " ").trim();
+    }
+    function _zonesFiltered(all) {
+      const q = _zNorm(document.getElementById("zonesSearch")?.value || "");
+      const br = document.getElementById("zonesBranchFilter")?.value || "";
+      if (!q && !br) return all;
+      const words = q ? q.split(" ") : [];
+      return all.filter(z => {
+        if (br && String(z.deliveryBranchId || z.branchId || "") !== br) return false;
+        if (!words.length) return true;
+        const hay = _zNorm([z.areaName || z.name, z.deliveryBranchName || z.branchName, z.sourceBranchName, z.price, z.id].join(" "));
+        return words.every(w => hay.includes(w));
+      });
+    }
+    function _zonesCount(shown, total) {
+      const el = document.getElementById("zonesSearchCount");
+      if (el) el.textContent = total ? (shown === total ? `${total} منطقة` : `ظاهر ${shown} من ${total} منطقة`) : "";
+    }
+    function _zonesFillBranchFilter(zones) {
+      const sel = document.getElementById("zonesBranchFilter");
+      if (!sel) return;
+      const seen = new Map();
+      zones.forEach(z => { const id = String(z.deliveryBranchId || z.branchId || ""); if (id && !seen.has(id)) seen.set(id, z.deliveryBranchName || z.branchName || id); });
+      const sig = [...seen.keys()].join(",");
+      if (sel.dataset.sig === sig) return;
+      const cur = sel.value;
+      sel.dataset.sig = sig;
+      sel.innerHTML = `<option value="">كل الفروع</option>` + [...seen].map(([id, name]) => `<option value="${ esc(id) }">${ esc(name) }</option>`).join("");
+      if (seen.has(cur)) sel.value = cur;
+    }
+    window.onZonesSearch = function () {
+      window._pageMul.zones = 1;                       // بحث جديد = من أول صفحة
+      renderZonesTable(window._zonesData || []);
+    };
+    window.clearZonesSearch = function () {
+      const i = document.getElementById("zonesSearch"); if (i) i.value = "";
+      const b = document.getElementById("zonesBranchFilter"); if (b) b.value = "";
+      window.onZonesSearch();
+      if (i) i.focus();
+    };
     function renderZonesTable(zones) {
       const tbody = document.getElementById("zonesBody");
       if (!tbody) return;
       window._zonesData = zones;
-      if (!zones.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا توجد مناطق مسجّلة بعد</td></tr>`; return; }
+      _zonesFillBranchFilter(zones);
+      if (!zones.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">لا توجد مناطق مسجّلة بعد</td></tr>`; _zonesCount(0, 0); return; }
+      /* 🔍 البحث (2026-09-21): القايمة الكاملة في _zonesData والجدول بيعرض المطابق بس — فالاستطلاع
+         لما يعيد الرسم البحث بيفضل شغال، و«تعديل»/«حذف» بيشتغلوا بنفس الـid. */
+      const all = zones;
+      zones = _zonesFiltered(all);
+      _zonesCount(zones.length, all.length);
+      if (!zones.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-row">مفيش منطقة مطابقة للبحث — جرّب كلمة تانية أو دوس «مسح»</td></tr>`; return; }
       tbody.innerHTML = pagedRows("zones", zones, (z, i) => {        const srcLabel = z.sourceBranchId
           ? `<span style="background:rgba(14,165,233,.12);color:var(--sky);padding:2px 8px;border-radius:12px;font-size:.8rem">${ esc(z.sourceBranchName || '—') }</span>`
           : `<span style="background:rgba(168,85,247,.12);color:var(--purple);padding:2px 8px;border-radius:12px;font-size:.8rem">يدوي</span>`;
@@ -11063,6 +11114,14 @@ window._hasFormFields = function (el) {
       </div>
       <div id="settings-zones" style="display:none">
         <div class="sec-header"><span class="sec-title">🗺️ إدارة مناطق التوصيل</span><button class="add-btn" onclick="resetZoneModal();openModal('zone')">➕ إضافة منطقة جديدة</button></div>
+        <!-- 🔍 بحث في المناطق (طلب صاحب النظام 2026-09-21: «اعمل بحث علشان أشوف التكويد اللي أنا عايزه وأعدّل عليه») -->
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px">
+          <input type="text" id="zonesSearch" class="smart-search-input" autocomplete="off" placeholder="🔍 ابحث باسم المنطقة أو الفرع أو السعر…"
+                 oninput="onZonesSearch()" style="flex:1;min-width:240px;max-width:520px" />
+          <select id="zonesBranchFilter" onchange="onZonesSearch()" style="padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:inherit;min-width:170px"><option value="">كل الفروع</option></select>
+          <button type="button" onclick="clearZonesSearch()" style="padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:inherit">✕ مسح</button>
+          <span id="zonesSearchCount" style="font-size:.82rem;color:var(--muted)"></span>
+        </div>
         <div class="table-wrap"><table><thead><tr><th>#</th><th>الفرع المسؤول</th><th>الفرع المصدر</th><th>المنطقة</th><th>سعر التوصيل</th><th>إجراء</th></tr></thead><tbody id="zonesBody"></tbody></table></div>
       </div>
       <div id="settings-users" style="display:none">
