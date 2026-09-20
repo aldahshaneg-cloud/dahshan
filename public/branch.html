@@ -2449,7 +2449,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_shiftReportBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -2838,7 +2838,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_monthlyCloseoutBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -4526,7 +4526,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_odBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -4781,7 +4781,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_odBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -7994,6 +7994,27 @@
     }
 
   </style>
+<script>
+/* 🛡️ النافذة اللي فيها خانات إدخال مابتتقفلش بالضغط برّه (بلاغ صاحب النظام 2026-09-20:
+   «الفورم بيقفل بمجرد الضغط خارج الفورم وده بيضيّع الشغل») — القفل من ✕ أو إلغاء بس.
+   نوافذ العرض اللي مافيهاش خانات لسه بتتقفل بالضغط برّه زي الأول. */
+window._hasFormFields = function (el) {
+  try {
+    var f = el && el.querySelector("input:not([type=hidden]), textarea, select");
+    if (!f) return false;
+    var h = document.getElementById("_bdHint");
+    if (!h) {
+      h = document.createElement("div"); h.id = "_bdHint";
+      h.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483000;background:#111827;color:#fff;border:1px solid #f59e0b;border-radius:12px;padding:9px 16px;font:700 13px/1.6 inherit;box-shadow:0 8px 24px rgba(0,0,0,.45);pointer-events:none;direction:rtl";
+      h.textContent = "المكتوب لسه موجود — اقفل النافذة من ✕ أو «إلغاء»";
+      document.body.appendChild(h);
+    }
+    h.style.display = "block"; clearTimeout(window._bdHintT);
+    window._bdHintT = setTimeout(function () { h.style.display = "none"; }, 2200);
+    return true;
+  } catch (_) { return false; }
+};
+</script>
 </head>
 <body>
 
@@ -8834,7 +8855,7 @@
 <!-- ══════════════════════════════════════ MODALS ══════════════════════════════════════ -->
 
 <!-- Modal: خزنة جديدة -->
-<div id="modal-cashstore" class="modal-overlay" onclick="if(event.target===this) closeModal('cashstore')">
+<div id="modal-cashstore" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('cashstore')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">🏦 خزنة جديدة</span>
@@ -8856,7 +8877,7 @@
 </div>
 
 <!-- Modal: تسجيل صادر/وارد -->
-<div id="modal-cashtxn" class="modal-overlay" onclick="if(event.target===this) closeModal('cashtxn')">
+<div id="modal-cashtxn" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('cashtxn')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">📒 تسجيل صادر / وارد</span>
@@ -8893,7 +8914,7 @@
 </div>
 
 <!-- Modal: إضافة طيار للفرع -->
-<div id="modal-addpilot" class="modal-overlay" onclick="if(event.target===this) closeModal('addpilot')">
+<div id="modal-addpilot" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('addpilot')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">✈ طلب انضمام طيار جديد</span>
@@ -8962,7 +8983,7 @@
 </div>
 
 <!-- Modal: فتح وردية مباشرة بدون طلب من الطيار -->
-<div id="modal-open-shift" class="modal-overlay" onclick="if(event.target===this) closeModal('open-shift')">
+<div id="modal-open-shift" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('open-shift')">
   <div class="modal-box" style="max-width:420px">
     <div class="modal-header"><span class="modal-title">▶️ فتح وردية مباشرة</span><button class="modal-close" onclick="closeModal('open-shift')">✕</button></div>
     <div style="padding:4px 0 16px">
@@ -8979,7 +9000,7 @@
 </div>
 
 <!-- Modal: طلب نقل طيار -->
-<div id="modal-transfer" class="modal-overlay" onclick="if(event.target===this) closeModal('transfer')">
+<div id="modal-transfer" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('transfer')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">🔄 طلب نقل طيار</span>
@@ -9010,7 +9031,7 @@
 </div>
 
 <!-- Modal: طلب شحن جديد (فرع) -->
-<div id="modal-order" class="modal-overlay" onclick="if(event.target===this) closeModal('order')">
+<div id="modal-order" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('order')">
   <div class="modal-box" style="max-width:780px">
     <div class="modal-header">
       <span class="modal-title">📋 طلب شحن جديد</span>
@@ -9087,7 +9108,7 @@
 </div>
 
 <!-- Modal: نقل طلب لفرع آخر (تصحيح خطأ الكول سنتر) -->
-<div id="modal-transfer-order" class="modal-overlay" onclick="if(event.target===this) closeModal('transfer-order')">
+<div id="modal-transfer-order" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('transfer-order')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">🔁 نقل الطلب لفرع آخر</span>
@@ -9118,7 +9139,7 @@
 <!-- ══ طلب نقل طيار بعينه — التحذير قبل الإرسال ══
      صاحب النظام اختار «تحذير واضح والنقل يعدّي»: الأرقام اللي تحت
      بتتعرض عشان مدير الفرع يشوفها، مش عشان تمنعه. -->
-<div id="modal-pilot-request" class="modal-overlay" onclick="if(event.target===this) closeModal('pilot-request')">
+<div id="modal-pilot-request" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('pilot-request')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">📨 طلب نقل طيار</span>
@@ -9141,7 +9162,7 @@
 <!-- ══ رفض طلب دعم — السبب إجباري ══
      السيرفر بيرفض الرد من غير سبب، فالنافذة دي مش تجميل: من غيرها
      زرار الرفض بيرجّع رسالة خطأ. -->
-<div id="modal-support-reject" class="modal-overlay" onclick="if(event.target===this) closeModal('support-reject')">
+<div id="modal-support-reject" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('support-reject')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">❌ رفض الطلب</span>
@@ -9160,7 +9181,7 @@
   </div>
 </div>
 
-<div id="modal-support-request" class="modal-overlay" onclick="if(event.target===this) closeModal('support-request')">
+<div id="modal-support-request" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('support-request')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">🆘 طلب دعم طيار</span>
@@ -9205,7 +9226,7 @@
 </style>
 
 <!-- Modal: عهدة الطيار (إعطاء / استرداد) -->
-<div id="modal-custody" class="modal-overlay" onclick="if(event.target===this) closeModal('custody')">
+<div id="modal-custody" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('custody')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title" id="custodyModalTitle">💰 عهدة الطيار</span>
@@ -9241,7 +9262,7 @@
 
 
 <!-- Modal: إرسال طيار لفرع طالب الدعم -->
-<div id="modal-send-pilot" class="modal-overlay" onclick="if(event.target===this) closeModal('send-pilot')">
+<div id="modal-send-pilot" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('send-pilot')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">✈ إرسال طيار للدعم</span>

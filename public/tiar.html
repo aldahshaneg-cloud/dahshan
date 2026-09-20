@@ -4487,7 +4487,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_odBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -4589,7 +4589,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_odBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -7253,7 +7253,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_shiftReportBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -7641,7 +7641,7 @@
       const box = document.createElement("div");
       box.className = "od-overlay";
       box.id = "_monthlyCloseoutBox";
-      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.onclick = e => { if (e.target === box && !window._hasFormFields(box)) box.remove(); };
       box.innerHTML = `
         <div class="od-box">
           <div class="od-header">
@@ -10074,6 +10074,27 @@
     }
 
   </style>
+<script>
+/* 🛡️ النافذة اللي فيها خانات إدخال مابتتقفلش بالضغط برّه (بلاغ صاحب النظام 2026-09-20:
+   «الفورم بيقفل بمجرد الضغط خارج الفورم وده بيضيّع الشغل») — القفل من ✕ أو إلغاء بس.
+   نوافذ العرض اللي مافيهاش خانات لسه بتتقفل بالضغط برّه زي الأول. */
+window._hasFormFields = function (el) {
+  try {
+    var f = el && el.querySelector("input:not([type=hidden]), textarea, select");
+    if (!f) return false;
+    var h = document.getElementById("_bdHint");
+    if (!h) {
+      h = document.createElement("div"); h.id = "_bdHint";
+      h.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483000;background:#111827;color:#fff;border:1px solid #f59e0b;border-radius:12px;padding:9px 16px;font:700 13px/1.6 inherit;box-shadow:0 8px 24px rgba(0,0,0,.45);pointer-events:none;direction:rtl";
+      h.textContent = "المكتوب لسه موجود — اقفل النافذة من ✕ أو «إلغاء»";
+      document.body.appendChild(h);
+    }
+    h.style.display = "block"; clearTimeout(window._bdHintT);
+    window._bdHintT = setTimeout(function () { h.style.display = "none"; }, 2200);
+    return true;
+  } catch (_) { return false; }
+};
+</script>
 </head>
 <body>
 
@@ -11274,7 +11295,7 @@
 
 <!-- Modal: إضافة مصروف -->
 <!-- Modal: إضافة/تعديل خزنة -->
-<div id="modal-store" class="modal-overlay" onclick="if(event.target===this) closeModal('store')">
+<div id="modal-store" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('store')">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title" id="storeModalTitle">🏦 خزنة جديدة</span><button class="modal-close" onclick="closeModal('store')">✕</button></div>
     <form id="storeForm" onsubmit="event.preventDefault(); submitStore();">
@@ -11296,7 +11317,7 @@
 
 <!-- Modal: تحويل بين الخزن -->
 <!-- 💰 عهدة مسبقة — أول مدخل فلوس للخزن -->
-<div id="modal-deposit" class="modal-overlay" onclick="if(event.target===this) closeModal('deposit')">
+<div id="modal-deposit" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('deposit')">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title">💰 عهدة مسبقة</span><button class="modal-close" onclick="closeModal('deposit')">✕</button></div>
     <form id="depositForm" onsubmit="event.preventDefault(); submitDeposit();">
@@ -11325,7 +11346,7 @@
   </div>
 </div>
 
-<div id="modal-cash-transfer" class="modal-overlay" onclick="if(event.target===this) closeModal('cash-transfer')">
+<div id="modal-cash-transfer" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('cash-transfer')">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title">🔄 تحويل بين الخزن</span><button class="modal-close" onclick="closeModal('cash-transfer')">✕</button></div>
     <form id="cashTransferForm" onsubmit="event.preventDefault(); submitCashTransfer();">
@@ -11349,7 +11370,7 @@
   </div>
 </div>
 
-<div id="modal-expense" class="modal-overlay" onclick="if(event.target===this) closeModal('expense')">
+<div id="modal-expense" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('expense')">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title">🧾 إضافة مصروف</span><button class="modal-close" onclick="closeModal('expense')">✕</button></div>
     <form id="addExpenseForm" onsubmit="event.preventDefault(); submitExpense();">
@@ -11388,7 +11409,7 @@
 
 
 <!-- Modal: نقل طلب لفرع آخر (تصحيح خطأ الكول سنتر) -->
-<div id="modal-transfer-order" class="modal-overlay" onclick="if(event.target===this) closeModal('transfer-order')">
+<div id="modal-transfer-order" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('transfer-order')">
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">🔁 نقل الطلب لفرع آخر</span>
@@ -11416,7 +11437,7 @@
 </div>
 
 <!-- Modal: Add/Edit Pilot -->
-<div id="modal-pilot" class="modal-overlay" onclick="if(event.target===this) closeModal('pilot')">
+<div id="modal-pilot" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('pilot')">
   <div class="modal-box" style="max-width:640px"><div class="modal-header"><span class="modal-title">✈ إضافة طيار جديد</span><button class="modal-close" onclick="closeModal('pilot')">✕</button></div>
     <form id="addForm" onsubmit="event.preventDefault(); addPilot();">
       <div class="form-grid"><div class="form-group full"><label>اسم الطيار <span class="req">*</span></label><input id="pilotName" type="text" required /></div>
@@ -11443,7 +11464,7 @@
 </div>
 
 <!-- Modal: فتح وردية مباشرة بدون طلب من الطيار -->
-<div id="modal-open-shift" class="modal-overlay" onclick="if(event.target===this) closeModal('open-shift')">
+<div id="modal-open-shift" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('open-shift')">
   <div class="modal-box" style="max-width:420px">
     <div class="modal-header"><span class="modal-title">▶️ فتح وردية مباشرة</span><button class="modal-close" onclick="closeModal('open-shift')">✕</button></div>
     <div style="padding:4px 0 16px">
@@ -11464,7 +11485,7 @@
     </div>
   </div>
 </div>
-<div id="modal-approve-creds" class="modal-overlay" onclick="if(event.target===this) closeModal('approve-creds')">
+<div id="modal-approve-creds" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('approve-creds')">
   <div class="modal-box" style="max-width:420px">
     <div class="modal-header"><span class="modal-title">✅ قبول طلب الانضمام</span><button class="modal-close" onclick="closeModal('approve-creds')">✕</button></div>
     <input type="hidden" id="approveReqId" />
@@ -11484,7 +11505,7 @@
 </div>
 
 <!-- Modal: عميل استلام -->
-<div id="modal-sender" class="modal-overlay" onclick="if(event.target===this) closeModal('sender')">
+<div id="modal-sender" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('sender')">
   <div class="modal-box"><div class="modal-header"><span class="modal-title">🏪 إضافة عميل استلام</span><button class="modal-close" onclick="closeModal('sender')">✕</button></div>
     <form id="addSenderForm" onsubmit="event.preventDefault(); addClient('senders','sender');">
       <div class="form-grid">
@@ -11510,7 +11531,7 @@
 </div>
 
 <!-- Modal: عميل تسليم -->
-<div id="modal-receiver" class="modal-overlay" onclick="if(event.target===this) closeModal('receiver')">
+<div id="modal-receiver" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('receiver')">
   <div class="modal-box"><div class="modal-header"><span class="modal-title">📬 إضافة عميل تسليم</span><button class="modal-close" onclick="closeModal('receiver')">✕</button></div>
     <form id="addReceiverForm" onsubmit="event.preventDefault(); addClient('receivers','receiver');">
       <div class="form-grid">
@@ -11536,7 +11557,7 @@
 </div>
 
 <!-- Modal: إضافة فرع -->
-<div id="modal-branch" class="modal-overlay" onclick="if(event.target===this) closeModal('branch')">
+<div id="modal-branch" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('branch')">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title">🏢 إضافة فرع جديد</span><button class="modal-close" onclick="closeModal('branch')">✕</button></div>
     <form id="addBranchForm" onsubmit="event.preventDefault(); addBranch();">
@@ -11565,7 +11586,7 @@
 </div>
 
 <!-- Modal: إيقاف فرع مؤقتًا وتحويل أوردراته -->
-<div class="modal-overlay" id="modal-pause" onclick="if(event.target===this) closeModal('pause')">
+<div class="modal-overlay" id="modal-pause" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('pause')">
   <div class="modal-box" style="max-width:520px;padding:0">
     <div class="modal-header"><span class="modal-title">⏸️ إيقاف الفرع مؤقتًا</span>
       <button class="modal-close" onclick="closeModal('pause')">✕</button></div>
@@ -11590,7 +11611,7 @@
 </div>
 
 <!-- Modal: إضافة منطقة توصيل -->
-<div id="modal-zone" class="modal-overlay" onclick="if(event.target===this) closeModal('zone')">
+<div id="modal-zone" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('zone')">
   <div class="modal-box" style="max-width:560px">
     <div class="modal-header">
       <span class="modal-title">🗺️ إضافة منطقة توصيل</span>
@@ -11672,7 +11693,7 @@
 </div>
 
 <!-- Modal: إضافة طلب جديد -->
-<div id="modal-order" class="modal-overlay" onclick="if(event.target===this) closeModal('order')">
+<div id="modal-order" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('order')">
   <div class="modal-box" style="max-width:780px">
     <div class="modal-header"><span class="modal-title">📋 طلب شحن جديد</span><button class="modal-close" onclick="closeModal('order')">✕</button></div>
     <form id="addOrderForm" onsubmit="event.preventDefault(); addOrder();">
@@ -11734,7 +11755,7 @@
 </div>
 
 <!-- Modal: إضافة/تعديل مستخدم -->
-<div id="modal-user" class="modal-overlay" onclick="if(event.target===this) closeModal('user')">
+<div id="modal-user" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('user')">
   <div class="modal-box"><div class="modal-header"><span class="modal-title">👤 إضافة مستخدم جديد</span><button class="modal-close" onclick="closeModal('user')">✕</button></div>
     <form id="addUserForm" onsubmit="event.preventDefault(); addUser();">
       <div class="form-grid">
@@ -11817,7 +11838,7 @@
 </div>
 
 <!-- Modal: إضافة/تعديل موظف خارج النظام -->
-<div id="modal-manual-emp" class="modal-overlay" onclick="if(event.target===this) closeModal('manual-emp')">
+<div id="modal-manual-emp" class="modal-overlay" onclick="if(event.target===this&&!window._hasFormFields(this)) closeModal('manual-emp')">
   <div class="modal-box"><div class="modal-header"><span class="modal-title">📝 إضافة موظف خارج النظام</span><button class="modal-close" onclick="closeModal('manual-emp')">✕</button></div>
     <form id="addManualEmpForm" onsubmit="event.preventDefault(); addManualEmployee();">
       <div class="form-grid">

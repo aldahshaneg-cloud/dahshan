@@ -191,6 +191,27 @@ img{display:block;max-width:100%}
   font-weight:700;z-index:800;opacity:0;transition:.25s;pointer-events:none}
 #toast.on{opacity:1;transform:translateX(50%) translateY(0)}
 </style>
+<script>
+/* 🛡️ النافذة اللي فيها خانات إدخال مابتتقفلش بالضغط برّه (بلاغ صاحب النظام 2026-09-20:
+   «الفورم بيقفل بمجرد الضغط خارج الفورم وده بيضيّع الشغل») — القفل من ✕ أو إلغاء بس.
+   نوافذ العرض اللي مافيهاش خانات لسه بتتقفل بالضغط برّه زي الأول. */
+window._hasFormFields = function (el) {
+  try {
+    var f = el && el.querySelector("input:not([type=hidden]), textarea, select");
+    if (!f) return false;
+    var h = document.getElementById("_bdHint");
+    if (!h) {
+      h = document.createElement("div"); h.id = "_bdHint";
+      h.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483000;background:#111827;color:#fff;border:1px solid #f59e0b;border-radius:12px;padding:9px 16px;font:700 13px/1.6 inherit;box-shadow:0 8px 24px rgba(0,0,0,.45);pointer-events:none;direction:rtl";
+      h.textContent = "المكتوب لسه موجود — اقفل النافذة من ✕ أو «إلغاء»";
+      document.body.appendChild(h);
+    }
+    h.style.display = "block"; clearTimeout(window._bdHintT);
+    window._bdHintT = setTimeout(function () { h.style.display = "none"; }, 2200);
+    return true;
+  } catch (_) { return false; }
+};
+</script>
 </head>
 <body>
 
@@ -871,7 +892,7 @@ window.openLookupLog = async function () {
 const openM = (title, html) => { $("mTitle").textContent = title; $("mBody").innerHTML = html;
   $("modal").classList.add("on"); };
 window.closeM = () => $("modal").classList.remove("on");
-$("modal").onclick = e => { if (e.target === $("modal")) closeM(); };
+$("modal").onclick = e => { if (e.target === $("modal") && !window._hasFormFields($("modal"))) closeM(); };
 
 function act(a, c) {
   if (a === "block")    return askBlock(c);
