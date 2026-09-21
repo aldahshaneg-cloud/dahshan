@@ -28,8 +28,7 @@
             @php
               $isList = isset(config('v4.order_lists')[$key]);
               $href = ! $pg['ready'] ? route("v4.$v4App.soon", ['page' => $key])
-                    : ($isList ? route("v4.$v4App.orders", ['list' => $key])
-                    : (\Illuminate\Support\Facades\Route::has("v4.$v4App.$key") ? route("v4.$v4App.$key") : route("v4.$v4App.page", ['page' => $key])));
+                    : ($isList ? route("v4.$v4App.orders", ['list' => $key]) : route("v4.$v4App.$key"));
             @endphp
             <a href="{{ $href }}" class="{{ $pageKey === $key ? 'active' : '' }}" data-nav="{{ $key }}">
               <i class="fas {{ $pg['icon'] }}"></i> {{ $pg['label'] }}
@@ -67,7 +66,7 @@
         <div class="small muted top-date">{{ now('Africa/Cairo')->locale('ar')->translatedFormat('l j F') }}</div>
       </div>
     </div>
-    <div class="content @yield('contentClass')">
+    <div class="content">
       @yield('content')
     </div>
   </div>

@@ -18,21 +18,6 @@
 -->
 <html lang="ar" dir="rtl">
 <head>
-  <!-- 🧭 وضع التضمين جوه غلاف الجيل الرابع (v4) — طلب صاحب النظام 2026-09-21: «في الإصدار السابق أمور لا
-       أريد تغييرها مثل عمل أوردر جديد وصفحة الأوردرات النشطة». الشاشات دي بتتعرض **بكودها ده نفسه**
-       جوه /v4 عن طريق ?embed=<page>[&new=1][&theme=light|dark] — من غير الباراميتر الصفحة زي ما هي بالحرف. -->
-  <script>
-    (function () { try {
-      var p = new URLSearchParams(location.search), pg = p.get("embed"); if (!pg) return;
-      window.__V4_EMBED = { page: pg, newOrder: p.get("new") === "1" };
-      document.documentElement.classList.add("v4-embed");
-      var th = p.get("theme"); if (th === "light" || th === "dark") { localStorage.setItem("dahshan-theme", th); localStorage.setItem("tiar-theme", th); }
-    } catch (e) {} })();
-  </script>
-  <style>
-    html.v4-embed #sidebar, html.v4-embed #mobile-topbar, html.v4-embed #sidebar-overlay { display: none !important; }
-    html.v4-embed #main { margin-top: 0 !important; }
-  </style>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>الدهشان | الكول سنتر</title>
@@ -10412,24 +10397,5 @@ window._hasFormFields = function (el) {
   </script>
 <!-- قوائم ٣٠ صف + كروت + فورم تفاصيل — طبقة مشتركة لكل الجداول (طلب صاحب النظام 2026-09-10) -->
 <script src="assets/js/listview.js?v=20260910b" defer></script>
-<script>
-  /* 🧭 وضع التضمين (v4): بعد ما الجلسة تتطبّق والصفحة الافتراضية تفتح، نروح للصفحة المطلوبة ونفتح
-     فورم الأوردر لو مطلوب. لو شاشة الدخول هي اللي ظهرت (الجلسة خلصت) بنبلّغ الغلاف يحوّل لدخول v4. */
-  (function () {
-    var E = window.__V4_EMBED; if (!E) return;
-    var t0 = Date.now();
-    var tell = function (msg) { try { parent.postMessage(msg, location.origin); } catch (e) {} };
-    var iv = setInterval(function () {
-      var waited = Date.now() - t0;
-      if (window._currentUser && typeof window.navigateTo === "function" && (document.querySelector(".page.active") || waited > 2500)) {
-        clearInterval(iv);
-        try { var cur = document.getElementById("page-" + E.page); if (cur && !cur.classList.contains("active")) window.navigateTo(E.page); } catch (e) {}
-        if (E.newOrder) setTimeout(function () { try { window.openModal("order"); } catch (e) {} }, 300);
-        tell({ v4embed: "ready", page: E.page });
-      } else if (waited > 7000) { clearInterval(iv); tell({ v4embed: "login" }); }
-    }, 150);
-  })();
-</script>
 </body>
-
 </html>
