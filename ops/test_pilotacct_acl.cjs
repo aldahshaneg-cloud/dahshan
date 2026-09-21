@@ -95,9 +95,10 @@ const footCells = (id) => {
   return (fn.match(/<td[\s>]/g) || []).length;
 };
 /* ١٦ من 2026-09-04: عمود «سلّم للخزنة» (col.handed) بعد صافي الخدمة */
-ok('paDailyFoot فيه ١٦ خانة', footCells('paDailyFoot') === 16, String(footCells('paDailyFoot')));
-ok('paPilotFoot فيه ١٦ خانة', footCells('paPilotFoot') === 16, String(footCells('paPilotFoot')));
-ok('paMonthFoot فيه ١٥ خانة', footCells('paMonthFoot') === 15, String(footCells('paMonthFoot')));
+/* +١ من 2026-09-21: عمود «ساعات إضافية» بعد الساعات (نفس مفتاح قفل الساعات) */
+ok('paDailyFoot فيه ١٧ خانة', footCells('paDailyFoot') === 17, String(footCells('paDailyFoot')));
+ok('paPilotFoot فيه ١٧ خانة', footCells('paPilotFoot') === 17, String(footCells('paPilotFoot')));
+ok('paMonthFoot فيه ١٦ خانة', footCells('paMonthFoot') === 16, String(footCells('paMonthFoot')));
 
 /* ══ 3) محرّك الصلاحيات ══ */
 console.log('\n══ 3) المحرّك ══');
