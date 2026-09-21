@@ -46,9 +46,36 @@ class CallcenterController
         ]);
     }
 
+    /** «طلب جديد» = صفحة الطلبات القديمة نفسها ومودال الأوردر مفتوح (قرار صاحب النظام: مايتغيّرش). */
     public function newOrder(Request $request): View
     {
-        return $this->page($request, 'new', 'v4.callcenter.new');
+        return $this->embedded($request, 'new');
+    }
+
+    /** أي صفحة `embed` في config/v4.php من غير مسار خاص بيها (الخريطة، رسايل العملاء، الشكاوى، أدائي). */
+    public function legacyPage(Request $request, string $page): View
+    {
+        $def = config('v4.apps.' . self::APP . ".pages.{$page}");
+        if (! is_array($def) || empty($def['embed']) || empty($def['ready'])) {
+            throw new NotFoundHttpException();
+        }
+
+        return $this->embedded($request, $page);
+    }
+
+    /**
+     * الشاشة بكود التطبيق القديم نفسه جوه غلاف v4 (callcenter.html?embed=…): صفر تغيير في الشكل
+     * والسلوك — وده المطلوب للشاشات اللي صاحب النظام قال «لا أريد تغييرها». الغلاف بيظبط كاش
+     * الجلسة المحلي (`tiar-session`) اللي القديم بيستأنف منه، فالموظف مايشوفش شاشة دخول تانية.
+     */
+    private function embedded(Request $request, string $key): View
+    {
+        $def = (array) config('v4.apps.' . self::APP . ".pages.{$key}");
+
+        return $this->page($request, $key, 'v4.callcenter.embed', [
+            'embedPage' => (string) $def['embed'],
+            'embedNew'  => ! empty($def['embedNew']),
+        ]);
     }
 
     public function search(Request $request): View
@@ -65,6 +92,11 @@ class CallcenterController
         $def = config("v4.order_lists.{$list}");
         if (! is_array($def)) {
             throw new NotFoundHttpException();
+        }
+
+        /* القايمة اللي عليها `embed` (النشطة) بتتعرض بشاشة القديم نفسها */
+        if (! empty(config('v4.apps.' . self::APP . ".pages.{$list}.embed"))) {
+            return $this->embedded($request, $list);
         }
 
         return $this->page($request, $list, 'v4.callcenter.orders', [

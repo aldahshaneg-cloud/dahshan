@@ -32,6 +32,8 @@ Route::prefix('callcenter')->middleware('v4.auth:callcenter')->group(function ()
     Route::get('pilots', [CallcenterController::class, 'pilots'])->name('v4.callcenter.pilots');
     Route::get('zones', [CallcenterController::class, 'zones'])->name('v4.callcenter.zones');
     Route::get('clients', [CallcenterController::class, 'clients'])->name('v4.callcenter.clients');
+    Route::get('page/{page}', [CallcenterController::class, 'legacyPage'])
+        ->where('page', '[a-z]+')->name('v4.callcenter.page');
     Route::get('soon/{page}', [CallcenterController::class, 'soon'])
         ->where('page', '[a-z]+')->name('v4.callcenter.soon');
 });

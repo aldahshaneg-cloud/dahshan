@@ -63,7 +63,7 @@ if (! $cc || ! $br || ! $ad) { echo "مافيش كول سنتر/مشرف/أدم�
 
 echo "══ 0) القديم ماتلمسش والملفات في مكانها ══\n";
 ok('callcenter.html القديم موجود زي ما هو', is_file($ROOT . '/public/callcenter.html') && filesize($ROOT . '/public/callcenter.html') > 500000);
-foreach (['v4/css/app.css', 'v4/css/cairo.css', 'v4/css/fontawesome.css', 'v4/fonts/cairo-1.woff2', 'v4/webfonts/fa-solid-900.woff2', 'v4/js/core.js', 'v4/js/orders-common.js', 'v4/js/wa-notify.js'] as $f) {
+foreach (['v4/css/app.css', 'v4/css/cairo.css', 'v4/css/fontawesome.css', 'v4/fonts/cairo-1.woff2', 'v4/webfonts/fa-solid-900.woff2', 'v4/js/core.js', 'v4/js/orders-common.js', 'v4/js/callcenter/embed.js'] as $f) {
     ok("public/{$f}", is_file($ROOT . '/public/' . $f));
 }
 $core = (string) file_get_contents($ROOT . '/public/v4/js/core.js');
@@ -86,22 +86,42 @@ ok('دور مالوش تطبيق v4 بيتقال له بوضوح', $c === 200 &&
 ok('الأدمن مسموح له', $c === 200, (string) $c);
 
 echo "\n══ 2) الشاشات بتترسم ══\n";
-$pages = ['/v4/callcenter' => 'home.js', '/v4/callcenter/new' => 'new-order.js', '/v4/callcenter/search' => 'orders.js', '/v4/callcenter/pilots' => 'pilots.js',
+$pages = ['/v4/callcenter' => 'home.js', '/v4/callcenter/search' => 'orders.js', '/v4/callcenter/pilots' => 'pilots.js',
     '/v4/callcenter/zones' => 'zones.js', '/v4/callcenter/clients' => 'clients.js'];
-foreach (array_keys((array) config('v4.order_lists')) as $l) { $pages["/v4/callcenter/orders/{$l}"] = 'orders.js'; }
+foreach (array_keys((array) config('v4.order_lists')) as $l) {
+    if (empty(config("v4.apps.callcenter.pages.{$l}.embed"))) { $pages["/v4/callcenter/orders/{$l}"] = 'orders.js'; }
+}
 foreach ($pages as $url => $js) {
     [$c, $h] = hit($kernel, $cc, 'GET', $url);
     ok("{$url} = 200 وفيها {$js} والقائمة والبث", $c === 200 && str_contains($h, $js) && str_contains($h, 'class="side"') && str_contains($h, 'realtime.js') && str_contains($h, 'التطبيق القديم'), (string) $c);
 }
-[$c, $h] = hit($kernel, $cc, 'GET', '/v4/callcenter/soon/notifs');
-ok('صفحة لسه ماتنقلتش = «قريبًا» وبتفتح القديم', $c === 200 && str_contains($h, 'callcenter.html') && str_contains($h, 'لسه بتتنقل'));
 [$c] = hit($kernel, $cc, 'GET', '/v4/callcenter/soon/home');
-ok('وصفحة جاهزة مالهاش «قريبًا» (404)', $c === 404, (string) $c);
+ok('صفحة جاهزة مالهاش «قريبًا» (404)', $c === 404, (string) $c);
 [$c] = hit($kernel, $cc, 'GET', '/v4/callcenter/orders/nope');
 ok('قايمة مش معروفة = 404', $c === 404, (string) $c);
-[, $h] = hit($kernel, $cc, 'GET', '/v4/callcenter/new');
-ok('فورم الأوردر: فورم العميل عائم + نافذة الواتساب إجبارية + منع التكرار', str_contains($h, 'id="m-contact"') && str_contains($h, 'id="m-wa" data-locked')
-    && str_contains((string) file_get_contents($ROOT . '/public/v4/js/callcenter/new-order.js'), 'clientRef: S.clientRef'));
+
+/* ═══ 2.5) «أمور لا أريد تغييرها» (قرار صاحب النظام 2026-09-21 بعد أول عرض) ═══
+   فورم الأوردر الجديد وصفحة الطلبات النشطة (وباقي الشاشات اللي لسه ماتنقلتش) بيتعرضوا **بكود
+   التطبيق القديم نفسه** جوه غلاف v4 — مش إعادة تصميم. */
+echo "\n══ 2.5) شاشات القديم زي ما هي جوه الغلاف ══\n";
+$embeds = ['/v4/callcenter/new' => ['orders', true], '/v4/callcenter/orders/active' => ['orders', false], '/v4/callcenter/page/map' => ['pilotmap', false],
+    '/v4/callcenter/page/notifs' => ['ccnotifs', false], '/v4/callcenter/page/complaints' => ['ccomplaints', false], '/v4/callcenter/page/perf' => ['ccperf', false]];
+foreach ($embeds as $url => [$old, $new]) {
+    [$c, $h] = hit($kernel, $cc, 'GET', $url);
+    ok("{$url} = القديم «{$old}» جوه الغلاف" . ($new ? ' والمودال مفتوح' : ''), $c === 200 && str_contains($h, 'id="v4-embed"') && str_contains($h, 'data-page="' . $old . '"')
+        && str_contains($h, 'data-new="' . ($new ? '1' : '') . '"') && str_contains($h, 'embed.js') && str_contains($h, 'class="side"'), (string) $c);
+}
+ok('🔴 مفيش فورم أوردر «متصمّم من جديد» في v4', ! is_file($ROOT . '/public/v4/js/callcenter/new-order.js') && ! is_file($ROOT . '/resources/views/v4/callcenter/new.blade.php'));
+ok('كل صفحات الكول سنتر جاهزة (مفيش «قريبًا»)', ! array_filter((array) config('v4.apps.callcenter.pages'), fn ($p) => empty($p['ready'])));
+[$c] = hit($kernel, $cc, 'GET', '/v4/callcenter/page/home');
+ok('page/<صفحة مش embed> = 404', $c === 404, (string) $c);
+$old = (string) file_get_contents($ROOT . '/public/callcenter.html');
+ok('القديم: وضع التضمين خامل من غير ?embed (بيتفعّل بالباراميتر بس)', str_contains($old, 'var p = new URLSearchParams(location.search), pg = p.get("embed"); if (!pg) return;')
+    && str_contains($old, 'var E = window.__V4_EMBED; if (!E) return;'));
+ok('  وبيخفي قايمته هو بس ويفتح الصفحة والمودال ويبلّغ الغلاف', str_contains($old, 'html.v4-embed #sidebar, html.v4-embed #mobile-topbar') && str_contains($old, 'window.navigateTo(E.page)')
+    && str_contains($old, 'window.openModal("order")') && str_contains($old, 'tell({ v4embed: "login" })'));
+$ej = (string) file_get_contents($ROOT . '/public/v4/js/callcenter/embed.js');
+ok('  والغلاف بيظبط كاش الجلسة ويوحّد الوضع الليلي ويفتح مودال القديم من زرار «طلب جديد»', str_contains($ej, 'localStorage.setItem("tiar-session"') && str_contains($ej, 'fr.contentWindow.openModal("order")') && str_contains($ej, '"&theme="'));
 
 $zone = DB::selectOne('SELECT z.id, z.price, z.delivery_branch_id FROM zones z WHERE z.price > 0 AND (z.source_branch_id IS NULL OR z.source_branch_id = z.delivery_branch_id) ORDER BY z.id LIMIT 1');
 
