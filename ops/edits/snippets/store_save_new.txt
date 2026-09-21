@@ -1,0 +1,24 @@
+    async function saveStoreContact(username, { name, phone, phone2, address, zoneId, lat, lng, fromReceipt }) {
+      if (!name || !phone || fromReceipt) return;
+
+      /* 1) دفتر المحل — `upsert` (2026-09-22): نفس الرقم بيتحدّث بدل ما يتساب على أول شحنة.
+         كان «بنضيف الجديد بس»، فعميل أول شحنة له من غير عنوان/دبوس كان بيفضل ناقص للأبد —
+         والمحل يختاره من القائمة فمايلاقيش أماكن العنوان اتملّت. السيرفر بيحدّث اللي جاي فيه
+         قيمة بس، فشحنة من غير عنوان ماتمسحش عنوان محفوظ. */
+      try {
+        await api.post("/api/store-contacts", {
+          upsert: true,
+          name, phone, phone2: phone2 || "", address: address || "",
+          zoneId: zoneId || null,
+          ...(lat != null && lng != null ? { lat, lng } : {})
+        });
+      } catch (e) { console.warn("store contact save:", e?.message || e); }
+
+      // 2) نسخة المستلمين للإدارة والفروع (لا يراها المحل)
+      try {
+        await api.post("/api/receivers", {
+          name, phone1: phone, phone2: phone2 || "",
+          address: address || "", source: "store"
+        });
+      } catch (e) { console.warn("receivers sync error:", e?.message || e); }
+    }

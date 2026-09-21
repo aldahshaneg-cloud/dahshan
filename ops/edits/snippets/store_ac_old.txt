@@ -1,0 +1,48 @@
+    window.filterContacts = function (n, field) {
+      const nameEl  = document.getElementById(`rName-${n}`);
+      const phoneEl = document.getElementById(`rPhone-${n}`);
+      const drop    = document.getElementById(`acDrop-${n}`);
+      if (!drop) return;
+      const q = (field === "name" ? nameEl?.value : phoneEl?.value || "").trim().toLowerCase();
+      const all = window._storeContacts || [];
+      const hits = q.length >= 1
+        ? all.filter(c =>
+            (field === "name"  && c.name?.toLowerCase().includes(q)) ||
+            (field === "phone" && c.phone?.includes(q))
+          ).slice(0, 6)
+        : all.slice(0, 6);
+      if (!hits.length) { drop.innerHTML = ""; drop.style.display = "none"; return; }
+      drop.innerHTML = hits.map(c => `
+        <div class="ac-item" onmousedown="pickContact(${n},'${ escJs(c.id) }')">
+          <span class="ac-name">${ esc(c.name) }</span>
+          <span class="ac-phone" dir="ltr">${ esc(c.phone) }</span>
+        </div>`).join("");
+      drop.style.display = "block";
+    };
+
+    window.hideDropdown = function (n, delay) {
+      setTimeout(() => {
+        const drop = document.getElementById(`acDrop-${n}`);
+        if (drop) { drop.innerHTML = ""; drop.style.display = "none"; }
+      }, delay || 0);
+    };
+
+    window.pickContact = function (n, contactId) {
+      const c = (window._storeContacts || []).find(x => x.id === contactId);
+      if (!c) return;
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
+      set(`rName-${n}`,  c.name);
+      set(`rPhone-${n}`, c.phone);
+      set(`rPhone2-${n}`, c.phone2 || "");
+      if (window.setAddressValue) window.setAddressValue(`rAddrWidget-${n}`, c.address || "");
+      /* منطقة التسليم من الدفتر — كان المحل بيعيد اختيارها لنفس العميل مع
+         كل شحنة. change لازم يتبعت بالإيد: القيمة اتحطّت برمجيًا فالحدث
+         مابيطلعش لوحده، والسعر والفرع بيتحسبوا من المنطقة. */
+      if (c.zoneId) {
+        const zEl = document.getElementById(`rZone-${n}`);
+        if (zEl) { zEl.value = String(c.zoneId); zEl.dispatchEvent(new Event("change")); }
+      }
+      hideDropdown(n, 0);
+      // الاختيار من الدفتر بيحط الرقم برمجيًا فمفيش input event — بنشغّل بحث الثقة يدويًا
+      document.getElementById(`rPhone-${n}`)?.dispatchEvent(new Event("input"));
+    };

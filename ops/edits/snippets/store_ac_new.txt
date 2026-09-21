@@ -1,0 +1,122 @@
+    /* قائمتين: واحدة تحت **الاسم** وواحدة تحت **صف التليفون** (بلاغ صاحب النظام 2026-09-22:
+       «لما المستخدم يكتب الرقم بتظهر قائمة أرقام بتغطّي على خانة الرقم ومايشوفش اللي بيكتبه»).
+       كانت قائمة واحدة مكانها تحت الاسم — يعني فوق خانة الرقم بالظبط. */
+    const _acDrops = n => ({
+      name : document.getElementById(`acDrop-${n}`),
+      phone: document.getElementById(`acDropP-${n}`)
+    });
+    const _acDigits = v => (window.cleanPhone ? window.cleanPhone(v) : String(v || "").replace(/\D/g, ""));
+
+    window.filterContacts = function (n, field) {
+      const nameEl  = document.getElementById(`rName-${n}`);
+      const phoneEl = document.getElementById(`rPhone-${n}`);
+      const drops   = _acDrops(n);
+      const drop    = field === "phone" ? drops.phone : drops.name;
+      const other   = field === "phone" ? drops.name  : drops.phone;
+      if (other) { other.innerHTML = ""; other.style.display = "none"; }
+      if (!drop) return;
+      const all = window._storeContacts || [];
+      /* الرقم بيتقارن **أرقام بأرقام**: المحل بيكتب بأرقام عربي أو بمسافات أو +20، والمحفوظ 01… */
+      const q = field === "name"
+        ? (nameEl?.value || "").trim().toLowerCase()
+        : _acDigits(phoneEl?.value);
+      const hits = q.length >= 1
+        ? all.filter(c =>
+            (field === "name"  && c.name?.toLowerCase().includes(q)) ||
+            (field === "phone" && _acDigits(c.phone).includes(q))
+          ).slice(0, 6)
+        : all.slice(0, 6);
+
+      /* الرقم اتكتب كامل وهو رقم عميل محفوظ → نملّي **الفاضي بس** من غير ما المحل يختار.
+         مرة واحدة لكل رقم (`dataset.acFilled`) عشان لو المحل مسح خانة بإيده ماترجعش تتملّى. */
+      if (field === "phone" && q.length >= 10 && phoneEl) {
+        const exact = all.find(c => _acDigits(c.phone) === q);
+        if (exact && phoneEl.dataset.acFilled !== q) {
+          phoneEl.dataset.acFilled = q;
+          const did = window.applyContactToRow(n, exact, { onlyEmpty: true });
+          if (did.length) toast(`عميل محفوظ — اتملّى: ${ did.join(" · ") } ✓`, "ok");
+        }
+        if (exact) { drop.innerHTML = ""; drop.style.display = "none"; return; }
+      }
+
+      if (!hits.length) { drop.innerHTML = ""; drop.style.display = "none"; return; }
+      drop.innerHTML = hits.map(c => {
+        const sub = [_zoneNameOfId(c.zoneId), c.address].filter(Boolean).join(" · ");
+        return `
+        <div class="ac-item" onmousedown="pickContact(${n},'${ escJs(c.id) }')">
+          <span><span class="ac-name">${ esc(c.name) }</span>${ sub ? `<span class="ac-sub">📍 ${ esc(sub) }</span>` : "" }</span>
+          <span class="ac-phone" dir="ltr">${ esc(c.phone) }</span>
+        </div>`; }).join("");
+      drop.style.display = "block";
+    };
+
+    window.hideDropdown = function (n, delay) {
+      setTimeout(() => {
+        const d = _acDrops(n);
+        [d.name, d.phone].forEach(drop => { if (drop) { drop.innerHTML = ""; drop.style.display = "none"; } });
+      }, delay || 0);
+    };
+
+    /* 🧩 ملّاية واحدة لكل أماكن العميل المحفوظ (طلب صاحب النظام 2026-09-22: «إذا اختار من القائمة
+       يجب أن يملأ كل الأماكن التي تخص العنوان المحفوظ من قبل») — الاسم · التليفونين · المنطقة
+       (ومنها السعر والفرع) · العنوان · دبوس الخريطة. بتتنده من الاختيار من القائمة، ومن «ابعت له»
+       في دفتر العملاء، ومن كتابة الرقم كامل.
+       `onlyEmpty`: ماتدوسش على حاجة المحل كتبها بإيده. بترجّع أسماء اللي اتملّى (للتوست). */
+    window.applyContactToRow = function (n, c, opts) {
+      const onlyEmpty = !!(opts && opts.onlyEmpty);
+      const did = [];
+      if (!c) return did;
+      const el  = id => document.getElementById(id);
+      const put = (id, val, label) => {
+        const e = el(id);
+        if (!e || !val) return;
+        if (onlyEmpty && String(e.value || "").trim()) return;
+        if (e.value !== val) { e.value = val; if (label) did.push(label); }
+      };
+      put(`rName-${n}`,   c.name,   "الاسم");
+      if (!onlyEmpty) put(`rPhone-${n}`, c.phone, "");
+      put(`rPhone2-${n}`, c.phone2, "هاتف ٢");
+
+      /* المنطقة — `change` لازم يتبعت بالإيد: القيمة اتحطّت برمجيًا فالحدث مابيطلعش لوحده،
+         والسعر والفرع بيتحسبوا من المنطقة. */
+      const zEl = el(`rZone-${n}`);
+      if (zEl && c.zoneId && !(onlyEmpty && zEl.value)) {
+        const want = String(c.zoneId);
+        if (zEl.value !== want) {
+          zEl.value = want;
+          if (zEl.value === want) { zEl.dispatchEvent(new Event("change")); did.push("المنطقة"); }
+        }
+      }
+
+      if (c.address && window.setAddressValue) {
+        const cur = (window.getAddressValue && window.getAddressValue(`rAddrWidget-${n}`)) || "";
+        if (!(onlyEmpty && cur.trim()) && cur.trim() !== String(c.address).trim()) {
+          window.setAddressValue(`rAddrWidget-${n}`, c.address);
+          did.push("العنوان");
+        }
+      }
+
+      // الدبوس — الطيار بيمشي عليه، فسيبانه فاضي بيضيّع نص الفايدة
+      const lat = Number(c.lat), lng = Number(c.lng);
+      if (c.lat != null && c.lng != null && isFinite(lat) && isFinite(lng) && (lat || lng)) {
+        window._geoPins = window._geoPins || {};
+        if (!(onlyEmpty && window._geoPins[`r${n}`])) {
+          window._geoPins[`r${n}`] = { lat, lng };
+          try { window.renderGeoPicker(`rGeoBox-${n}`, `r${n}`, "نقطة التسليم"); } catch (e) {}
+          did.push("نقطة الخريطة");
+        }
+      }
+      try { window.renderParcelTabs?.(); } catch (e) {}
+      return did;
+    };
+
+    window.pickContact = function (n, contactId) {
+      const c = (window._storeContacts || []).find(x => x.id === contactId);
+      if (!c) return;
+      window.applyContactToRow(n, c, { onlyEmpty: false });
+      const ph = document.getElementById(`rPhone-${n}`);
+      if (ph) ph.dataset.acFilled = _acDigits(c.phone);   // اتملّى خلاص — الكتابة الكاملة ماتعيدهوش
+      hideDropdown(n, 0);
+      // الاختيار من الدفتر بيحط الرقم برمجيًا فمفيش input event — بنشغّل بحث الثقة يدويًا
+      ph?.dispatchEvent(new Event("input"));
+    };

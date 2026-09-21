@@ -259,6 +259,9 @@ final class CoreWire
             'address'   => $r['address'] ?? null,
             // منطقة التسليم المعتادة — بتتعبّى تلقائيًا لما المحل يختار العميل
             'zoneId'    => isset($r['zone_id']) && $r['zone_id'] !== null ? (int) $r['zone_id'] : null,
+            // دبوس التسليم المحفوظ مع العميل (2026-09-22) — الاتنين null لو مفيش
+            'lat'       => isset($r['lat'], $r['lng']) ? (float) $r['lat'] : null,
+            'lng'       => isset($r['lat'], $r['lng']) ? (float) $r['lng'] : null,
             'createdAt' => WireTime::toWire($r['created_at'] ?? null),
         ];
     }

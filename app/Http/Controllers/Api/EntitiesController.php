@@ -102,12 +102,16 @@ class EntitiesController
             }
         }
 
+        /* 🔴 `, z.id` في الترتيب مش تجميل (بلاغ صاحب النظام 2026-09-22: «تطبيق المحلات كل دقيقة
+           بيعمل رفريش ويطلع لفوق»). فيه مناطق كتير بنفس الاسم (منطقة لكل فرع)، وMariaDB بترجّع
+           المتساويين بترتيب **بيتغيّر من نداء للتاني** — فبصمة الرد في `API.Poller` كانت بتتغيّر كل
+           دقيقة والمحتوى هو هو، وكل التطبيقات بتعيد رسم المناطق (والصفحة تنط) من غير أي تغيير. */
         $rows = DB::select(
             'SELECT z.*, d.name AS delivery_branch_name, s.name AS source_branch_name
                FROM zones z
                JOIN branches d ON d.id = z.delivery_branch_id
                LEFT JOIN branches s ON s.id = z.source_branch_id
-              ORDER BY z.area_name'
+              ORDER BY z.area_name, z.id'
         );
 
         return PollableList::items(array_map(
@@ -175,7 +179,7 @@ class EntitiesController
             $vals[]  = (int) $branchId;
             $vals[]  = (int) $branchId;
         }
-        $sql .= ' WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name';
+        $sql .= ' WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name, p.id';
 
         $rows = array_map(fn ($r) => (array) $r, DB::select($sql, $vals));
 
@@ -422,7 +426,7 @@ class EntitiesController
 
         return PollableList::items(array_map(
             fn ($r) => CoreWire::storeContact($r),
-            DB::select('SELECT * FROM store_contacts WHERE store_username = ? ORDER BY name', [$owner])
+            DB::select('SELECT * FROM store_contacts WHERE store_username = ? ORDER BY name, id', [$owner])
         ));
     }
 
@@ -1773,23 +1777,60 @@ class EntitiesController
             throw new ApiException('الاسم ورقم التليفون مطلوبين');
         }
 
+        $phone2  = trim((string) ($b['phone2'] ?? '')) ?: null;
+        /* حد الطول (2026-09-10): العمود varchar(500) بعد التوسيع —
+           من غير الفحص ده العنوان الطويل بيرمي 500 «Data too long». */
+        $address = self::partyAddress($b['address'] ?? null);
+        $zoneId  = ((int) ($b['zoneId'] ?? 0)) ?: null;
+
+        /* 📍 دبوس الخريطة (2026-09-22) — الاتنين مع بعض أو مفيش. أي قيمة بره حدود الكرة
+           بتتسقط بصمت: دي بيانات راحة مش بيانات الشحنة، فمش سبب نرفض بيه الحفظ. */
+        $lat = is_numeric($b['lat'] ?? null) ? (float) $b['lat'] : null;
+        $lng = is_numeric($b['lng'] ?? null) ? (float) $b['lng'] : null;
+        if ($lat === null || $lng === null || abs($lat) > 90 || abs($lng) > 180 || ($lat == 0.0 && $lng == 0.0)) {
+            $lat = $lng = null;
+        }
+
+        /* 🔁 `upsert` (طلب صاحب النظام 2026-09-22: «إذا اختار من القائمة يجب أن يملأ كل الأماكن
+           التي تخص العنوان المحفوظ»). الدفتر كان بيتكتب **مرة واحدة** مع أول شحنة ومفيش تعديل —
+           فعميل أول شحنة له كانت من غير عنوان أو دبوس بيفضل ناقص للأبد، واللي غيّر عنوانه بيفضل
+           بالقديم. مع العلم ده نفس الرقم في نفس الدفتر بيتحدّث بدل ما يتكرر.
+           القاعدة: الاسم بياخد الأحدث · والباقي بيتحدّث **بس لو جاي فيه قيمة** — شحنة من غير
+           عنوان ماتمسحش عنوان محفوظ. من غير العلم السلوك زي ما كان بالحرف (إضافة صف). */
+        if (! empty($b['upsert'])) {
+            $old = DB::selectOne(
+                'SELECT id FROM store_contacts WHERE store_username = ? AND phone = ? ORDER BY id LIMIT 1',
+                [$owner, $phone]
+            );
+            if ($old) {
+                $set = ['name = ?'];
+                $args = [$name];
+                foreach (['phone2' => $phone2, 'address' => $address, 'zone_id' => $zoneId] as $col => $val) {
+                    if ($val !== null && $val !== '') {
+                        $set[] = "{$col} = ?";
+                        $args[] = $val;
+                    }
+                }
+                if ($lat !== null) {
+                    $set[] = 'lat = ?';
+                    $set[] = 'lng = ?';
+                    $args[] = $lat;
+                    $args[] = $lng;
+                }
+                $args[] = (int) $old->id;
+                DB::update('UPDATE store_contacts SET ' . implode(', ', $set) . ' WHERE id = ?', $args);
+
+                return ApiResponse::out(['ok' => true, 'id' => (int) $old->id, 'updated' => true]);
+            }
+        }
+
         DB::insert(
             /* zone_id اتضاف 2026-08-24: المحل كان بيعيد اختيار منطقة التسليم
                لنفس العميل مع كل شحنة رغم إن الدفتر فيه بياناته. القيمة
                اختيارية — الدفتر القديم كله NULL والواجهة بتتعامل معاه عادي. */
-            'INSERT INTO store_contacts (store_username, name, phone, phone2, address, zone_id, created_at)
-             VALUES (?,?,?,?,?,?,?)',
-            [
-                $owner,
-                $name,
-                $phone,
-                trim((string) ($b['phone2'] ?? '')) ?: null,
-                /* حد الطول (2026-09-10): العمود varchar(500) بعد التوسيع —
-                   من غير الفحص ده العنوان الطويل بيرمي 500 «Data too long». */
-                self::partyAddress($b['address'] ?? null),
-                ((int) ($b['zoneId'] ?? 0)) ?: null,
-                WireTime::nowDb(),
-            ]
+            'INSERT INTO store_contacts (store_username, name, phone, phone2, address, zone_id, lat, lng, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?)',
+            [$owner, $name, $phone, $phone2, $address, $zoneId, $lat, $lng, WireTime::nowDb()]
         );
 
         return ApiResponse::out(['ok' => true, 'id' => (int) DB::getPdo()->lastInsertId()]);

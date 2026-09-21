@@ -2161,6 +2161,8 @@ CREATE TABLE `store_contacts` (
   `phone2` varchar(20) DEFAULT NULL,
   `address` varchar(500) DEFAULT NULL,
   `zone_id` bigint(20) unsigned DEFAULT NULL COMMENT 'منطقة التسليم المعتادة للعميل ده — بتتعبّى تلقائيًا لما المحل يختاره من الدفتر',
+  `lat` decimal(10,7) DEFAULT NULL COMMENT 'نقطة التسليم على الخريطة (خط العرض) — بتتحفظ مع العميل عشان اختياره يملّي الدبوس كمان (طلب 2026-09-22)',
+  `lng` decimal(10,7) DEFAULT NULL COMMENT 'نقطة التسليم على الخريطة (خط الطول)',
   `legacy_key` varchar(100) DEFAULT NULL COMMENT 'مفتاح Firebase القديم وقت الترحيل',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),

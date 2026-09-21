@@ -1,0 +1,22 @@
+    async function saveStoreContact(username, { name, phone, phone2, address, zoneId }) {
+      if (!name || !phone) return;
+
+      // 1) دفتر المحل — مفيش endpoint تعديل، فبنضيف الجديد بس
+      const existing = (window._storeContacts || []).find(c => c.phone === phone);
+      if (!existing) {
+        try {
+          await api.post("/api/store-contacts", {
+            name, phone, phone2: phone2 || "", address: address || "",
+            zoneId: zoneId || null
+          });
+        } catch (e) { console.warn("store contact save:", e?.message || e); }
+      }
+
+      // 2) نسخة المستلمين للإدارة والفروع (لا يراها المحل)
+      try {
+        await api.post("/api/receivers", {
+          name, phone1: phone, phone2: phone2 || "",
+          address: address || "", source: "store"
+        });
+      } catch (e) { console.warn("receivers sync error:", e?.message || e); }
+    }

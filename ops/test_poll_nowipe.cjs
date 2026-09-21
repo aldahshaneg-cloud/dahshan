@@ -74,7 +74,8 @@ ok('الـPoller بيقبل alwaysFire', /this\.alwaysFire = !!options\.alwaysFi
     && !/function refreshPriceFloor\(n\) \{[\s\S]{0,400}if \(can[^\n]*el\.value = /.test(S));
   ok('⚠️ والمحل المقفول عن التعديل بياخد سعر المنطقة الجديد',
     /if \(!can && price\) el\.value = String\(price\);/.test(S));
-  ok('🔴 ونسخة بوابة المحلات اتحرّكت (api.js اتغيّر)', /content="1\.1\.7"/.test(S));
+  ok('🔴 ونسخة بوابة المحلات اتحرّكت (api.js اتغيّر)',
+    (() => { const m = S.match(/<meta name="app-version" content="(\d+)\.(\d+)\.(\d+)"/); return !!m && (+m[1] * 1e6 + +m[2] * 1e3 + +m[3]) >= 1001007; })());
   const C = fs.readFileSync('public/customer.html', 'utf8');
   ok('🔴 ونسخة تطبيق العميل كمان', /content="1\.7\.7"/.test(C));
 
