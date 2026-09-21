@@ -1,0 +1,160 @@
+/* ═════════════════════════════════════════════════════════════════════
+   الدهشان — الجيل الرابع (v4) · الأنماط العامة (RTL)
+   نفس لغة تصميم «الشمس — Laravel» اللي عجبت صاحب النظام: شريط جانبي غامق،
+   بطاقات بيضا بظل خفيف، جداول هادية، وضع ليلي — بلون الدهشان الأحمر.
+   كل الأسطح بمتغيّرات عشان الوضع الداكن يبقى تبديل متغيّرات وبس.
+   ═════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#f3f5f9; --card:#fff; --text:#1c2333; --muted:#6b7488; --line:#e3e7ef;
+  --primary:#e8192c; --primary-dark:#c41324; --primary-bg:#fdecee;
+  --blue:#2563eb; --blue-bg:#e8efff; --green:#16a34a; --green-bg:#e6f7ec;
+  --red:#dc2626; --red-bg:#fdecec; --yellow:#d97706; --yellow-bg:#fff4e0;
+  --purple:#7c3aed; --purple-bg:#f1e9ff; --side:#141a2b; --side-text:#c7cde0;
+  --surface:#fff; --surface2:#fafbfd; --surface3:#eef0f5; --hover:#f6f8fc;
+  --radius:12px; --shadow:0 1px 3px rgba(20,26,43,.06),0 4px 14px rgba(20,26,43,.05);
+}
+html[data-theme=dark]{
+  --bg:#0f1422; --card:#171e31; --text:#e6e9f2; --muted:#94a0bb; --line:#27304a;
+  --primary-bg:rgba(232,25,44,.16); --blue-bg:rgba(37,99,235,.18); --green-bg:rgba(22,163,74,.18);
+  --red-bg:rgba(220,38,38,.18); --yellow-bg:rgba(217,119,6,.2); --purple-bg:rgba(124,58,237,.2);
+  --side:#0b0f1b; --surface:#1d2540; --surface2:#1a2138; --surface3:#232c48; --hover:#222b47;
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+html[data-font=s]{font-size:14px} html[data-font=l]{font-size:16.5px}
+*{box-sizing:border-box}
+html{font-size:15px}
+body{margin:0;font-family:'Cairo',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.6}
+a{color:var(--blue);text-decoration:none}
+h1,h2,h3{margin:0 0 .5rem;font-weight:700}
+h1{font-size:1.45rem} h2{font-size:1.15rem} h3{font-size:1rem}
+.muted{color:var(--muted)} .small{font-size:.85rem} .bold{font-weight:700}
+.green{color:var(--green)} .red{color:var(--red)} .yellow{color:var(--yellow)} .purple{color:var(--purple)} .blue{color:var(--blue)}
+.ltr{direction:ltr;unicode-bidi:embed;display:inline-block}
+.num{font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+
+/* ── الهيكل ── */
+.app{display:flex;min-height:100vh}
+.side{width:244px;background:var(--side);color:var(--side-text);padding:1rem 0;position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column}
+.side .brand{padding:.4rem 1.2rem 1rem;color:#fff;font-size:1.2rem;font-weight:800;display:flex;align-items:center;gap:.6rem}
+.side .brand i{color:var(--primary)} .side .brand small{display:block;font-size:.68rem;font-weight:600;color:#7d87a3}
+.side nav .nav-group{padding:.9rem 1.2rem .25rem;font-size:.72rem;letter-spacing:.04em;color:#7d87a3;font-weight:700}
+.side nav a{display:flex;align-items:center;gap:.7rem;padding:.47rem 1.2rem;font-size:.93rem;color:var(--side-text);border-right:3px solid transparent}
+.side nav a i{width:20px;text-align:center;opacity:.8}
+.side nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.side nav a.active{background:rgba(232,25,44,.2);color:#fff;border-right-color:var(--primary)}
+.side nav a .cnt{margin-inline-start:auto;background:var(--primary);color:#fff;border-radius:999px;font-size:.7rem;font-weight:800;padding:0 .45rem;min-width:1.3rem;text-align:center}
+.side .user{margin-top:auto;padding:1rem 1.2rem;border-top:1px solid rgba(255,255,255,.08);font-size:.85rem}
+.side .user .me{color:#fff;font-weight:700;display:block}
+.side .user .ux-row{display:flex;gap:.35rem;margin-top:.6rem;flex-wrap:wrap}
+.side .user .btn{color:var(--side-text);border-color:rgba(255,255,255,.15)}
+.side .old-link{margin:.6rem .8rem 0;padding:.45rem .7rem;border-radius:8px;font-size:.78rem;background:rgba(255,255,255,.06);color:#c7cde0;display:block;text-align:center}
+.side-backdrop{display:none}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--card);border-bottom:1px solid var(--line);padding:.7rem 1.4rem;display:flex;align-items:center;gap:1rem;justify-content:space-between;position:sticky;top:0;z-index:30}
+.topbar .burger{display:none;background:none;border:0;font-size:1.3rem;cursor:pointer;color:var(--text)}
+.topbar h1{margin:0;font-size:1.15rem}
+.top-tools{display:flex;align-items:center;gap:.6rem;min-width:0}
+.content{padding:1.4rem;max-width:1500px;width:100%}
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;flex-wrap:wrap}
+.page-head .actions{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* ── البطاقات والشبكة ── */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.1rem 1.2rem;margin-bottom:1.2rem}
+.card.tight{padding:.6rem .8rem} .card>h2:first-child{margin-bottom:.9rem}
+.grid{display:grid;gap:1rem}
+.grid.c2{grid-template-columns:repeat(2,1fr)} .grid.c3{grid-template-columns:repeat(3,1fr)} .grid.c4{grid-template-columns:repeat(4,1fr)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-bottom:1.2rem}
+.stat{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:1rem 1.1rem;display:flex;gap:.9rem;align-items:center}
+.stat .ic{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-size:1.15rem;flex-shrink:0}
+.stat.green .ic{background:var(--green-bg);color:var(--green)} .stat.blue .ic{background:var(--blue-bg);color:var(--blue)}
+.stat.red .ic{background:var(--red-bg);color:var(--red)} .stat.yellow .ic{background:var(--yellow-bg);color:var(--yellow)}
+.stat.purple .ic{background:var(--purple-bg);color:var(--purple)}
+.stat .v{font-size:1.3rem;font-weight:800;line-height:1.2} .stat .l{color:var(--muted);font-size:.85rem}
+
+/* ── النماذج ── */
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:.25rem}
+label .req{color:var(--red)}
+input,select,textarea{width:100%;padding:.55rem .7rem;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--surface);color:var(--text)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-bg)}
+input[readonly]{background:var(--surface2);color:var(--muted)}
+input[type=checkbox],input[type=radio]{width:auto;vertical-align:middle}
+.field{margin-bottom:.8rem}
+.row{display:flex;gap:.7rem;flex-wrap:wrap;align-items:flex-end} .row>*{flex:1;min-width:120px}
+.btn{display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .95rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)} .btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff} .btn.primary:hover{background:var(--primary-dark)}
+.btn.blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff} .btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.ghost{background:transparent} .btn.sm{padding:.3rem .6rem;font-size:.85rem} .btn.lg{padding:.75rem 1.4rem;font-size:1.05rem}
+.btn.block{width:100%;justify-content:center}
+
+/* ── الجداول ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{padding:.55rem .7rem;text-align:right;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:.82rem;background:var(--surface2);white-space:nowrap;position:sticky;top:0}
+tbody tr:hover td{background:var(--surface2)}
+tr.clickable{cursor:pointer}
+td.num,th.num{text-align:left;direction:ltr;font-variant-numeric:tabular-nums}
+tr.flash td{animation:flash 1.6s ease-out}
+@keyframes flash{from{background:var(--yellow-bg)}to{background:transparent}}
+.empty{text-align:center;color:var(--muted);padding:2rem}
+
+/* ── الشارات والتنبيهات ── */
+.badge{display:inline-block;padding:.1rem .55rem;border-radius:999px;font-size:.78rem;font-weight:600;white-space:nowrap}
+.badge.green{background:var(--green-bg);color:var(--green)} .badge.red{background:var(--red-bg);color:var(--red)}
+.badge.yellow{background:var(--yellow-bg);color:var(--yellow)} .badge.blue{background:var(--blue-bg);color:var(--blue)}
+.badge.gray{background:var(--surface3);color:var(--muted)} .badge.purple{background:var(--purple-bg);color:var(--purple)}
+.alert{padding:.7rem 1rem;border-radius:8px;margin-bottom:1rem;font-weight:600}
+.alert.ok{background:var(--green-bg);color:var(--green)} .alert.err{background:var(--red-bg);color:var(--red)} .alert.warn{background:var(--yellow-bg);color:var(--yellow)}
+/* التوست فوق في النص — مايغطّيش أزرار الحفظ اللي تحت */
+.toast{position:fixed;top:1rem;left:50%;z-index:200;background:var(--side);color:#fff;padding:.7rem 1.2rem;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transform:translate(-50%,-12px);transition:.2s;pointer-events:none;max-width:min(92vw,640px);font-weight:600}
+.toast.show{opacity:1;transform:translate(-50%,0)} .toast.err{background:var(--red)} .toast.ok{background:var(--green)}
+.chip{display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--line);border-radius:999px;padding:.15rem .7rem;font-size:.82rem;background:var(--surface);color:var(--text);white-space:nowrap}
+.chip.live{border-color:var(--green);color:var(--green);background:var(--green-bg);font-weight:700}
+.chip.off{border-color:var(--yellow);color:var(--yellow);background:var(--yellow-bg);font-weight:700}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+
+/* ── النوافذ — مابتتقفلش بالضغط برّه لو فيها خانات (قاعدة صاحب النظام 2026-09-20) ── */
+.modal{position:fixed;inset:0;background:rgba(10,14,25,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:1rem}
+.modal.open{display:flex}
+.modal.top{z-index:60}
+.modal .box{background:var(--card);border-radius:14px;width:100%;max-width:560px;max-height:92vh;overflow:auto;padding:1.2rem 1.3rem;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal .box.wide{max-width:920px} .modal .box.xwide{max-width:1180px}
+.modal .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem;gap:1rem}
+.modal .head h2{margin:0}
+.modal .close{background:none;border:0;font-size:1.3rem;cursor:pointer;color:var(--muted)}
+.modal .foot{display:flex;gap:.6rem;justify-content:flex-start;margin-top:1rem;flex-wrap:wrap}
+.tabs{display:flex;gap:.3rem;border-bottom:1px solid var(--line);margin-bottom:1rem;flex-wrap:wrap}
+.tabs a,.tabs button{background:none;border:0;padding:.5rem .9rem;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs .active{color:var(--primary);border-bottom-color:var(--primary)}
+.kv{display:flex;justify-content:space-between;gap:1rem;padding:.35rem 0;border-bottom:1px dashed var(--line)} .kv:last-child{border:0}
+.kv b{font-variant-numeric:tabular-nums;text-align:left}
+.pager{display:flex;gap:.5rem;justify-content:center;align-items:center;margin-top:1rem;flex-wrap:wrap}
+.dd-list{position:absolute;top:calc(100% + .25rem);right:0;left:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);z-index:20;max-height:260px;overflow:auto}
+.dd-list div{padding:.45rem .7rem;cursor:pointer;border-bottom:1px solid var(--line)} .dd-list div:last-child{border:0}
+.dd-list div:hover,.dd-list div.on{background:var(--primary-bg)}
+.dd-list .none{cursor:default;color:var(--muted)} .dd-list .none:hover{background:none}
+.dd-list .add{color:var(--green);font-weight:700}
+.dd-wrap{position:relative}
+
+/* ── الطباعة ── */
+@media print{.side,.topbar,.no-print{display:none!important}.content{padding:0}.card{box-shadow:none}}
+
+/* ── الموبايل ── */
+@media (max-width:1000px){.grid.c3,.grid.c4{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:760px){
+  .side{position:fixed;right:-260px;transition:.2s;z-index:40} .side.open{right:0}
+  .side.open+.side-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:39}
+  .topbar .burger{display:block} .content{padding:.9rem} .topbar{padding:.6rem .9rem}
+  .grid.c2,.grid.c3,.grid.c4{grid-template-columns:1fr} html{font-size:14px}
+  .top-tools .t{display:none}
+}
+
+/* ── شاشة الدخول ── */
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:1rem;background:linear-gradient(135deg,#141a2b 0%,#2a1220 100%)}
+.login-card{background:var(--card);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.4);padding:2rem 1.8rem;width:100%;max-width:400px}
+.login-card .logo{text-align:center;margin-bottom:1.2rem}
+.login-card .logo i{font-size:2.4rem;color:var(--primary)}
+.login-card .logo h1{margin:.4rem 0 0;font-size:1.35rem}

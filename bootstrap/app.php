@@ -27,6 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        /* الجيل الرابع (v4): شاشات Blade موازية للوحات القديمة — طلب صاحب النظام 2026-09-21.
+           مجموعة `v4` = جلسة النظام نفسها (من غير EncryptCookies بتاعة `web`، وإلا كوكي
+           ALDAHSHAN_SESS الخام مايتقراش ويبقى فيه دخولين). */
+        then: function (): void {
+            \Illuminate\Support\Facades\Route::middleware('v4')->prefix('v4')->group(__DIR__.'/../routes/v4.php');
+        },
     )
     /*
      * البث (Reverb). **مش** `channels:` جوه withRouting ولا
@@ -81,8 +87,15 @@ return Application::configure(basePath: dirname(__DIR__))
             ResolveApiActor::class,
         ]);
 
+        $middleware->group('v4', [
+            AddQueuedCookiesToResponse::class,
+            StartSession::class,
+            ResolveApiActor::class,
+        ]);
+
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureRole::class,
+            'v4.auth' => \App\Http\Middleware\V4Auth::class,
         ]);
 
         /*
